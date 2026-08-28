@@ -231,7 +231,6 @@ struct PlayerView: View {
 
                         VStack(spacing: 0) {
                             headerBar
-                                .modifier(Layoutable(part: .topBar, enabled: layoutMode, data: $layoutData))
                             content(geo: geo)
                         }
                         .foregroundStyle(palette.text)
@@ -417,6 +416,7 @@ struct PlayerView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(GlassPressButtonStyle())
+            .modifier(Layoutable(part: .topBack, enabled: layoutMode, data: $layoutData))
 
             Spacer(minLength: 0)
 
@@ -455,6 +455,7 @@ struct PlayerView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(GlassPressButtonStyle())
+            .modifier(Layoutable(part: .topFavorite, enabled: layoutMode, data: $layoutData))
 
             Menu {
                 Menu {
@@ -519,6 +520,7 @@ struct PlayerView: View {
             }
             .buttonStyle(.plain)
             .zIndex(20)
+            .modifier(Layoutable(part: .topMore, enabled: layoutMode, data: $layoutData))
         }
         .padding(.horizontal, 20)
         .padding(.top, 2)
@@ -1151,7 +1153,7 @@ struct PlayerView: View {
         switch layoutPart {
         case .lyric:
             return -80...80
-        case .topBar, .cover, .title, .previewLyric:
+        case .topBack, .topFavorite, .topMore, .cover, .title, .previewLyric:
             return -180...180
         default:
             return -140...140
@@ -1162,7 +1164,7 @@ struct PlayerView: View {
     private var layoutYRange: ClosedRange<CGFloat> {
         switch layoutPart {
         case .lyric: return -80...80
-        case .topBar: return -80...160
+        case .topBack, .topFavorite, .topMore: return -80...160
         case .cover, .title, .previewLyric: return -220...220
         case .grabber: return -120...120
         default: return -300...300
