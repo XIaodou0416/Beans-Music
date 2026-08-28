@@ -513,9 +513,11 @@ struct PlayerView: View {
                                                 BeansGlass(shape: Circle())
                     }
                     .clipShape(Circle())
-                    .contentShape(Circle())
+                    .contentShape(Rectangle())
+                    .frame(width: 52, height: 52)
             }
             .buttonStyle(.plain)
+            .zIndex(20)
         }
         .padding(.horizontal, 20)
         .padding(.top, 2)

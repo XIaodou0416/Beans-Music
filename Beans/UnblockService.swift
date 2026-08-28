@@ -184,10 +184,13 @@ enum UnblockService {
                 }
             }
 
-            let requestBlock: @convention(block) (JSValue?, JSValue?) -> JSValue? = { urlValue, optionsValue in
+            let requestBlock: @convention(block) (JSValue?, JSValue?, JSValue?) -> JSValue? = { urlValue, optionsValue, callbackValue in
                 let urlString = urlValue?.toString() ?? ""
                 let options = optionsValue?.toDictionary() as? [String: Any] ?? [:]
                 let response = blockingScriptRequest(urlString: urlString, options: options)
+                if let callbackValue, callbackValue.isObject {
+                    callbackValue.call(withArguments: [NSNull(), response])
+                }
                 return JSValue(object: response, in: contextRef)
             }
             let logBlock: @convention(block) (String) -> Void = { message in
@@ -200,16 +203,20 @@ enum UnblockService {
             var __beansDone = false;
             var __beansResult = null;
             var __beansError = null;
+            globalThis.module = { exports: {} };
+            globalThis.exports = globalThis.module.exports;
+            globalThis.process = { env: {} };
+            globalThis.require = function() { return {}; };
             globalThis.lx = {
               EVENT_NAMES: { inited: 'inited', request: 'request' },
               env: 'ios',
               version: '1.0.0',
               utils: {},
-              request: function(url, options) {
+              request: function(url, options, callback) {
                 if (url && typeof url === 'object') {
-                  return __beansRequest(url.url || url.uri || url.href || '', url);
+                  return __beansRequest(url.url || url.uri || url.href || '', url, options);
                 }
-                return __beansRequest(url, options || {});
+                return __beansRequest(url, options || {}, callback);
               },
               on: function(name, handler) { if (name === 'request') __beansHandler = handler; },
               send: function() {}
