@@ -27,6 +27,7 @@ struct PlayerView: View {
     @State private var showComments = false
     @State private var showDownloadPicker = false
     @State private var showShare = false
+    @State private var showMoreActions = false
     /// 下载完成后直接弹原生分享（用户自行选择保存或转发）
     @State private var shareFile: ShareFileItem?
     @State private var sharedFileURL: URL?
@@ -248,6 +249,24 @@ struct PlayerView: View {
                                 .padding(.top, 54)
                                 .transition(.opacity)
                         }
+
+                        if showMoreActions {
+                            Color.black.opacity(0.001)
+                                .ignoresSafeArea()
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+                                        showMoreActions = false
+                                    }
+                                }
+                                .zIndex(70)
+
+                            playerMoreActionsPanel
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                .padding(.top, 76)
+                                .zIndex(80)
+                                .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
+                        }
                     }
                 }
             }
@@ -420,17 +439,28 @@ struct PlayerView: View {
 
             Spacer(minLength: 0)
 
-            VStack(spacing: 2) {
-                Text(player.isBuffering ? "加载中…" : (player.isPlaying ? "正在播放" : "已暂停"))
-                    .font(BeansFont.appFont(12, .semibold))
-                    .foregroundStyle(palette.secondary)
-                    .lineLimit(1)
-                Text(song?.album ?? "Beans Music")
-                    .font(BeansFont.appFont(10))
-                    .foregroundStyle(palette.secondary.opacity(0.85))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+            Button {
+                BeansHaptics.tap()
+                withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+                    showMoreActions.toggle()
+                }
+            } label: {
+                VStack(spacing: 2) {
+                    Text(player.isBuffering ? "加载中…" : (player.isPlaying ? "正在播放" : "已暂停"))
+                        .font(BeansFont.appFont(12, .semibold))
+                        .foregroundStyle(palette.secondary)
+                        .lineLimit(1)
+                    Text(song?.album ?? "Beans Music")
+                        .font(BeansFont.appFont(10))
+                        .foregroundStyle(palette.secondary.opacity(0.85))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .frame(minWidth: 118, maxWidth: 190)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+            .modifier(Layoutable(part: .topTitle, enabled: layoutMode, data: $layoutData))
 
             Spacer(minLength: 0)
             Button {
@@ -456,75 +486,99 @@ struct PlayerView: View {
             }
             .buttonStyle(GlassPressButtonStyle())
             .modifier(Layoutable(part: .topFavorite, enabled: layoutMode, data: $layoutData))
-
-            Menu {
-                Menu {
-                    ForEach(rateOptions, id: \.self) { option in
-                        Button {
-                            player.setRate(option)
-                            BeansHaptics.select()
-                        } label: {
-                            if abs(player.rate - option) < 0.01 {
-                                Label(String(format: "%.2gx", option), systemImage: "checkmark")
-                            } else {
-                                Text(String(format: "%.2gx", option))
-                            }
-                        }
-                    }
-                } label: {
-                    Label("倍速播放", systemImage: "speedometer")
-                }
-                Button {
-                    showSleepTimer = true
-                } label: {
-                    Label(player.sleepTimerRemaining > 0 ? "定时关闭（进行中）" : "定时关闭", systemImage: "moon.zzz")
-                }
-                Button {
-                    showAddToPlaylist = true
-                } label: {
-                    Label("添加到歌单", systemImage: "text.badge.plus")
-                }
-                Button {
-                    showDownloadPicker = true
-                } label: {
-                    Label("下载歌曲", systemImage: "arrow.down.circle")
-                }
-                Button {
-                    showShare = true
-                } label: {
-                    Label("分享歌曲", systemImage: "square.and.arrow.up")
-                }
-                Divider()
-                Button {
-                    showAddToLocalPlaylist = true
-                } label: {
-                    Label("加入本地歌单", systemImage: "internaldrive")
-                }
-                Divider()
-                Button {
-                    showPlayerSettings = true
-                } label: {
-                    Label("播放器设置", systemImage: "slider.horizontal.3")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(palette.text)
-                    .frame(width: 38, height: 38)
-                    .background {
-                                                BeansGlass(shape: Circle())
-                    }
-                    .clipShape(Circle())
-                    .contentShape(Rectangle())
-                    .frame(width: 52, height: 52)
-            }
-            .buttonStyle(.plain)
-            .zIndex(20)
-            .modifier(Layoutable(part: .topMore, enabled: layoutMode, data: $layoutData))
         }
         .padding(.horizontal, 20)
         .padding(.top, 2)
         .padding(.bottom, 1)
+    }
+
+    private var playerMoreActionsPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "speedometer")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("倍速播放")
+                    .font(BeansFont.appFont(13, .semibold))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(palette.text)
+
+            HStack(spacing: 6) {
+                ForEach(rateOptions, id: \.self) { option in
+                    Button {
+                        player.setRate(option)
+                        BeansHaptics.select()
+                    } label: {
+                        Text(String(format: "%.2gx", option))
+                            .font(BeansFont.appFont(10, .semibold))
+                            .foregroundStyle(abs(player.rate - option) < 0.01 ? Color.white : palette.text)
+                            .frame(width: 36, height: 28)
+                            .background {
+                                Capsule().fill(abs(player.rate - option) < 0.01 ? controlAccent : Color.white.opacity(0.08))
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Divider().overlay(Color.white.opacity(0.12))
+
+            moreActionRow("定时关闭", systemName: player.sleepTimerRemaining > 0 ? "moon.zzz.fill" : "moon.zzz") {
+                showMoreActions = false
+                showSleepTimer = true
+            }
+            moreActionRow("添加到歌单", systemName: "text.badge.plus") {
+                showMoreActions = false
+                showAddToPlaylist = true
+            }
+            moreActionRow("下载歌曲", systemName: "arrow.down.circle") {
+                showMoreActions = false
+                showDownloadPicker = true
+            }
+            moreActionRow("分享歌曲", systemName: "square.and.arrow.up") {
+                showMoreActions = false
+                showShare = true
+            }
+            moreActionRow("加入本地歌单", systemName: "internaldrive") {
+                showMoreActions = false
+                showAddToLocalPlaylist = true
+            }
+            moreActionRow("播放器设置", systemName: "slider.horizontal.3") {
+                showMoreActions = false
+                showPlayerSettings = true
+            }
+        }
+        .padding(14)
+        .frame(width: 292)
+        .background {
+            BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .beansCardShadow(radius: 14, y: 8)
+    }
+
+    private func moreActionRow(_ title: String, systemName: String, action: @escaping () -> Void) -> some View {
+        Button {
+            BeansHaptics.tap()
+            withAnimation(.spring(response: 0.20, dampingFraction: 0.9)) {
+                action()
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: systemName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 20)
+                Text(title)
+                    .font(BeansFont.appFont(13, .semibold))
+                Spacer()
+            }
+            .foregroundStyle(palette.text)
+            .padding(.horizontal, 10)
+            .frame(height: 36)
+            .background(Capsule().fill(Color.white.opacity(0.07)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
     }
 
     // MARK: - 中间内容区（专辑 / 歌词 两模式独立视图，自动布局居中）
@@ -1153,7 +1207,7 @@ struct PlayerView: View {
         switch layoutPart {
         case .lyric:
             return -80...80
-        case .topBack, .topFavorite, .topMore, .cover, .title, .previewLyric:
+        case .topBack, .topTitle, .topFavorite, .cover, .title, .previewLyric:
             return -180...180
         default:
             return -140...140
@@ -1164,7 +1218,7 @@ struct PlayerView: View {
     private var layoutYRange: ClosedRange<CGFloat> {
         switch layoutPart {
         case .lyric: return -80...80
-        case .topBack, .topFavorite, .topMore: return -80...160
+        case .topBack, .topTitle, .topFavorite: return -80...160
         case .cover, .title, .previewLyric: return -220...220
         case .grabber: return -120...120
         default: return -300...300
