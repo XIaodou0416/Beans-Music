@@ -2,7 +2,7 @@ name: Build Test IPA
 
 on:
   push:
-    branches: [v134-features]
+    branches: [v134-features, work-1.5.3-fixes]
 
 permissions:
   contents: write
@@ -56,20 +56,20 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Beans.app Payload/
-          ditto -c -k --sequesterRsrc --keepParent Payload Beans-1.5.2-test.ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload Beans-1.5.3-test.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Beans-1.5.2-test-ipa
-          path: Beans-1.5.2-test.ipa
+          name: Beans-1.5.3-test-ipa
+          path: Beans-1.5.3-test.ipa
 
       - name: Commit test IPA
         run: |
           mkdir -p ci-builds
-          cp Beans-1.5.2-test.ipa ci-builds/Beans-1.5.2-test.ipa
+          cp Beans-1.5.3-test.ipa ci-builds/Beans-1.5.3-test.ipa
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f ci-builds/Beans-1.5.2-test.ipa
+          git add -f ci-builds/Beans-1.5.3-test.ipa
           git commit -m "ci: attach test ipa [skip ci]" || exit 0
           git push
