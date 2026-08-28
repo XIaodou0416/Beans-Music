@@ -159,7 +159,7 @@ struct ThirdPartySourceImportSheet: View {
         jsonText = text
         let sources = parseSources(text)
         guard !sources.isEmpty else {
-            errorMessage = "文件中未找到可用的音源配置（JSON 对象 / 数组）"
+            errorMessage = "文件中未找到可用的音源配置。若这是混淆后的 LX 脚本，需要脚本暴露可转换的接口地址后才能导入。"
             return
         }
         for source in sources {
@@ -177,6 +177,9 @@ struct ThirdPartySourceImportSheet: View {
         guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8) else { return [] }
         if let lxSources = parseLXScript(trimmed), !lxSources.isEmpty {
             return lxSources
+        }
+        if let postSources = parseLXPostMusicURLScript(trimmed), !postSources.isEmpty {
+            return postSources
         }
         if let eventSources = parseLXEventScript(trimmed), !eventSources.isEmpty {
             return eventSources
@@ -231,9 +234,39 @@ struct ThirdPartySourceImportSheet: View {
         return sources
     }
 
+    /// 兼容 ikun 等新式 LX 音源：POST /music/url，body = source/musicId/quality。
+    private func parseLXPostMusicURLScript(_ text: String) -> [ThirdPartySource]? {
+        guard looksLikeLXScript(text),
+              text.contains("EVENT_NAMES.request"),
+              text.contains("musicUrl"),
+              text.contains("/music/url") else { return nil }
+        guard let apiURL = firstCapture(#"(?:const|let|var)\s+API_URL\s*=\s*['\"]([^'\"]+)['\"]"#, in: text)
+                ?? firstCapture(#"['\"](https?://[^'\"]+)['\"]\s*\+\s*['\"]/music/url['\"]"#, in: text)
+                ?? firstCapture(#"['\"](https?://[^'\"]+/music/url)['\"]"#, in: text) else { return nil }
+
+        let scriptName = firstCapture(#"@name\s+([^\r\n]+)"#, in: text)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "LX POST 音源"
+        let apiKey = firstCapture(#"(?:const|let|var)\s+API_KEY\s*=\s*['\"]([^'\"]*)['\"]"#, in: text) ?? ""
+        let supported: [(code: String, name: String)] = [("wy", "网易云"), ("tx", "QQ音乐"), ("kg", "酷狗音乐")]
+        let declared = declaredLXProviders(in: text)
+        let providers = supported.filter { declared.isEmpty || declared.contains($0.code) }
+        guard !providers.isEmpty else { return nil }
+
+        let template = apiURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        return providers.map { provider in
+            ThirdPartySource(
+                name: "\(scriptName) · \(provider.name)",
+                kind: "lx-post-json",
+                template: template,
+                urlPath: "url|data.url|data.play_url|data.music_url|music_url|play_url",
+                headers: ["source": provider.code, "quality": "flac", "apiKey": apiKey]
+            )
+        }
+    }
+
     /// 将“非常刀”等 LX 事件脚本里声明的直链接口转换为 Beans 模板配置，不执行任意 JavaScript。
     private func parseLXEventScript(_ text: String) -> [ThirdPartySource]? {
-        guard text.contains("globalThis.lx"),
+        guard looksLikeLXScript(text),
               text.contains("EVENT_NAMES.request"),
               text.contains("musicUrl") else { return nil }
 
@@ -308,6 +341,22 @@ struct ThirdPartySourceImportSheet: View {
               match.numberOfRanges > 1,
               let range = Range(match.range(at: 1), in: text) else { return nil }
         return String(text[range])
+    }
+
+    private func looksLikeLXScript(_ text: String) -> Bool {
+        text.contains("globalThis.lx") || text.contains("globalThis['lx']") || text.contains("globalThis[\"lx\"]")
+    }
+
+    private func declaredLXProviders(in text: String) -> Set<String> {
+        let supported = ["wy", "tx", "kg"]
+        if let json = firstCapture(#"MUSIC_QUALITY\s*=\s*JSON\.parse\(\s*'([^']+)'\s*\)"#, in: text),
+           let data = json.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return Set(obj.keys.filter { supported.contains($0) })
+        }
+        return Set(supported.filter { code in
+            text.contains("\"\(code)\"") || text.contains("'\(code)'") || text.range(of: #"\b\#(code)\s*:"#, options: .regularExpression) != nil
+        })
     }
 }
 

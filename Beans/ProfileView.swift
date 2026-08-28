@@ -374,6 +374,7 @@ struct ProfileView: View {
                 }
                 .frame(height: 108)
                 .frame(maxWidth: .infinity)
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(alignment: .bottomTrailing) {
                     if isActive {
@@ -2082,6 +2083,7 @@ struct SettingsView: View {
                 }
                 .frame(height: 108)
                 .frame(maxWidth: .infinity)
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(alignment: .bottomTrailing) {
                     if isActive {

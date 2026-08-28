@@ -585,9 +585,12 @@ struct DiscoverView: View {
 
     private func load(force: Bool = false) async {
         let cache = DiscoverCache.shared
+        let requestedSource = source
         // 网易云非「全部」分类的歌单不缓存（切换分类即重新拉取）
-        let cacheable = neteaseCat == "全部" || source != .netease
-        if let cached = cache.cached(for: source), !force, cacheable {
+        let requestedCat = neteaseCat
+        let cacheable = requestedCat == "全部" || requestedSource != .netease
+        if let cached = cache.cached(for: requestedSource), !force, cacheable {
+            guard !Task.isCancelled, requestedSource == source else { return }
             apply(cached)
             loading = false
             errorMessage = nil
@@ -599,14 +602,16 @@ struct DiscoverView: View {
         }
 
         do {
-            let snapshot = try await fetchSnapshot(for: source)
+            let snapshot = try await fetchSnapshot(for: requestedSource, neteaseCat: requestedCat)
+            guard !Task.isCancelled, requestedSource == source else { return }
             apply(snapshot)
             if cacheable, !snapshot.isEmpty {
-                cache.save(snapshot, for: source)
+                cache.save(snapshot, for: requestedSource)
             }
             loading = false
             errorMessage = nil
         } catch {
+            guard !Task.isCancelled, requestedSource == source else { return }
             loading = false
             if !hasAnyData {
                 errorMessage = error.localizedDescription
@@ -628,7 +633,7 @@ struct DiscoverView: View {
         }
     }
 
-    private func fetchSnapshot(for source: SearchProvider) async throws -> DiscoverCache.Snapshot {
+    private func fetchSnapshot(for source: SearchProvider, neteaseCat: String) async throws -> DiscoverCache.Snapshot {
         var snapshot = DiscoverCache.Snapshot()
         snapshot.savedAt = Date()
         switch source {

@@ -54,6 +54,8 @@ enum UnblockService {
                 group.addTask {
                     if source.kind == "lx-script" {
                         return await lxScript(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
+                    } else if source.kind == "lx-post-json" {
+                        return await lxPostJSON(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
                     } else if source.kind == "lx" {
                         return await lx(source: source, keyword: keyword)
                     } else {
@@ -152,6 +154,73 @@ enum UnblockService {
         return nil
     }
 
+    /// 新式 LX 脚本协议：POST /music/url，body = source/musicId/quality。
+    private static func lxPostJSON(source: ThirdPartySource, songSource: SongSource, neteaseID: Int, qqMid: String?, kugouID: String?) async -> Resolved? {
+        let provider = source.headers["source"] ?? providerCode(for: songSource)
+        let songID: String
+        switch (songSource, provider) {
+        case (.netease, "wy") where neteaseID > 0:
+            songID = String(neteaseID)
+        case (.qq, "tx"):
+            guard let qqMid, !qqMid.isEmpty else { return nil }
+            songID = qqMid
+        case (.kugou, "kg"):
+            guard let kugouID, !kugouID.isEmpty else { return nil }
+            songID = kugouID
+        default:
+            return nil
+        }
+
+        let base = source.template.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        let endpoint = base.hasSuffix("/music/url") ? base : "\(base)/music/url"
+        let preferred = source.headers["quality"] ?? source.headers["br"] ?? "flac"
+        for quality in lxPostQualities(preferred) {
+            guard let url = URL(string: endpoint) else { continue }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 7
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("lx-music-mobile/1.0", forHTTPHeaderField: "User-Agent")
+            if let apiKey = source.headers["apiKey"], !apiKey.isEmpty {
+                request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key")
+                request.setValue(apiKey, forHTTPHeaderField: "X-Request-Key")
+            }
+            request.httpBody = try? JSONSerialization.data(withJSONObject: [
+                "source": provider,
+                "musicId": songID,
+                "quality": quality
+            ])
+
+            guard let (data, response) = try? await session.data(for: request),
+                  let http = response as? HTTPURLResponse else {
+                BeansLogger.shared.log("导入音源请求失败：\(source.name) 平台=\(provider) 音质=\(quality)", level: .debug)
+                continue
+            }
+            guard http.statusCode == 200 else {
+                BeansLogger.shared.log("导入音源 HTTP 失败：\(source.name) 状态=\(http.statusCode) 平台=\(provider) 音质=\(quality)", level: .debug)
+                continue
+            }
+            guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                BeansLogger.shared.log("导入音源响应格式错误：\(source.name)", level: .debug)
+                continue
+            }
+            let code = object["code"] as? Int ?? Int(object["code"] as? String ?? "") ?? 200
+            guard code == 0 || code == 200,
+                  let value = valueAtAnyPath(object, source.urlPath),
+                  let urlString = value as? String,
+                  !urlString.isEmpty,
+                  let playURL = URL(string: urlString) else {
+                let message = object["msg"] as? String ?? object["message"] as? String ?? "code=\(code)"
+                BeansLogger.shared.log("导入音源返回失败：\(source.name) \(message)", level: .debug)
+                continue
+            }
+            BeansLogger.shared.log("导入音源命中：\(source.name) 平台=\(provider) 音质=\(quality)", level: .info)
+            return Resolved(url: playURL, source: source.name)
+        }
+        return nil
+    }
+
     private static func custom(
         source: ThirdPartySource,
         name: String,
@@ -223,6 +292,13 @@ enum UnblockService {
         case .qq: return "tx"
         case .kugou: return "kg"
         }
+    }
+
+    private static func lxPostQualities(_ preferred: String) -> [String] {
+        let normalized = preferred.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = ["flac24bit", "hires", "flac", "320k", "128k"]
+        guard !normalized.isEmpty else { return fallback }
+        return [normalized] + fallback.filter { $0 != normalized }
     }
 
     // MARK: - 落雪音乐源（lx-music-api-server 风格 HTTP API）

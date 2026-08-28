@@ -27,6 +27,8 @@ struct PlayerView: View {
     @State private var showComments = false
     @State private var showDownloadPicker = false
     @State private var showShare = false
+    @State private var showMoreActions = false
+    @State private var showRatePicker = false
     /// 下载完成后直接弹原生分享（用户自行选择保存或转发）
     @State private var shareFile: ShareFileItem?
     @State private var sharedFileURL: URL?
@@ -326,6 +328,25 @@ struct PlayerView: View {
             }
             Button("取消", role: .cancel) {}
         }
+        .confirmationDialog("更多操作", isPresented: $showMoreActions, titleVisibility: .visible) {
+            Button("倍速播放") { showRatePicker = true }
+            Button(player.sleepTimerRemaining > 0 ? "定时关闭（进行中）" : "定时关闭") { showSleepTimer = true }
+            Button("添加到歌单") { showAddToPlaylist = true }
+            Button("下载歌曲") { showDownloadPicker = true }
+            Button("分享歌曲") { showShare = true }
+            Button("加入本地歌单") { showAddToLocalPlaylist = true }
+            Button("播放器设置") { showPlayerSettings = true }
+            Button("取消", role: .cancel) {}
+        }
+        .confirmationDialog("倍速播放", isPresented: $showRatePicker, titleVisibility: .visible) {
+            ForEach(rateOptions, id: \.self) { option in
+                Button(abs(player.rate - option) < 0.01 ? "\(String(format: "%.2gx", option)) ✓" : String(format: "%.2gx", option)) {
+                    player.setRate(option)
+                    BeansHaptics.select()
+                }
+            }
+            Button("取消", role: .cancel) {}
+        }
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
@@ -455,55 +476,9 @@ struct PlayerView: View {
             }
             .buttonStyle(GlassPressButtonStyle())
 
-            Menu {
-                Menu {
-                    ForEach(rateOptions, id: \.self) { option in
-                        Button {
-                            player.setRate(option)
-                            BeansHaptics.select()
-                        } label: {
-                            if abs(player.rate - option) < 0.01 {
-                                Label(String(format: "%.2gx", option), systemImage: "checkmark")
-                            } else {
-                                Text(String(format: "%.2gx", option))
-                            }
-                        }
-                    }
-                } label: {
-                    Label("倍速播放", systemImage: "speedometer")
-                }
-                Button {
-                    showSleepTimer = true
-                } label: {
-                    Label(player.sleepTimerRemaining > 0 ? "定时关闭（进行中）" : "定时关闭", systemImage: "moon.zzz")
-                }
-                Button {
-                    showAddToPlaylist = true
-                } label: {
-                    Label("添加到歌单", systemImage: "text.badge.plus")
-                }
-                Button {
-                    showDownloadPicker = true
-                } label: {
-                    Label("下载歌曲", systemImage: "arrow.down.circle")
-                }
-                Button {
-                    showShare = true
-                } label: {
-                    Label("分享歌曲", systemImage: "square.and.arrow.up")
-                }
-                Divider()
-                Button {
-                    showAddToLocalPlaylist = true
-                } label: {
-                    Label("加入本地歌单", systemImage: "internaldrive")
-                }
-                Divider()
-                Button {
-                    showPlayerSettings = true
-                } label: {
-                    Label("播放器设置", systemImage: "slider.horizontal.3")
-                }
+            Button {
+                BeansHaptics.tap()
+                showMoreActions = true
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.system(size: 14, weight: .semibold))
@@ -515,7 +490,7 @@ struct PlayerView: View {
                     .clipShape(Circle())
                     .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GlassPressButtonStyle())
         }
         .padding(.horizontal, 20)
         .padding(.top, 2)

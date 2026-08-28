@@ -403,9 +403,21 @@ final class ThemeStore: ObservableObject {
 
     /// 从壁纸库选择壁纸应用为当前背景（无需再去相册）
     func applyWallpaper(at path: String) {
-        guard FileManager.default.fileExists(atPath: path) else { return }
-        backgroundImagePath = path
-        UserDefaults.standard.set(path, forKey: backgroundImageKey)
+        var target = path
+        if !FileManager.default.fileExists(atPath: target) {
+            restoreWallpapers()
+            let fileName = URL(fileURLWithPath: path).lastPathComponent
+            guard let restored = wallpaperPaths.first(where: {
+                URL(fileURLWithPath: $0).lastPathComponent == fileName && FileManager.default.fileExists(atPath: $0)
+            }) else { return }
+            target = restored
+        }
+        if !wallpaperPaths.contains(target) {
+            wallpaperPaths.insert(target, at: 0)
+            saveWallpaperList()
+        }
+        backgroundImagePath = target
+        UserDefaults.standard.set(target, forKey: backgroundImageKey)
         invalidateBackgroundCache()
     }
 
