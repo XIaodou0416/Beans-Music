@@ -59,7 +59,7 @@ struct PlayerView: View {
     @AppStorage("beans.progressBarStyle") private var progressBarStyle = 0
     /// 进度条单独强调色；空值时跟随播放控件颜色
     @AppStorage("beans.progressAccentHex") private var progressAccentHex = ""
-    /// 底部布局自由调整：开关 + 各组件 x/y/z 数据 + 当前选中组件
+    /// 播放器布局自由调整：开关 + 各组件 x/y/z 数据 + 当前选中组件
     @AppStorage("beans.playerLayoutMode") private var layoutMode = false
     @State private var layoutData: [String: PlayerLayoutEntry] = PlayerLayoutStore.load()
     @State private var layoutPart: PlayerLayoutPart = .progress
@@ -231,6 +231,7 @@ struct PlayerView: View {
 
                         VStack(spacing: 0) {
                             headerBar
+                                .modifier(Layoutable(part: .topBar, enabled: layoutMode, data: $layoutData))
                             content(geo: geo)
                         }
                         .foregroundStyle(palette.text)
@@ -634,6 +635,7 @@ struct PlayerView: View {
                 )
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.96))
+            .modifier(Layoutable(part: .cover, enabled: layoutMode, data: $layoutData))
 
             VStack(spacing: 6) {
                 HStack(spacing: 8) {
@@ -663,10 +665,12 @@ struct PlayerView: View {
                     .onTapGesture { openArtistHome() }
             }
             .padding(.horizontal, 36)
+            .modifier(Layoutable(part: .title, enabled: layoutMode, data: $layoutData))
 
 
             // 封面下歌词阅览（固定高度预留，歌词加载后布局不跳动）
             lyricPreviewBox
+                .modifier(Layoutable(part: .previewLyric, enabled: layoutMode, data: $layoutData))
 
             Spacer(minLength: 2)
         }
@@ -1111,7 +1115,7 @@ struct PlayerView: View {
     }
 
 
-    // MARK: - 底部布局自由调整工具栏（x / y / z + 恢复默认）
+    // MARK: - 播放器自定义布局工具栏（x / y / z + 恢复默认）
 
     /// 当前选中组件的绑定（滑杆读写；歌词映射到独立存储的偏移值）
     private var selectedLayoutEntry: Binding<PlayerLayoutEntry> {
@@ -1144,13 +1148,22 @@ struct PlayerView: View {
 
     /// 各组件 X 滑杆范围
     private var layoutXRange: ClosedRange<CGFloat> {
-        layoutPart == .lyric ? -80...80 : -140...140
+        switch layoutPart {
+        case .lyric:
+            return -80...80
+        case .topBar, .cover, .title, .previewLyric:
+            return -180...180
+        default:
+            return -140...140
+        }
     }
 
     /// 各组件 Y 滑杆范围
     private var layoutYRange: ClosedRange<CGFloat> {
         switch layoutPart {
         case .lyric: return -80...80
+        case .topBar: return -80...160
+        case .cover, .title, .previewLyric: return -220...220
         case .grabber: return -120...120
         default: return -300...300
         }
@@ -1159,7 +1172,7 @@ struct PlayerView: View {
     private var layoutToolbar: some View {
         VStack(spacing: 10) {
             HStack {
-                Text("布局调整")
+                Text("自定义布局")
                     .font(BeansFont.appFont(15, .bold))
                 Spacer()
                 Button {
@@ -1211,7 +1224,7 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Text("编辑模式：拖动组件到任意位置（X / Y）")
+                Text("编辑模式：顶部、封面、歌名、歌词和底部控件都可调")
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(palette.secondary)
             }
@@ -2571,17 +2584,17 @@ struct PlayerSettingsSheet: View {
         }
     }
 
-    /// 布局卡片：自定义底部布局 / 指示线 / 歌词对齐
+    /// 布局卡片：播放器自定义布局 / 指示线 / 歌词对齐
     private var layoutCard: some View {
         settingCard("布局", isExpanded: $layoutExpanded) {
-            settingToggle("自定义底部布局", isOn: Binding(
+            settingToggle("播放器自定义布局", isOn: Binding(
                 get: { layoutMode },
                 set: { newValue in
                     layoutMode = newValue
                     // 开启后直接回到播放页进行调节
                     if newValue { dismiss() }
                 }
-            ), caption: "开启后回到播放页，可直接拖动底部组件到任意位置")
+            ), caption: "开启后回到播放页，可拖动顶部栏、封面、歌名、预览歌词和底部控件")
             Divider().opacity(0.5)
             settingToggle("显示底部指示线", isOn: $deckGrabberEnabled,
                           caption: "关闭后隐藏指示线，仍可上滑呼出评论区")

@@ -1,9 +1,13 @@
 import SwiftUI
 
-// MARK: - 播放器底部 UI 自由调整（x / y / 大小）
+// MARK: - 播放器 UI 自由调整（x / y / 大小）
 
-/// 可自由调整的底部组件
+/// 可自由调整的播放器组件
 enum PlayerLayoutPart: String, CaseIterable, Identifiable {
+    case topBar = "顶部栏"
+    case cover = "封面"
+    case title = "歌名"
+    case previewLyric = "预览歌词"
     case progress = "进度条"
     case controls = "控制行"
     case loop = "循环按钮"
@@ -66,6 +70,8 @@ enum PlayerLayoutStore {
     /// 各组件默认位置 / 大小（相对原始布局的偏移与缩放）
     static func defaultEntry(for part: PlayerLayoutPart) -> PlayerLayoutEntry {
         switch part {
+        case .topBar, .cover, .title, .previewLyric:
+            return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
         case .progress:
             return PlayerLayoutEntry(x: 0, y: 17, scale: 1)
         case .controls:
