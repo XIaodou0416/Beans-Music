@@ -341,8 +341,7 @@ struct ThirdPartySourceImportSheet: View {
     /// 混淆 LX 脚本兜底：无法静态转换接口时，保存脚本文本，由播放解析时在后台 JSContext 执行 musicUrl。
     private func parseRawLXScript(_ text: String) -> [ThirdPartySource]? {
         guard looksLikeLXScript(text),
-              text.contains("EVENT_NAMES.request") || text.contains("EVENT_NAMES"),
-              text.contains("musicUrl") || text.contains("music") else { return nil }
+              text.contains("EVENT_NAMES") else { return nil }
         let scriptName = firstCapture(#"@name\s+([^\r\n]+)"#, in: text)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? "导入 LX 脚本"
         let providers: [(code: String, name: String)] = [("wy", "网易云"), ("tx", "QQ音乐"), ("kg", "酷狗音乐")]

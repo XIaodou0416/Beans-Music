@@ -205,9 +205,28 @@ enum UnblockService {
               env: 'ios',
               version: '1.0.0',
               utils: {},
-              request: function(url, options) { return __beansRequest(url, options || {}); },
+              request: function(url, options) {
+                if (url && typeof url === 'object') {
+                  return __beansRequest(url.url || url.uri || url.href || '', url);
+                }
+                return __beansRequest(url, options || {});
+              },
               on: function(name, handler) { if (name === 'request') __beansHandler = handler; },
               send: function() {}
+            };
+            globalThis.fetch = function(url, options) {
+              var resp = globalThis.lx.request(url, options || {});
+              return Promise.resolve({
+                ok: resp && resp.statusCode >= 200 && resp.statusCode < 300,
+                status: resp ? resp.statusCode : 0,
+                statusText: '',
+                headers: {},
+                json: function() { return Promise.resolve(resp ? resp.body : null); },
+                text: function() {
+                  var body = resp ? resp.body : '';
+                  return Promise.resolve(typeof body === 'string' ? body : JSON.stringify(body || {}));
+                }
+              });
             };
             globalThis.console = { log: function(msg) { __beansLog(String(msg)); }, warn: function(msg) { __beansLog(String(msg)); }, error: function(msg) { __beansLog(String(msg)); } };
             """)
@@ -229,7 +248,9 @@ enum UnblockService {
                 "artist": artists,
                 "artists": artists,
                 "interval": durationMS / 1000,
-                "duration": durationMS
+                "duration": durationMS,
+                "quality": source.headers["quality"] ?? "flac",
+                "type": source.headers["quality"] ?? "flac"
             ]
             let args: [String: Any] = [
                 "source": provider,
