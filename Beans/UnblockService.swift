@@ -1,4 +1,5 @@
 import Foundation
+import JavaScriptCore
 
 /// 灰色歌曲 / VIP 试听解锁：仅使用用户导入的自定义音源（JSON 配置 / 落雪 API 服务器）
 /// 由 PlayerManager 在网易云 / QQ 无完整 URL 时自动调用。
@@ -56,6 +57,8 @@ enum UnblockService {
                         return await lxScript(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
                     } else if source.kind == "lx-post-json" {
                         return await lxPostJSON(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
+                    } else if source.kind == "lx-raw-script" {
+                        return await lxRawScript(source: source, name: name, artists: artists, durationMS: durationMS, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
                     } else if source.kind == "lx" {
                         return await lx(source: source, keyword: keyword)
                     } else {
@@ -150,6 +153,187 @@ enum UnblockService {
             }
             BeansLogger.shared.log("导入音源命中：\(source.name) 平台=\(provider) 音质=\(quality)", level: .info)
             return Resolved(url: playURL, source: source.name)
+        }
+        return nil
+    }
+
+    /// 原生 LX 脚本兜底。仅在后台执行脚本的 musicUrl 事件，并提供同步 HTTP request 桥。
+    private static func lxRawScript(source: ThirdPartySource, name: String, artists: String, durationMS: Int, songSource: SongSource, neteaseID: Int, qqMid: String?, kugouID: String?) async -> Resolved? {
+        guard !source.template.isEmpty else { return nil }
+        let provider = source.headers["source"] ?? providerCode(for: songSource)
+        let songID: String
+        switch (songSource, provider) {
+        case (.netease, "wy") where neteaseID > 0:
+            songID = String(neteaseID)
+        case (.qq, "tx"):
+            guard let qqMid, !qqMid.isEmpty else { return nil }
+            songID = qqMid
+        case (.kugou, "kg"):
+            guard let kugouID, !kugouID.isEmpty else { return nil }
+            songID = kugouID
+        default:
+            return nil
+        }
+
+        return await Task.detached(priority: .utility) {
+            guard let context = JSContext() else { return nil }
+            var contextRef: JSContext? = context
+            context.exceptionHandler = { _, exception in
+                if let message = exception?.toString(), !message.isEmpty {
+                    BeansLogger.shared.log("LX脚本执行异常：\(source.name) \(message)", level: .debug)
+                }
+            }
+
+            let requestBlock: @convention(block) (JSValue?, JSValue?) -> JSValue? = { urlValue, optionsValue in
+                let urlString = urlValue?.toString() ?? ""
+                let options = optionsValue?.toDictionary() as? [String: Any] ?? [:]
+                let response = blockingScriptRequest(urlString: urlString, options: options)
+                return JSValue(object: response, in: contextRef)
+            }
+            let logBlock: @convention(block) (String) -> Void = { message in
+                BeansLogger.shared.log("LX脚本：\(message)", level: .debug)
+            }
+            context.setObject(requestBlock, forKeyedSubscript: "__beansRequest" as NSString)
+            context.setObject(logBlock, forKeyedSubscript: "__beansLog" as NSString)
+            context.evaluateScript("""
+            var __beansHandler = null;
+            var __beansDone = false;
+            var __beansResult = null;
+            var __beansError = null;
+            globalThis.lx = {
+              EVENT_NAMES: { inited: 'inited', request: 'request' },
+              env: 'ios',
+              version: '1.0.0',
+              utils: {},
+              request: function(url, options) { return __beansRequest(url, options || {}); },
+              on: function(name, handler) { if (name === 'request') __beansHandler = handler; },
+              send: function() {}
+            };
+            globalThis.console = { log: function(msg) { __beansLog(String(msg)); }, warn: function(msg) { __beansLog(String(msg)); }, error: function(msg) { __beansLog(String(msg)); } };
+            """)
+            context.evaluateScript(source.template)
+            guard context.objectForKeyedSubscript("__beansHandler")?.isUndefined == false else {
+                BeansLogger.shared.log("LX脚本未注册 musicUrl 处理器：\(source.name)", level: .debug)
+                contextRef = nil
+                return nil
+            }
+
+            let info: [String: Any] = [
+                "id": songID,
+                "hash": provider == "kg" ? songID : "",
+                "songmid": provider == "tx" ? songID : "",
+                "mid": provider == "tx" ? songID : "",
+                "name": name,
+                "songName": name,
+                "singer": artists,
+                "artist": artists,
+                "artists": artists,
+                "interval": durationMS / 1000,
+                "duration": durationMS
+            ]
+            let args: [String: Any] = [
+                "source": provider,
+                "action": "musicUrl",
+                "quality": source.headers["quality"] ?? "flac",
+                "info": info,
+                "musicInfo": info
+            ]
+            guard let argsData = try? JSONSerialization.data(withJSONObject: args),
+                  let argsJSON = String(data: argsData, encoding: .utf8) else {
+                contextRef = nil
+                return nil
+            }
+            context.evaluateScript("""
+            Promise.resolve(__beansHandler(\(argsJSON))).then(function(value) {
+              __beansResult = value;
+              __beansDone = true;
+            }).catch(function(error) {
+              __beansError = error && error.message ? error.message : String(error);
+              __beansDone = true;
+            });
+            """)
+
+            let deadline = Date().addingTimeInterval(7)
+            while Date() < deadline {
+                if context.objectForKeyedSubscript("__beansDone")?.toBool() == true {
+                    break
+                }
+                RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+                context.evaluateScript("void 0")
+            }
+            if let error = context.objectForKeyedSubscript("__beansError")?.toString(), !error.isEmpty, error != "undefined" {
+                BeansLogger.shared.log("LX脚本返回失败：\(source.name) \(error)", level: .debug)
+            }
+            let result = context.objectForKeyedSubscript("__beansResult")
+            let urlString = scriptResultURL(result, urlPath: source.urlPath)
+            contextRef = nil
+            guard let urlString, let url = URL(string: urlString) else { return nil }
+            BeansLogger.shared.log("导入音源命中：\(source.name) 平台=\(provider)", level: .info)
+            return Resolved(url: url, source: source.name)
+        }.value
+    }
+
+    private static func blockingScriptRequest(urlString: String, options: [String: Any]) -> [String: Any] {
+        guard let url = URL(string: urlString) else {
+            return ["statusCode": -1, "body": ["code": -1, "msg": "bad url"]]
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 7
+        request.httpMethod = (options["method"] as? String ?? "GET").uppercased()
+        if let headers = options["headers"] as? [String: Any] {
+            for (key, value) in headers {
+                request.setValue("\(value)", forHTTPHeaderField: key)
+            }
+        }
+        if request.value(forHTTPHeaderField: "User-Agent") == nil {
+            request.setValue("lx-music-mobile/1.0", forHTTPHeaderField: "User-Agent")
+        }
+        if let body = options["body"] {
+            if let text = body as? String {
+                request.httpBody = text.data(using: .utf8)
+            } else if JSONSerialization.isValidJSONObject(body) {
+                request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+                if request.value(forHTTPHeaderField: "Content-Type") == nil {
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                }
+            }
+        }
+        let semaphore = DispatchSemaphore(value: 0)
+        var responseData = Data()
+        var statusCode = -1
+        var responseError: String?
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            responseData = data ?? Data()
+            statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            responseError = error?.localizedDescription
+            semaphore.signal()
+        }.resume()
+        _ = semaphore.wait(timeout: .now() + 8)
+        let body: Any
+        if let json = try? JSONSerialization.jsonObject(with: responseData) {
+            body = json
+        } else {
+            body = String(data: responseData, encoding: .utf8) ?? ""
+        }
+        if let responseError {
+            return ["statusCode": statusCode, "body": ["code": -1, "msg": responseError]]
+        }
+        return ["statusCode": statusCode, "body": body]
+    }
+
+    private static func scriptResultURL(_ result: JSValue?, urlPath: String) -> String? {
+        guard let result, !result.isUndefined, !result.isNull else { return nil }
+        if let text = result.toString(), text.hasPrefix("http") {
+            return text
+        }
+        if let dict = result.toDictionary() {
+            if let value = valueAtAnyPath(dict, urlPath) as? String, value.hasPrefix("http") {
+                return value
+            }
+            if let body = dict["body"] as? [String: Any],
+               let value = valueAtAnyPath(body, urlPath) as? String, value.hasPrefix("http") {
+                return value
+            }
         }
         return nil
     }

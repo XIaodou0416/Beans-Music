@@ -486,21 +486,28 @@ final class PlayerManager: NSObject, ObservableObject {
     /// 酷狗兜底：官方播放失败后使用导入音源作为备选，便于验证用户导入音源是否可用。
     private func kugouFallback(song: Song, enableUnblock: Bool) async -> UnblockService.Resolved? {
         guard enableUnblock else { return nil }
-        let kugouID = song.kugouHash ?? song.kugouAlbumAudioId ?? ""
-        if kugouID.isEmpty {
+        let kugouIDs = [song.kugouHash, song.kugouAlbumAudioId]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .reduce(into: [String]()) { result, id in
+                if !result.contains(id) { result.append(id) }
+            }
+        if kugouIDs.isEmpty {
             BeansLogger.shared.log("酷狗兜底跳过：缺少 album_audio_id/hash", level: .debug)
         } else {
-            let resolved = await UnblockService.resolve(
-                name: song.name,
-                artists: song.artists,
-                durationMS: Int(song.duration * 1000),
-                neteaseID: 0,
-                songSource: .kugou,
-                kugouID: kugouID
-            )
-            if let resolved {
-                BeansLogger.shared.log("酷狗兜底：\(song.name) 酷狗音源=命中", level: .debug)
-                return resolved
+            for kugouID in kugouIDs {
+                let resolved = await UnblockService.resolve(
+                    name: song.name,
+                    artists: song.artists,
+                    durationMS: Int(song.duration * 1000),
+                    neteaseID: 0,
+                    songSource: .kugou,
+                    kugouID: kugouID
+                )
+                if let resolved {
+                    BeansLogger.shared.log("酷狗兜底：\(song.name) 酷狗音源=命中 id=\(kugouID.count)位", level: .debug)
+                    return resolved
+                }
             }
         }
 

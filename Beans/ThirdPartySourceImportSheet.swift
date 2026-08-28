@@ -187,6 +187,9 @@ struct ThirdPartySourceImportSheet: View {
         if let xinghaiSources = parseXinghaiEventScript(trimmed), !xinghaiSources.isEmpty {
             return xinghaiSources
         }
+        if let rawSources = parseRawLXScript(trimmed), !rawSources.isEmpty {
+            return rawSources
+        }
         if let list = try? JSONDecoder().decode([ThirdPartySource].self, from: data), !list.isEmpty {
             return list
         }
@@ -333,6 +336,25 @@ struct ThirdPartySourceImportSheet: View {
             ))
         }
         return sources.isEmpty ? nil : sources
+    }
+
+    /// 混淆 LX 脚本兜底：无法静态转换接口时，保存脚本文本，由播放解析时在后台 JSContext 执行 musicUrl。
+    private func parseRawLXScript(_ text: String) -> [ThirdPartySource]? {
+        guard looksLikeLXScript(text),
+              text.contains("EVENT_NAMES.request") || text.contains("EVENT_NAMES"),
+              text.contains("musicUrl") || text.contains("music") else { return nil }
+        let scriptName = firstCapture(#"@name\s+([^\r\n]+)"#, in: text)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "导入 LX 脚本"
+        let providers: [(code: String, name: String)] = [("wy", "网易云"), ("tx", "QQ音乐"), ("kg", "酷狗音乐")]
+        return providers.map { provider in
+            ThirdPartySource(
+                name: "\(scriptName) · \(provider.name)",
+                kind: "lx-raw-script",
+                template: text,
+                urlPath: "url|data.url|data.play_url|data.music_url|music_url|play_url",
+                headers: ["source": provider.code, "quality": "flac"]
+            )
+        }
     }
 
     private func firstCapture(_ pattern: String, in text: String) -> String? {
