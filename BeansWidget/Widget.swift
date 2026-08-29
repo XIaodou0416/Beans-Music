@@ -44,7 +44,7 @@ struct NowPlayingActivityView: View {
                     .lineLimit(1)
                 Text(context.state.lyricText.isEmpty ? context.state.artist : context.state.lyricText)
                     .font(.caption)
-                    .foregroundStyle(context.state.lyricText.isEmpty ? .secondary : .primary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                 ProgressView(value: context.state.duration > 0 ? min(context.state.progress / context.state.duration, 1) : 0)
                     .tint(.secondary)
@@ -77,7 +77,7 @@ struct NowPlayingLiveActivity: Widget {
                                 .lineLimit(1)
                             Text(context.state.lyricText.isEmpty ? context.state.artist : context.state.lyricText)
                                 .font(.caption)
-                                .foregroundStyle(context.state.lyricText.isEmpty ? .secondary : .primary)
+                                .foregroundStyle(.secondary)
                                 .lineLimit(2)
                         }
                     }

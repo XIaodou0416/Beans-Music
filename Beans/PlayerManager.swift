@@ -634,7 +634,9 @@ final class PlayerManager: NSObject, ObservableObject {
             bumpPlayCount(song)
             lastCountedSongID = song.identityKey
         }
-        loadLiveActivityLyrics(for: song)
+        if let song = currentSong {
+            loadLiveActivityLyrics(for: song)
+        }
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.2, preferredTimescale: 600), queue: .main) { [weak self] time in
             guard let self, let player = self.player else { return }
             if time.seconds.isFinite {
@@ -943,15 +945,15 @@ final class PlayerManager: NSObject, ObservableObject {
             lyricText: lyricText
         )
         if let activity = liveActivity as? Activity<NowPlayingAttributes> {
-            Task { await activity.update(using: ActivityContent(state: state, staleDate: nil)) }
+            Task { await activity.update(using: state) }
         } else if let existing = Activity<NowPlayingAttributes>.activities.first {
             liveActivity = existing
-            Task { await existing.update(using: ActivityContent(state: state, staleDate: nil)) }
+            Task { await existing.update(using: state) }
         } else {
             do {
                 let activity = try Activity<NowPlayingAttributes>.request(
                     attributes: NowPlayingAttributes(),
-                    content: ActivityContent(state: state, staleDate: nil),
+                    contentState: state,
                     pushType: nil
                 )
                 liveActivity = activity
@@ -967,7 +969,7 @@ final class PlayerManager: NSObject, ObservableObject {
         let fallbackState = (liveActivity as? Activity<NowPlayingAttributes>)?.contentState
         for activity in Activity<NowPlayingAttributes>.activities {
             let state = fallbackState ?? activity.contentState
-            Task { await activity.end(using: ActivityContent(state: state, staleDate: nil), dismissalPolicy: .immediate) }
+            Task { await activity.end(using: state, dismissalPolicy: .immediate) }
         }
         liveActivity = nil
         lastLiveActivitySync = nil
@@ -1013,9 +1015,10 @@ final class PlayerManager: NSObject, ObservableObject {
                 parsed = LyricParser.parse(lrc ?? "", translationRaw: tlyric)
             }
             guard !Task.isCancelled else { return }
+            let parsedResult = parsed
             await MainActor.run {
                 guard self.currentSong?.identityKey == identity else { return }
-                self.liveActivityLyricLines = parsed
+                self.liveActivityLyricLines = parsedResult
                 self.liveActivityLyricIdentity = identity
                 self.syncLiveActivity(force: true)
             }
