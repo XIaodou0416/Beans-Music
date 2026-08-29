@@ -229,7 +229,6 @@ enum BeansPlayerButtonStyle: String, CaseIterable, Identifiable {
 
 enum BeansPlayerDustMode: String, CaseIterable, Identifiable {
     case off
-    case still
     case snow
 
     var id: String { rawValue }
@@ -237,16 +236,14 @@ enum BeansPlayerDustMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .off: return "关闭"
-        case .still: return "静态浮尘"
-        case .snow: return "动态轻雪"
+        case .snow: return "动态浮尘"
         }
     }
 
     var icon: String {
         switch self {
         case .off: return "circle.slash"
-        case .still: return "sparkle"
-        case .snow: return "snowflake"
+        case .snow: return "sparkles"
         }
     }
 }

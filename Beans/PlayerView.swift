@@ -53,6 +53,8 @@ struct PlayerView: View {
     /// 播放器氛围：背景流动开关 / 速度 / 呼吸光晕强度
     @AppStorage("beans.playerBreath") private var playerBreath = 0.6
     @AppStorage("beans.playerDustMode") private var playerDustModeRaw = BeansPlayerDustMode.off.rawValue
+    @AppStorage("beans.playerDustDensity") private var playerDustDensity = 1.0
+    @AppStorage("beans.playerDustSize") private var playerDustSize = 1.0
     /// 播放控件颜色是否跟随封面主色；关闭后使用全局主题色
     @AppStorage("beans.playerControlsUseCoverColor") private var controlsUseCoverColor = true
     /// 播放器顶部与底部控制按钮的统一样式
@@ -102,6 +104,7 @@ struct PlayerView: View {
     @AppStorage("beans.albumPreviewDimColorHex") private var albumPreviewDimColorHex = ""
     @AppStorage("beans.albumTextGradient") private var albumTextGradient = false
     @AppStorage("beans.albumTextGlow") private var albumTextGlow = false
+    @AppStorage("beans.albumTextGlowIntensity") private var albumTextGlowIntensity = 1.0
     @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.classic.rawValue
     /// 侧边滑动手势当前位移（刷视频式切歌过渡）
     @State private var swipeOffset: CGFloat = 0
@@ -220,7 +223,7 @@ struct PlayerView: View {
     }
 
     private func albumGlow(_ color: Color, strong: Bool = false) -> Color {
-        albumTextGlow ? color.opacity(strong ? 0.46 : 0.30) : .clear
+        albumTextGlow ? color.opacity((strong ? 0.46 : 0.30) * albumTextGlowIntensity) : .clear
     }
 
     private var playerVisualsActive: Bool {
@@ -465,6 +468,8 @@ struct PlayerView: View {
                 secondary: palette.secondary,
                 isPlaying: playerVisualsActive,
                 dustMode: playerDustMode,
+                dustDensity: playerDustDensity,
+                dustSize: playerDustSize,
                 breath: playerBreath
             )
             if djVisualEnabled {
@@ -855,9 +860,9 @@ struct PlayerView: View {
     }
 
     private func controlPanelAlbumPanel(geo: GeometryProxy) -> some View {
-        let panelWidth = min(geo.size.width - 54, 392)
-        let panelHeight = min(max(398, geo.size.height * 0.54), 486)
-        let coverHeight = min(panelHeight * 0.40, 188)
+        let panelWidth = min(geo.size.width - 58, 388)
+        let panelHeight = min(max(376, geo.size.height * 0.50), 458)
+        let coverHeight = min(panelHeight * 0.38, 176)
         let corner: CGFloat = 28
 
         return VStack(spacing: 0) {
@@ -2450,6 +2455,8 @@ struct PlayerSettingsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
     @AppStorage("beans.playerBreath") private var breath = 0.6
     @AppStorage("beans.playerDustMode") private var playerDustModeRaw = BeansPlayerDustMode.off.rawValue
+    @AppStorage("beans.playerDustDensity") private var playerDustDensity = 1.0
+    @AppStorage("beans.playerDustSize") private var playerDustSize = 1.0
     @AppStorage("beans.playerControlsUseCoverColor") private var controlsUseCoverColor = true
     @AppStorage("beans.progressBarStyle") private var progressBarStyle = 0
     @AppStorage("beans.progressAccentHex") private var progressAccentHex = ""
@@ -2489,6 +2496,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.albumPreviewDimColorHex") private var albumPreviewDimColorHex = ""
     @AppStorage("beans.albumTextGradient") private var albumTextGradient = false
     @AppStorage("beans.albumTextGlow") private var albumTextGlow = false
+    @AppStorage("beans.albumTextGlowIntensity") private var albumTextGlowIntensity = 1.0
     @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.classic.rawValue
     @Environment(\.dismiss) private var dismiss
     @AppStorage("beans.playerSettings.playbackExpanded") private var playbackExpanded = false
@@ -2877,6 +2885,16 @@ struct PlayerSettingsSheet: View {
             }
             Divider().opacity(0.5)
             dustModeSelector
+            if playerDustModeRaw == BeansPlayerDustMode.snow.rawValue {
+                settingSlider("浮尘密度", valueText: String(format: "%.1fx", playerDustDensity)) {
+                    Slider(value: $playerDustDensity, in: 0.4...2.6, step: 0.1)
+                        .tint(Color.beansAmber)
+                }
+                settingSlider("浮尘大小", valueText: String(format: "%.1fx", playerDustSize)) {
+                    Slider(value: $playerDustSize, in: 0.8...2.8, step: 0.1)
+                        .tint(Color.beansAmber)
+                }
+            }
             Divider().opacity(0.5)
             CompactSettingGroup {
                 settingToggle("DJ 节奏脉冲光效", isOn: $djVisualEnabled,
@@ -3247,6 +3265,12 @@ struct PlayerSettingsSheet: View {
                 Toggle("文字高光", isOn: $albumTextGlow)
                     .tint(Color.beansAmber)
                     .font(BeansFont.appFont(13))
+                if albumTextGlow {
+                    settingSlider("高光强度", valueText: "\(Int((albumTextGlowIntensity * 100).rounded()))%") {
+                        Slider(value: $albumTextGlowIntensity, in: 0.2...2.0, step: 0.05)
+                            .tint(Color.beansAmber)
+                    }
+                }
                 Divider().opacity(0.35)
                 ColorPicker("歌名颜色", selection: albumTitleColor, supportsOpacity: false)
                     .font(BeansFont.appFont(13))
@@ -3263,6 +3287,7 @@ struct PlayerSettingsSheet: View {
                     albumPreviewDimColorHex = ""
                     albumTextGradient = false
                     albumTextGlow = false
+                    albumTextGlowIntensity = 1.0
                     BeansHaptics.select()
                 } label: {
                     Text("恢复封面页文字默认")

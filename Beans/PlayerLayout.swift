@@ -80,15 +80,15 @@ enum PlayerLayoutStore {
         case .topBack, .topTitle, .topFavorite, .cover, .title, .previewLyric:
             return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
         case .controlCenter:
-            return PlayerLayoutEntry(x: 0, y: -8, scale: 0.94)
+            return PlayerLayoutEntry(x: 0, y: -14, scale: 0.92)
         case .controlCenterCover:
             return PlayerLayoutEntry(x: 0, y: 0, scale: 0.94)
         case .controlCenterTitle:
-            return PlayerLayoutEntry(x: 0, y: -2, scale: 0.96)
+            return PlayerLayoutEntry(x: 0, y: 3, scale: 0.96)
         case .controlCenterLyric:
-            return PlayerLayoutEntry(x: 0, y: -2, scale: 0.96)
+            return PlayerLayoutEntry(x: 0, y: 4, scale: 0.96)
         case .controlCenterActions:
-            return PlayerLayoutEntry(x: 0, y: -4, scale: 0.94)
+            return PlayerLayoutEntry(x: 0, y: 12, scale: 0.94)
         case .progress:
             return PlayerLayoutEntry(x: 0, y: 17, scale: 1)
         case .controls:
