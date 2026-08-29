@@ -225,6 +225,36 @@ enum BeansPlayerButtonStyle: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - 播放器封面页样式
+
+enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
+    case classic
+    case controlPanel
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .classic: return "经典封面"
+        case .controlPanel: return "控制面板"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .classic: return "封面、歌名和预览歌词分层显示"
+        case .controlPanel: return "封面、歌词和快捷操作聚合成高级面板"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .classic: return "square.stack"
+        case .controlPanel: return "slider.horizontal.3"
+        }
+    }
+}
+
 // MARK: - 全局主题（ObservableObject：一处修改，全 App 即时联动）
 
 final class ThemeStore: ObservableObject {
