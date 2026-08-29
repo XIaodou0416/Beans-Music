@@ -51,7 +51,7 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-/// 内置音源管理：首次启动时写入三种插件格式对应的预设。
+/// 内置音源管理：首次启动时写入三种插件格式与两个 LX Music 预设。
 final class UnblockSourceStore: ObservableObject {
     static let shared = UnblockSourceStore()
 
@@ -84,6 +84,24 @@ final class UnblockSourceStore: ObservableObject {
             kind: "paid-qt",
             template: paidURLTemplate,
             headers: ["apiKey": paidAPIKey, "quality": "320k"],
+            isPreset: true
+        ),
+        ThirdPartySource(
+            id: "beans.preset.gdstudio.unified.v1",
+            name: "统一音乐源 · GD Studio",
+            kind: "lx-preset",
+            template: "https://music-api.gdstudio.xyz/api.php?types=url&source={gdSource}&id={id}&br={br}",
+            urlPath: "url",
+            headers: ["quality": "320k", "br": "320", "sources": "wy"],
+            isPreset: true
+        ),
+        ThirdPartySource(
+            id: "beans.preset.dreammeting.v1",
+            name: "忆音音源 · DreamMeting",
+            kind: "lx-preset",
+            template: "https://music.3e0.cn/?server={dreamSource}&type=url&id={id}",
+            urlPath: "url",
+            headers: ["quality": "320k", "sources": "wy,tx", "response": "direct"],
             isPreset: true
         ),
     ]

@@ -95,6 +95,9 @@ struct PlayerView: View {
     @AppStorage("beans.lyricBackground.image") private var lyricBackgroundImagePath = ""
     @AppStorage("beans.lyricBackground.blur") private var lyricBackgroundBlur = 12.0
     @AppStorage("beans.lyricBackground.syncCover") private var lyricBackgroundSyncCover = false
+    /// 封面页歌名与预览歌词颜色；留空时继续跟随封面调色板。
+    @AppStorage("beans.coverSongTitleColor") private var coverSongTitleColorRaw = ""
+    @AppStorage("beans.coverPreviewLyricColor") private var coverPreviewLyricColorRaw = ""
     /// 侧边滑动手势当前位移（刷视频式切歌过渡）
     @State private var swipeOffset: CGFloat = 0
     @State private var coverDrag: CGSize = .zero
@@ -129,6 +132,20 @@ struct PlayerView: View {
             return CoverPalette.make(dominant: dominantColor, colorScheme: colorScheme)
         }
         return CoverPalette.fallback(colorScheme: colorScheme)
+    }
+
+    private var coverPageTitleColor: Color {
+        if coverSongTitleColorRaw.hasPrefix("#"), let color = Color(hex: coverSongTitleColorRaw) {
+            return color
+        }
+        return palette.text
+    }
+
+    private var coverPagePreviewLyricColor: Color {
+        if coverPreviewLyricColorRaw.hasPrefix("#"), let color = Color(hex: coverPreviewLyricColorRaw) {
+            return color
+        }
+        return palette.secondary
     }
 
     private var controlAccent: Color {
@@ -712,7 +729,7 @@ struct PlayerView: View {
                 HStack(spacing: 8) {
                     Text(song?.name ?? "未在播放")
                         .font(BeansFont.appFont(22, .bold))
-                        .foregroundStyle(palette.text)
+                        .foregroundStyle(coverPageTitleColor)
                         .lineLimit(2)
                         .minimumScaleFactor(0.55)
                         .multilineTextAlignment(.center)
@@ -774,7 +791,7 @@ struct PlayerView: View {
             if rows.isEmpty {
                 Text("暂无歌词，点击封面查看完整歌词")
                     .font(BeansFont.appFont(12))
-                    .foregroundStyle(palette.secondary.opacity(0.75))
+                    .foregroundStyle(coverPagePreviewLyricColor.opacity(0.75))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity)
             } else {
@@ -782,10 +799,10 @@ struct PlayerView: View {
                     HStack(spacing: 6) {
                         Text(item.isCurrent ? "●" : "·")
                             .font(BeansFont.appFont(8))
-                            .foregroundStyle(item.isCurrent ? palette.accent : palette.secondary.opacity(0.5))
+                            .foregroundStyle(item.isCurrent ? coverPagePreviewLyricColor : coverPagePreviewLyricColor.opacity(0.5))
                         Text(item.text)
                             .font(BeansFont.appFont(12, item.isCurrent ? .semibold : .regular))
-                            .foregroundStyle(item.isCurrent ? palette.text : palette.secondary.opacity(0.8))
+                            .foregroundStyle(item.isCurrent ? coverPagePreviewLyricColor : coverPagePreviewLyricColor.opacity(0.8))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
@@ -1521,6 +1538,9 @@ struct PlayerView: View {
         func apply(_ parsed: [LyricLine]) {
             guard self.song?.identityKey == identity else { return }
             self.lyrics = parsed
+            if let song = self.song {
+                self.player.updateLiveActivityLyrics(parsed, for: song)
+            }
         }
         if song.source == .kugou, let hash = song.kugouHash {
             let raw = await KugouMusicAPI.shared.lyric(hash: hash, duration: song.duration)
@@ -2167,6 +2187,8 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.lyricBackground.image") private var lyricBackgroundImagePath = ""
     @AppStorage("beans.lyricBackground.blur") private var lyricBackgroundBlur = 12.0
     @AppStorage("beans.lyricBackground.syncCover") private var lyricBackgroundSyncCover = false
+    @AppStorage("beans.coverSongTitleColor") private var coverSongTitleColorRaw = ""
+    @AppStorage("beans.coverPreviewLyricColor") private var coverPreviewLyricColorRaw = ""
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
     @AppStorage("beans.playerButtonStyle") private var playerButtonStyleRaw = BeansPlayerButtonStyle.glass.rawValue
     @Environment(\.dismiss) private var dismiss
@@ -2292,6 +2314,26 @@ struct PlayerSettingsSheet: View {
                 gradEndRaw = "#" + UIColor(newValue).hexString
                 gradMode = 1
             }
+        )
+    }
+
+    private var coverSongTitleColor: Binding<Color> {
+        Binding(
+            get: {
+                if coverSongTitleColorRaw.hasPrefix("#"), let c = Color(hex: coverSongTitleColorRaw) { return c }
+                return Color.beansAmber
+            },
+            set: { coverSongTitleColorRaw = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var coverPreviewLyricColor: Binding<Color> {
+        Binding(
+            get: {
+                if coverPreviewLyricColorRaw.hasPrefix("#"), let c = Color(hex: coverPreviewLyricColorRaw) { return c }
+                return Color.beansComment
+            },
+            set: { coverPreviewLyricColorRaw = "#" + UIColor($0).hexString }
         )
     }
 
@@ -2821,6 +2863,40 @@ struct PlayerSettingsSheet: View {
             Divider().opacity(0.5)
             settingToggle("圆形封面旋转", isOn: $circularCoverSpin,
                           caption: "开启后播放时封面自动匀速旋转")
+            Divider().opacity(0.5)
+            HStack(spacing: 10) {
+                Text("封面页歌名颜色")
+                    .font(BeansFont.appFont(13))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer()
+                ColorPicker("", selection: coverSongTitleColor, supportsOpacity: false)
+                    .labelsHidden()
+                Button("默认") {
+                    coverSongTitleColorRaw = ""
+                    BeansHaptics.select()
+                }
+                .font(BeansFont.appFont(12, .semibold))
+                .foregroundStyle(Color.beansAmber)
+                .buttonStyle(.plain)
+            }
+            HStack(spacing: 10) {
+                Text("预览歌词颜色")
+                    .font(BeansFont.appFont(13))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer()
+                ColorPicker("", selection: coverPreviewLyricColor, supportsOpacity: false)
+                    .labelsHidden()
+                Button("默认") {
+                    coverPreviewLyricColorRaw = ""
+                    BeansHaptics.select()
+                }
+                .font(BeansFont.appFont(12, .semibold))
+                .foregroundStyle(Color.beansAmber)
+                .buttonStyle(.plain)
+            }
+            Text("留空时自动跟随当前歌曲封面取色")
+                .font(BeansFont.appFont(11))
+                .foregroundStyle(Color.beansComment)
         }
     }
 

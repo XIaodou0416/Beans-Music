@@ -981,6 +981,7 @@ struct AccountHubSheet: View {
 
 struct SettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
+    @EnvironmentObject private var player: PlayerManager
     @Environment(\.dismiss) private var dismiss
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     /// 音质等级（借鉴 Kumone）
@@ -1639,6 +1640,30 @@ struct SettingsView: View {
                 .onChange(of: mixesWithOthers) { value in
                     PlayerManager.applyAudioMixPreference(value)
                 }
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
+                Toggle(isOn: Binding(
+                    get: { player.liveActivityEnabled },
+                    set: { player.liveActivityEnabled = $0 }
+                )) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "waveform.badge.magnifyingglass")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("灵动岛显示歌词")
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text("播放时在灵动岛与锁屏显示当前歌词（需 iOS 16.1+，巨魔安装同样适用）")
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color.beansAmber)
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 

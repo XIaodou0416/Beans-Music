@@ -253,6 +253,7 @@ final class ThemeStore: ObservableObject {
     private let wallpaperDataKey = "beans.wallpapers.data"
     private let deletedKey = "beans.wallpapers.deleted"
     private let uiStyleKey = "beans.uiStyle"
+    private var didRestoreWallpapers = false
 
     private init() {
         accent = BeansAccent(rawValue: UserDefaults.standard.string(forKey: AccentTheme.key) ?? "") ?? .amber
@@ -263,7 +264,12 @@ final class ThemeStore: ObservableObject {
         backgroundImagePath = UserDefaults.standard.string(forKey: backgroundImageKey) ?? ""
         wallpaperPaths = UserDefaults.standard.stringArray(forKey: wallpaperListKey) ?? []
         uiStyle = BeansUIStyle(rawValue: UserDefaults.standard.string(forKey: uiStyleKey) ?? "") ?? .liquid
-        // 自动恢复壁纸（覆盖安装/数据迁移后：文件仍在用文件，文件丢失用 base64 备份重建）
+    }
+
+    /// 在首帧显示后执行一次壁纸恢复，避免初始化 ThemeStore 时同步读写大量 base64。
+    func restoreWallpapersIfNeeded() {
+        guard !didRestoreWallpapers else { return }
+        didRestoreWallpapers = true
         restoreWallpapers()
     }
 
@@ -276,6 +282,9 @@ final class ThemeStore: ObservableObject {
         let dir = Self.wallpaperDirectory()
         var backup = UserDefaults.standard.dictionary(forKey: wallpaperDataKey) as? [String: String] ?? [:]
         let deleted = deletedWallpaperPaths()
+        let originalPaths = wallpaperPaths
+        let originalBackgroundPath = backgroundImagePath
+        let originalBackup = backup
         var restored: [String] = []
         for path in wallpaperPaths {
             if deleted.contains(path) { continue }
@@ -301,7 +310,6 @@ final class ThemeStore: ObservableObject {
             }
         }
         wallpaperPaths = restored
-        saveWallpaperList()
         if !backgroundImagePath.isEmpty, !deleted.contains(backgroundImagePath) {
             if !FileManager.default.fileExists(atPath: backgroundImagePath),
                let b64 = Self.wallpaperBackupValue(for: backgroundImagePath, in: backup),
@@ -324,9 +332,16 @@ final class ThemeStore: ObservableObject {
            !wallpaperPaths.contains(backgroundImagePath),
            !deleted.contains(backgroundImagePath) {
             wallpaperPaths.insert(backgroundImagePath, at: 0)
+        }
+        if wallpaperPaths != originalPaths {
             saveWallpaperList()
         }
-        UserDefaults.standard.set(backup, forKey: wallpaperDataKey)
+        if backgroundImagePath != originalBackgroundPath {
+            UserDefaults.standard.set(backgroundImagePath, forKey: backgroundImageKey)
+        }
+        if backup != originalBackup {
+            UserDefaults.standard.set(backup, forKey: wallpaperDataKey)
+        }
         invalidateBackgroundCache()
     }
 

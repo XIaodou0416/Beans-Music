@@ -324,6 +324,11 @@ final class KugouMusicAPI {
 
     /// 酷狗官方排行榜歌曲。
     func rankSongs(rankID: Int, limit: Int = 100) async throws -> [Song] {
+        // 移动榜单接口同时提供 album_sizable_cover，并按 30 首分页；
+        // 官网 global.features 在部分榜单只带 hash，不带封面，不能优先使用。
+        if let songs = try? await mobileRankSongs(rankID: rankID, limit: limit), !songs.isEmpty {
+            return songs
+        }
         if let songs = try? await officialWebRankSongs(rankID: rankID, limit: limit), !songs.isEmpty {
             return songs
         }
@@ -337,6 +342,41 @@ final class KugouMusicAPI {
         let json = try await getJSON(url, ua: Self.browserUA)
         let rows = (json["songs"] as? [String: Any])?["list"] as? [[String: Any]] ?? []
         return rows.prefix(limit).compactMap(Self.mapTrack)
+    }
+
+    private func mobileRankSongs(rankID: Int, limit: Int) async throws -> [Song] {
+        guard limit > 0 else { return [] }
+        var result: [Song] = []
+        var seen = Set<String>()
+        var page = 1
+        let pageSize = 30
+
+        // 酷狗移动榜单固定每页 30 首，限制页数避免异常接口返回时无限请求。
+        while result.count < limit, page <= 20 {
+            var components = URLComponents(string: "https://m.kugou.com/rank/info")!
+            components.queryItems = [
+                URLQueryItem(name: "rankid", value: "\(rankID)"),
+                URLQueryItem(name: "page", value: "\(page)"),
+                URLQueryItem(name: "json", value: "true"),
+            ]
+            guard let url = components.url else { throw NetEaseError.unknown("酷狗排行榜地址无效") }
+            let json = try await getJSON(url, ua: Self.browserUA)
+            let rows = (json["songs"] as? [String: Any])?["list"] as? [[String: Any]] ?? []
+            if rows.isEmpty { break }
+
+            for row in rows {
+                guard let song = Self.mapTrack(row), seen.insert(song.identityKey).inserted else { continue }
+                result.append(song)
+                if result.count == limit { break }
+            }
+
+            if rows.count < pageSize { break }
+            page += 1
+        }
+
+        let songs = Array(result.prefix(limit))
+        BeansLogger.shared.log("酷狗移动排行榜歌曲：rankid=\(rankID) 返回 \(songs.count) 首（含封面）", level: .debug)
+        return songs
     }
 
     /// 酷狗官方歌单广场（移动站点 JSON）。
@@ -1161,7 +1201,14 @@ final class KugouMusicAPI {
         normalized["audio_id"] = raw["audio_id"] ?? raw["audioid"] ?? raw["encrypt_id"]
         normalized["album_id"] = raw["AlbumID"] ?? raw["album_id"]
         normalized["duration"] = raw["Duration"] ?? raw["duration"] ?? raw["timeLen"] ?? raw["timelength"]
-        normalized["album_sizable_cover"] = raw["Image"] ?? raw["ImageUrl"] ?? raw["AlbumImg"] ?? raw["album_sizable_cover"]
+        let trans = raw["trans_param"] as? [String: Any] ?? raw["transParam"] as? [String: Any] ?? [:]
+        normalized["album_sizable_cover"] = raw["Image"]
+            ?? raw["ImageUrl"]
+            ?? raw["AlbumImg"]
+            ?? raw["album_sizable_cover"]
+            ?? raw["imgurl"]
+            ?? raw["album_img"]
+            ?? trans["union_cover"]
         normalized["pay_type"] = raw["PayType"] ?? raw["Privilege"] ?? raw["pay_type"]
         normalized["feetype"] = raw["FeeType"] ?? raw["feetype"]
         normalized["privilege"] = raw["Privilege"] ?? raw["privilege"]
@@ -1199,7 +1246,10 @@ final class KugouMusicAPI {
         }
         guard !title.isEmpty, !hash.isEmpty || !albumAudioId.isEmpty else { return nil }
         let album = string(raw["album_name"] ?? raw["albumname"] ?? raw["album"] ?? (raw["albuminfo"] as? [String: Any])?["name"])
-        let cover = string(raw["pic"] ?? raw["img"] ?? raw["image"] ?? raw["cover"] ?? raw["album_sizable_cover"] ?? raw["sizable_cover"] ?? trans["union_cover"]).replacingOccurrences(of: "{size}", with: "300")
+        let cover = normalizeURL(
+            string(raw["pic"] ?? raw["img"] ?? raw["image"] ?? raw["cover"] ?? raw["album_sizable_cover"] ?? raw["sizable_cover"] ?? trans["union_cover"])
+                .replacingOccurrences(of: "{size}", with: "300")
+        )
         let durRaw = double(raw["timelength"] ?? raw["time_length"] ?? raw["timelen"] ?? raw["duration"] ?? raw["interval"])
         let seconds = durRaw > 1000 ? durRaw / 1000.0 : durRaw
         return Song(

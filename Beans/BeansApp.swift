@@ -13,8 +13,6 @@ struct BeansApp: App {
     init() {
         // 闪退检测：优先初始化，检测上次异常退出并安装崩溃捕获
         _ = CrashReporter.shared
-        // 启动时重新注册用户上传的全局字体（覆盖安装后依然生效）
-        FontManager.reinstallIfNeeded()
         // 新安装默认开启高刷新率；老用户保留自己手动关闭的选择。
         HighRefreshKeeper.registerDefaults()
         HighRefreshKeeper.shared.configureFromDefaults()
@@ -32,6 +30,12 @@ struct BeansApp: App {
                 if !disclaimerAccepted {
                     OnboardingView { disclaimerAccepted = true }
                 }
+            }
+            .task {
+                // 把字体注册与壁纸恢复移出 App.init，避免安装后首帧被同步磁盘/图片操作阻塞。
+                await Task.yield()
+                FontManager.reinstallIfNeeded()
+                theme.restoreWallpapersIfNeeded()
             }
         }
     }

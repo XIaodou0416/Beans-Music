@@ -2,6 +2,7 @@ import AVFoundation
 import MediaPlayer
 import SwiftUI
 import UIKit
+import ActivityKit
 
 enum PlayMode: String, CaseIterable, Identifiable {
     case sequential
@@ -87,10 +88,17 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastPublishedProgress: Double = -1
     private var lastNowPlayingArtworkKey: String?
     private static let nowPlayingArtworkCache = NSCache<NSURL, UIImage>()
+    /// 灵动岛实时活动引用。使用 Any 让主 App 继续兼容 iOS 15 编译目标。
+    private var liveActivity: Any?
+    /// 灵动岛同步节流，避免进度回调造成高频系统活动更新。
+    private var lastLiveActivitySync: Date?
+    private var liveActivityLyricLines: [LyricLine] = []
+    private var liveActivityLyricIdentity = ""
 
     private let historyKey = "beans.history"
     private let countsKey = "beans.playcounts"
     private let audioMixKey = "beans.audio.mixothers.v1"
+    private let liveActivityKey = "beans.liveActivityLyrics"
     private let thirdPartyVIPNoticeKey = "beans.showThirdPartyVIPNotice"
     private let defaults = UserDefaults.standard
 
@@ -360,6 +368,9 @@ final class PlayerManager: NSObject, ObservableObject {
         isPlaying = false
         isBuffering = true
         loadFailed = false
+        liveActivityLyricLines = []
+        liveActivityLyricIdentity = ""
+        lastLiveActivitySync = nil
         pushHistory(song)
         Task {
             var urlString: String?
@@ -623,6 +634,7 @@ final class PlayerManager: NSObject, ObservableObject {
             bumpPlayCount(song)
             lastCountedSongID = song.identityKey
         }
+        loadLiveActivityLyrics(for: song)
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.2, preferredTimescale: 600), queue: .main) { [weak self] time in
             guard let self, let player = self.player else { return }
             if time.seconds.isFinite {
@@ -640,6 +652,9 @@ final class PlayerManager: NSObject, ObservableObject {
             let waiting = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
             if waiting != self.isBuffering {
                 self.isBuffering = waiting
+            }
+            if self.lastLiveActivitySync == nil || Date().timeIntervalSince(self.lastLiveActivitySync!) >= 1 {
+                self.syncLiveActivity()
             }
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
@@ -876,6 +891,135 @@ final class PlayerManager: NSObject, ObservableObject {
             lastNowPlayingArtworkKey = nil
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        syncLiveActivity()
+    }
+
+    /// 灵动岛实时活动开关。未提供可靠的 TrollStore 标识，因此以兼容 iOS 16.1+ 的设置控制。
+    var liveActivityEnabled: Bool {
+        get { defaults.object(forKey: liveActivityKey) as? Bool ?? true }
+        set {
+            defaults.set(newValue, forKey: liveActivityKey)
+            if newValue {
+                if let song = currentSong, isPlaying {
+                    loadLiveActivityLyrics(for: song)
+                }
+                syncLiveActivity(force: true)
+            } else {
+                endLiveActivity()
+            }
+        }
+    }
+
+    /// 播放器页面加载歌词后同步给实时活动；切歌时会校验歌曲 identity，避免旧歌词串到新歌。
+    func updateLiveActivityLyrics(_ lines: [LyricLine], for song: Song) {
+        guard currentSong?.identityKey == song.identityKey else { return }
+        liveActivityLyricLines = lines
+        liveActivityLyricIdentity = song.identityKey
+        syncLiveActivity(force: true)
+    }
+
+    /// 播放状态变化时同步灵动岛（切歌 / 播放 / 暂停 / 进度 / 歌词）。
+    func syncLiveActivity(force: Bool = false) {
+        guard #available(iOS 16.1, *) else { return }
+        guard liveActivityEnabled, let song = currentSong else {
+            endLiveActivity()
+            return
+        }
+        if !force,
+           let lastLiveActivitySync,
+           Date().timeIntervalSince(lastLiveActivitySync) < 0.9 {
+            return
+        }
+        lastLiveActivitySync = Date()
+
+        let lyricText = currentLiveLyricText(for: song)
+        let state = NowPlayingAttributes.ContentState(
+            songName: song.name,
+            artist: song.artists,
+            coverURL: song.coverURL?.absoluteString,
+            isPlaying: isPlaying,
+            progress: progress,
+            duration: max(duration, song.duration),
+            lyricText: lyricText
+        )
+        if let activity = liveActivity as? Activity<NowPlayingAttributes> {
+            Task { await activity.update(using: ActivityContent(state: state, staleDate: nil)) }
+        } else if let existing = Activity<NowPlayingAttributes>.activities.first {
+            liveActivity = existing
+            Task { await existing.update(using: ActivityContent(state: state, staleDate: nil)) }
+        } else {
+            do {
+                let activity = try Activity<NowPlayingAttributes>.request(
+                    attributes: NowPlayingAttributes(),
+                    content: ActivityContent(state: state, staleDate: nil),
+                    pushType: nil
+                )
+                liveActivity = activity
+            } catch {
+                BeansLogger.shared.log("灵动岛启动失败：\(error)", level: .error)
+            }
+        }
+    }
+
+    /// 结束灵动岛实时活动，避免关闭开关或停止播放后残留旧状态。
+    func endLiveActivity() {
+        guard #available(iOS 16.1, *) else { return }
+        let fallbackState = (liveActivity as? Activity<NowPlayingAttributes>)?.contentState
+        for activity in Activity<NowPlayingAttributes>.activities {
+            let state = fallbackState ?? activity.contentState
+            Task { await activity.end(using: ActivityContent(state: state, staleDate: nil), dismissalPolicy: .immediate) }
+        }
+        liveActivity = nil
+        lastLiveActivitySync = nil
+    }
+
+    private func currentLiveLyricText(for song: Song) -> String {
+        guard liveActivityLyricIdentity == song.identityKey,
+              !liveActivityLyricLines.isEmpty else {
+            return ""
+        }
+        let progress = LyricTiming.effectiveProgress(progress)
+        var low = 0
+        var high = liveActivityLyricLines.count - 1
+        var answer: Int?
+        while low <= high {
+            let middle = (low + high) / 2
+            if liveActivityLyricLines[middle].time <= progress {
+                answer = middle
+                low = middle + 1
+            } else {
+                high = middle - 1
+            }
+        }
+        guard let answer else { return "" }
+        let text = liveActivityLyricLines[answer].text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? " " : text
+    }
+
+    private func loadLiveActivityLyrics(for song: Song) {
+        guard liveActivityEnabled else { return }
+        let identity = song.identityKey
+        Task { [weak self] in
+            guard let self else { return }
+            var parsed: [LyricLine] = []
+            if song.source == .kugou, let hash = song.kugouHash {
+                let raw = await KugouMusicAPI.shared.lyric(hash: hash, duration: song.duration)
+                parsed = LyricParser.parse(raw)
+            } else if song.source == .qq, let mid = song.qqMid {
+                if let raw = try? await QQMusicAPI.shared.lyric(songmid: mid) {
+                    parsed = LyricParser.parse(raw)
+                }
+            } else if let (lrc, tlyric) = try? await NetEaseAPI.shared.lyricWithTranslation(id: song.id) {
+                parsed = LyricParser.parse(lrc ?? "", translationRaw: tlyric)
+            }
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard self.currentSong?.identityKey == identity else { return }
+                self.liveActivityLyricLines = parsed
+                self.liveActivityLyricIdentity = identity
+                self.syncLiveActivity(force: true)
+            }
+        }
     }
 
     private func setupRemoteCommands() {

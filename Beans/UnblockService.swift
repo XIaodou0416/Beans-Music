@@ -67,7 +67,10 @@ enum UnblockService {
 
     private static func canUse(source: ThirdPartySource, songSource: SongSource, neteaseID: Int, qqMid: String?, kugouID: String?) -> Bool {
         let expectedProvider = providerCode(for: songSource)
-        if let provider = source.headers["source"], !provider.isEmpty, provider != expectedProvider {
+        if let providers = source.headers["sources"], !providers.isEmpty {
+            let supported = providers.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard supported.contains(expectedProvider) else { return false }
+        } else if let provider = source.headers["source"], !provider.isEmpty, provider != expectedProvider {
             return false
         }
         if songSource == .qq {
@@ -90,7 +93,10 @@ enum UnblockService {
     ) async -> Resolved? {
         guard !source.template.isEmpty else { return nil }
         let expectedProvider = providerCode(for: songSource)
-        if let provider = source.headers["source"], !provider.isEmpty, provider != expectedProvider {
+        if let providers = source.headers["sources"], !providers.isEmpty {
+            let supported = providers.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard supported.contains(expectedProvider) else { return nil }
+        } else if let provider = source.headers["source"], !provider.isEmpty, provider != expectedProvider {
             return nil
         }
         let songID: String
@@ -110,12 +116,31 @@ enum UnblockService {
         urlString = urlString.replacingOccurrences(of: "{id}", with: songID)
         urlString = urlString.replacingOccurrences(of: "{source}", with: expectedProvider)
         urlString = urlString.replacingOccurrences(of: "{quality}", with: source.headers["quality"] ?? "320k")
+        let dreamSource: String
+        let gdSource: String
+        switch songSource {
+        case .netease:
+            dreamSource = "netease"
+            gdSource = "netease"
+        case .qq:
+            dreamSource = "tencent"
+            gdSource = "tencent"
+        case .kugou:
+            dreamSource = "kugou"
+            gdSource = "kugou"
+        }
+        urlString = urlString.replacingOccurrences(of: "{dreamSource}", with: dreamSource)
+        urlString = urlString.replacingOccurrences(of: "{gdSource}", with: gdSource)
         urlString = urlString.replacingOccurrences(of: "{name}", with: urlEncoded(name))
         let keyword = ([name, artists].filter { !$0.isEmpty }).joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         urlString = urlString.replacingOccurrences(of: "{keyword}", with: urlEncoded(keyword))
         urlString = urlString.replacingOccurrences(of: "{artist}", with: urlEncoded(artists))
         guard let url = URL(string: urlString) else { return nil }
+        if source.headers["response"] == "direct" {
+            BeansLogger.shared.log("内置音源直连：\(source.name) 平台=\(expectedProvider)", level: .info)
+            return Resolved(url: url, source: source.name)
+        }
         var request = URLRequest(url: url)
         request.timeoutInterval = 7
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -123,7 +148,7 @@ enum UnblockService {
         if let apiKey = source.headers["apiKey"], !apiKey.isEmpty {
             request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
-        let metadataKeys: Set<String> = ["source", "quality", "br", "apiKey"]
+        let metadataKeys: Set<String> = ["source", "sources", "quality", "br", "apiKey", "response"]
         for (key, value) in source.headers where !metadataKeys.contains(key) {
             request.setValue(value, forHTTPHeaderField: key)
         }
