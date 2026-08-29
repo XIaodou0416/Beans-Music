@@ -121,8 +121,11 @@ final class UnblockSourceStore: ObservableObject {
             savedSources = []
         }
 
-        // 旧版本的导入源和旧版 guoyue 预设不再参与播放，避免导入脚本继续触发网络请求。
-        let existingPresets = savedSources.filter { $0.isPreset }
+        // 只保留当前支持的三个预设，清理旧版本保存的已移除音源。
+        let supportedPresetIDs = Set(Self.paidPresetSources.map(\.id))
+        let existingPresets = savedSources.filter {
+            $0.isPreset && supportedPresetIDs.contains($0.id)
+        }
         presetSources = Self.seedPaidPresets(into: existingPresets)
         defaults.removeObject(forKey: legacyCustomKey)
         defaults.removeObject(forKey: legacyLXKey)
