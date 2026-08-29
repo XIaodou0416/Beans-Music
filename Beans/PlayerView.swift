@@ -1538,9 +1538,6 @@ struct PlayerView: View {
         func apply(_ parsed: [LyricLine]) {
             guard self.song?.identityKey == identity else { return }
             self.lyrics = parsed
-            if let song = self.song {
-                self.player.updateLiveActivityLyrics(parsed, for: song)
-            }
         }
         if song.source == .kugou, let hash = song.kugouHash {
             let raw = await KugouMusicAPI.shared.lyric(hash: hash, duration: song.duration)
@@ -2519,7 +2516,7 @@ struct PlayerSettingsSheet: View {
                 }
                 Divider().opacity(0.35)
                 settingToggle("与其他音频同时播放", isOn: $mixesWithOthers,
-                              caption: "默认关闭以显示锁屏/灵动岛")
+                              caption: "默认关闭以显示锁屏控制")
                     .onChange(of: mixesWithOthers) { value in
                         PlayerManager.applyAudioMixPreference(value)
                     }
