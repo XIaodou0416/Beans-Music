@@ -10,6 +10,11 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
     case cover = "封面"
     case title = "歌名"
     case previewLyric = "预览歌词"
+    case controlCenter = "控制中心"
+    case controlCenterCover = "控中封面"
+    case controlCenterTitle = "控中标题"
+    case controlCenterLyric = "控中歌词"
+    case controlCenterActions = "控中按钮"
     case progress = "进度条"
     case controls = "控制行"
     case loop = "循环按钮"
@@ -74,6 +79,16 @@ enum PlayerLayoutStore {
         switch part {
         case .topBack, .topTitle, .topFavorite, .cover, .title, .previewLyric:
             return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
+        case .controlCenter:
+            return PlayerLayoutEntry(x: 0, y: -8, scale: 0.94)
+        case .controlCenterCover:
+            return PlayerLayoutEntry(x: 0, y: 0, scale: 0.94)
+        case .controlCenterTitle:
+            return PlayerLayoutEntry(x: 0, y: -2, scale: 0.96)
+        case .controlCenterLyric:
+            return PlayerLayoutEntry(x: 0, y: -2, scale: 0.96)
+        case .controlCenterActions:
+            return PlayerLayoutEntry(x: 0, y: -4, scale: 0.94)
         case .progress:
             return PlayerLayoutEntry(x: 0, y: 17, scale: 1)
         case .controls:

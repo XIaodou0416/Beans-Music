@@ -8,15 +8,16 @@ struct AmbientGlowView: View {
     let accent: Color
     let secondary: Color
     let isPlaying: Bool
+    let dustMode: BeansPlayerDustMode
     /// 呼吸光晕强度 0~1（0 关闭光晕，1 满强度）
     var breath: Double = 0.6
 
     var body: some View {
-        // 静态渲染：位置固定、无漂移（用户要求封面外液态 UI 飘动效果暂停，保持静止）
-        Canvas { context, size in
-            guard size.width > 0, size.height > 0 else { return }
-            let t = 1.7
-            let w = size.width, h = size.height
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying || dustMode != .snow)) { timeline in
+            Canvas { context, size in
+                guard size.width > 0, size.height > 0 else { return }
+                let t = dustMode == .snow ? timeline.date.timeIntervalSinceReferenceDate : 1.7
+                let w = size.width, h = size.height
 
                 // 主色光斑（缓慢漂移 + 呼吸）
                 let cx = w * (0.5 + 0.18 * sin(t * 0.25))
@@ -39,16 +40,34 @@ struct AmbientGlowView: View {
                     with: .radialGradient(g2, center: CGPoint(x: cx2, y: cy2), startRadius: 0, endRadius: r2)
                 )
 
-                // 浮尘微粒（极淡，缓慢环游）
-                for i in 0..<26 {
-                    let px = w * (0.5 + 0.45 * sin(Double(i) * 2.4 + t * 0.12))
-                    let py = h * (0.5 + 0.42 * cos(Double(i) * 1.8 + t * 0.10))
-                    let tw = 0.5 + 0.5 * sin(t * 0.9 + Double(i) * 1.7)
-                    let r = 1.2 + 1.6 * tw
-                    let rect = CGRect(x: px - r, y: py - r, width: r * 2, height: r * 2)
-                    context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.05 + 0.06 * tw)))
+                switch dustMode {
+                case .off:
+                    break
+                case .still:
+                    for i in 0..<18 {
+                        let px = w * (0.5 + 0.45 * sin(Double(i) * 2.4 + 0.2))
+                        let py = h * (0.5 + 0.42 * cos(Double(i) * 1.8 + 0.4))
+                        let tw = 0.5 + 0.5 * sin(Double(i) * 1.7)
+                        let r = 0.7 + 0.9 * tw
+                        let rect = CGRect(x: px - r, y: py - r, width: r * 2, height: r * 2)
+                        context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.035 + 0.035 * tw)))
+                    }
+                case .snow:
+                    for i in 0..<22 {
+                        let seed = Double(i)
+                        let drift = sin(t * 0.35 + seed * 1.9) * 18
+                        let px = (w * (0.08 + (seed * 0.137).truncatingRemainder(dividingBy: 0.84)) + drift)
+                            .truncatingRemainder(dividingBy: max(w, 1))
+                        let fall = (t * (18 + seed.truncatingRemainder(dividingBy: 9)) + seed * 47)
+                            .truncatingRemainder(dividingBy: max(h + 60, 1)) - 30
+                        let tw = 0.55 + 0.45 * sin(t * 1.2 + seed)
+                        let r = 0.8 + 1.0 * tw
+                        let rect = CGRect(x: px - r, y: fall - r, width: r * 2, height: r * 2)
+                        context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.045 + 0.04 * tw)))
+                    }
                 }
             }
+        }
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .drawingGroup()

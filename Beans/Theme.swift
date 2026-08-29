@@ -225,6 +225,32 @@ enum BeansPlayerButtonStyle: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - 播放器浮尘样式
+
+enum BeansPlayerDustMode: String, CaseIterable, Identifiable {
+    case off
+    case still
+    case snow
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .off: return "关闭"
+        case .still: return "静态浮尘"
+        case .snow: return "动态轻雪"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .off: return "circle.slash"
+        case .still: return "sparkle"
+        case .snow: return "snowflake"
+        }
+    }
+}
+
 // MARK: - 播放器封面页样式
 
 enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
