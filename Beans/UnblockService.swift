@@ -116,14 +116,43 @@ enum UnblockService {
         urlString = urlString.replacingOccurrences(of: "{keyword}", with: urlEncoded(keyword))
         urlString = urlString.replacingOccurrences(of: "{artist}", with: urlEncoded(artists))
         guard let url = URL(string: urlString) else { return nil }
+        let apiKeys = orderedAPIKeys(for: source)
+        if !apiKeys.isEmpty {
+            for (originalIndex, apiKey) in apiKeys {
+                if let resolved = await presetSourceRequestOnce(
+                    source: source,
+                    url: url,
+                    apiKey: apiKey,
+                    keyIndex: originalIndex + 1,
+                    keyTotal: apiKeys.count
+                ) {
+                    rememberWorkingKey(originalIndex, for: source)
+                    return resolved
+                }
+            }
+            BeansLogger.shared.log("内置音源全部密钥未命中：\(source.name) 共 \(apiKeys.count) 个", level: .debug)
+            return nil
+        }
+
+        return await presetSourceRequestOnce(source: source, url: url, apiKey: nil, keyIndex: 0, keyTotal: 0)
+    }
+
+    private static func presetSourceRequestOnce(
+        source: ThirdPartySource,
+        url: URL,
+        apiKey: String?,
+        keyIndex: Int,
+        keyTotal: Int
+    ) async -> Resolved? {
         var request = URLRequest(url: url)
         request.timeoutInterval = 7
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("BeansMusic-Preset/1.0", forHTTPHeaderField: "User-Agent")
-        if let apiKey = source.headers["apiKey"], !apiKey.isEmpty {
+        if let apiKey, !apiKey.isEmpty {
             request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
-        let metadataKeys: Set<String> = ["source", "quality", "br", "apiKey"]
+        let keyLabel = keyTotal > 1 ? " 密钥=\(keyIndex)/\(keyTotal)" : ""
+        let metadataKeys: Set<String> = ["source", "quality", "br", "apiKey", "apiKeys"]
         for (key, value) in source.headers where !metadataKeys.contains(key) {
             request.setValue(value, forHTTPHeaderField: key)
         }
@@ -132,30 +161,30 @@ enum UnblockService {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            BeansLogger.shared.log("内置音源请求失败：\(source.name) \(error.localizedDescription)", level: .debug)
+            BeansLogger.shared.log("内置音源请求失败：\(source.name)\(keyLabel) \(error.localizedDescription)", level: .debug)
             return nil
         }
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            BeansLogger.shared.log("内置音源 HTTP 失败：\(source.name) 状态=\(status)", level: .debug)
+            BeansLogger.shared.log("内置音源 HTTP 失败：\(source.name)\(keyLabel) 状态=\(status)", level: .debug)
             return nil
         }
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            BeansLogger.shared.log("内置音源响应格式错误：\(source.name)", level: .debug)
+            BeansLogger.shared.log("内置音源响应格式错误：\(source.name)\(keyLabel)", level: .debug)
             return nil
         }
-        if let code = responseCode(from: obj), code != 200 {
+        if let code = responseCode(from: obj), code != 0 && code != 200 {
             let message = obj["message"] as? String ?? obj["msg"] as? String ?? "code=\(code)"
-            BeansLogger.shared.log("内置音源返回失败：\(source.name) \(message)", level: .debug)
+            BeansLogger.shared.log("内置音源返回失败：\(source.name)\(keyLabel) \(message)", level: .debug)
             return nil
         }
         guard let value = valueAtAnyPath(obj, source.urlPath),
               let resolvedURL = value as? String, !resolvedURL.isEmpty,
               let playURL = URL(string: resolvedURL) else {
-            BeansLogger.shared.log("内置音源响应中没有播放地址：\(source.name)", level: .debug)
+            BeansLogger.shared.log("内置音源响应中没有播放地址：\(source.name)\(keyLabel)", level: .debug)
             return nil
         }
-        BeansLogger.shared.log("内置音源命中：\(source.name) 平台=\(expectedProvider)", level: .info)
+        BeansLogger.shared.log("内置音源命中：\(source.name)\(keyLabel)", level: .info)
         return Resolved(url: playURL, source: source.name)
     }
 
@@ -166,6 +195,41 @@ enum UnblockService {
             .map { "\($0.key)=\($0.value)" }
             .joined(separator: "&")
         return "\(source.template)|\(source.urlPath)|\(headers)"
+    }
+
+    private static func orderedAPIKeys(for source: ThirdPartySource) -> [(Int, String)] {
+        if let apiKeys = source.headers["apiKeys"] {
+            let keys = apiKeys
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if !keys.isEmpty {
+                var seen = Set<String>()
+                let unique = keys.enumerated().compactMap { index, key -> (Int, String)? in
+                    seen.insert(key).inserted ? (index, key) : nil
+                }
+                let preferred = UserDefaults.standard.integer(forKey: preferredKeyIndexDefaultsKey(for: source))
+                guard let hit = unique.firstIndex(where: { $0.0 == preferred }), hit > 0 else {
+                    return unique
+                }
+                var reordered = unique
+                let item = reordered.remove(at: hit)
+                reordered.insert(item, at: 0)
+                return reordered
+            }
+        }
+        if let apiKey = source.headers["apiKey"]?.trimmingCharacters(in: .whitespacesAndNewlines), !apiKey.isEmpty {
+            return [(0, apiKey)]
+        }
+        return []
+    }
+
+    private static func rememberWorkingKey(_ index: Int, for source: ThirdPartySource) {
+        UserDefaults.standard.set(index, forKey: preferredKeyIndexDefaultsKey(for: source))
+    }
+
+    private static func preferredKeyIndexDefaultsKey(for source: ThirdPartySource) -> String {
+        "beans.unblock.preferredKeyIndex.\(source.id)"
     }
 
     private static func responseCode(from object: [String: Any]) -> Int? {

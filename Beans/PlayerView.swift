@@ -95,6 +95,10 @@ struct PlayerView: View {
     @AppStorage("beans.lyricBackground.image") private var lyricBackgroundImagePath = ""
     @AppStorage("beans.lyricBackground.blur") private var lyricBackgroundBlur = 12.0
     @AppStorage("beans.lyricBackground.syncCover") private var lyricBackgroundSyncCover = false
+    @AppStorage("beans.albumTitleColorHex") private var albumTitleColorHex = ""
+    @AppStorage("beans.albumArtistColorHex") private var albumArtistColorHex = ""
+    @AppStorage("beans.albumPreviewLyricColorHex") private var albumPreviewLyricColorHex = ""
+    @AppStorage("beans.albumPreviewDimColorHex") private var albumPreviewDimColorHex = ""
     /// 侧边滑动手势当前位移（刷视频式切歌过渡）
     @State private var swipeOffset: CGFloat = 0
     @State private var coverDrag: CGSize = .zero
@@ -149,6 +153,26 @@ struct PlayerView: View {
 
     private var playerButtonSecondaryText: Color {
         palette.secondary
+    }
+
+    private var albumTitleColor: Color {
+        if albumTitleColorHex.hasPrefix("#"), let color = Color(hex: albumTitleColorHex) { return color }
+        return palette.text
+    }
+
+    private var albumArtistColor: Color {
+        if albumArtistColorHex.hasPrefix("#"), let color = Color(hex: albumArtistColorHex) { return color }
+        return palette.secondary
+    }
+
+    private var albumPreviewLyricColor: Color {
+        if albumPreviewLyricColorHex.hasPrefix("#"), let color = Color(hex: albumPreviewLyricColorHex) { return color }
+        return palette.text
+    }
+
+    private var albumPreviewDimColor: Color {
+        if albumPreviewDimColorHex.hasPrefix("#"), let color = Color(hex: albumPreviewDimColorHex) { return color }
+        return palette.secondary
     }
 
     private var progressAccent: Color {
@@ -712,7 +736,7 @@ struct PlayerView: View {
                 HStack(spacing: 8) {
                     Text(song?.name ?? "未在播放")
                         .font(BeansFont.appFont(22, .bold))
-                        .foregroundStyle(palette.text)
+                        .foregroundStyle(albumTitleColor)
                         .lineLimit(2)
                         .minimumScaleFactor(0.55)
                         .multilineTextAlignment(.center)
@@ -729,7 +753,7 @@ struct PlayerView: View {
                 .shadow(color: palette.accent.opacity(0.30), radius: 10)
                 Text(subtitle)
                     .font(BeansFont.appFont(14, .medium))
-                    .foregroundStyle(palette.secondary)
+                    .foregroundStyle(albumArtistColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .contentShape(Rectangle())
@@ -774,7 +798,7 @@ struct PlayerView: View {
             if rows.isEmpty {
                 Text("暂无歌词，点击封面查看完整歌词")
                     .font(BeansFont.appFont(12))
-                    .foregroundStyle(palette.secondary.opacity(0.75))
+                    .foregroundStyle(albumPreviewDimColor.opacity(0.75))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity)
             } else {
@@ -782,10 +806,10 @@ struct PlayerView: View {
                     HStack(spacing: 6) {
                         Text(item.isCurrent ? "●" : "·")
                             .font(BeansFont.appFont(8))
-                            .foregroundStyle(item.isCurrent ? palette.accent : palette.secondary.opacity(0.5))
+                            .foregroundStyle(item.isCurrent ? albumPreviewLyricColor : albumPreviewDimColor.opacity(0.5))
                         Text(item.text)
                             .font(BeansFont.appFont(12, item.isCurrent ? .semibold : .regular))
-                            .foregroundStyle(item.isCurrent ? palette.text : palette.secondary.opacity(0.8))
+                            .foregroundStyle(item.isCurrent ? albumPreviewLyricColor : albumPreviewDimColor.opacity(0.8))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
@@ -2169,6 +2193,10 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.lyricBackground.syncCover") private var lyricBackgroundSyncCover = false
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
     @AppStorage("beans.playerButtonStyle") private var playerButtonStyleRaw = BeansPlayerButtonStyle.glass.rawValue
+    @AppStorage("beans.albumTitleColorHex") private var albumTitleColorHex = ""
+    @AppStorage("beans.albumArtistColorHex") private var albumArtistColorHex = ""
+    @AppStorage("beans.albumPreviewLyricColorHex") private var albumPreviewLyricColorHex = ""
+    @AppStorage("beans.albumPreviewDimColorHex") private var albumPreviewDimColorHex = ""
     @Environment(\.dismiss) private var dismiss
     @State private var playbackExpanded = true
     @State private var lyricDisplayExpanded = true
@@ -2264,6 +2292,46 @@ struct PlayerSettingsSheet: View {
             set: { newValue in
                 progressAccentHex = "#" + UIColor(newValue).hexString
             }
+        )
+    }
+
+    private var albumTitleColor: Binding<Color> {
+        Binding(
+            get: {
+                if albumTitleColorHex.hasPrefix("#"), let c = Color(hex: albumTitleColorHex) { return c }
+                return Color.beansLabel
+            },
+            set: { albumTitleColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var albumArtistColor: Binding<Color> {
+        Binding(
+            get: {
+                if albumArtistColorHex.hasPrefix("#"), let c = Color(hex: albumArtistColorHex) { return c }
+                return Color.beansComment
+            },
+            set: { albumArtistColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var albumPreviewLyricColor: Binding<Color> {
+        Binding(
+            get: {
+                if albumPreviewLyricColorHex.hasPrefix("#"), let c = Color(hex: albumPreviewLyricColorHex) { return c }
+                return Color.beansLabel
+            },
+            set: { albumPreviewLyricColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var albumPreviewDimColor: Binding<Color> {
+        Binding(
+            get: {
+                if albumPreviewDimColorHex.hasPrefix("#"), let c = Color(hex: albumPreviewDimColorHex) { return c }
+                return Color.beansComment
+            },
+            set: { albumPreviewDimColorHex = "#" + UIColor($0).hexString }
         )
     }
 
@@ -2821,6 +2889,35 @@ struct PlayerSettingsSheet: View {
             Divider().opacity(0.5)
             settingToggle("圆形封面旋转", isOn: $circularCoverSpin,
                           caption: "开启后播放时封面自动匀速旋转")
+            Divider().opacity(0.5)
+            CompactSettingGroup {
+                Text("封面页文字颜色")
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                ColorPicker("歌名颜色", selection: albumTitleColor, supportsOpacity: false)
+                    .font(BeansFont.appFont(13))
+                ColorPicker("歌手颜色", selection: albumArtistColor, supportsOpacity: false)
+                    .font(BeansFont.appFont(13))
+                ColorPicker("预览歌词颜色", selection: albumPreviewLyricColor, supportsOpacity: false)
+                    .font(BeansFont.appFont(13))
+                ColorPicker("预览未播放颜色", selection: albumPreviewDimColor, supportsOpacity: false)
+                    .font(BeansFont.appFont(13))
+                Button {
+                    albumTitleColorHex = ""
+                    albumArtistColorHex = ""
+                    albumPreviewLyricColorHex = ""
+                    albumPreviewDimColorHex = ""
+                    BeansHaptics.select()
+                } label: {
+                    Text("恢复封面页文字默认")
+                        .font(BeansFont.appFont(12, .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.beansAmber.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 

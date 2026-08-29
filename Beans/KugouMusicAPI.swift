@@ -311,8 +311,9 @@ final class KugouMusicAPI {
             guard id > 0 else { return nil }
             let name = Self.string(item["rankname"] ?? item["name"])
             guard !name.isEmpty else { return nil }
-            let cover = Self.string(item["album_img_9"] ?? item["img_9"] ?? item["imgurl"])
+            let cover = Self.normalizeURL(Self.string(item["album_img_9"] ?? item["img_9"] ?? item["imgurl"])
                 .replacingOccurrences(of: "{size}", with: "400")
+            )
             return KugouTopInfo(
                 id: id,
                 name: name,
@@ -354,8 +355,9 @@ final class KugouMusicAPI {
             guard id > 0 else { return nil }
             let name = Self.string(item["specialname"] ?? item["name"] ?? item["title"])
             guard !name.isEmpty else { return nil }
-            let cover = Self.string(item["imgurl"] ?? item["pic"] ?? item["cover"])
+            let cover = Self.normalizeURL(Self.string(item["imgurl"] ?? item["pic"] ?? item["cover"])
                 .replacingOccurrences(of: "{size}", with: "400")
+            )
             return Playlist(
                 id: id,
                 name: name,
@@ -1199,7 +1201,10 @@ final class KugouMusicAPI {
         }
         guard !title.isEmpty, !hash.isEmpty || !albumAudioId.isEmpty else { return nil }
         let album = string(raw["album_name"] ?? raw["albumname"] ?? raw["album"] ?? (raw["albuminfo"] as? [String: Any])?["name"])
-        let cover = string(raw["pic"] ?? raw["img"] ?? raw["image"] ?? raw["cover"] ?? raw["album_sizable_cover"] ?? raw["sizable_cover"] ?? trans["union_cover"]).replacingOccurrences(of: "{size}", with: "300")
+        let cover = normalizeURL(
+            string(raw["pic"] ?? raw["img"] ?? raw["image"] ?? raw["cover"] ?? raw["album_sizable_cover"] ?? raw["sizable_cover"] ?? trans["union_cover"])
+                .replacingOccurrences(of: "{size}", with: "300")
+        )
         let durRaw = double(raw["timelength"] ?? raw["time_length"] ?? raw["timelen"] ?? raw["duration"] ?? raw["interval"])
         let seconds = durRaw > 1000 ? durRaw / 1000.0 : durRaw
         return Song(
