@@ -19,10 +19,8 @@ struct DiscoverView: View {
     /// 主页板块顺序（每日推荐 / 排行榜 / 歌单广场，可自定义）
     @State private var homeOrder = SectionOrderStore.load(SectionOrderStore.homeKey, defaults: SectionOrderStore.homeDefaults)
 
-    /// 当前平台可排序的板块：三个平台都保留主页推荐、排行榜和歌单广场位置。
-    private var availableSections: [String] {
-        source == .qq ? ["每日推荐", "排行榜"] : SectionOrderStore.homeDefaults
-    }
+    /// 三个平台都保留每日推荐、排行榜和歌单板块，QQ 歌单板块展示官网推荐的热门歌单。
+    private var availableSections: [String] { SectionOrderStore.homeDefaults }
     /// 首页数据源：记住上次选择，下次打开仍保持该平台（默认网易云）
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
     private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
@@ -494,7 +492,7 @@ struct DiscoverView: View {
 
     private var personalizedSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: source == .qq ? "QQ歌单广场" : "歌单广场")
+            SectionHeader(title: source == .qq ? "QQ音乐热门歌单" : "歌单广场")
             if source == .netease {
                 // 官方分类标签：点击切换分类（「全部」为官方精品歌单）
                 ScrollView(.horizontal, showsIndicators: false) {
