@@ -33,6 +33,7 @@ enum ChangelogStore {
 
     static func markSeen() {
         UserDefaults.standard.set(currentVersion, forKey: lastSeenKey)
+        UserDefaults.standard.synchronize()
     }
 
     static var shouldShowWhatsNew: Bool {
@@ -241,6 +242,9 @@ struct WhatsNewSheet: View {
             }
         }
         .modifier(BeansSheetModifier(detents: [.medium, .large]))
+        .onDisappear {
+            ChangelogStore.markSeen()
+        }
     }
 }
 

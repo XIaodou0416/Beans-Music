@@ -20,60 +20,63 @@ struct LogViewerSheet: View {
     var body: some View {
         let _ = theme.accent
         BeansNavigationStack {
-            VStack(spacing: 0) {
-                if let importedText {
-                    ScrollView {
-                        Text(importedText)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(Color.beansLabel)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                    }
-                    .beansScrollIndicatorsHidden()
-                } else {
-                    Picker("级别", selection: $filter) {
-                        Text("全部").tag(nil as BeansLogLevel?)
-                        ForEach(BeansLogLevel.allCases, id: \.self) { level in
-                            Text(level.rawValue).tag(level as BeansLogLevel?)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    if filtered.isEmpty {
-                        EmptyStateView(icon: "doc.text", text: "暂无日志")
-                    } else {
+            ZStack {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                VStack(spacing: 0) {
+                    if let importedText {
                         ScrollView {
-                            LazyVStack(spacing: 6) {
-                                ForEach(filtered) { entry in
-                                    HStack(alignment: .top, spacing: 8) {
-                                        Text(entry.level.rawValue)
-                                            .font(BeansFont.appFont(9, .bold, .monospaced))
-                                            .foregroundStyle(.white)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 3)
-                                            .background(Capsule().fill(entry.level.tint))
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(entry.message)
-                                                .font(BeansFont.appFont(12, .medium))
-                                                .foregroundStyle(Color.beansLabel)
-                                                .textSelection(.enabled)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                            Text(BeansLogger.dateString(entry.date))
-                                                .font(BeansFont.appFont(9, .regular, .monospaced))
-                                                .foregroundStyle(Color.beansComment)
-                                        }
-                                    }
-                                    .padding(9)
-                                    .background {
-                                        BeansGlass(shape: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 30)
+                            Text(importedText)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(Color.beansLabel)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(14)
                         }
                         .beansScrollIndicatorsHidden()
+                    } else {
+                        Picker("级别", selection: $filter) {
+                            Text("全部").tag(nil as BeansLogLevel?)
+                            ForEach(BeansLogLevel.allCases, id: \.self) { level in
+                                Text(level.rawValue).tag(level as BeansLogLevel?)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        if filtered.isEmpty {
+                            EmptyStateView(icon: "doc.text", text: "暂无日志")
+                        } else {
+                            ScrollView {
+                                LazyVStack(spacing: 6) {
+                                    ForEach(filtered) { entry in
+                                        HStack(alignment: .top, spacing: 8) {
+                                            Text(entry.level.rawValue)
+                                                .font(BeansFont.appFont(9, .bold, .monospaced))
+                                                .foregroundStyle(.white)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 3)
+                                                .background(Capsule().fill(entry.level.tint))
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(entry.message)
+                                                    .font(BeansFont.appFont(12, .medium))
+                                                    .foregroundStyle(Color.beansLabel)
+                                                    .textSelection(.enabled)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                Text(BeansLogger.dateString(entry.date))
+                                                    .font(BeansFont.appFont(9, .regular, .monospaced))
+                                                    .foregroundStyle(Color.beansComment)
+                                            }
+                                        }
+                                        .padding(9)
+                                        .background {
+                                            BeansGlass(shape: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 30)
+                            }
+                            .beansScrollIndicatorsHidden()
+                        }
                     }
                 }
             }
@@ -107,6 +110,11 @@ struct LogViewerSheet: View {
                     }
                 }
             }
+        }
+        .background {
+            HighRefreshConfigurator()
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
         }
         .modifier(BeansSheetModifier(detents: [.large], dragIndicator: true))
         .sheet(isPresented: $showShare) {

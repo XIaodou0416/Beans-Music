@@ -8,7 +8,6 @@ final class HighRefreshKeeper {
     static let defaultsKey = "beans.enableHighRefresh"
 
     private var displayLink: CADisplayLink?
-
     private init() {}
 
     static func registerDefaults() {
@@ -39,12 +38,12 @@ final class HighRefreshKeeper {
         let link = CADisplayLink(target: self, selector: #selector(tick))
         if #available(iOS 15.0, *) {
             let maximum = Float(min(120, max(60, UIScreen.main.maximumFramesPerSecond)))
-            let minimum: Float = maximum >= 120 ? 80 : maximum
             link.preferredFrameRateRange = CAFrameRateRange(
-                minimum: minimum,
+                minimum: maximum,
                 maximum: maximum,
                 preferred: maximum
             )
+            link.preferredFramesPerSecond = Int(maximum)
         } else {
             link.preferredFramesPerSecond = 120
         }

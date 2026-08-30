@@ -28,6 +28,8 @@ struct PlayerView: View {
     @State private var showDownloadPicker = false
     @State private var showShare = false
     @State private var showMoreActions = false
+    @State private var showMoreSettingsHint = false
+    @AppStorage("beans.playerMoreSettingsHintSeen") private var playerMoreSettingsHintSeen = false
     /// 下载完成后直接弹原生分享（用户自行选择保存或转发）
     @State private var shareFile: ShareFileItem?
     @State private var sharedFileURL: URL?
@@ -364,6 +366,24 @@ struct PlayerView: View {
                 }
             }
         }
+        .background {
+            HighRefreshConfigurator()
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
+        }
+        .overlay(alignment: .top) {
+            if showMoreSettingsHint {
+                Text("点击顶部中间正在播放的标题，可打开更多设置")
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(.black.opacity(0.58), in: Capsule())
+                    .padding(.top, 62)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .zIndex(120)
+            }
+        }
         .task(id: song?.identityKey) {
             let songKey = song?.identityKey ?? ""
             dominantColor = nil
@@ -390,8 +410,23 @@ struct PlayerView: View {
             if let path = LyricBackgroundStore.restoreFromBackup(), lyricBackgroundImagePath != path {
                 lyricBackgroundImagePath = path
             }
+            if !playerMoreSettingsHintSeen {
+                playerMoreSettingsHintSeen = true
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+                    showMoreSettingsHint = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.2) {
+                    withAnimation(.easeOut(duration: 0.22)) {
+                        showMoreSettingsHint = false
+                    }
+                }
+            }
         }
-        .sheet(isPresented: $showQueue) { QueueView().environmentObject(player) }
+        .sheet(isPresented: $showQueue) {
+            QueueView()
+                .environmentObject(player)
+                .environmentObject(theme)
+        }
         .sheet(isPresented: $showSleepTimer) { SleepTimerSheet().environmentObject(player) }
         .sheet(isPresented: $showAddToPlaylist) {
             if let song {
@@ -406,6 +441,8 @@ struct PlayerView: View {
         }
         .fullScreenCover(isPresented: $showPlayerSettings) {
             PlayerSettingsSheet()
+                .environmentObject(theme)
+                .environmentObject(player)
         }
         .sheet(isPresented: $showShare) {
             if let song {
@@ -2804,6 +2841,11 @@ struct PlayerSettingsSheet: View {
             if let path = LyricBackgroundStore.restoreFromBackup(), lyricBackgroundImagePath != path {
                 lyricBackgroundImagePath = path
             }
+        }
+        .background {
+            HighRefreshConfigurator()
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
         }
     }
 

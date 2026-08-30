@@ -149,7 +149,7 @@ struct DiscoverView: View {
                     .environmentObject(player)
             }
             .sheet(item: $selectedQQPlaylist) { playlist in
-                QQPlaylistSongsSheet(playlist: playlist)
+                PlaylistView(playlist: playlist)
                     .environmentObject(player)
                     .environmentObject(auth)
             }

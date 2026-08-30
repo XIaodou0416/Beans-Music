@@ -8,7 +8,8 @@ struct QueueView: View {
     var body: some View {
         let _ = theme.accent
         BeansNavigationStack {
-            Group {
+            ZStack {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 if player.queue.isEmpty {
                     EmptyStateView(icon: "music.note.list", text: "播放队列为空")
                 } else {
@@ -29,7 +30,6 @@ struct QueueView: View {
                     }
                     .beansScrollContentBackgroundHidden()
                     .listStyle(.plain)
-                    .background(LinearGradient.beansBackdrop)
                 }
             }
             .navigationTitle("播放队列")
@@ -47,6 +47,11 @@ struct QueueView: View {
                     }
                 }
             }
+        }
+        .background {
+            HighRefreshConfigurator()
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
         }
     }
 

@@ -132,6 +132,7 @@ struct LibraryView: View {
             HistoryView()
                 .environmentObject(player)
                 .environmentObject(auth)
+                .environmentObject(theme)
         }
         .sheet(isPresented: $showSectionSort) {
             SectionOrderSheet(title: "音乐库板块排序", sections: SectionOrderStore.libraryDefaults, order: $libraryOrder)
@@ -141,6 +142,7 @@ struct LibraryView: View {
             PlaylistView(playlist: playlist)
                 .environmentObject(player)
                 .environmentObject(auth)
+                .environmentObject(theme)
         }
         .alert("新建歌单", isPresented: $showCreatePlaylist) {
             TextField("歌单名称", text: $newPlaylistName)

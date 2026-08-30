@@ -1192,6 +1192,68 @@ final class QQMusicAPI {
         return decoded
     }
 
+    private static func initialData(from html: String) -> [String: Any]? {
+        guard let marker = html.range(of: "window.__INITIAL_DATA__") ?? html.range(of: "__INITIAL_DATA__"),
+              let start = html[marker.upperBound...].firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var inString = false
+        var escaped = false
+        var index = start
+        while index < html.endIndex {
+            let ch = html[index]
+            if escaped {
+                escaped = false
+            } else if ch == "\\" {
+                escaped = inString
+            } else if ch == "\"" {
+                inString.toggle()
+            } else if !inString {
+                if ch == "{" {
+                    depth += 1
+                } else if ch == "}" {
+                    depth -= 1
+                    if depth == 0 {
+                        let jsonText = String(html[start...index])
+                        return try? JSONSerialization.jsonObject(with: Data(jsonText.utf8)) as? [String: Any]
+                    }
+                }
+            }
+            index = html.index(after: index)
+        }
+        return nil
+    }
+
+    private static func hotRecommendArray(from json: [String: Any]) -> [[String: Any]] {
+        if let list = json["hotRecommend"] as? [[String: Any]], !list.isEmpty { return list }
+        var result: [[String: Any]] = []
+        func walk(_ value: Any) {
+            guard result.isEmpty else { return }
+            if let dict = value as? [String: Any] {
+                for (key, child) in dict {
+                    if key == "hotRecommend", let list = child as? [[String: Any]], !list.isEmpty {
+                        result = list
+                        return
+                    }
+                    walk(child)
+                }
+            } else if let array = value as? [Any] {
+                array.forEach(walk)
+            }
+        }
+        walk(json)
+        return result
+    }
+
+    private static func hotRecommendPlaylist(_ item: [String: Any]) -> Playlist? {
+        let id = integerValue(item["dissid"] ?? item["diss_id"] ?? item["tid"] ?? item["id"])
+        let name = (item["dissname"] as? String) ?? (item["title"] as? String) ?? (item["name"] as? String) ?? ""
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard id > 0, !trimmedName.isEmpty else { return nil }
+        let cover = normalizedQQImageURL(item["imgurl"] ?? item["picurl"] ?? item["pic_url"] ?? item["cover"])
+        let count = integerValue(item["listennum"] ?? item["songnum"] ?? item["song_cnt"] ?? item["listen_num"])
+        return Playlist(id: id, name: trimmedName, coverURL: cover, trackCount: count, source: .qq)
+    }
+
     /// 兼容 GetUserPlaylist 在不同客户端版本中的嵌套位置。
     private static func playlistArray(from json: [String: Any]) -> [[String: Any]] {
         let paths = [
@@ -1253,8 +1315,27 @@ final class QQMusicAPI {
             throw NetEaseError.network
         }
 
-        let pattern = #""imgurl":"([^"]+)","dissname":"([^"]*)","listennum":([0-9]+),"dissid":([0-9]+)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+        if let initialData = Self.initialData(from: html) {
+            var seen = Set<Int>()
+            let playlists = Self.hotRecommendArray(from: initialData)
+                .compactMap(Self.hotRecommendPlaylist)
+                .filter { playlist in
+                    guard !seen.contains(playlist.id) else { return false }
+                    seen.insert(playlist.id)
+                    return true
+                }
+                .prefix(max(1, limit))
+            if !playlists.isEmpty {
+                BeansLogger.shared.log("QQ 官网热门歌单 SSR 解析完成 count=\(playlists.count) elapsed=\(Self.elapsed(startedAt))", level: .info)
+                return Array(playlists)
+            }
+            BeansLogger.shared.log("QQ 官网热门歌单 SSR 存在但 hotRecommend 为空，尝试正则兜底", level: .warn)
+        } else {
+            BeansLogger.shared.log("QQ 官网热门歌单未找到 INITIAL_DATA，尝试正则兜底", level: .warn)
+        }
+
+        let pattern = #""imgurl"\s*:\s*"([^"]+)".*?"dissname"\s*:\s*"([^"]*)".*?"listennum"\s*:\s*([0-9]+).*?"dissid"\s*:\s*([0-9]+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else {
             throw NetEaseError.decoding("QQ 官网热门歌单解析器初始化失败")
         }
         let range = NSRange(html.startIndex..<html.endIndex, in: html)

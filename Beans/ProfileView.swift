@@ -145,10 +145,16 @@ struct ProfileView: View {
                 await qqAuth.fetchVIPStatus()
             }
         }
+        .background {
+            HighRefreshConfigurator()
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
+        }
         .sheet(isPresented: $showHistory) {
             HistoryView()
                 .environmentObject(player)
                 .environmentObject(auth)
+                .environmentObject(theme)
         }
         .sheet(isPresented: $showAccountHub) {
             AccountHubSheet()
@@ -1179,9 +1185,11 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showChangelog) {
             ChangelogListView()
+                .environmentObject(theme)
         }
         .sheet(isPresented: $showUsageGuide) {
             UsageGuideSheet()
+                .environmentObject(theme)
         }
         .fileExporter(
             isPresented: $showExportBackup,
@@ -1200,6 +1208,7 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showLogViewer) {
             LogViewerSheet(importedText: nil)
+                .environmentObject(theme)
         }
         .fullScreenCover(isPresented: $showRestorePicker) {
             BackupDocumentPicker { url in
@@ -1220,6 +1229,11 @@ struct SettingsView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("会恢复主题、播放器、平台显示、壁纸、布局等设置，但保留已登录账号。")
+        }
+        .background {
+            HighRefreshConfigurator()
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
         }
     }
 

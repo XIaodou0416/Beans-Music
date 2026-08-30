@@ -50,6 +50,7 @@ struct UpdateChecker {
 
     static func suppress(version: String) {
         UserDefaults.standard.set(version, forKey: suppressedVersionKey)
+        UserDefaults.standard.synchronize()
     }
 
     /// 拉取最新 Release（公开仓库无需 Token）
