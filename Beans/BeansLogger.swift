@@ -37,8 +37,8 @@ final class BeansLogger: ObservableObject {
 
     @Published private(set) var entries: [BeansLogEntry] = []
 
-    private let maxEntries = 800
-    private let maxLogFileBytes = 2 * 1024 * 1024
+    private let maxEntries = 5000
+    private let maxLogFileBytes = 10 * 1024 * 1024
     private let lock = NSLock()
     private var recentEntries: [BeansLogEntry] = []
 

@@ -156,6 +156,7 @@ struct PlaylistView: View {
     private func load() async {
         loading = true
         errorMessage = nil
+        BeansLogger.shared.log("歌单页面打开 source=\(playlist.source.rawValue) id=\(playlist.id) name=\(playlist.name) advertisedCount=\(playlist.trackCount)", level: .info)
         do {
             if playlist.source == .kugou {
                 tracks = try await KugouMusicAPI.shared.playlistSongs(listID: playlist.id)
@@ -165,13 +166,16 @@ struct PlaylistView: View {
                 // 避免“我的喜欢”进入后变成空白页面。
                 if tracks.isEmpty, playlist.id == QQMusicAPI.qqLikedPlaylistID {
                     tracks = favorites.qqFavoriteSongs
+                    BeansLogger.shared.log("QQ 我的喜欢页面网络结果为空，使用本地收藏回退 count=\(tracks.count)", level: tracks.isEmpty ? .warn : .info)
                 }
             } else {
                 tracks = try await NetEaseAPI.shared.playlistTracks(id: playlist.id)
             }
+            BeansLogger.shared.log("歌单页面加载完成 source=\(playlist.source.rawValue) id=\(playlist.id) name=\(playlist.name) count=\(tracks.count) error=无", level: tracks.isEmpty ? .warn : .info)
             loading = false
         } catch {
             errorMessage = error.localizedDescription
+            BeansLogger.shared.log("歌单页面加载失败 source=\(playlist.source.rawValue) id=\(playlist.id) name=\(playlist.name) error=\(error.localizedDescription)", level: .error)
             loading = false
         }
     }

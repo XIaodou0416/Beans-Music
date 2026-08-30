@@ -32,19 +32,31 @@ final class QQMusicAPI {
 
     private func get(_ urlString: String, referer: String = "https://y.qq.com/", cookie: String = "") async throws -> [String: Any] {
         guard let url = URL(string: urlString) else { throw NetEaseError.unknown("请求地址无效") }
+        let startedAt = Date()
+        BeansLogger.shared.log("QQ HTTP GET 开始 url=\(Self.sanitizedURL(urlString)) referer=\(referer) cookie=\(Self.cookieSummary(cookie))", level: .debug)
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 QQMusic/9.0.5", forHTTPHeaderField: "User-Agent")
         request.setValue(referer, forHTTPHeaderField: "Referer")
         request.setValue(cookie.isEmpty ? "uin=0; qqmusic_fromtag=66" : cookie, forHTTPHeaderField: "Cookie")
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw NetEaseError.network
+        do {
+            let (data, response) = try await session.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            BeansLogger.shared.log("QQ HTTP GET 完成 status=\(status) bytes=\(data.count) elapsed=\(Self.elapsed(startedAt))", level: .debug)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                BeansLogger.shared.log("QQ HTTP GET 非 200 status=\(status) response=\(Self.responseSummary(data))", level: .warn)
+                throw NetEaseError.network
+            }
+            guard let json = parseJSON(data) else {
+                BeansLogger.shared.log("QQ HTTP GET JSON 解析失败 response=\(Self.responseSummary(data))", level: .error)
+                let snippet = String(data: data, encoding: .utf8)?.prefix(120) ?? ""
+                throw NetEaseError.decoding(String(snippet))
+            }
+            BeansLogger.shared.log("QQ HTTP GET JSON 结构 \(Self.jsonSummary(json))", level: .debug)
+            return json
+        } catch {
+            BeansLogger.shared.log("QQ HTTP GET 异常 elapsed=\(Self.elapsed(startedAt)) error=\(error.localizedDescription)", level: .error)
+            throw error
         }
-        guard let json = parseJSON(data) else {
-            let snippet = String(data: data, encoding: .utf8)?.prefix(120) ?? ""
-            throw NetEaseError.decoding(String(snippet))
-        }
-        return json
     }
 
     /// musicu.fcg 统一入口：POST JSON body（与 wp_MusicApi 一致）；登录后附加 QQ Cookie
@@ -64,15 +76,27 @@ final class QQMusicAPI {
             request.setValue(cookie, forHTTPHeaderField: "Cookie")
         }
         request.httpBody = body
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw NetEaseError.network
+        let startedAt = Date()
+        BeansLogger.shared.log("QQ musicu POST 开始 timeout=\(timeout)s cookie=\(Self.cookieSummary(cookie)) payload=\(Self.jsonSummary(payload))", level: .debug)
+        do {
+            let (data, response) = try await session.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            BeansLogger.shared.log("QQ musicu POST 完成 status=\(status) bytes=\(data.count) elapsed=\(Self.elapsed(startedAt))", level: .debug)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                BeansLogger.shared.log("QQ musicu 非 200 status=\(status) response=\(Self.responseSummary(data))", level: .warn)
+                throw NetEaseError.network
+            }
+            guard let json = parseJSON(data) else {
+                BeansLogger.shared.log("QQ musicu JSON 解析失败 response=\(Self.responseSummary(data))", level: .error)
+                let snippet = String(data: data, encoding: .utf8)?.prefix(120) ?? ""
+                throw NetEaseError.decoding(String(snippet))
+            }
+            BeansLogger.shared.log("QQ musicu JSON 结构 \(Self.jsonSummary(json))", level: .debug)
+            return json
+        } catch {
+            BeansLogger.shared.log("QQ musicu 异常 elapsed=\(Self.elapsed(startedAt)) error=\(error.localizedDescription)", level: .error)
+            throw error
         }
-        guard let json = parseJSON(data) else {
-            let snippet = String(data: data, encoding: .utf8)?.prefix(120) ?? ""
-            throw NetEaseError.decoding(String(snippet))
-        }
-        return json
     }
 
     /// 表单 POST（fcg 老接口统一走这里，如 H5 评论接口）
@@ -391,7 +415,12 @@ final class QQMusicAPI {
     /// 我喜欢（红心）歌单歌曲列表（dirid=201 解析真实歌单 ID，再拉歌单详情）
     func favoriteSongs(limit: Int = 100) async throws -> [Song] {
         let qqAuth = QQMusicAuth.shared
-        guard qqAuth.isLoggedIn else { return [] }
+        let identities = qqAuth.playlistIdentityCandidates.map(Self.maskedIdentity).joined(separator: ",")
+        BeansLogger.shared.log("QQ 我的喜欢加载开始 limit=\(limit) loggedIn=\(qqAuth.isLoggedIn) identities=[\(identities)] playlistUin=\(Self.maskedIdentity(qqAuth.playlistUin)) gtk=已计算", level: .info)
+        guard qqAuth.isLoggedIn else {
+            BeansLogger.shared.log("QQ 我的喜欢终止：当前未登录", level: .error)
+            return []
+        }
         let cookieCandidates = [qqAuth.playlistCookieHeader, qqAuth.cookieHeader]
             .filter { !$0.isEmpty }
             .reduce(into: [String]()) { result, value in
@@ -404,13 +433,19 @@ final class QQMusicAPI {
         let legacyFavURL = "https://c.y.qq.com/splcloud/fcgi-bin/fcg_musiclist_getmyfav.fcg?dirid=201&dirinfo=1&g_tk=\(qqAuth.gtk)&format=json&utf8=1"
         if let favJson = try? await get(legacyFavURL, referer: "https://y.qq.com/n/yqq/playlist", cookie: qqAuth.cookieHeader),
            let mapid = Self.likedMapID(favJson), mapid > 0 {
+            BeansLogger.shared.log("QQ 我的喜欢旧接口成功 mapid=\(mapid) json=\(Self.jsonSummary(favJson))", level: .info)
             let detailURL = "https://c.y.qq.com/qzone/fcgi-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&new_format=1&disstid=\(mapid)&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0"
             if let detailJson = try? await get(detailURL, referer: "https://y.qq.com/", cookie: qqAuth.cookieHeader),
                let cdlist = detailJson["cdlist"] as? [[String: Any]],
                let rawSongs = cdlist.first?["songlist"] as? [[String: Any]] {
                 let songs = rawSongs.prefix(limit).compactMap { song(from: Self.unwrapQQSong($0)) }
+                BeansLogger.shared.log("QQ 我的喜欢旧详情 mapid=\(mapid) cdlist=\(cdlist.count) rawSongs=\(rawSongs.count) parsedSongs=\(songs.count)", level: songs.isEmpty ? .warn : .info)
                 if !songs.isEmpty { return songs }
+            } else {
+                BeansLogger.shared.log("QQ 我的喜欢旧详情未匹配 cdlist/songlist mapid=\(mapid)", level: .warn)
             }
+        } else {
+            BeansLogger.shared.log("QQ 我的喜欢旧接口未得到有效 mapid", level: .warn)
         }
 
         // 官方“我的喜欢”详情接口。它不依赖普通歌单的 disstid，
@@ -443,6 +478,7 @@ final class QQMusicAPI {
             let songs = Self.favoriteSongArray(from: json)
                 .prefix(limit)
                 .compactMap { song(from: Self.unwrapQQSong($0)) }
+            BeansLogger.shared.log("QQ 我的喜欢 CgiGetDiss 解析 raw=\(Self.favoriteSongArray(from: json).count) parsed=\(songs.count)", level: songs.isEmpty ? .warn : .info)
             if !songs.isEmpty { return songs }
         }
 
@@ -456,6 +492,7 @@ final class QQMusicAPI {
                 let songs = Self.favoriteSongArray(from: favJson)
                     .prefix(limit)
                     .compactMap { song(from: ($0["track_info"] as? [String: Any]) ?? $0) }
+                BeansLogger.shared.log("QQ 我的喜欢带身份接口 identity=\(identity) raw=\(Self.favoriteSongArray(from: favJson).count) parsed=\(songs.count)", level: songs.isEmpty ? .warn : .info)
                 if !songs.isEmpty { return songs }
             }
         }
@@ -466,9 +503,12 @@ final class QQMusicAPI {
         }
         for cookie in cookieCandidates {
             let songs = try await playlistSongs(listID: mapid, preferredCookie: cookie, limit: limit)
+            BeansLogger.shared.log("QQ 我的喜欢最终详情 mapid=\(mapid) songs=\(songs.count)", level: songs.isEmpty ? .warn : .info)
             if !songs.isEmpty { return songs }
         }
-        return try await playlistSongs(listID: mapid, preferredCookie: nil, limit: limit)
+        let songs = try await playlistSongs(listID: mapid, preferredCookie: nil, limit: limit)
+        BeansLogger.shared.log("QQ 我的喜欢加载结束 mapid=\(mapid) songs=\(songs.count)", level: songs.isEmpty ? .error : .info)
+        return songs
     }
 
     /// 解析「我的喜欢」的真实歌单 ID。该歌单通常不会出现在 profile/create 的创建歌单列表中，
@@ -973,6 +1013,7 @@ final class QQMusicAPI {
     /// 同时保留旧版 fcg 接口作为 QQ 登录和部分旧账号的快速通道。
     func userPlaylists(uin: String) async throws -> [Playlist] {
         let qqAuth = QQMusicAuth.shared
+        BeansLogger.shared.log("QQ 歌单列表加载开始 requestedUin=\(Self.maskedIdentity(uin)) playlistUin=\(Self.maskedIdentity(qqAuth.playlistUin)) identities=\(qqAuth.playlistIdentityCandidates.map(Self.maskedIdentity).joined(separator: ",")) cookies=\(cookieCandidatesSummary(qqAuth))", level: .info)
         guard qqAuth.isLoggedIn else { return [] }
 
         let requestUin = qqAuth.playlistUin
@@ -1090,6 +1131,7 @@ final class QQMusicAPI {
                 at: 0
             )
         }
+        BeansLogger.shared.log("QQ 歌单列表加载结束 count=\(playlists.count) likedPresent=\(playlists.contains { $0.id == Self.qqLikedPlaylistID }) names=\(playlists.map(\.name).joined(separator: " | "))", level: playlists.isEmpty ? .error : .info)
 
         playlists.sort { lhs, rhs in
             let a = lhs.name.contains("我喜欢") || lhs.name.contains("我的喜欢") || lhs.name.contains("喜欢的音乐")
@@ -1212,6 +1254,7 @@ final class QQMusicAPI {
     }
 
     private func playlistSongs(listID: Int, preferredCookie: String?, limit: Int) async throws -> [Song] {
+        BeansLogger.shared.log("QQ 歌单歌曲加载开始 listID=\(listID) limit=\(limit) preferredCookie=\(preferredCookie == nil ? "无" : "有")", level: .info)
         if listID == Self.qqLikedPlaylistID {
             return try await favoriteSongs(limit: limit)
         }
@@ -1254,6 +1297,11 @@ final class QQMusicAPI {
             if !songs.isEmpty { return songs }
         }
         return []
+    }
+
+    private func cookieCandidatesSummary(_ auth: QQMusicAuth) -> String {
+        let values = [auth.playlistCookieHeader, auth.cookieHeader].filter { !$0.isEmpty }
+        return values.enumerated().map { "#\($0.offset):\(Self.cookieSummary($0.element))" }.joined(separator: " ")
     }
 
     /// 歌单第一首歌曲封面（歌单封面缺失时的兜底；失败返回 nil）
@@ -1351,6 +1399,66 @@ final class QQMusicAPI {
     }
 
     // MARK: - 工具
+
+    private static func maskedIdentity(_ value: String) -> String {
+        guard value.count > 4 else { return value.isEmpty ? "空" : "***" }
+        return "\(value.prefix(2))***\(value.suffix(2))"
+    }
+
+    private static func elapsed(_ start: Date) -> String {
+        String(format: "%.3fs", Date().timeIntervalSince(start))
+    }
+
+    private static func cookieSummary(_ cookie: String) -> String {
+        let names = cookie.split(separator: ";").compactMap { part -> String? in
+            let name = part.split(separator: "=", maxSplits: 1).first.map(String.init) ?? ""
+            return name.isEmpty ? nil : name
+        }
+        return "keys=[\(names.joined(separator: ","))] count=\(names.count)"
+    }
+
+    private static func responseSummary(_ data: Data) -> String {
+        let text = String(data: data, encoding: .utf8) ?? ""
+        let compact = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        return "text=\(String(compact.prefix(300)))"
+    }
+
+    private static func jsonSummary(_ value: [String: Any]) -> String {
+        var lines: [String] = []
+        func describe(_ value: Any, path: String, depth: Int) {
+            guard lines.count < 160 else { return }
+            if let dict = value as? [String: Any] {
+                let keys = dict.keys.sorted()
+                let codes = ["code", "ret", "result", "message", "msg"].compactMap { key -> String? in
+                    guard let item = dict[key] else { return nil }
+                    return "\(key)=\(String(describing: item).prefix(80))"
+                }
+                lines.append("\(path): dict keys=[\(keys.joined(separator: ","))] \(codes.joined(separator: " "))")
+                guard depth < 4 else { return }
+                for key in keys {
+                    if let child = dict[key] { describe(child, path: "\(path).\(key)", depth: depth + 1) }
+                }
+            } else if let array = value as? [Any] {
+                lines.append("\(path): array count=\(array.count)")
+                guard depth < 4 else { return }
+                if let first = array.first { describe(first, path: "\(path)[0]", depth: depth + 1) }
+            } else {
+                lines.append("\(path): \(String(describing: value).prefix(120))")
+            }
+        }
+        describe(value, path: "$", depth: 0)
+        return lines.joined(separator: " | ")
+    }
+
+    private static func sanitizedURL(_ value: String) -> String {
+        guard var components = URLComponents(string: value), var items = components.queryItems else { return value }
+        let privateKeys = Set(["uin", "loginUin", "userid", "hostUin", "g_tk", "g_tk_new"])
+        items = items.map { item in
+            privateKeys.contains(item.name) ? URLQueryItem(name: item.name, value: "<redacted>") : item
+        }
+        components.queryItems = items
+        return components.string ?? value
+    }
 
     private func nestedArray(_ json: [String: Any], path: [String]) -> [[String: Any]] {
         var current: Any = json
