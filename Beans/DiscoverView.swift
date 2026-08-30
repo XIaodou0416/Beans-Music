@@ -669,7 +669,7 @@ struct DiscoverView: View {
         case .qq:
             async let a = QQMusicAPI.shared.recommendSongs(limit: 30)
             async let b = QQMusicAPI.shared.topLists()
-            async let c = QQMusicAPI.shared.recommendPlaylists(limit: 12)
+            async let c = QQMusicAPI.shared.hotPlaylists(limit: 18)
             let (dr, tl, pp) = try await (a, b, c)
             snapshot.dailySongs = dr
             snapshot.qqTopLists = tl

@@ -3,6 +3,15 @@ import SwiftUI
 // MARK: - 本地音乐库区块（音乐库页面顶部：本机歌单，可新建 / 播放 / 添加歌曲）
 
 struct LocalMusicSection: View {
+    private enum SyncTarget: String, CaseIterable, Identifiable {
+        case netease = "网易云音乐"
+        case qq = "QQ音乐"
+        case kugou = "酷狗音乐"
+        case all = "全部平台"
+
+        var id: String { rawValue }
+    }
+
     @ObservedObject private var store = LocalLibraryStore.shared
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
@@ -13,6 +22,7 @@ struct LocalMusicSection: View {
     @State private var selected: LocalPlaylist?
     @State private var syncing = false
     @State private var syncMessage = ""
+    @State private var showSyncPicker = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -35,14 +45,14 @@ struct LocalMusicSection: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 GlassButton(
-                    title: syncing ? "正在同步三平台喜欢…" : "一键同步三平台喜欢",
+                    title: syncing ? "正在同步歌单…" : "一键同步歌单",
                     systemName: "arrow.triangle.2.circlepath",
                     prominent: true
                 ) {
-                    Task { await syncAllLikes() }
+                    showSyncPicker = true
                 }
                 .disabled(syncing)
-                Text("将网易云、QQ音乐、酷狗音乐的喜欢歌曲合并到本地歌单“三平台喜欢”")
+                Text("选择平台后，将喜欢歌曲同步到对应的本地歌单")
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
             }
@@ -120,6 +130,15 @@ struct LocalMusicSection: View {
         } message: {
             Text("本地歌单保存在设备上，覆盖安装不会丢失，不依赖平台账号")
         }
+        .confirmationDialog("选择要同步的平台", isPresented: $showSyncPicker, titleVisibility: .visible) {
+            Button("网易云音乐") { Task { await sync(target: .netease) } }
+            Button("QQ音乐") { Task { await sync(target: .qq) } }
+            Button("酷狗音乐") { Task { await sync(target: .kugou) } }
+            Button("全部平台") { Task { await sync(target: .all) } }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("选择后会创建或更新对应的本地歌单")
+        }
         .sheet(item: $selected) { playlist in
             LocalPlaylistDetailSheet(playlistID: playlist.id)
                 .environmentObject(player)
@@ -127,13 +146,13 @@ struct LocalMusicSection: View {
         }
     }
 
-    private func syncAllLikes() async {
+    private func sync(target: SyncTarget) async {
         guard !syncing else { return }
         syncing = true
         syncMessage = ""
         var songs: [Song] = []
         var details: [String] = []
-        if let user = auth.user, auth.isLoggedIn {
+        if target == .netease || target == .all, let user = auth.user, auth.isLoggedIn {
             do {
                 let lists = try await NetEaseAPI.shared.userPlaylists(uid: user.uid)
                 let liked = lists.first { list in
@@ -151,16 +170,16 @@ struct LocalMusicSection: View {
                 BeansLogger.shared.log("三平台同步：网易云失败 \(error.localizedDescription)", level: .error)
                 details.append("网易云请求失败")
             }
-        } else {
+        } else if target == .netease || target == .all {
             details.append("网易云未登录")
         }
-        if !favorites.neteaseFavoriteSongs.isEmpty {
+        if (target == .netease || target == .all), !favorites.neteaseFavoriteSongs.isEmpty {
             let cachedIDs = Set(songs.filter { $0.source == .netease }.map(\.id))
             let cached = favorites.neteaseFavoriteSongs.filter { !cachedIDs.contains($0.id) }
             songs.append(contentsOf: cached)
             if !cached.isEmpty { details.append("网易云缓存补充 \(cached.count) 首") }
         }
-        if QQMusicAuth.shared.isLoggedIn {
+        if target == .qq || target == .all, QQMusicAuth.shared.isLoggedIn {
             do {
                 let qqSongs = try await QQMusicAPI.shared.favoriteSongs(limit: 300)
                 songs.append(contentsOf: qqSongs)
@@ -169,10 +188,10 @@ struct LocalMusicSection: View {
                 BeansLogger.shared.log("三平台同步：QQ音乐失败 \(error.localizedDescription)", level: .error)
                 details.append("QQ音乐请求失败")
             }
-        } else {
+        } else if target == .qq || target == .all {
             details.append("QQ音乐未登录")
         }
-        if KugouMusicAuth.shared.isLoggedIn {
+        if target == .kugou || target == .all, KugouMusicAuth.shared.isLoggedIn {
             do {
                 let lists = try await KugouMusicAPI.shared.userPlaylists()
                 BeansLogger.shared.log("三平台同步：酷狗歌单 \(lists.map(\.name).joined(separator: "|"))", level: .info)
@@ -191,16 +210,23 @@ struct LocalMusicSection: View {
                 BeansLogger.shared.log("三平台同步：酷狗音乐失败 \(error.localizedDescription)", level: .error)
                 details.append("酷狗音乐请求失败")
             }
-        } else {
+        } else if target == .kugou || target == .all {
             details.append("酷狗音乐未登录")
         }
         var unique: [Song] = []
         var seen = Set<String>()
         for song in songs where seen.insert(song.identityKey).inserted { unique.append(song) }
-        let added = store.syncSongs(unique)
+        let playlistName: String
+        switch target {
+        case .netease: playlistName = "网易云喜欢"
+        case .qq: playlistName = "QQ音乐喜欢"
+        case .kugou: playlistName = "酷狗音乐喜欢"
+        case .all: playlistName = "三平台喜欢"
+        }
+        let added = store.syncSongs(unique, intoPlaylistNamed: playlistName)
         syncing = false
         syncMessage = details.joined(separator: "，") + "；合计 \(unique.count) 首"
-        ToastCenter.shared.show(unique.isEmpty ? "没有获取到已登录平台的喜欢歌曲" : "已同步 \(unique.count) 首，新增 \(added) 首到三平台喜欢")
+        ToastCenter.shared.show(unique.isEmpty ? "没有获取到该平台的喜欢歌曲" : "已同步 \(unique.count) 首，新增 \(added) 首到本地歌单“\(playlistName)”")
     }
 }
 

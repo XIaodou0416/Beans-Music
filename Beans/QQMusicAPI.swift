@@ -1183,6 +1183,15 @@ final class QQMusicAPI {
         return 0
     }
 
+    private static func decodeJSONStringValue(_ value: String) -> String {
+        let quoted = "\"\(value)\""
+        guard let data = quoted.data(using: .utf8),
+              let decoded = try? JSONSerialization.jsonObject(with: data) as? String else {
+            return value
+        }
+        return decoded
+    }
+
     /// 兼容 GetUserPlaylist 在不同客户端版本中的嵌套位置。
     private static func playlistArray(from json: [String: Any]) -> [[String: Any]] {
         let paths = [
@@ -1225,8 +1234,55 @@ final class QQMusicAPI {
         return result
     }
 
-    /// QQ 推荐歌单
-    func recommendPlaylists(limit: Int = 12) async throws -> [Playlist] {
+    /// QQ 官网首页热门歌单。
+    /// 官网首页会把这组数据放在 SSR 的 __INITIAL_DATA__.hotRecommend 中，
+    /// 比旧的 RecommendPlaylist musicu 接口更接近官网实际展示内容。
+    func hotPlaylists(limit: Int = 18) async throws -> [Playlist] {
+        guard let url = URL(string: "https://y.qq.com/") else {
+            throw NetEaseError.unknown("QQ 音乐官网地址无效")
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 QQMusic/9.0.5", forHTTPHeaderField: "User-Agent")
+        request.setValue("https://y.qq.com/", forHTTPHeaderField: "Referer")
+        let startedAt = Date()
+        BeansLogger.shared.log("QQ 官网热门歌单加载开始 limit=\(limit)", level: .info)
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard status == 200, let html = String(data: data, encoding: .utf8) else {
+            BeansLogger.shared.log("QQ 官网热门歌单加载失败 status=\(status) bytes=\(data.count)", level: .error)
+            throw NetEaseError.network
+        }
+
+        let pattern = #""imgurl":"([^"]+)","dissname":"([^"]*)","listennum":([0-9]+),"dissid":([0-9]+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            throw NetEaseError.decoding("QQ 官网热门歌单解析器初始化失败")
+        }
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        var playlists: [Playlist] = []
+        var seen = Set<Int>()
+        for match in regex.matches(in: html, range: range) {
+            guard match.numberOfRanges == 5,
+                  let imageRange = Range(match.range(at: 1), in: html),
+                  let nameRange = Range(match.range(at: 2), in: html),
+                  let countRange = Range(match.range(at: 3), in: html),
+                  let idRange = Range(match.range(at: 4), in: html),
+                  let id = Int(html[idRange]),
+                  !seen.contains(id) else { continue }
+            let image = Self.decodeJSONStringValue(String(html[imageRange]))
+            let name = Self.decodeJSONStringValue(String(html[nameRange]))
+            let count = Int(html[countRange]) ?? 0
+            guard !name.isEmpty else { continue }
+            seen.insert(id)
+            playlists.append(Playlist(id: id, name: name, coverURL: Self.normalizedQQImageURL(image), trackCount: count, source: .qq))
+            if playlists.count >= max(1, limit) { break }
+        }
+        BeansLogger.shared.log("QQ 官网热门歌单加载完成 count=\(playlists.count) elapsed=\(Self.elapsed(startedAt))", level: playlists.isEmpty ? .warn : .info)
+        if !playlists.isEmpty { return playlists }
+        return try await recommendPlaylistsFallback(limit: limit)
+    }
+
+    /// QQ 推荐歌单 musicu 兜底接口
+    private func recommendPlaylistsFallback(limit: Int = 12) async throws -> [Playlist] {
         let payload: [String: Any] = [
             "comm": ["ct": 24, "cv": 0],
             "req_1": [
