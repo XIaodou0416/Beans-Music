@@ -306,6 +306,7 @@ final class ThemeStore: ObservableObject {
     private let wallpaperDataKey = "beans.wallpapers.data"
     private let deletedKey = "beans.wallpapers.deleted"
     private let uiStyleKey = "beans.uiStyle"
+    private var wallpapersRestored = false
 
     private init() {
         accent = BeansAccent(rawValue: UserDefaults.standard.string(forKey: AccentTheme.key) ?? "") ?? .amber
@@ -316,7 +317,12 @@ final class ThemeStore: ObservableObject {
         backgroundImagePath = UserDefaults.standard.string(forKey: backgroundImageKey) ?? ""
         wallpaperPaths = UserDefaults.standard.stringArray(forKey: wallpaperListKey) ?? []
         uiStyle = BeansUIStyle(rawValue: UserDefaults.standard.string(forKey: uiStyleKey) ?? "") ?? .liquid
-        // 自动恢复壁纸（覆盖安装/数据迁移后：文件仍在用文件，文件丢失用 base64 备份重建）
+    }
+
+    /// 在首帧之后恢复壁纸，避免覆盖安装后同步读写大图备份阻塞应用启动。
+    func restoreWallpapersIfNeeded() {
+        guard !wallpapersRestored else { return }
+        wallpapersRestored = true
         restoreWallpapers()
     }
 
@@ -385,6 +391,7 @@ final class ThemeStore: ObservableObject {
 
     /// 配置备份恢复后调用：按 UserDefaults 中的壁纸列表与 base64 备份重建壁纸文件
     func reloadWallpapersFromBackup() {
+        wallpapersRestored = true
         restoreWallpapers()
     }
 
