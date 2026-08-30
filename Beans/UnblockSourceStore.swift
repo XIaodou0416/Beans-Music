@@ -56,25 +56,12 @@ final class UnblockSourceStore: ObservableObject {
     static let shared = UnblockSourceStore()
 
     private static let paidAPIURL = "https://source.shiqianjiang.cn/api/music"
-    private static let paidAPIKeys = [
-        "CERU_KEY-51440644-C9AD-4E10-B593-258FF59CF259",
-        "CERU_KEY-1C0F7359-2863-46F7-A63C-B0E0E744CDFE",
-        "CERU_KEY-B2495961-F872-4F31-9893-F6E8F15B5D62",
-        "CERU_KEY-51A42014-7122-4D7A-9964-51DEE617FDB5",
-        "CERU_KEY-DCF912D8-1AF2-43E0-B5BE-1AE9ACB628CA",
-        "CERU_KEY-D5131038-C149-4EC3-B7B9-0C6FA6F9254C",
-        "CERU_KEY-123597C5-FD84-44E3-B30B-DA4E986775EF",
-        "CERU_KEY-1AAA372F-0436-442B-A893-29F429F23A99",
-        "CERU_KEY-27801580-D346-4ECC-8279-4A6E3DCE2A04",
-        "CERU_KEY-6A7A61FC-69E3-4DA6-8BE7-4CC30C276155",
-        "CERU_KEY-29C420FF-991A-4CDF-8AD7-80052193CC03",
-        "CERU_KEY-E0BF635D-2866-4C35-A053-938636729CF3",
-        "CERU_KEY-AFC06E87-AD81-49BD-9B70-738346B31DF9",
-    ]
+    // 密钥不再随客户端发布；需要使用时应由受控服务端注入。
+    private static let paidAPIKeys: [String] = []
     private static let paidURLTemplate = "\(paidAPIURL)/url?source={source}&songId={id}&quality={quality}"
     private static var paidHeaders: [String: String] {
         [
-            "apiKey": paidAPIKeys[0],
+            "apiKey": paidAPIKeys.first ?? "",
             "apiKeys": paidAPIKeys.joined(separator: ","),
             "quality": "320k",
         ]
