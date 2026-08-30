@@ -14,6 +14,9 @@ enum QQSearchType: Int {
 /// - vkey 播放地址经 musicu.fcg 获取，VIP 歌曲返回空；部分数据中心 IP 会被风控返回空，家庭网络正常。
 final class QQMusicAPI {
     static let shared = QQMusicAPI()
+    /// QQ「我的喜欢」不是“创建歌单”列表中的普通歌单，使用稳定占位 ID 进入专用加载流程。
+    static let qqLikedPlaylistID = -201
+    private static let qqLikedCoverURL = URL(string: "https://y.gtimg.cn/mediastyle/global/img/cover_like.png")
 
     private let base = "https://u.y.qq.com/cgi-bin/musicu.fcg"
     private let searchBase = "https://c.y.qq.com/soso/fcgi-bin/search_for_qq_cp"
@@ -385,25 +388,88 @@ final class QQMusicAPI {
         return code == 0
     }
 
-    /// 我喜欢（红心）歌单歌曲列表（fcg_musiclist_getmyfav dirid=201 拿歌单 id，再拉歌单详情）
+    /// 我喜欢（红心）歌单歌曲列表（dirid=201 解析真实歌单 ID，再拉歌单详情）
     func favoriteSongs(limit: Int = 100) async throws -> [Song] {
         let qqAuth = QQMusicAuth.shared
         guard qqAuth.isLoggedIn else { return [] }
-        let gtk = qqAuth.gtk
-        let favURL = "https://c.y.qq.com/splcloud/fcgi-bin/fcg_musiclist_getmyfav.fcg?dirid=201&dirinfo=1&g_tk=\(gtk)&format=json&utf8=1"
         let cookieCandidates = [qqAuth.playlistCookieHeader, qqAuth.cookieHeader]
             .filter { !$0.isEmpty }
             .reduce(into: [String]()) { result, value in
                 if !result.contains(value) { result.append(value) }
             }
+        guard let mapid = await likedPlaylistID(qqAuth: qqAuth, cookies: cookieCandidates), mapid > 0 else {
+            BeansLogger.shared.log("QQ 我的喜欢歌单解析失败：未找到真实歌单 ID", level: .error)
+            return []
+        }
         for cookie in cookieCandidates {
-            guard let favJson = try? await get(favURL, referer: "https://y.qq.com/n/yqq/playlist", cookie: cookie) else { continue }
-            let mapid = Self.integerValue(favJson["map"] ?? favJson["mapid"] ?? favJson["id"])
-            guard mapid > 0 else { continue }
             let songs = try await playlistSongs(listID: mapid, preferredCookie: cookie, limit: limit)
             if !songs.isEmpty { return songs }
         }
-        return []
+        return try await playlistSongs(listID: mapid, preferredCookie: nil, limit: limit)
+    }
+
+    /// 解析「我的喜欢」的真实歌单 ID。该歌单通常不会出现在 profile/create 的创建歌单列表中，
+    /// 需要通过 dirid=201 专用接口或 GetUserPlaylist order=3 单独获取。
+    private func likedPlaylistID(qqAuth: QQMusicAuth, cookies: [String]) async -> Int? {
+        let favURL = "https://c.y.qq.com/splcloud/fcgi-bin/fcg_musiclist_getmyfav.fcg?dirid=201&dirinfo=1&g_tk=\(qqAuth.gtk)&format=json&utf8=1"
+        for cookie in cookies {
+            guard let favJson = try? await get(favURL, referer: "https://y.qq.com/n/yqq/playlist", cookie: cookie) else { continue }
+            if let id = Self.likedMapID(favJson), id > 0 { return id }
+
+            let data = favJson["data"] as? [String: Any] ?? favJson
+            if let first = (data["cdlist"] as? [[String: Any]])?.first {
+                let id = Self.integerValue(first["dissid"] ?? first["diss_id"])
+                if id > 0 { return id }
+            }
+        }
+
+        let identities = qqAuth.playlistIdentityCandidates
+        for identity in identities {
+            let numericUin = Int(identity) ?? 0
+            let payload: [String: Any] = [
+                "comm": [
+                    "ct": 24,
+                    "cv": 0,
+                    "uin": numericUin,
+                    "g_tk": qqAuth.gtk,
+                    "platform": "yqq",
+                ],
+                "req_1": [
+                    "module": "music.musichallSong.PlayListDataServer",
+                    "method": "GetUserPlaylist",
+                    "param": [
+                        "uin": numericUin,
+                        "sin": 0,
+                        "size": 100,
+                        "order": 3,
+                    ],
+                ],
+            ]
+            for cookie in cookies {
+                guard let json = try? await musicu(payload, cookie: cookie, timeout: 15) else { continue }
+                for item in playlistArray(from: json) {
+                    let id = Self.integerValue(item["dissid"] ?? item["diss_id"] ?? item["tid"])
+                    if id > 0 { return id }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// fcg_musiclist_getmyfav 的 map 可能是标量、嵌套在 data 中，或是 {"201": 真实歌单 ID}。
+    private static func likedMapID(_ json: [String: Any]) -> Int? {
+        let data = json["data"] as? [String: Any] ?? [:]
+        for value in [json["map"], json["mapid"], json["id"], data["map"], data["mapid"], data["id"]] {
+            if let dict = value as? [String: Any] {
+                let preferredID = integerValue(dict["201"])
+                if preferredID > 0 { return preferredID }
+                if let id = dict.values.lazy.map({ integerValue($0) }).first(where: { $0 > 0 }) { return id }
+            } else {
+                let id = integerValue(value)
+                if id > 0 { return id }
+            }
+        }
+        return nil
     }
 
     // MARK: - 红心收藏
@@ -910,6 +976,20 @@ final class QQMusicAPI {
             BeansLogger.shared.log("QQ 歌单列表为空（uin=\(uin)，playlistUin=\(requestUin)），可能是微信 Cookie 未包含完整登录态或接口返回空", level: .error)
         }
 
+        // QQ 网页的 profile/create 只展示创建歌单，“我的喜欢”由 dirid=201 单独维护。
+        // 即使各歌单列表接口没有把它返回，也要显式放回音乐库列表。
+        if !seen.contains(Self.qqLikedPlaylistID) {
+            playlists.insert(
+                Playlist(
+                    id: Self.qqLikedPlaylistID,
+                    name: "我的喜欢",
+                    coverURL: Self.qqLikedCoverURL,
+                    source: .qq
+                ),
+                at: 0
+            )
+        }
+
         playlists.sort { lhs, rhs in
             let a = lhs.name.contains("我喜欢") || lhs.name.contains("我的喜欢") || lhs.name.contains("喜欢的音乐")
             let b = rhs.name.contains("我喜欢") || rhs.name.contains("我的喜欢") || rhs.name.contains("喜欢的音乐")
@@ -1031,7 +1111,7 @@ final class QQMusicAPI {
     }
 
     private func playlistSongs(listID: Int, preferredCookie: String?, limit: Int) async throws -> [Song] {
-        if listID == -201 {
+        if listID == Self.qqLikedPlaylistID {
             return try await favoriteSongs(limit: limit)
         }
         let qqAuth = QQMusicAuth.shared
