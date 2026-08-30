@@ -134,6 +134,8 @@ struct ProfileView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
                 .padding(.bottom, 190)
+                .frame(maxWidth: 860)
+                .frame(maxWidth: .infinity)
             }
             .beansScrollIndicatorsHidden()
         }
@@ -1109,6 +1111,12 @@ struct SettingsView: View {
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
     @AppStorage("beans.labelColorHex") private var labelColorHex = ""
+    @AppStorage("beans.homeGreetingText") private var homeGreetingText = ""
+    @AppStorage("beans.homeGreetingSize") private var homeGreetingSize = 30.0
+    @AppStorage("beans.homeGreetingHeight") private var homeGreetingHeight = 0.0
+    @AppStorage("beans.homeGreetingColorHex") private var homeGreetingColorHex = ""
+    @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
+    @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
@@ -1159,6 +1167,8 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 40)
+                    .frame(maxWidth: 860)
+                    .frame(maxWidth: .infinity)
                 }
                 .beansScrollIndicatorsHidden()
             }
@@ -1229,11 +1239,6 @@ struct SettingsView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("会恢复主题、播放器、平台显示、壁纸、布局等设置，但保留已登录账号。")
-        }
-        .background {
-            HighRefreshConfigurator()
-                .frame(width: 0, height: 0)
-                .allowsHitTesting(false)
         }
     }
 
@@ -1618,6 +1623,50 @@ struct SettingsView: View {
                     Text("全 App 主文字颜色")
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
+                }
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "text.badge.star")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        Text("主页问候文字")
+                            .font(BeansFont.appFont(15))
+                            .foregroundStyle(Color.beansLabel)
+                        Spacer()
+                        ColorPicker("", selection: Binding(
+                            get: { Color(hex: homeGreetingColorHex) ?? Color.beansLabel },
+                            set: { homeGreetingColorHex = $0.hexString }
+                        ), supportsOpacity: false)
+                        .labelsHidden()
+                    }
+                    TextField("留空自动显示早上好/下午好/晚上好", text: $homeGreetingText)
+                        .textFieldStyle(.roundedBorder)
+                    VStack(spacing: 8) {
+                        HStack {
+                            Text("文字大小")
+                            Spacer()
+                            Text("\(Int(homeGreetingSize))")
+                                .foregroundStyle(Color.beansComment)
+                        }
+                        Slider(value: $homeGreetingSize, in: 20...44, step: 1)
+                        HStack {
+                            Text("标题区高度")
+                            Spacer()
+                            Text(homeGreetingHeight <= 0 ? "自动" : "\(Int(homeGreetingHeight))")
+                                .foregroundStyle(Color.beansComment)
+                        }
+                        Slider(value: $homeGreetingHeight, in: 0...140, step: 1)
+                    }
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansLabel)
+                    Toggle("隐藏主页排序按钮", isOn: $homeHeaderHideSort)
+                        .font(BeansFont.appFont(13))
+                    Toggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
+                        .font(BeansFont.appFont(13))
                 }
 
                 Divider().overlay(Color.beansComment.opacity(0.15))

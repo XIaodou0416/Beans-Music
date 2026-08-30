@@ -640,6 +640,13 @@ struct AddToLocalPlaylistSheet: View {
             }
         }
         .modifier(BeansSheetModifier(detents: [.medium, .large], dragIndicator: true))
+        .onAppear {
+            if store.playlists.isEmpty {
+                ToastCenter.shared.show(store.addToDefaultFavorites(song))
+                BeansHaptics.success()
+                dismiss()
+            }
+        }
     }
 
     private func createAndAdd() {

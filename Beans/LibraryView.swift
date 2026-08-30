@@ -94,6 +94,8 @@ struct LibraryView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
                 .padding(.bottom, 190)
+                .frame(maxWidth: 860)
+                .frame(maxWidth: .infinity)
             }
             .beansScrollIndicatorsHidden()
             .refreshable {
@@ -173,10 +175,6 @@ struct LibraryView: View {
                     GlassIconButton(systemName: "arrow.up.arrow.down") {
                         BeansHaptics.tap()
                         showSectionSort = true
-                    }
-                    GlassIconButton(systemName: "arrow.clockwise") {
-                        BeansHaptics.tap()
-                        Task { await auth.loadLibrary() }
                     }
                 }
             }
@@ -525,12 +523,12 @@ struct LibraryView: View {
             return
         }
         // 会话内短缓存：5 分钟内不重复拉取，避免每次打开界面都重新加载（下拉可强制刷新）
-        if !force, Date().timeIntervalSince(qqSavedAt) < 300 { return }
+        if !force, !qqPlaylists.isEmpty, Date().timeIntervalSince(qqSavedAt) < 300 { return }
         qqLoading = true
         let list = (try? await QQMusicAPI.shared.userPlaylists(uin: qqAuth.uin)) ?? []
         qqPlaylists = list
         await favorites.syncQQFromCloud()
-        qqSavedAt = Date()
+        if !list.isEmpty { qqSavedAt = Date() }
         qqLoading = false
         // 封面兜底：歌单封面缺失时默认取第一首歌曲封面（列表先展示，封面后台补齐）
         if !list.isEmpty { await fillQQPlaylistCovers(list) }
@@ -542,12 +540,12 @@ struct LibraryView: View {
             kugouLoading = false
             return
         }
-        if !force, Date().timeIntervalSince(kugouSavedAt) < 300 { return }
+        if !force, !kugouPlaylists.isEmpty, Date().timeIntervalSince(kugouSavedAt) < 300 { return }
         kugouLoading = true
         do {
             let list = try await KugouMusicAPI.shared.userPlaylists()
             kugouPlaylists = list
-            kugouSavedAt = Date()
+            if !list.isEmpty { kugouSavedAt = Date() }
         } catch {
             BeansLogger.shared.log("酷狗歌单同步失败：\(error.localizedDescription)", level: .error)
             kugouPlaylists = []

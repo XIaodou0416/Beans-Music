@@ -23,6 +23,12 @@ struct DiscoverView: View {
     private var availableSections: [String] { SectionOrderStore.homeDefaults }
     /// 首页数据源：记住上次选择，下次打开仍保持该平台（默认网易云）
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
+    @AppStorage("beans.homeGreetingText") private var homeGreetingText = ""
+    @AppStorage("beans.homeGreetingSize") private var homeGreetingSize = 30.0
+    @AppStorage("beans.homeGreetingHeight") private var homeGreetingHeight = 0.0
+    @AppStorage("beans.homeGreetingColorHex") private var homeGreetingColorHex = ""
+    @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
+    @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
     /// 首页数据源：网易云 / QQ音乐（与搜索页同一控件样式）
     private var source: SearchProvider {
@@ -91,6 +97,8 @@ struct DiscoverView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
                 .padding(.bottom, 190)
+                .frame(maxWidth: 860)
+                .frame(maxWidth: .infinity)
                 }
             }
             .beansScrollIndicatorsHidden()
@@ -171,26 +179,31 @@ struct DiscoverView: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(greeting)
-                        .font(BeansFont.appFont(30, .bold))
-                        .foregroundStyle(Color.beansLabel)
+                        .font(BeansFont.appFont(CGFloat(homeGreetingSize), .bold))
+                        .foregroundStyle(homeGreetingColor)
                     Text(auth.user?.nickname ?? "发现好音乐")
                         .font(BeansFont.appFont(13))
                         .foregroundStyle(Color.beansComment)
                 }
                 Spacer()
                 HStack(spacing: 10) {
-                    GlassIconButton(systemName: "arrow.up.arrow.down") {
-                        BeansHaptics.tap()
-                        showSectionSort = true
+                    if !homeHeaderHideSort {
+                        GlassIconButton(systemName: "arrow.up.arrow.down") {
+                            BeansHaptics.tap()
+                            showSectionSort = true
+                        }
                     }
-                    GlassIconButton(systemName: "arrow.clockwise") {
-                        BeansHaptics.tap()
-                        Task { await load(force: true) }
+                    if !homeHeaderHideRefresh {
+                        GlassIconButton(systemName: "arrow.clockwise") {
+                            BeansHaptics.tap()
+                            Task { await load(force: true) }
+                        }
                     }
                 }
             }
         }
         .padding(.top, 8)
+        .frame(minHeight: homeGreetingHeight > 0 ? homeGreetingHeight : nil, alignment: .top)
     }
 
     /// 平台选择（网易云 / QQ音乐 / 酷狗音乐，样式与搜索页一致）
@@ -237,6 +250,8 @@ struct DiscoverView: View {
     }
 
     private var greeting: String {
+        let custom = homeGreetingText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !custom.isEmpty { return custom }
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
         case 5..<12: return "早上好"
@@ -652,6 +667,11 @@ struct DiscoverView: View {
         } else {
             homeSourceRaw = provider.rawValue
         }
+    }
+
+    private var homeGreetingColor: Color {
+        if let color = Color(hex: homeGreetingColorHex) { return color }
+        return Color.beansLabel
     }
 
     /// 网易云歌单广场：切换官方分类时单独拉取（不写缓存）

@@ -16,6 +16,7 @@ struct PlayerView: View {
     @EnvironmentObject private var clock: PlaybackClock
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
+    @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @Environment(\.colorScheme) private var colorScheme
     @Binding var isPresented: Bool
 
@@ -610,21 +611,20 @@ struct PlayerView: View {
             Button {
                 BeansHaptics.tap()
                 if let song {
-                    Task {
-                        if await favorites.toggle(song) {
-                            ToastCenter.shared.show(favorites.isLiked(song) ? "已收藏" : "已取消收藏")
-                        } else {
-                            ToastCenter.shared.show("收藏失败，请稍后再试")
-                        }
+                    if localLibrary.playlists.count > 1 {
+                        showAddToLocalPlaylist = true
+                    } else {
+                        ToastCenter.shared.show(localLibrary.addToDefaultFavorites(song))
+                        BeansHaptics.success()
                     }
                 }
             } label: {
-                Image(systemName: favorites.isLiked(song) ? "heart.fill" : "heart")
+                Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(favorites.isLiked(song) ? Color(red: 0.95, green: 0.33, blue: 0.42) : playerButtonText)
+                    .foregroundStyle(localLibrary.containsSong(song) ? Color(red: 0.95, green: 0.33, blue: 0.42) : playerButtonText)
                     .frame(width: 38, height: 38)
                     .background {
-                        playerButtonSurface(size: 38, active: favorites.isLiked(song))
+                        playerButtonSurface(size: 38, active: localLibrary.containsSong(song))
                     }
                     .clipShape(Circle())
             }
@@ -671,9 +671,9 @@ struct PlayerView: View {
                 showMoreActions = false
                 showSleepTimer = true
             }
-            moreActionRow("添加到歌单", systemName: "text.badge.plus") {
+            moreActionRow("添加到本地歌单", systemName: "text.badge.plus") {
                 showMoreActions = false
-                showAddToPlaylist = true
+                showAddToLocalPlaylist = true
             }
             moreActionRow("下载歌曲", systemName: "arrow.down.circle") {
                 showMoreActions = false
@@ -682,10 +682,6 @@ struct PlayerView: View {
             moreActionRow("分享歌曲", systemName: "square.and.arrow.up") {
                 showMoreActions = false
                 showShare = true
-            }
-            moreActionRow("加入本地歌单", systemName: "internaldrive") {
-                showMoreActions = false
-                showAddToLocalPlaylist = true
             }
             moreActionRow("播放器设置", systemName: "slider.horizontal.3") {
                 showMoreActions = false
@@ -1006,14 +1002,14 @@ struct PlayerView: View {
                     .modifier(Layoutable(part: .controlCenterLyric, enabled: layoutMode, data: $layoutData))
 
                 HStack(spacing: 12) {
-                    controlPanelAction(icon: favorites.isLiked(song) ? "heart.fill" : "heart", title: "收藏", active: favorites.isLiked(song)) {
+                    controlPanelAction(icon: localLibrary.containsSong(song) ? "heart.fill" : "heart", title: "收藏", active: localLibrary.containsSong(song)) {
                         if let song {
-                            Task {
-                                if await favorites.toggle(song) {
-                                    ToastCenter.shared.show(favorites.isLiked(song) ? "已收藏" : "已取消收藏")
-                                } else {
-                                    ToastCenter.shared.show("收藏失败，请稍后再试")
-                                }
+                            BeansHaptics.tap()
+                            if localLibrary.playlists.count > 1 {
+                                showAddToLocalPlaylist = true
+                            } else {
+                                ToastCenter.shared.show(localLibrary.addToDefaultFavorites(song))
+                                BeansHaptics.success()
                             }
                         }
                     }
@@ -1519,6 +1515,21 @@ struct PlayerView: View {
                     )
             }
             .frame(width: size, height: size)
+        case .soft:
+            Circle()
+                .fill(primary ? controlAccent.opacity(0.72) : Color.white.opacity(active ? 0.18 : 0.10))
+                .overlay {
+                    Circle().strokeBorder((active || primary) ? controlAccent.opacity(0.55) : Color.white.opacity(0.16), lineWidth: 0.8)
+                }
+                .shadow(color: primary ? controlAccent.opacity(0.26) : .black.opacity(0.08), radius: primary ? 12 : 6, y: primary ? 6 : 3)
+                .frame(width: size, height: size)
+        case .outline:
+            Circle()
+                .fill(Color.white.opacity(primary ? 0.10 : 0.001))
+                .overlay {
+                    Circle().strokeBorder((active || primary) ? controlAccent.opacity(0.72) : palette.secondary.opacity(0.38), lineWidth: primary ? 1.4 : 1.0)
+                }
+                .frame(width: size, height: size)
         }
     }
 
@@ -2841,11 +2852,6 @@ struct PlayerSettingsSheet: View {
             if let path = LyricBackgroundStore.restoreFromBackup(), lyricBackgroundImagePath != path {
                 lyricBackgroundImagePath = path
             }
-        }
-        .background {
-            HighRefreshConfigurator()
-                .frame(width: 0, height: 0)
-                .allowsHitTesting(false)
         }
     }
 

@@ -176,8 +176,8 @@ struct SearchView: View {
             }
         }
         .sheet(item: $showAddToPlaylist) { song in
-            AddToPlaylistSheet(song: song)
-                .environmentObject(auth)
+            AddToLocalPlaylistSheet(song: song)
+                .environmentObject(theme)
         }
         .sheet(item: $selectedArtist) { artist in
             ArtistHomeSheet(artist: artist)
