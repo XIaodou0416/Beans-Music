@@ -397,6 +397,22 @@ final class QQMusicAPI {
             .reduce(into: [String]()) { result, value in
                 if !result.contains(value) { result.append(value) }
             }
+        let identityCandidates = qqAuth.playlistIdentityCandidates
+
+        // 201 收藏夹接口在不同登录态下有两种返回形式：
+        // 有的直接返回 songlist，有的只返回 map/歌单 ID。必须先消费直接返回的歌曲，
+        // 否则微信登录时会因为拿不到普通歌单 ID 而显示空列表。
+        for identity in identityCandidates {
+            let favURL = "https://c.y.qq.com/splcloud/fcgi-bin/fcg_musiclist_getmyfav.fcg?dirid=201&dirinfo=1&uin=\(identity)&loginUin=\(identity)&hostUin=0&g_tk=\(qqAuth.gtk)&format=json&utf8=1"
+            for cookie in cookieCandidates {
+                guard let favJson = try? await get(favURL, referer: "https://y.qq.com/n/ryqq_v2/profile/create", cookie: cookie) else { continue }
+                let songs = Self.favoriteSongArray(from: favJson)
+                    .prefix(limit)
+                    .compactMap { song(from: ($0["track_info"] as? [String: Any]) ?? $0) }
+                if !songs.isEmpty { return songs }
+            }
+        }
+
         guard let mapid = await likedPlaylistID(qqAuth: qqAuth, cookies: cookieCandidates), mapid > 0 else {
             BeansLogger.shared.log("QQ 我的喜欢歌单解析失败：未找到真实歌单 ID", level: .error)
             return []
@@ -470,6 +486,27 @@ final class QQMusicAPI {
             }
         }
         return nil
+    }
+
+    /// 递归提取 fcg_musiclist_getmyfav 可能返回的 songlist/songList 数组。
+    private static func favoriteSongArray(from json: [String: Any]) -> [[String: Any]] {
+        var result: [[String: Any]] = []
+        func walk(_ value: Any) {
+            guard result.isEmpty else { return }
+            if let dict = value as? [String: Any] {
+                for key in ["songlist", "songList", "song_list", "tracks", "tracklist"] {
+                    if let list = dict[key] as? [[String: Any]], !list.isEmpty {
+                        result = list
+                        return
+                    }
+                }
+                for child in dict.values { walk(child) }
+            } else if let array = value as? [Any] {
+                for child in array { walk(child) }
+            }
+        }
+        walk(json)
+        return result
     }
 
     // MARK: - 红心收藏

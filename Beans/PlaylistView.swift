@@ -12,6 +12,7 @@ struct PlaylistView: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var theme: ThemeStore
+    @ObservedObject private var favorites = FavoritesStore.shared
 
     let playlist: Playlist
     @State private var tracks: [Song] = []
@@ -160,6 +161,11 @@ struct PlaylistView: View {
                 tracks = try await KugouMusicAPI.shared.playlistSongs(listID: playlist.id)
             } else if playlist.source == .qq {
                 tracks = try await QQMusicAPI.shared.playlistSongs(listID: playlist.id)
+                // 云端收藏接口临时被风控或返回空时，至少展示已同步到本机的 QQ 收藏，
+                // 避免“我的喜欢”进入后变成空白页面。
+                if tracks.isEmpty, playlist.id == QQMusicAPI.qqLikedPlaylistID {
+                    tracks = favorites.qqFavoriteSongs
+                }
             } else {
                 tracks = try await NetEaseAPI.shared.playlistTracks(id: playlist.id)
             }
