@@ -812,7 +812,10 @@ final class QQMusicAPI {
         let requestUin = qqAuth.playlistUin
         let cookieCandidates = [qqAuth.playlistCookieHeader, qqAuth.cookieHeader]
             .filter { !$0.isEmpty }
-        let legacyUins = (qqAuth.isWeChatLogin ? [] : [requestUin, uin])
+            .reduce(into: [String]()) { result, value in
+                if !result.contains(value) { result.append(value) }
+            }
+        let legacyUins = (qqAuth.playlistIdentityCandidates + [requestUin, uin])
             .filter { !$0.isEmpty && $0 != "0" }
             .reduce(into: [String]()) { result, value in
                 if !result.contains(value) { result.append(value) }
@@ -832,7 +835,7 @@ final class QQMusicAPI {
         var createdLoaded = false
         var collectedLoaded = false
 
-        // 微信登录的 wxuin 不是 QQ 音乐旧接口所需的 userid，避免把它拼进 hostuin/userid。
+        // QQ/微信登录都尝试旧接口；部分微信态账号必须显式带 wxuin 才会返回歌单。
         for legacyUin in legacyUins {
             let createdURL = "https://c.y.qq.com/rsc/fcgi-bin/fcg_user_created_diss?hostUin=0&hostuin=\(legacyUin)&sin=0&size=200&g_tk=\(qqAuth.gtk)&loginUin=\(legacyUin)&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0"
             for cookie in cookieCandidates {
@@ -863,9 +866,9 @@ final class QQMusicAPI {
             if collectedLoaded { break }
         }
 
-        // 官方 App 接口能直接根据微信登录 Cookie 识别账号，不依赖 wxuin 充当 QQ uin。
+        // 官方 App 接口按多个身份候选依次尝试，兼容 QQ 登录和微信网页登录。
         // order：1=创建，2=收藏，3=我喜欢。空响应仍继续尝试下一个身份参数。
-        let officialUins = (qqAuth.isWeChatLogin ? ["0", requestUin] : [requestUin, "0"]).reduce(into: [String]()) { result, value in
+        let officialUins = (qqAuth.playlistIdentityCandidates + [requestUin, "0"]).reduce(into: [String]()) { result, value in
             if !result.contains(value) { result.append(value) }
         }
         for (order, loaded) in [(1, createdLoaded), (2, collectedLoaded), (3, false)] {
@@ -1033,34 +1036,43 @@ final class QQMusicAPI {
         }
         let qqAuth = QQMusicAuth.shared
         let cookie = preferredCookie ?? (qqAuth.isLoggedIn ? qqAuth.playlistCookieHeader : "")
-        let loginUin = qqAuth.isLoggedIn ? qqAuth.playlistUin : "0"
-        let detailURL = "https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&new_format=1&disstid=\(listID)&loginUin=\(loginUin)&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0"
-        if let detailJson = try? await get(detailURL, referer: "https://y.qq.com/n/yqq/playlist", cookie: cookie),
-           let cdlist = detailJson["cdlist"] as? [[String: Any]],
-           let songlist = cdlist.first?["songlist"] as? [[String: Any]],
-           !songlist.isEmpty {
-            let songs = songlist.compactMap { item -> Song? in
-                // 部分接口返回会把歌曲包在 track_info 里，先解包再走统一解析
+        let loginUins = (qqAuth.isLoggedIn ? qqAuth.playlistIdentityCandidates : ["0"])
+            .reduce(into: [String]()) { result, value in
+                if !result.contains(value) { result.append(value) }
+            }
+        for loginUin in loginUins {
+            let detailURL = "https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&new_format=1&disstid=\(listID)&loginUin=\(loginUin)&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0"
+            if let detailJson = try? await get(detailURL, referer: "https://y.qq.com/n/yqq/playlist", cookie: cookie),
+               let cdlist = detailJson["cdlist"] as? [[String: Any]],
+               let songlist = cdlist.first?["songlist"] as? [[String: Any]],
+               !songlist.isEmpty {
+                let songs = songlist.prefix(limit).compactMap { item -> Song? in
+                    // 部分接口返回会把歌曲包在 track_info 里，先解包再走统一解析
+                    let raw = (item["track_info"] as? [String: Any]) ?? item
+                    return song(from: raw)
+                }
+                if !songs.isEmpty { return songs }
+            }
+        }
+        // 兜底：musicu GetPlaylistDetail
+        for loginUin in loginUins {
+            let payload: [String: Any] = [
+                "comm": ["ct": 24, "cv": 0, "uin": Int(loginUin) ?? 0, "g_tk": qqAuth.gtk, "platform": "yqq"],
+                "req_1": [
+                    "module": "music.playlist.PlayListDataServer",
+                    "method": "GetPlaylistDetail",
+                    "param": ["id": listID, "uin": Int(loginUin) ?? 0, "song_begin": 0, "song_num": limit]
+                ]
+            ]
+            guard let json = try? await musicu(payload, cookie: cookie) else { continue }
+            let list = nestedArray(json, path: ["req_1", "data", "songlist"])
+            let songs = list.prefix(limit).compactMap { item -> Song? in
                 let raw = (item["track_info"] as? [String: Any]) ?? item
                 return song(from: raw)
             }
             if !songs.isEmpty { return songs }
         }
-        // 兜底：musicu GetPlaylistDetail
-        let payload: [String: Any] = [
-            "comm": ["ct": 24, "cv": 0, "uin": Int(loginUin) ?? 0, "g_tk": qqAuth.gtk, "platform": "yqq"],
-            "req_1": [
-                "module": "music.playlist.PlayListDataServer",
-                "method": "GetPlaylistDetail",
-                "param": ["id": listID, "uin": Int(loginUin) ?? 0, "song_begin": 0, "song_num": limit]
-            ]
-        ]
-        let json = try await musicu(payload, cookie: cookie)
-        let list = nestedArray(json, path: ["req_1", "data", "songlist"])
-        return list.compactMap { item -> Song? in
-            let raw = (item["track_info"] as? [String: Any]) ?? item
-            return song(from: raw)
-        }
+        return []
     }
 
     /// 歌单第一首歌曲封面（歌单封面缺失时的兜底；失败返回 nil）

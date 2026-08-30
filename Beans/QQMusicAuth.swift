@@ -59,7 +59,7 @@ final class QQMusicAuth: ObservableObject {
         if isWeChatLogin,
            !Self.hasUsableAccountID(cookies["p_uin"]),
            !Self.hasUsableAccountID(cookies["pt2gguin"]) {
-            return "0"
+            return Self.normalizedUIN(cookies["wxuin"] ?? "0")
         }
         for key in ["uin", "p_uin", "pt2gguin"] {
             guard let value = cookies[key],
@@ -67,6 +67,25 @@ final class QQMusicAuth: ObservableObject {
             return Self.normalizedUIN(value)
         }
         return "0"
+    }
+
+    /// QQ/微信登录态可用于歌单接口的身份候选。微信登录时 wxuin 也必须尝试；
+    /// 部分账号的歌单/喜欢接口不会仅凭 uin=0 + Cookie 返回数据。
+    var playlistIdentityCandidates: [String] {
+        let rawValues = [
+            cookies["p_uin"],
+            cookies["pt2gguin"],
+            cookies["uin"],
+            cookies["wxuin"],
+            playlistUin,
+            "0",
+        ]
+        return rawValues.compactMap { value -> String? in
+            guard let value, Self.hasUsableAccountID(value) || value == "0" else { return nil }
+            return Self.normalizedUIN(value)
+        }.reduce(into: [String]()) { result, value in
+            if !result.contains(value) { result.append(value) }
+        }
     }
 
     /// g_tk（写操作接口签名；QQ/微信登录均优先使用音乐域凭证）。
