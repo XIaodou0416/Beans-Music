@@ -4,6 +4,7 @@ import CoreText
 /// 全局字体管理：把用户上传的 ttf/otf 复制到 Documents/Fonts 并动态注册，App 重启后自动重新注册
 enum FontManager {
     static let storedFontNameKey = "beans.globalFont"
+    static let storedGreetingFontNameKey = "beans.homeGreetingFont"
 
     private static var cachedInstalledFontName: String? = UserDefaults.standard.string(forKey: storedFontNameKey)
 
@@ -15,9 +16,26 @@ enum FontManager {
         }
     }
 
+    static var greetingFontName: String? {
+        get { UserDefaults.standard.string(forKey: storedGreetingFontNameKey) }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(newValue, forKey: storedGreetingFontNameKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: storedGreetingFontNameKey)
+            }
+        }
+    }
+
     private static var fontsDirectory: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let dir = docs.appendingPathComponent("Fonts", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private static var greetingFontsDirectory: URL {
+        let dir = fontsDirectory.appendingPathComponent("Greeting", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
@@ -28,6 +46,12 @@ enum FontManager {
         guard let files = try? FileManager.default.contentsOfDirectory(at: fontsDirectory, includingPropertiesForKeys: nil) else { return }
         for file in files where ["ttf", "otf", "ttc"].contains(file.pathExtension.lowercased()) {
             register(file)
+        }
+        if greetingFontName != nil,
+           let files = try? FileManager.default.contentsOfDirectory(at: greetingFontsDirectory, includingPropertiesForKeys: nil) {
+            for file in files where ["ttf", "otf", "ttc"].contains(file.pathExtension.lowercased()) {
+                register(file)
+            }
         }
     }
 
@@ -77,6 +101,26 @@ enum FontManager {
         }
     }
 
+    /// 安装仅用于主页问候语的字体，不影响全局字体。
+    @discardableResult
+    static func installGreeting(from sourceURL: URL) -> String? {
+        let file = greetingFontsDirectory.appendingPathComponent(sourceURL.lastPathComponent)
+        if let files = try? FileManager.default.contentsOfDirectory(at: greetingFontsDirectory, includingPropertiesForKeys: nil) {
+            for f in files { try? FileManager.default.removeItem(at: f) }
+        }
+        guard (try? FileManager.default.copyItem(at: sourceURL, to: file)) != nil else { return nil }
+        guard let name = register(file) else { return nil }
+        greetingFontName = name
+        return name
+    }
+
+    static func clearGreeting() {
+        greetingFontName = nil
+        if let files = try? FileManager.default.contentsOfDirectory(at: greetingFontsDirectory, includingPropertiesForKeys: nil) {
+            for f in files { try? FileManager.default.removeItem(at: f) }
+        }
+    }
+
     @discardableResult
     private static func register(_ url: URL) -> String? {
         // 用 Data 读取避免安全作用域/CGDataProvider(url:) 兼容问题，iOS 上更稳
@@ -95,6 +139,13 @@ enum BeansFont {
             return .custom(name, size: size)
         }
         return .system(size: size, weight: weight, design: design)
+    }
+
+    static func greetingFont(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        if let name = FontManager.greetingFontName {
+            return .custom(name, size: size)
+        }
+        return appFont(size, weight)
     }
 
     /// UIKit 版字体（UITextField 等 SwiftUI 不覆盖的控件用）

@@ -1140,6 +1140,10 @@ struct SettingsView: View {
     @AppStorage("beans.homeGreetingLine3OffsetY") private var homeGreetingLine3OffsetY = 0.0
     @AppStorage("beans.homeGreetingGlowEnabled") private var homeGreetingGlowEnabled = false
     @AppStorage("beans.homeGreetingGlowIntensity") private var homeGreetingGlowIntensity = 0.45
+    @AppStorage("beans.homeGreetingTilt") private var homeGreetingTilt = 0.0
+    @AppStorage("beans.homeGreetingUnderline") private var homeGreetingUnderline = false
+    @AppStorage("beans.homeGreetingGradient") private var homeGreetingGradient = false
+    @AppStorage("beans.homeGreetingFont") private var homeGreetingFontName = ""
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
@@ -1152,6 +1156,7 @@ struct SettingsView: View {
     @State private var playbackExpanded = false
     @State private var showWallpaperPicker = false
     @State private var showFontImporter = false
+    @State private var showGreetingFontImporter = false
     /// 更新日志
     @State private var showChangelog = false
     /// 配置备份与恢复
@@ -1303,6 +1308,12 @@ struct SettingsView: View {
             }
             .ignoresSafeArea()
         }
+        .fullScreenCover(isPresented: $showGreetingFontImporter) {
+            FontDocumentPicker { url in
+                installGreetingFont(from: url)
+            }
+            .ignoresSafeArea()
+        }
         .sheet(isPresented: $showChangelog) {
             ChangelogListView()
                 .environmentObject(theme)
@@ -1370,6 +1381,21 @@ struct SettingsView: View {
             ToastCenter.shared.show("字体已应用：\(name)")
         } else {
             ToastCenter.shared.show("字体安装失败，请使用 ttf / otf 文件")
+        }
+    }
+
+    private func installGreetingFont(from url: URL) {
+        let ext = url.pathExtension.lowercased()
+        guard ["ttf", "otf", "ttc"].contains(ext) else {
+            ToastCenter.shared.show("请选择 ttf / otf 字体文件")
+            return
+        }
+        if let name = FontManager.installGreeting(from: url) {
+            homeGreetingFontName = name
+            BeansHaptics.success()
+            ToastCenter.shared.show("主页问候字体已应用：\(name)")
+        } else {
+            ToastCenter.shared.show("主页问候字体安装失败，请使用 ttf / otf 文件")
         }
     }
 
@@ -1801,9 +1827,56 @@ struct SettingsView: View {
                             Text("\(Int(homeGreetingGlowIntensity * 100))%")
                                 .foregroundStyle(Color.beansComment)
                         }
-                        Slider(value: $homeGreetingGlowIntensity, in: 0...1, step: 0.01)
+                        Slider(value: $homeGreetingGlowIntensity, in: 0...2, step: 0.01)
                             .tint(Color.beansAmber)
                             .disabled(!homeGreetingGlowEnabled)
+                    }
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansLabel)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Image(systemName: "textformat")
+                                .foregroundStyle(Color.beansAmber)
+                            Text("问候语专属字体")
+                            Spacer()
+                            Text(homeGreetingFontName.isEmpty ? "跟随全局" : "已设置")
+                                .foregroundStyle(Color.beansComment)
+                        }
+                        HStack(spacing: 10) {
+                            Button {
+                                showGreetingFontImporter = true
+                            } label: {
+                                Label("选择字体", systemImage: "text.badge.plus")
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(Color.beansAmber)
+                            if !homeGreetingFontName.isEmpty {
+                                Button("清除专属字体") {
+                                    FontManager.clearGreeting()
+                                    homeGreetingFontName = ""
+                                    BeansHaptics.select()
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(Color.beansComment)
+                            }
+                        }
+                        Text("仅主页问候语使用该字体；清除后跟随全局字体，没有全局字体时使用系统字体。")
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansLabel)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("文字倾斜度")
+                            Spacer()
+                            Text("\(Int(homeGreetingTilt))°")
+                                .foregroundStyle(Color.beansComment)
+                        }
+                        Slider(value: $homeGreetingTilt, in: -15...15, step: 1)
+                            .tint(Color.beansAmber)
+                        Toggle("显示底部横线", isOn: $homeGreetingUnderline)
+                        Toggle("开启上下渐变字", isOn: $homeGreetingGradient)
                     }
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansLabel)

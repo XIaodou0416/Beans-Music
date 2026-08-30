@@ -38,6 +38,10 @@ struct DiscoverView: View {
     @AppStorage("beans.homeGreetingLine3OffsetY") private var homeGreetingLine3OffsetY = 0.0
     @AppStorage("beans.homeGreetingGlowEnabled") private var homeGreetingGlowEnabled = false
     @AppStorage("beans.homeGreetingGlowIntensity") private var homeGreetingGlowIntensity = 0.45
+    @AppStorage("beans.homeGreetingTilt") private var homeGreetingTilt = 0.0
+    @AppStorage("beans.homeGreetingUnderline") private var homeGreetingUnderline = false
+    @AppStorage("beans.homeGreetingGradient") private var homeGreetingGradient = false
+    @AppStorage("beans.homeGreetingFont") private var homeGreetingFontName = ""
     @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
@@ -217,17 +221,27 @@ struct DiscoverView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(greetingLines.enumerated()), id: \.offset) { index, line in
                             Text(line)
-                                .font(BeansFont.appFont(greetingLineSize(index), .bold))
-                                .foregroundStyle(greetingLineColor(index))
+                                .font(BeansFont.greetingFont(greetingLineSize(index), .bold))
+                                .foregroundStyle(greetingLineStyle(index))
+                                .underline(homeGreetingUnderline, color: greetingLineColor(index))
                                 .shadow(
                                     color: homeGreetingGlowEnabled
-                                        ? greetingLineColor(index).opacity(0.9 * homeGreetingGlowIntensity)
+                                        ? greetingLineColor(index).opacity(min(1, 0.75 * homeGreetingGlowIntensity))
                                         : .clear,
                                     radius: homeGreetingGlowEnabled
-                                        ? 6 + 18 * homeGreetingGlowIntensity
+                                        ? 8 + 28 * homeGreetingGlowIntensity
+                                        : 0
+                                )
+                                .shadow(
+                                    color: homeGreetingGlowEnabled
+                                        ? greetingLineColor(index).opacity(min(1, 0.95 * homeGreetingGlowIntensity))
+                                        : .clear,
+                                    radius: homeGreetingGlowEnabled
+                                        ? 2 + 10 * homeGreetingGlowIntensity
                                         : 0
                                 )
                                 .fixedSize(horizontal: false, vertical: true)
+                                .rotationEffect(.degrees(homeGreetingTilt), anchor: .leading)
                                 .offset(y: greetingLineOffsetY(index))
                         }
                     }
@@ -741,6 +755,18 @@ struct DiscoverView: View {
         default: raw = homeGreetingLine3ColorHex
         }
         return Color(hex: raw) ?? homeGreetingColor
+    }
+
+    private func greetingLineStyle(_ index: Int) -> AnyShapeStyle {
+        let color = greetingLineColor(index)
+        if homeGreetingGradient {
+            return AnyShapeStyle(LinearGradient(
+                colors: [color, color.opacity(0.42)],
+                startPoint: .top,
+                endPoint: .bottom
+            ))
+        }
+        return AnyShapeStyle(color)
     }
 
     private func greetingLineOffsetY(_ index: Int) -> CGFloat {
