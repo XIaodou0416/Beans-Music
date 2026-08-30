@@ -73,7 +73,7 @@ final class QQMusicAuth: ObservableObject {
             "qm_keyst", "qqmusic_key", "music_key", "wxskey", "wx_skey",
             "musickey", "p_skey", "skey", "pt4_token"
         ]
-        var pairs = order.compactMap { key in
+        var pairs: [String] = order.compactMap { key in
             guard let value = cookies[key], !value.isEmpty else { return nil }
             return "\(key)=\(value)"
         }
