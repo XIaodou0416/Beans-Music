@@ -12,6 +12,7 @@ struct LocalMusicSection: View {
     @State private var newName = ""
     @State private var selected: LocalPlaylist?
     @State private var syncing = false
+    @State private var syncMessage = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -20,19 +21,6 @@ struct LocalMusicSection: View {
                     .font(BeansFont.appFont(21, .bold))
                     .foregroundStyle(Color.beansLabel)
                 Spacer(minLength: 8)
-                Button {
-                    Task { await syncAllLikes() }
-                } label: {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.beansAmber)
-                        .rotationEffect(.degrees(syncing ? 360 : 0))
-                        .animation(syncing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: syncing)
-                }
-                .buttonStyle(.plain)
-                .disabled(syncing)
-                .accessibilityLabel("一键同步三平台喜欢")
-                .help("一键同步网易云、QQ音乐、酷狗音乐的喜欢歌曲")
                 Button {
                     newName = ""
                     showCreate = true
@@ -44,6 +32,24 @@ struct LocalMusicSection: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("新建本地歌单")
                 .help("新建本地歌单")
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                GlassButton(
+                    title: syncing ? "正在同步三平台喜欢…" : "一键同步三平台喜欢",
+                    systemName: "arrow.triangle.2.circlepath",
+                    prominent: true
+                ) {
+                    Task { await syncAllLikes() }
+                }
+                .disabled(syncing)
+                Text("将网易云、QQ音乐、酷狗音乐的喜欢歌曲合并到本地歌单“三平台喜欢”")
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(Color.beansComment)
+            }
+            if !syncMessage.isEmpty {
+                Text(syncMessage)
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(Color.beansSage)
             }
             if store.playlists.isEmpty {
                 EmptyStateView(icon: "internaldrive", text: "还没有本地歌单\n新建一个歌单，把喜欢的歌曲收藏到本机")
@@ -124,28 +130,76 @@ struct LocalMusicSection: View {
     private func syncAllLikes() async {
         guard !syncing else { return }
         syncing = true
+        syncMessage = ""
         var songs: [Song] = []
-        songs.append(contentsOf: favorites.neteaseFavoriteSongs)
-        songs.append(contentsOf: favorites.qqFavoriteSongs)
-        if let user = auth.user,
-           let lists = try? await NetEaseAPI.shared.userPlaylists(uid: user.uid),
-           let liked = lists.first(where: { $0.name == "我喜欢的音乐" }) {
-            songs.append(contentsOf: (try? await NetEaseAPI.shared.playlistTracks(id: liked.id)) ?? [])
+        var details: [String] = []
+        if let user = auth.user, auth.isLoggedIn {
+            do {
+                let lists = try await NetEaseAPI.shared.userPlaylists(uid: user.uid)
+                let liked = lists.first { list in
+                    let name = list.name.replacingOccurrences(of: " ", with: "")
+                    return name.contains("喜欢") || name.contains("我喜欢")
+                }
+                if let liked {
+                    let neteaseSongs = try await NetEaseAPI.shared.playlistTracks(id: liked.id)
+                    songs.append(contentsOf: neteaseSongs)
+                    details.append("网易云 \(neteaseSongs.count) 首")
+                } else {
+                    details.append("网易云未找到喜欢歌单")
+                }
+            } catch {
+                BeansLogger.shared.log("三平台同步：网易云失败 \(error.localizedDescription)", level: .error)
+                details.append("网易云请求失败")
+            }
+        } else {
+            details.append("网易云未登录")
+        }
+        if !favorites.neteaseFavoriteSongs.isEmpty {
+            let cachedIDs = Set(songs.filter { $0.source == .netease }.map(\.id))
+            let cached = favorites.neteaseFavoriteSongs.filter { !cachedIDs.contains($0.id) }
+            songs.append(contentsOf: cached)
+            if !cached.isEmpty { details.append("网易云缓存补充 \(cached.count) 首") }
         }
         if QQMusicAuth.shared.isLoggedIn {
-            songs.append(contentsOf: (try? await QQMusicAPI.shared.favoriteSongs(limit: 300)) ?? [])
+            do {
+                let qqSongs = try await QQMusicAPI.shared.favoriteSongs(limit: 300)
+                songs.append(contentsOf: qqSongs)
+                details.append("QQ音乐 \(qqSongs.count) 首")
+            } catch {
+                BeansLogger.shared.log("三平台同步：QQ音乐失败 \(error.localizedDescription)", level: .error)
+                details.append("QQ音乐请求失败")
+            }
+        } else {
+            details.append("QQ音乐未登录")
         }
-        if KugouMusicAuth.shared.isLoggedIn,
-           let liked = (try? await KugouMusicAPI.shared.userPlaylists())?.first(where: {
-               $0.name.contains("喜欢") || $0.name.contains("收藏")
-           }) {
-            songs.append(contentsOf: (try? await KugouMusicAPI.shared.playlistSongs(listID: liked.id)) ?? [])
+        if KugouMusicAuth.shared.isLoggedIn {
+            do {
+                let lists = try await KugouMusicAPI.shared.userPlaylists()
+                BeansLogger.shared.log("三平台同步：酷狗歌单 \(lists.map(\.name).joined(separator: "|"))", level: .info)
+                let liked = lists.first { list in
+                    let name = list.name.replacingOccurrences(of: " ", with: "")
+                    return name.contains("喜欢") || name.contains("收藏") || name.contains("红心")
+                }
+                if let liked {
+                    let kugouSongs = try await KugouMusicAPI.shared.playlistSongs(listID: liked.id)
+                    songs.append(contentsOf: kugouSongs)
+                    details.append("酷狗音乐 \(kugouSongs.count) 首")
+                } else {
+                    details.append("酷狗音乐未找到喜欢歌单")
+                }
+            } catch {
+                BeansLogger.shared.log("三平台同步：酷狗音乐失败 \(error.localizedDescription)", level: .error)
+                details.append("酷狗音乐请求失败")
+            }
+        } else {
+            details.append("酷狗音乐未登录")
         }
         var unique: [Song] = []
         var seen = Set<String>()
         for song in songs where seen.insert(song.identityKey).inserted { unique.append(song) }
         let added = store.syncSongs(unique)
         syncing = false
+        syncMessage = details.joined(separator: "，") + "；合计 \(unique.count) 首"
         ToastCenter.shared.show(unique.isEmpty ? "没有获取到已登录平台的喜欢歌曲" : "已同步 \(unique.count) 首，新增 \(added) 首到三平台喜欢")
     }
 }
@@ -156,6 +210,7 @@ struct LocalPlaylistDetailSheet: View {
     @ObservedObject private var store = LocalLibraryStore.shared
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
 
     let playlistID: UUID
@@ -171,7 +226,7 @@ struct LocalPlaylistDetailSheet: View {
     var body: some View {
         BeansNavigationStack {
             ZStack {
-                GlassBackdrop(ignoreCustomBackground: true)
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if let playlist {
                     List {

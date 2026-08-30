@@ -25,7 +25,7 @@ struct PlaylistView: View {
         let _ = theme.accent
         BeansNavigationStack {
             ZStack {
-                GlassBackdrop(ignoreCustomBackground: true)
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
                     LoadingStateView()
