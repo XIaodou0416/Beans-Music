@@ -47,12 +47,9 @@ final class HighRefreshKeeper {
         let minimum: Float = preferred >= 120 ? 80 : preferred
         let range = CAFrameRateRange(minimum: minimum, maximum: preferred, preferred: preferred)
 
-        var current: UIView? = hostView
-        while let view = current {
-            view.preferredFrameRateRange = range
-            current = view.superview
-        }
-        hostView.window?.preferredFrameRateRange = range
+        // Xcode 26 no longer exposes preferredFrameRateRange on UIView/ UIWindow.
+        // The frame-rate preference belongs to the window scene.
+        hostView.window?.windowScene?.preferredFrameRateRange = range
     }
 }
 
