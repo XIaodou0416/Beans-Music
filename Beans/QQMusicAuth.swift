@@ -49,6 +49,17 @@ final class QQMusicAuth: ObservableObject {
         Self.accountID(from: cookies)
     }
 
+    /// QQ 歌单接口使用的 QQ 账号 ID。微信登录通常没有可用的 QQ uin，
+    /// 此时返回 0，让官方接口根据 wxuin / wxopenid Cookie 识别账号。
+    var playlistUin: String {
+        for key in ["uin", "p_uin", "pt2gguin"] {
+            guard let value = cookies[key],
+                  Self.hasUsableAccountID(value) else { continue }
+            return Self.normalizedUIN(value)
+        }
+        return "0"
+    }
+
     /// g_tk（写操作接口签名；QQ/微信登录均优先使用音乐域凭证）。
     var gtk: Int {
         let key = cookies["qqmusic_key"]
@@ -68,6 +79,16 @@ final class QQMusicAuth: ObservableObject {
 
     /// 发给 u.y.qq.com 的 Cookie 串（含 qqmusic_key 时 VIP 歌曲播放成功率最高）
     var cookieHeader: String {
+        makeCookieHeader(includeCompatibilityUIN: true)
+    }
+
+    /// 不注入兼容用的 uin=wxuin，给微信登录的歌单接口使用。
+    /// 部分 QQ 接口会优先读取 uin，误把 wxuin 当成 QQ uin 后会返回空歌单。
+    var playlistCookieHeader: String {
+        makeCookieHeader(includeCompatibilityUIN: false)
+    }
+
+    private func makeCookieHeader(includeCompatibilityUIN: Bool) -> String {
         let order = [
             "uin", "wxuin", "p_uin", "wxopenid",
             "qm_keyst", "qqmusic_key", "music_key", "wxskey", "wx_skey",
@@ -78,7 +99,8 @@ final class QQMusicAuth: ObservableObject {
             return "\(key)=\(value)"
         }
         // 旧版保存的微信登录态可能只有 wxuin；部分 QQ 接口仍只读取 uin。
-        if !Self.hasUsableAccountID(cookies["uin"]),
+        if includeCompatibilityUIN,
+           !Self.hasUsableAccountID(cookies["uin"]),
            let wxuin = cookies["wxuin"],
            !wxuin.isEmpty {
             pairs.insert("uin=\(wxuin)", at: 0)
