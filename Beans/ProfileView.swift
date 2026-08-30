@@ -128,6 +128,7 @@ struct ProfileView: View {
                     // 更新入口固定放在“我的”页面最底部，避免被板块排序隐藏。
                     updateLinkCard
                     communityCard
+                    donationCard
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -706,6 +707,96 @@ struct ProfileView: View {
         .buttonStyle(GlassPressButtonStyle(scale: 0.98))
         .beansCardShadow(radius: 9, y: 3)
     }
+
+    /// 我的页底部赞助入口与赞助排行榜
+    private var donationCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                Image(systemName: "heart.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.beansAmber)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("自愿赞助")
+                        .font(BeansFont.appFont(16, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text("感谢每一份喜欢与支持")
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer()
+            }
+
+            Image("DonationQR")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 300)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.beansComment.opacity(0.14), lineWidth: 0.8)
+                }
+
+            Text("虽然没有服务器运营成本，但是软件本身使用AI构建，需要消耗大量token，音源接口也由本人购买，本身就会有些压力，因为软件本身公益所以自愿赞助，感谢各位的喜欢")
+                .font(BeansFont.appFont(13))
+                .foregroundStyle(Color.beansLabel)
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("赞助人员")
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Spacer()
+                    Text("按金额排序")
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+
+                ForEach(Self.donors.indices, id: \.self) { index in
+                    let donor = Self.donors[index]
+                    HStack(spacing: 10) {
+                        Text("\(index + 1)")
+                            .font(BeansFont.appFont(13, .bold))
+                            .foregroundStyle(index == 0 ? Color.beansAmber : Color.beansComment)
+                            .frame(width: 24, height: 24)
+                            .background(
+                                (index == 0 ? Color.beansAmber : Color.beansComment).opacity(index == 0 ? 0.16 : 0.08),
+                                in: Circle()
+                            )
+                        Text(donor.name)
+                            .font(BeansFont.appFont(13, .medium))
+                            .foregroundStyle(Color.beansLabel)
+                        Spacer()
+                        Text(String(format: "¥ %.2f", donor.amount))
+                            .font(BeansFont.appFont(13, .semibold))
+                            .foregroundStyle(index == 0 ? Color.beansAmber : Color.beansLabel)
+                    }
+                    if index < Self.donors.count - 1 {
+                        Divider().overlay(Color.beansComment.opacity(0.12))
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background {
+            BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .beansCardShadow(radius: 9, y: 3)
+    }
+
+    private struct Donor {
+        let name: String
+        let amount: Double
+    }
+
+    private static let donors: [Donor] = [
+        Donor(name: "WeChat", amount: 26.66),
+        Donor(name: "Aert", amount: 8.88),
+        Donor(name: "wxx", amount: 5),
+        Donor(name: "！", amount: 3),
+    ]
 }
 
 // MARK: - 交流群二维码
