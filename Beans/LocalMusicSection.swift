@@ -7,7 +7,6 @@ struct LocalMusicSection: View {
         case netease = "网易云音乐"
         case qq = "QQ音乐"
         case kugou = "酷狗音乐"
-        case all = "全部平台"
 
         var id: String { rawValue }
     }
@@ -247,7 +246,7 @@ fileprivate struct SyncPlatformPicker: View {
     }
 
     var body: some View {
-        NavigationStack {
+        BeansNavigationStack {
             List {
                 Section {
                     ForEach(LocalMusicSection.SyncTarget.allCases) { target in

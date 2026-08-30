@@ -36,6 +36,8 @@ struct DiscoverView: View {
     @AppStorage("beans.homeGreetingLine1OffsetY") private var homeGreetingLine1OffsetY = 0.0
     @AppStorage("beans.homeGreetingLine2OffsetY") private var homeGreetingLine2OffsetY = 0.0
     @AppStorage("beans.homeGreetingLine3OffsetY") private var homeGreetingLine3OffsetY = 0.0
+    @AppStorage("beans.homeGreetingGlowEnabled") private var homeGreetingGlowEnabled = false
+    @AppStorage("beans.homeGreetingGlowIntensity") private var homeGreetingGlowIntensity = 0.45
     @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
@@ -217,6 +219,14 @@ struct DiscoverView: View {
                             Text(line)
                                 .font(BeansFont.appFont(greetingLineSize(index), .bold))
                                 .foregroundStyle(greetingLineColor(index))
+                                .shadow(
+                                    color: homeGreetingGlowEnabled
+                                        ? greetingLineColor(index).opacity(0.9 * homeGreetingGlowIntensity)
+                                        : .clear,
+                                    radius: homeGreetingGlowEnabled
+                                        ? 6 + 18 * homeGreetingGlowIntensity
+                                        : 0
+                                )
                                 .fixedSize(horizontal: false, vertical: true)
                                 .offset(y: greetingLineOffsetY(index))
                         }

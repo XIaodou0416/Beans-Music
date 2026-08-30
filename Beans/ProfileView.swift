@@ -1138,6 +1138,8 @@ struct SettingsView: View {
     @AppStorage("beans.homeGreetingLine1OffsetY") private var homeGreetingLine1OffsetY = 0.0
     @AppStorage("beans.homeGreetingLine2OffsetY") private var homeGreetingLine2OffsetY = 0.0
     @AppStorage("beans.homeGreetingLine3OffsetY") private var homeGreetingLine3OffsetY = 0.0
+    @AppStorage("beans.homeGreetingGlowEnabled") private var homeGreetingGlowEnabled = false
+    @AppStorage("beans.homeGreetingGlowIntensity") private var homeGreetingGlowIntensity = 0.45
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
@@ -1788,6 +1790,20 @@ struct SettingsView: View {
                                 .foregroundStyle(Color.beansComment)
                         }
                         Slider(value: $homeGreetingHeight, in: 0...260, step: 1)
+                    }
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansLabel)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle("开启文字背景发光", isOn: $homeGreetingGlowEnabled)
+                        HStack {
+                            Text("发光强度")
+                            Spacer()
+                            Text("\(Int(homeGreetingGlowIntensity * 100))%")
+                                .foregroundStyle(Color.beansComment)
+                        }
+                        Slider(value: $homeGreetingGlowIntensity, in: 0...1, step: 0.01)
+                            .tint(Color.beansAmber)
+                            .disabled(!homeGreetingGlowEnabled)
                     }
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansLabel)
