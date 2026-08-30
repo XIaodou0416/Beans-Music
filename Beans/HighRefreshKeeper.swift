@@ -1,13 +1,13 @@
+import QuartzCore
 import SwiftUI
 import UIKit
-import QuartzCore
 
-/// 全局高刷新率保持器。配合 Info.plist 的 CADisableMinimumFrameDurationOnPhone 强制请求 120Hz。
+/// 全局高刷新率保持器。配合 Info.plist 的 CADisableMinimumFrameDurationOnPhone 请求设备支持的最高刷新率。
 final class HighRefreshKeeper {
     static let shared = HighRefreshKeeper()
     static let defaultsKey = "beans.enableHighRefresh"
 
-    private weak var hostView: UIView?
+    private var displayLink: CADisplayLink?
 
     private init() {}
 
@@ -17,40 +17,47 @@ final class HighRefreshKeeper {
     }
 
     func configureFromDefaults() {
-        configure(enabled: true)
+        configure(enabled: UserDefaults.standard.bool(forKey: Self.defaultsKey))
     }
 
     func configure(enabled: Bool) {
-        UserDefaults.standard.set(true, forKey: Self.defaultsKey)
-        apply()
+        UserDefaults.standard.set(enabled, forKey: Self.defaultsKey)
+        if enabled {
+            start()
+        } else {
+            stop()
+        }
     }
 
     func attach(to view: UIView) {
-        hostView = view
-        apply()
+        _ = view
+        start()
     }
 
     func start() {
-        configure(enabled: true)
+        guard displayLink == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(tick))
+        if #available(iOS 15.0, *) {
+            let maximum = Float(min(120, max(60, UIScreen.main.maximumFramesPerSecond)))
+            let minimum: Float = maximum >= 120 ? 80 : maximum
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: minimum,
+                maximum: maximum,
+                preferred: maximum
+            )
+        } else {
+            link.preferredFramesPerSecond = 120
+        }
+        link.add(to: .main, forMode: .common)
+        displayLink = link
     }
 
     func stop() {
-        configure(enabled: true)
+        displayLink?.invalidate()
+        displayLink = nil
     }
 
-    private func apply() {
-        guard let hostView else { return }
-        guard #available(iOS 15.0, *) else { return }
-
-        let screenMaximum = Float(max(60, UIScreen.main.maximumFramesPerSecond))
-        let preferred = min(screenMaximum, 120)
-        let minimum: Float = preferred >= 120 ? 80 : preferred
-        let range = CAFrameRateRange(minimum: minimum, maximum: preferred, preferred: preferred)
-
-        // Xcode 26 no longer exposes preferredFrameRateRange on UIView/ UIWindow.
-        // The frame-rate preference belongs to the window scene.
-        hostView.window?.windowScene?.preferredFrameRateRange = range
-    }
+    @objc private func tick() {}
 }
 
 struct HighRefreshConfigurator: UIViewRepresentable {
