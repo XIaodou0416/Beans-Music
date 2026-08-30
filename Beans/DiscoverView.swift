@@ -223,7 +223,14 @@ struct DiscoverView: View {
                             Text(line)
                                 .font(BeansFont.greetingFont(greetingLineSize(index), .bold))
                                 .foregroundStyle(greetingLineStyle(index))
-                                .underline(homeGreetingUnderline, color: greetingLineColor(index))
+                                .overlay(alignment: .bottomLeading) {
+                                    if homeGreetingUnderline {
+                                        Rectangle()
+                                            .fill(greetingLineColor(index))
+                                            .frame(height: 1.5)
+                                            .offset(y: 2)
+                                    }
+                                }
                                 .shadow(
                                     color: homeGreetingGlowEnabled
                                         ? greetingLineColor(index).opacity(min(1, 0.75 * homeGreetingGlowIntensity))
