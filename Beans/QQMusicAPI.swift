@@ -399,6 +399,53 @@ final class QQMusicAPI {
             }
         let identityCandidates = qqAuth.playlistIdentityCandidates
 
+        // 保留旧版已验证的主路径：201 接口返回真实 map 后，详情请求必须使用
+        // loginUin=0 + 完整 Cookie。部分微信登录态换成 wxuin 或裁剪 Cookie 后会返回空。
+        let legacyFavURL = "https://c.y.qq.com/splcloud/fcgi-bin/fcg_musiclist_getmyfav.fcg?dirid=201&dirinfo=1&g_tk=\(qqAuth.gtk)&format=json&utf8=1"
+        if let favJson = try? await get(legacyFavURL, referer: "https://y.qq.com/n/yqq/playlist", cookie: qqAuth.cookieHeader),
+           let mapid = Self.likedMapID(favJson), mapid > 0 {
+            let detailURL = "https://c.y.qq.com/qzone/fcgi-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&new_format=1&disstid=\(mapid)&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0"
+            if let detailJson = try? await get(detailURL, referer: "https://y.qq.com/", cookie: qqAuth.cookieHeader),
+               let cdlist = detailJson["cdlist"] as? [[String: Any]],
+               let rawSongs = cdlist.first?["songlist"] as? [[String: Any]] {
+                let songs = rawSongs.prefix(limit).compactMap { song(from: Self.unwrapQQSong($0)) }
+                if !songs.isEmpty { return songs }
+            }
+        }
+
+        // 官方“我的喜欢”详情接口。它不依赖普通歌单的 disstid，
+        // 而是用 dirid=201 返回专属收藏夹内容。
+        let officialPayload: [String: Any] = [
+            "comm": [
+                "ct": 24,
+                "cv": 0,
+                "uin": qqAuth.playlistUin,
+                "g_tk": qqAuth.gtk,
+                "platform": "yqq",
+            ],
+            "req_1": [
+                "module": "music.srfDissInfo.DissInfo",
+                "method": "CgiGetDiss",
+                "param": [
+                    "new_format": 1,
+                    "disstid": 201,
+                    "dirid": 201,
+                    "song_begin": 0,
+                    "song_num": limit,
+                    "enc_host_uin": qqAuth.playlistUin,
+                    "onlysonglist": 0,
+                    "userinfo": 1,
+                ],
+            ],
+        ]
+        for cookie in cookieCandidates {
+            guard let json = try? await musicu(officialPayload, cookie: cookie, timeout: 20) else { continue }
+            let songs = Self.favoriteSongArray(from: json)
+                .prefix(limit)
+                .compactMap { song(from: Self.unwrapQQSong($0)) }
+            if !songs.isEmpty { return songs }
+        }
+
         // 201 收藏夹接口在不同登录态下有两种返回形式：
         // 有的直接返回 songlist，有的只返回 map/歌单 ID。必须先消费直接返回的歌曲，
         // 否则微信登录时会因为拿不到普通歌单 ID 而显示空列表。
@@ -507,6 +554,22 @@ final class QQMusicAPI {
         }
         walk(json)
         return result
+    }
+
+    /// 收藏接口的曲目有时会包在 songInfo/data/track_info 内，统一解包到歌曲字段层。
+    private static func unwrapQQSong(_ item: [String: Any]) -> [String: Any] {
+        if item["songmid"] != nil || item["mid"] != nil || item["songname"] != nil {
+            return item
+        }
+        for key in ["songInfo", "songinfo", "track_info", "trackInfo", "data", "song"] {
+            if let nested = item[key] as? [String: Any] {
+                let unwrapped = unwrapQQSong(nested)
+                if unwrapped["songmid"] != nil || unwrapped["mid"] != nil || unwrapped["songname"] != nil {
+                    return unwrapped
+                }
+            }
+        }
+        return item
     }
 
     // MARK: - 红心收藏
@@ -1015,7 +1078,8 @@ final class QQMusicAPI {
 
         // QQ 网页的 profile/create 只展示创建歌单，“我的喜欢”由 dirid=201 单独维护。
         // 即使各歌单列表接口没有把它返回，也要显式放回音乐库列表。
-        if !seen.contains(Self.qqLikedPlaylistID) {
+        if !seen.contains(Self.qqLikedPlaylistID) &&
+           !playlists.contains(where: { $0.name == "我的喜欢" }) {
             playlists.insert(
                 Playlist(
                     id: Self.qqLikedPlaylistID,
@@ -1048,7 +1112,7 @@ final class QQMusicAPI {
         let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         if dirid == 201 || trimmedName == "我喜欢" || trimmedName == "我的喜欢" || trimmedName == "喜欢的音乐" {
             return Playlist(
-                id: -201,
+                id: Self.qqLikedPlaylistID,
                 name: "我的喜欢",
                 coverURL: URL(string: "https://y.gtimg.cn/mediastyle/global/img/cover_like.png"),
                 trackCount: integerValue(item["song_cnt"] ?? item["songnum"] ?? item["total_song_num"]),
