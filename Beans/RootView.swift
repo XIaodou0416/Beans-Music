@@ -41,7 +41,7 @@ struct RootView: View {
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
-    /// 可选高刷新率，默认开启；需要省电时可在设置里关闭。
+    /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.legacyTabCornerRadius") private var legacyTabCornerRadius = 32.0
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
@@ -125,6 +125,11 @@ struct RootView: View {
                 }
             }
         }
+        .background {
+            HighRefreshConfigurator()
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
+        }
         .preferredColorScheme(themeMode.colorScheme)
         .fullScreenCover(isPresented: $showPlayer) {
             PlayerView(isPresented: $showPlayer)
@@ -145,10 +150,14 @@ struct RootView: View {
             if disclaimerAccepted, ChangelogStore.shouldShowWhatsNew {
                 showWhatsNew = true
             }
-            HighRefreshKeeper.shared.configure(enabled: enableHighRefresh)
+            enableHighRefresh = true
+            HighRefreshKeeper.shared.configure(enabled: true)
         }
-        .onChange(of: enableHighRefresh) { enabled in
-            HighRefreshKeeper.shared.configure(enabled: enabled)
+        .onChange(of: enableHighRefresh) { _ in
+            if !enableHighRefresh {
+                enableHighRefresh = true
+            }
+            HighRefreshKeeper.shared.configure(enabled: true)
         }
         .onChange(of: disclaimerAccepted) { accepted in
             // 首次进入：确认免责声明后弹出更新说明

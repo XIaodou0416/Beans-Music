@@ -946,7 +946,7 @@ final class PlayerManager: NSObject, ObservableObject {
         return result.sorted { $0.count > $1.count }.prefix(8).map { $0 }
     }
 
-    // MARK: - 锁屏/控制中心
+    // MARK: - 系统正在播放
 
     private func updateNowPlaying() {
         guard let song = currentSong else { return }

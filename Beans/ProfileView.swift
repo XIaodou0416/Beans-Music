@@ -1245,9 +1245,11 @@ struct SettingsView: View {
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
-                legacyTabBarSettings
+                if #unavailable(iOS 26) {
+                    legacyTabBarSettings
 
-                Divider().overlay(Color.beansComment.opacity(0.15))
+                    Divider().overlay(Color.beansComment.opacity(0.15))
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -1642,24 +1644,28 @@ struct SettingsView: View {
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
-                Toggle(isOn: $enableHighRefresh) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "speedometer")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("高刷新动效")
-                                .font(BeansFont.appFont(15))
-                                .foregroundStyle(Color.beansLabel)
-                            Text("默认开启；允许系统高刷动画，不再常驻空转刷新")
-                                .font(BeansFont.appFont(11))
-                                .foregroundStyle(Color.beansComment)
-                        }
+                HStack(spacing: 12) {
+                    Image(systemName: "speedometer")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("120Hz 高刷新")
+                            .font(BeansFont.appFont(15))
+                            .foregroundStyle(Color.beansLabel)
+                        Text("已强制开启；用于修复我的、设置和播放器页面最高只有 60Hz 的问题")
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
                     }
+                    Spacer()
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 17))
+                        .foregroundStyle(Color.beansAmber)
                 }
-                .toggleStyle(.switch)
-                .tint(Color.beansAmber)
+                .onAppear {
+                    enableHighRefresh = true
+                    HighRefreshKeeper.shared.configure(enabled: true)
+                }
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 

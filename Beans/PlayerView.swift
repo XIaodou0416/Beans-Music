@@ -1652,7 +1652,7 @@ struct PlayerView: View {
             }
             layoutSlider("X", value: selectedLayoutEntry.x, range: layoutXRange)
             layoutSlider("Y", value: selectedLayoutEntry.y, range: layoutYRange)
-            layoutSlider("大小", value: selectedLayoutEntry.scale, range: 0.6...1.5, step: 0.05, format: "%.2f")
+            layoutSlider("大小", value: selectedLayoutEntry.scale, range: 0.3...1.5, step: 0.05, format: "%.2f")
             HStack(spacing: 10) {
                 Button {
                     resetCurrentLayoutPart()
