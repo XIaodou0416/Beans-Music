@@ -79,7 +79,9 @@ struct DiscoverView: View {
                             case "排行榜":
                                 if hasRankData { topListsSection.sectionEntrance(delay: 0.08) }
                             case "歌单广场":
-                                if !personalized.isEmpty { personalizedSection.sectionEntrance(delay: 0.16) }
+                                if source == .qq || !personalized.isEmpty {
+                                    personalizedSection.sectionEntrance(delay: 0.16)
+                                }
                             default:
                                 EmptyView()
                             }
@@ -523,31 +525,35 @@ struct DiscoverView: View {
                     .padding(.vertical, 2)
                 }
             }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                ForEach(displayedPlaylists) { playlist in
-                    Button {
-                        if source == .qq {
-                            selectedQQPlaylist = playlist
-                        } else {
-                            selectedPlaylist = playlist
+            if displayedPlaylists.isEmpty {
+                EmptyStateView(icon: "music.note.list", text: source == .qq ? "QQ音乐热门歌单暂未加载成功\n下拉刷新可重新获取" : "歌单广场暂时没有内容")
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    ForEach(displayedPlaylists) { playlist in
+                        Button {
+                            if source == .qq {
+                                selectedQQPlaylist = playlist
+                            } else {
+                                selectedPlaylist = playlist
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                CoverImage(url: playlist.coverURL, size: 144, cornerRadius: 18)
+                                    .frame(maxWidth: .infinity)
+                                Text(playlist.name)
+                                    .font(BeansFont.appFont(12, .medium))
+                                    .foregroundStyle(Color.beansLabel)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background {
+                                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            }
                         }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            CoverImage(url: playlist.coverURL, size: 144, cornerRadius: 18)
-                                .frame(maxWidth: .infinity)
-                            Text(playlist.name)
-                                .font(BeansFont.appFont(12, .medium))
-                                .foregroundStyle(Color.beansLabel)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                        }
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background {
-                                                        BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        }
+                        .buttonStyle(GlassPressButtonStyle(scale: 0.96))
                     }
-                    .buttonStyle(GlassPressButtonStyle(scale: 0.96))
                 }
             }
             if personalized.count > collapsedPlaylistCount {
@@ -667,10 +673,13 @@ struct DiscoverView: View {
         snapshot.savedAt = Date()
         switch source {
         case .qq:
-            async let a = QQMusicAPI.shared.recommendSongs(limit: 30)
-            async let b = QQMusicAPI.shared.topLists()
-            async let c = QQMusicAPI.shared.hotPlaylists(limit: 18)
-            let (dr, tl, pp) = try await (a, b, c)
+            async let a: [Song] = (try? await QQMusicAPI.shared.recommendSongs(limit: 30)) ?? []
+            async let b: [QQTopInfo] = (try? await QQMusicAPI.shared.topLists()) ?? []
+            async let c: [Playlist] = (try? await QQMusicAPI.shared.hotPlaylists(limit: 18)) ?? []
+            let (dr, tl, pp) = await (a, b, c)
+            if pp.isEmpty {
+                BeansLogger.shared.log("QQ音乐热门歌单为空：保留板块并显示空状态", level: .warn)
+            }
             snapshot.dailySongs = dr
             snapshot.qqTopLists = tl
             snapshot.personalized = pp

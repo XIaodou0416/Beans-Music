@@ -573,15 +573,11 @@ struct PlayerView: View {
             Button {
                 BeansHaptics.tap()
                 if let song {
-                    if song.source == .netease && !favorites.isLiked(song) {
-                        showAddToPlaylist = true
-                    } else {
-                        Task {
-                            if await favorites.toggle(song) {
-                                ToastCenter.shared.show(favorites.isLiked(song) ? "已收藏" : "已取消收藏")
-                            } else {
-                                ToastCenter.shared.show("收藏失败，请稍后再试")
-                            }
+                    Task {
+                        if await favorites.toggle(song) {
+                            ToastCenter.shared.show(favorites.isLiked(song) ? "已收藏" : "已取消收藏")
+                        } else {
+                            ToastCenter.shared.show("收藏失败，请稍后再试")
                         }
                     }
                 }
@@ -975,10 +971,12 @@ struct PlayerView: View {
                 HStack(spacing: 12) {
                     controlPanelAction(icon: favorites.isLiked(song) ? "heart.fill" : "heart", title: "收藏", active: favorites.isLiked(song)) {
                         if let song {
-                            if song.source == .netease && !favorites.isLiked(song) {
-                                showAddToPlaylist = true
-                            } else {
-                                Task { _ = await favorites.toggle(song) }
+                            Task {
+                                if await favorites.toggle(song) {
+                                    ToastCenter.shared.show(favorites.isLiked(song) ? "已收藏" : "已取消收藏")
+                                } else {
+                                    ToastCenter.shared.show("收藏失败，请稍后再试")
+                                }
                             }
                         }
                     }

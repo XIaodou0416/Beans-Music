@@ -244,9 +244,24 @@ struct LocalPlaylistDetailSheet: View {
     @State private var showSearchAdd = false
     @State private var showRename = false
     @State private var renameText = ""
+    @State private var playlistSearchText = ""
+    @State private var multiSelectMode = false
+    @State private var selectedSongKeys: Set<String> = []
 
     private var playlist: LocalPlaylist? {
         store.playlists.first { $0.id == playlistID }
+    }
+
+    private var visibleSongs: [(offset: Int, element: Song)] {
+        guard let playlist else { return [] }
+        let keyword = playlistSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let songs = Array(playlist.songs.enumerated())
+        guard !keyword.isEmpty else { return songs }
+        return songs.filter { _, song in
+            song.name.lowercased().contains(keyword)
+                || song.artists.lowercased().contains(keyword)
+                || song.album.lowercased().contains(keyword)
+        }
     }
 
     var body: some View {
@@ -259,29 +274,54 @@ struct LocalPlaylistDetailSheet: View {
                         Section {
                             HStack(spacing: 12) {
                                 GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
-                                    guard !playlist.songs.isEmpty else { return }
-                                    player.play(songs: playlist.songs, startAt: 0)
+                                    let songs = visibleSongs.map(\.element)
+                                    guard !songs.isEmpty else { return }
+                                    player.play(songs: songs, startAt: 0)
                                 }
                                 GlassButton(title: "随机播放", systemName: "shuffle") {
-                                    guard !playlist.songs.isEmpty else { return }
-                                    player.play(songs: playlist.songs.shuffled(), startAt: 0)
+                                    let songs = visibleSongs.map(\.element)
+                                    guard !songs.isEmpty else { return }
+                                    player.play(songs: songs.shuffled(), startAt: 0)
                                 }
                             }
                         }
                         .listRowBackground(Color.clear)
                         Section {
-                            ForEach(Array(playlist.songs.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true) {
-                                    player.play(songs: playlist.songs, startAt: index)
-                                }
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        BeansHaptics.tap()
-                                        store.removeSong(playlistID: playlistID, songIdentity: song.identityKey)
-                                    } label: {
-                                        Label("移除", systemImage: "trash")
+                            if visibleSongs.isEmpty {
+                                EmptyStateView(icon: "magnifyingglass", text: "没有找到匹配歌曲")
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
+                            } else {
+                                ForEach(visibleSongs, id: \.element.identityKey) { index, song in
+                                    if multiSelectMode {
+                                        HStack(spacing: 10) {
+                                            Image(systemName: selectedSongKeys.contains(song.identityKey) ? "checkmark.circle.fill" : "circle")
+                                                .font(.system(size: 20, weight: .semibold))
+                                                .foregroundStyle(selectedSongKeys.contains(song.identityKey) ? Color.beansAmber : Color.beansComment)
+                                            SongCell(song: song, glassRow: true) {
+                                                toggleSelection(song)
+                                            }
+                                        }
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            toggleSelection(song)
+                                        }
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.hidden)
+                                    } else {
+                                        SongCell(song: song, glassRow: true, playbackContext: playlist.songs, playbackIndex: index) {
+                                            player.play(songs: playlist.songs, startAt: index)
+                                        }
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.hidden)
+                                        .swipeActions(edge: .trailing) {
+                                            Button(role: .destructive) {
+                                                BeansHaptics.tap()
+                                                store.removeSong(playlistID: playlistID, songIdentity: song.identityKey)
+                                            } label: {
+                                                Label("移除", systemImage: "trash")
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -289,6 +329,7 @@ struct LocalPlaylistDetailSheet: View {
                     }
                     .beansScrollContentBackgroundHidden()
                     .listStyle(.plain)
+                    .searchable(text: $playlistSearchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索本地歌单歌曲")
                 } else {
                     EmptyStateView(icon: "music.note.list", text: "歌单不存在或已删除")
                 }
@@ -302,6 +343,22 @@ struct LocalPlaylistDetailSheet: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
+                        Button {
+                            multiSelectMode.toggle()
+                            if !multiSelectMode {
+                                selectedSongKeys.removeAll()
+                            }
+                        } label: {
+                            Label(multiSelectMode ? "退出多选" : "多选编辑", systemImage: multiSelectMode ? "xmark.circle" : "checklist")
+                        }
+                        if multiSelectMode {
+                            Button(role: .destructive) {
+                                removeSelectedSongs()
+                            } label: {
+                                Label("移除选中歌曲", systemImage: "trash")
+                            }
+                            .disabled(selectedSongKeys.isEmpty)
+                        }
                         Button {
                             if let song = player.currentSong {
                                 store.addSong(song, to: playlistID)
@@ -346,6 +403,27 @@ struct LocalPlaylistDetailSheet: View {
             Button("取消", role: .cancel) {}
         }
         .modifier(BeansSheetModifier(detents: [.medium, .large], dragIndicator: true))
+    }
+
+    private func toggleSelection(_ song: Song) {
+        BeansHaptics.select()
+        if selectedSongKeys.contains(song.identityKey) {
+            selectedSongKeys.remove(song.identityKey)
+        } else {
+            selectedSongKeys.insert(song.identityKey)
+        }
+    }
+
+    private func removeSelectedSongs() {
+        guard !selectedSongKeys.isEmpty else { return }
+        let count = selectedSongKeys.count
+        selectedSongKeys.forEach { key in
+            store.removeSong(playlistID: playlistID, songIdentity: key)
+        }
+        selectedSongKeys.removeAll()
+        multiSelectMode = false
+        BeansHaptics.success()
+        ToastCenter.shared.show("已移除 \(count) 首歌曲")
     }
 }
 
