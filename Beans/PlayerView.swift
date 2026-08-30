@@ -822,13 +822,13 @@ struct PlayerView: View {
                         .onChanged { value in
                             guard swipeSwitchSong else { return }
                             coverDrag = value.translation
-                            let h = value.translation.height
-                            if abs(h) > abs(value.translation.width) {
-                                swipeOffset = h
+                            let x = value.translation.width
+                            if abs(x) > abs(value.translation.height) {
+                                swipeOffset = x
                             }
                         }
                         .onEnded { value in
-                            handleSwipeEnd(height: value.translation.height)
+                            handleSwipeEnd(horizontal: value.translation.width)
                         }
                 )
             }
@@ -876,22 +876,22 @@ struct PlayerView: View {
         }
         .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // 侧边上下滑动切歌（抖音式刷视频交互）：上滑下一首、下滑上一首，仅响应纵向手势
-        // 使用 .gesture 与封面点击互斥：拖动时不会误触点击封面（避免切歌瞬间跳到歌词页）
-        .offset(y: swipeOffset)
+        // 左右滑动切歌：左滑下一首、右滑上一首，仅响应横向手势。
+        // 使用 .gesture 与封面点击互斥：拖动时不会误触点击封面。
+        .offset(x: swipeOffset)
         .opacity(1 - min(abs(swipeOffset) / 260, 0.35))
         .gesture(
             DragGesture(minimumDistance: 15)
                 .onChanged { value in
                     guard swipeSwitchSong else { return }
                     coverDrag = value.translation
-                    let h = value.translation.height
-                    if abs(h) > abs(value.translation.width) {
-                        swipeOffset = h
+                    let x = value.translation.width
+                    if abs(x) > abs(value.translation.height) {
+                        swipeOffset = x
                     }
                 }
                 .onEnded { value in
-                    handleSwipeEnd(height: value.translation.height)
+                    handleSwipeEnd(horizontal: value.translation.width)
                 }
         )
     }
@@ -959,13 +959,13 @@ struct PlayerView: View {
                         .onChanged { value in
                             guard swipeSwitchSong else { return }
                             coverDrag = value.translation
-                            let h = value.translation.height
-                            if abs(h) > abs(value.translation.width) {
-                                swipeOffset = h
+                            let x = value.translation.width
+                            if abs(x) > abs(value.translation.height) {
+                                swipeOffset = x
                             }
                         }
                         .onEnded { value in
-                            handleSwipeEnd(height: value.translation.height)
+                            handleSwipeEnd(horizontal: value.translation.width)
                         }
                 )
                 .modifier(Layoutable(part: .controlCenterCover, enabled: layoutMode, data: $layoutData))
@@ -1031,20 +1031,20 @@ struct PlayerView: View {
         }
         .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .offset(y: swipeOffset)
+        .offset(x: swipeOffset)
         .opacity(1 - min(abs(swipeOffset) / 260, 0.35))
         .gesture(
             DragGesture(minimumDistance: 15)
                 .onChanged { value in
                     guard swipeSwitchSong else { return }
                     coverDrag = value.translation
-                    let h = value.translation.height
-                    if abs(h) > abs(value.translation.width) {
-                        swipeOffset = h
+                    let x = value.translation.width
+                    if abs(x) > abs(value.translation.height) {
+                        swipeOffset = x
                     }
                 }
                 .onEnded { value in
-                    handleSwipeEnd(height: value.translation.height)
+                    handleSwipeEnd(horizontal: value.translation.width)
                 }
         )
     }
@@ -1810,15 +1810,15 @@ struct PlayerView: View {
         isPresented = false
     }
 
-    /// 刷抖音式切歌：松手后旧封面继续飞出屏幕，新封面从对侧滑入（上滑下一首：旧向上飞、新从底部上来；下滑反之）
-    private func handleSwipeEnd(height: CGFloat) {
+    /// 左右切歌：松手后旧封面沿手势方向飞出，新封面从对侧滑入（左滑下一首，右滑上一首）。
+    private func handleSwipeEnd(horizontal: CGFloat) {
         guard swipeSwitchSong else { return }
-        let h = height
-        if h < -70 {
+        let x = horizontal
+        if x < -70 {
             BeansHaptics.tap()
             coverDrag = .zero
             flySwipe(direction: -1)
-        } else if h > 70 {
+        } else if x > 70 {
             BeansHaptics.tap()
             coverDrag = .zero
             flySwipe(direction: 1)
@@ -2920,8 +2920,8 @@ struct PlayerSettingsSheet: View {
                 }
                 .buttonStyle(.plain)
                 Divider().opacity(0.35)
-                settingToggle("上下滑动切歌", isOn: $swipeSwitchSong,
-                              caption: "上滑下一首，下滑上一首")
+                settingToggle("左右滑动切歌", isOn: $swipeSwitchSong,
+                              caption: "左滑下一首，右滑上一首")
                 Divider().opacity(0.35)
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {

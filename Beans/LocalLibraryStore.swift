@@ -68,6 +68,16 @@ final class LocalLibraryStore: ObservableObject {
         playlists[idx].songs.append(song)
     }
 
+    @discardableResult
+    func addSongs(_ songs: [Song], to id: UUID) -> Int {
+        let before = playlists.first(where: { $0.id == id })?.songs.count ?? 0
+        for song in songs {
+            addSong(song, to: id)
+        }
+        let after = playlists.first(where: { $0.id == id })?.songs.count ?? before
+        return after - before
+    }
+
     func containsSong(_ song: Song?) -> Bool {
         guard let song else { return false }
         return playlists.contains { $0.songs.contains { $0.identityKey == song.identityKey } }

@@ -15,6 +15,7 @@ struct ProfileView: View {
     @EnvironmentObject private var player: PlayerManager
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
+    @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
 
     @State private var showHistory = false
 
@@ -101,6 +102,7 @@ struct ProfileView: View {
                 }
                 GlassIconButton(systemName: "gearshape.fill") {
                     BeansHaptics.tap()
+                    homeRenderingPaused = true
                     showSettings = true
                 }
             }
@@ -1126,6 +1128,16 @@ struct SettingsView: View {
     @AppStorage("beans.homeGreetingSize") private var homeGreetingSize = 30.0
     @AppStorage("beans.homeGreetingHeight") private var homeGreetingHeight = 0.0
     @AppStorage("beans.homeGreetingColorHex") private var homeGreetingColorHex = ""
+    @AppStorage("beans.homeGreetingLine1Size") private var homeGreetingLine1Size = 0.0
+    @AppStorage("beans.homeGreetingLine2Size") private var homeGreetingLine2Size = 0.0
+    @AppStorage("beans.homeGreetingLine3Size") private var homeGreetingLine3Size = 0.0
+    @AppStorage("beans.homeGreetingLine1ColorHex") private var homeGreetingLine1ColorHex = ""
+    @AppStorage("beans.homeGreetingLine2ColorHex") private var homeGreetingLine2ColorHex = ""
+    @AppStorage("beans.homeGreetingLine3ColorHex") private var homeGreetingLine3ColorHex = ""
+    @AppStorage("beans.homeGreetingLine1OffsetY") private var homeGreetingLine1OffsetY = 0.0
+    @AppStorage("beans.homeGreetingLine2OffsetY") private var homeGreetingLine2OffsetY = 0.0
+    @AppStorage("beans.homeGreetingLine3OffsetY") private var homeGreetingLine3OffsetY = 0.0
+    @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
@@ -1159,6 +1171,89 @@ struct SettingsView: View {
 
     private var presetSourceCount: Int {
         sourceStore.presetSources.count
+    }
+
+    private var homeGreetingLines: [String] {
+        let custom = homeGreetingText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if custom.isEmpty { return ["自动问候"] }
+        return custom.components(separatedBy: .newlines)
+    }
+
+    private func greetingLineSizeBinding(_ index: Int) -> Binding<Double> {
+        Binding(
+            get: {
+                switch index {
+                case 0: return homeGreetingLine1Size > 0 ? homeGreetingLine1Size : homeGreetingSize
+                case 1: return homeGreetingLine2Size > 0 ? homeGreetingLine2Size : homeGreetingSize
+                default: return homeGreetingLine3Size > 0 ? homeGreetingLine3Size : homeGreetingSize
+                }
+            },
+            set: { value in
+                switch index {
+                case 0: homeGreetingLine1Size = value
+                case 1: homeGreetingLine2Size = value
+                default: homeGreetingLine3Size = value
+                }
+            }
+        )
+    }
+
+    private func greetingLineColorBinding(_ index: Int) -> Binding<Color> {
+        Binding(
+            get: {
+                let raw: String
+                switch index {
+                case 0: raw = homeGreetingLine1ColorHex
+                case 1: raw = homeGreetingLine2ColorHex
+                default: raw = homeGreetingLine3ColorHex
+                }
+                return Color(hex: raw) ?? (Color(hex: homeGreetingColorHex) ?? Color.beansLabel)
+            },
+            set: { color in
+                let hex = color.hexString
+                switch index {
+                case 0: homeGreetingLine1ColorHex = hex
+                case 1: homeGreetingLine2ColorHex = hex
+                default: homeGreetingLine3ColorHex = hex
+                }
+            }
+        )
+    }
+
+    private func greetingLineOffsetBinding(_ index: Int) -> Binding<Double> {
+        Binding(
+            get: {
+                switch index {
+                case 0: return homeGreetingLine1OffsetY
+                case 1: return homeGreetingLine2OffsetY
+                default: return homeGreetingLine3OffsetY
+                }
+            },
+            set: { value in
+                switch index {
+                case 0: homeGreetingLine1OffsetY = value
+                case 1: homeGreetingLine2OffsetY = value
+                default: homeGreetingLine3OffsetY = value
+                }
+            }
+        )
+    }
+
+    private func resetGreetingLineStyle(_ index: Int) {
+        switch index {
+        case 0:
+            homeGreetingLine1Size = 0
+            homeGreetingLine1ColorHex = ""
+            homeGreetingLine1OffsetY = 0
+        case 1:
+            homeGreetingLine2Size = 0
+            homeGreetingLine2ColorHex = ""
+            homeGreetingLine2OffsetY = 0
+        default:
+            homeGreetingLine3Size = 0
+            homeGreetingLine3ColorHex = ""
+            homeGreetingLine3OffsetY = 0
+        }
     }
 
     var body: some View {
@@ -1251,6 +1346,12 @@ struct SettingsView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("会恢复主题、播放器、平台显示、壁纸、布局等设置，但保留已登录账号。")
+        }
+        .onAppear {
+            homeRenderingPaused = true
+        }
+        .onDisappear {
+            homeRenderingPaused = false
         }
     }
 
@@ -1686,6 +1787,50 @@ struct SettingsView: View {
                                 .foregroundStyle(Color.beansComment)
                         }
                         Slider(value: $homeGreetingHeight, in: 0...260, step: 1)
+                    }
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansLabel)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("逐行调节")
+                            .font(BeansFont.appFont(13, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                        ForEach(Array(homeGreetingLines.prefix(3).enumerated()), id: \.offset) { index, line in
+                            VStack(alignment: .leading, spacing: 7) {
+                                HStack {
+                                    Text("第\(index + 1)行")
+                                        .font(BeansFont.appFont(12, .semibold))
+                                    Text(line.isEmpty ? "空行" : line)
+                                        .font(BeansFont.appFont(11))
+                                        .foregroundStyle(Color.beansComment)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Button("跟随全局") {
+                                        resetGreetingLineStyle(index)
+                                    }
+                                    .font(BeansFont.appFont(11, .medium))
+                                    .foregroundStyle(Color.beansAmber)
+                                    .buttonStyle(.plain)
+                                }
+                                HStack {
+                                    Text("字号")
+                                    Spacer()
+                                    Text("\(Int(greetingLineSizeBinding(index).wrappedValue))")
+                                        .foregroundStyle(Color.beansComment)
+                                }
+                                Slider(value: greetingLineSizeBinding(index), in: 12...80, step: 1)
+                                    .tint(Color.beansAmber)
+                                HStack(spacing: 12) {
+                                    ColorPicker("颜色", selection: greetingLineColorBinding(index), supportsOpacity: false)
+                                    Spacer()
+                                    Text("上下偏移 \(Int(greetingLineOffsetBinding(index).wrappedValue))")
+                                        .foregroundStyle(Color.beansComment)
+                                }
+                                Slider(value: greetingLineOffsetBinding(index), in: -80...80, step: 1)
+                                    .tint(Color.beansAmber)
+                            }
+                            .padding(10)
+                            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
                     }
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansLabel)

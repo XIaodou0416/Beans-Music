@@ -27,7 +27,17 @@ struct DiscoverView: View {
     @AppStorage("beans.homeGreetingSize") private var homeGreetingSize = 30.0
     @AppStorage("beans.homeGreetingHeight") private var homeGreetingHeight = 0.0
     @AppStorage("beans.homeGreetingColorHex") private var homeGreetingColorHex = ""
+    @AppStorage("beans.homeGreetingLine1Size") private var homeGreetingLine1Size = 0.0
+    @AppStorage("beans.homeGreetingLine2Size") private var homeGreetingLine2Size = 0.0
+    @AppStorage("beans.homeGreetingLine3Size") private var homeGreetingLine3Size = 0.0
+    @AppStorage("beans.homeGreetingLine1ColorHex") private var homeGreetingLine1ColorHex = ""
+    @AppStorage("beans.homeGreetingLine2ColorHex") private var homeGreetingLine2ColorHex = ""
+    @AppStorage("beans.homeGreetingLine3ColorHex") private var homeGreetingLine3ColorHex = ""
+    @AppStorage("beans.homeGreetingLine1OffsetY") private var homeGreetingLine1OffsetY = 0.0
+    @AppStorage("beans.homeGreetingLine2OffsetY") private var homeGreetingLine2OffsetY = 0.0
+    @AppStorage("beans.homeGreetingLine3OffsetY") private var homeGreetingLine3OffsetY = 0.0
     @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
+    @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
@@ -67,74 +77,89 @@ struct DiscoverView: View {
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
             ScrollView {
-                ScrollViewReader { proxy in
-                VStack(alignment: .leading, spacing: 26) {
-                    header
-                    providerPicker
-                    if let errorMessage {
-                        ErrorStateView(message: errorMessage) {
-                            Task { await load(force: true) }
-                        }
-                    } else if loading {
-                        LoadingStateView()
-                    } else {
-                        // 板块按用户自定义顺序渲染（可拖拽排序）
-                        ForEach(homeOrder.filter { availableSections.contains($0) }, id: \.self) { key in
-                            switch key {
-                            case "每日推荐":
-                                if !dailySongs.isEmpty { dailySection.sectionEntrance(delay: 0) }
-                            case "排行榜":
-                                if hasRankData { topListsSection.sectionEntrance(delay: 0.08) }
-                            case "歌单广场":
-                                if source == .qq || !personalized.isEmpty {
-                                    personalizedSection.sectionEntrance(delay: 0.16)
+                if !homeRenderingPaused {
+                    ScrollViewReader { proxy in
+                    VStack(alignment: .leading, spacing: 26) {
+                        header
+                        providerPicker
+                        if let errorMessage {
+                            ErrorStateView(message: errorMessage) {
+                                Task { await load(force: true) }
+                            }
+                        } else if loading {
+                            LoadingStateView()
+                        } else {
+                            // 板块按用户自定义顺序渲染（可拖拽排序）
+                            ForEach(homeOrder.filter { availableSections.contains($0) }, id: \.self) { key in
+                                switch key {
+                                case "每日推荐":
+                                    if !dailySongs.isEmpty { dailySection.sectionEntrance(delay: 0) }
+                                case "排行榜":
+                                    if hasRankData { topListsSection.sectionEntrance(delay: 0.08) }
+                                case "歌单广场":
+                                    if source == .qq || !personalized.isEmpty {
+                                        personalizedSection.sectionEntrance(delay: 0.16)
+                                    }
+                                default:
+                                    EmptyView()
                                 }
-                            default:
-                                EmptyView()
                             }
                         }
                     }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 190)
-                .frame(maxWidth: 860)
-                .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 190)
+                    .frame(maxWidth: 860)
+                    .frame(maxWidth: .infinity)
+                    }
                 }
             }
             .beansScrollIndicatorsHidden()
-            .refreshable { await load(force: true) }
-            .task(id: source) { await load(force: false) }
+            .refreshable {
+                guard !homeRenderingPaused else { return }
+                await load(force: true)
+            }
+            .task(id: "\(source.rawValue)-\(homeRenderingPaused)") {
+                guard !homeRenderingPaused else { return }
+                await load(force: false)
+            }
             .onAppear {
+                guard !homeRenderingPaused else { return }
                 guard let saved = SearchProvider(rawValue: homeSourceRaw), homeProviders.contains(saved) else {
                     homeSourceRaw = (homeProviders.first ?? .netease).rawValue
                     return
                 }
             }
             .onReceive(platformPrefs.changes) { _ in
+                guard !homeRenderingPaused else { return }
                 let next = platformPrefs.ensureVisible(source)
                 if next != source {
                     homeSourceRaw = next.rawValue
                 }
             }
             .onChange(of: source) { _ in
+                guard !homeRenderingPaused else { return }
                 homeOrder = SectionOrderStore.load(SectionOrderStore.homeKey, defaults: availableSections)
             }
             .onChange(of: disclaimerAccepted) { accepted in
+                guard !homeRenderingPaused else { return }
                 // 免责声明确认进入后：若首页加载失败则自动刷新（无需手动下拉）
                 if accepted, errorMessage != nil {
                     Task { await load(force: true) }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .beansNeteaseLoginDidUpdate)) { _ in
+                guard !homeRenderingPaused else { return }
                 guard platformPrefs.isEnabled(SearchProvider.netease) else { return }
                 reloadAfterLoginUpdate(.netease)
             }
             .onReceive(NotificationCenter.default.publisher(for: .beansQQLoginDidUpdate)) { _ in
+                guard !homeRenderingPaused else { return }
                 guard platformPrefs.isEnabled(SearchProvider.qq) else { return }
                 reloadAfterLoginUpdate(.qq)
             }
             .onReceive(NotificationCenter.default.publisher(for: .beansKugouLoginDidUpdate)) { _ in
+                guard !homeRenderingPaused else { return }
                 guard platformPrefs.isEnabled(SearchProvider.kugou) else { return }
                 reloadAfterLoginUpdate(.kugou)
             }
@@ -187,10 +212,15 @@ struct DiscoverView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(greeting)
-                        .font(BeansFont.appFont(CGFloat(homeGreetingSize), .bold))
-                        .foregroundStyle(homeGreetingColor)
-                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(greetingLines.enumerated()), id: \.offset) { index, line in
+                            Text(line)
+                                .font(BeansFont.appFont(greetingLineSize(index), .bold))
+                                .foregroundStyle(greetingLineColor(index))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .offset(y: greetingLineOffsetY(index))
+                        }
+                    }
                     if !homeHideUsername {
                         Text(auth.user?.nickname ?? "发现好音乐")
                             .font(BeansFont.appFont(13))
@@ -617,6 +647,7 @@ struct DiscoverView: View {
     // MARK: - 动作
 
     private func load(force: Bool = false) async {
+        guard !homeRenderingPaused else { return }
         let cache = DiscoverCache.shared
         let requestedSource = source
         // 网易云非「全部」分类的歌单不缓存（切换分类即重新拉取）
@@ -671,6 +702,43 @@ struct DiscoverView: View {
             if !hasAnyData {
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    private var greetingLines: [String] {
+        let custom = homeGreetingText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if custom.isEmpty { return [greeting] }
+        return custom.components(separatedBy: .newlines)
+    }
+
+    private func greetingLineSize(_ index: Int) -> CGFloat {
+        guard index < 3 else { return CGFloat(homeGreetingSize) }
+        let value: Double
+        switch index {
+        case 0: value = homeGreetingLine1Size
+        case 1: value = homeGreetingLine2Size
+        default: value = homeGreetingLine3Size
+        }
+        return CGFloat(value > 0 ? value : homeGreetingSize)
+    }
+
+    private func greetingLineColor(_ index: Int) -> Color {
+        guard index < 3 else { return homeGreetingColor }
+        let raw: String
+        switch index {
+        case 0: raw = homeGreetingLine1ColorHex
+        case 1: raw = homeGreetingLine2ColorHex
+        default: raw = homeGreetingLine3ColorHex
+        }
+        return Color(hex: raw) ?? homeGreetingColor
+    }
+
+    private func greetingLineOffsetY(_ index: Int) -> CGFloat {
+        guard index < 3 else { return 0 }
+        switch index {
+        case 0: return CGFloat(homeGreetingLine1OffsetY)
+        case 1: return CGFloat(homeGreetingLine2OffsetY)
+        default: return CGFloat(homeGreetingLine3OffsetY)
         }
     }
 

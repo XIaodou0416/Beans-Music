@@ -247,6 +247,7 @@ struct LocalPlaylistDetailSheet: View {
     @State private var playlistSearchText = ""
     @State private var multiSelectMode = false
     @State private var selectedSongKeys: Set<String> = []
+    @State private var showAddSelectedDestination = false
 
     private var playlist: LocalPlaylist? {
         store.playlists.first { $0.id == playlistID }
@@ -358,6 +359,12 @@ struct LocalPlaylistDetailSheet: View {
                                 Label("移除选中歌曲", systemImage: "trash")
                             }
                             .disabled(selectedSongKeys.isEmpty)
+                            Button {
+                                showAddSelectedDestination = true
+                            } label: {
+                                Label("添加到其他本地歌单", systemImage: "folder.badge.plus")
+                            }
+                            .disabled(selectedSongKeys.isEmpty || !hasOtherPlaylist)
                         }
                         Button {
                             if let song = player.currentSong {
@@ -402,7 +409,25 @@ struct LocalPlaylistDetailSheet: View {
             }
             Button("取消", role: .cancel) {}
         }
+        .confirmationDialog(
+            "添加 \(selectedSongKeys.count) 首歌曲到其他本地歌单",
+            isPresented: $showAddSelectedDestination,
+            titleVisibility: .visible
+        ) {
+            ForEach(store.playlists.filter { $0.id != playlistID }) { target in
+                Button(target.name) {
+                    addSelectedSongs(to: target.id)
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("已选歌曲会复制到目标歌单，当前歌单中的歌曲不会被移除。")
+        }
         .modifier(BeansSheetModifier(detents: [.medium, .large], dragIndicator: true))
+    }
+
+    private var hasOtherPlaylist: Bool {
+        store.playlists.contains { $0.id != playlistID }
     }
 
     private func toggleSelection(_ song: Song) {
@@ -424,6 +449,19 @@ struct LocalPlaylistDetailSheet: View {
         multiSelectMode = false
         BeansHaptics.success()
         ToastCenter.shared.show("已移除 \(count) 首歌曲")
+    }
+
+    private func addSelectedSongs(to destinationID: UUID) {
+        guard let playlist else { return }
+        let songs = playlist.songs.filter { selectedSongKeys.contains($0.identityKey) }
+        let added = store.addSongs(songs, to: destinationID)
+        selectedSongKeys.removeAll()
+        multiSelectMode = false
+        BeansHaptics.success()
+        let targetName = store.playlists.first(where: { $0.id == destinationID })?.name ?? "目标歌单"
+        ToastCenter.shared.show(added == songs.count
+            ? "已添加 \(added) 首到「\(targetName)」"
+            : "已添加 \(added) 首到「\(targetName)」（重复歌曲已跳过）")
     }
 }
 
