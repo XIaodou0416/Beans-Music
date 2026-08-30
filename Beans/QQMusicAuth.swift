@@ -38,20 +38,25 @@ final class QQMusicAuth: ObservableObject {
 
     // MARK: - 登录状态
 
-    /// 登录 QQ 号（cookie uin 形如 o153140965）
+    /// 登录账号 ID。QQ 登录通常使用 uin，微信登录通常使用 wxuin。
     var uin: String {
-        let raw = cookies["uin"] ?? "0"
-        return raw.replacingOccurrences(of: "o", with: "")
+        Self.normalizedUIN(Self.accountID(from: cookies))
     }
 
-    /// 原始 uin（保留 o 前缀，歌单增删等写操作接口需要）
+    /// 原始账号 ID（保留 o 前缀，歌单增删等写操作接口需要）。
+    /// 微信网页登录没有 uin 时回退到 wxuin。
     var rawUin: String {
-        cookies["uin"] ?? "0"
+        Self.accountID(from: cookies)
     }
 
-    /// g_tk（写操作接口签名；由 qqmusic_key/p_skey/skey 计算，未登录时为 5381）
+    /// g_tk（写操作接口签名；QQ/微信登录均优先使用音乐域凭证）。
     var gtk: Int {
-        let key = cookies["qqmusic_key"] ?? cookies["p_skey"] ?? cookies["skey"] ?? ""
+        let key = cookies["qqmusic_key"]
+            ?? cookies["qm_keyst"]
+            ?? cookies["wxskey"]
+            ?? cookies["p_skey"]
+            ?? cookies["skey"]
+            ?? ""
         return key.isEmpty ? 5381 : Self.hash5381(key)
     }
 
@@ -63,11 +68,22 @@ final class QQMusicAuth: ObservableObject {
 
     /// 发给 u.y.qq.com 的 Cookie 串（含 qqmusic_key 时 VIP 歌曲播放成功率最高）
     var cookieHeader: String {
-        let order = ["uin", "p_uin", "qm_keyst", "qqmusic_key", "music_key", "wxskey", "musickey", "p_skey", "skey", "pt4_token"]
-        return order.compactMap { key in
+        let order = [
+            "uin", "wxuin", "p_uin", "wxopenid",
+            "qm_keyst", "qqmusic_key", "music_key", "wxskey", "wx_skey",
+            "musickey", "p_skey", "skey", "pt4_token"
+        ]
+        var pairs = order.compactMap { key in
             guard let value = cookies[key], !value.isEmpty else { return nil }
             return "\(key)=\(value)"
-        }.joined(separator: "; ")
+        }
+        // 旧版保存的微信登录态可能只有 wxuin；部分 QQ 接口仍只读取 uin。
+        if !Self.hasUsableAccountID(cookies["uin"]),
+           let wxuin = cookies["wxuin"],
+           !wxuin.isEmpty {
+            pairs.insert("uin=\(wxuin)", at: 0)
+        }
+        return pairs.joined(separator: "; ")
     }
 
     func logout() {
@@ -97,19 +113,31 @@ final class QQMusicAuth: ObservableObject {
         Task { await self.fetchProfile() }
     }
 
-    /// Cookie 是否包含有效登录态（uin 非空且带任一有效凭证）
-    func hasValidLogin(_ dict: [String: String]) -> Bool {
-        guard let uin = dict["uin"], !uin.isEmpty, uin != "0" else { return false }
-        let credentialKeys = ["p_skey", "skey", "qqmusic_key", "qm_keyst", "music_key", "wxskey", "musickey", "p_uin"]
-        return credentialKeys.contains { key in
-            guard let value = dict[key] else { return false }
-            return !value.isEmpty
+    /// 返回网页登录 Cookie 缺少哪一部分，便于区分 QQ 登录和微信登录失败原因。
+    static func loginValidationMessage(_ dict: [String: String]) -> String? {
+        guard hasUsableAccountID(accountID(from: dict)) else {
+            return "未读取到 QQ/微信账号标识，请确认网页登录已经完成"
         }
+
+        let credentialKeys = [
+            "p_skey", "skey", "qqmusic_key", "qm_keyst",
+            "music_key", "wxskey", "wx_skey", "musickey"
+        ]
+        guard credentialKeys.contains(where: { !(dict[$0] ?? "").isEmpty }) else {
+            return "已读取到账号，但缺少 QQ 音乐登录凭证，请在网页中重新登录后再同步"
+        }
+        return nil
+    }
+
+    /// Cookie 是否包含有效登录态，兼容 QQ 登录的 uin 和微信登录的 wxuin。
+    func hasValidLogin(_ dict: [String: String]) -> Bool {
+        Self.loginValidationMessage(dict) == nil
     }
 
     /// 网页登录关注的 Cookie 名（WKWebView 读取时按此过滤）
     static let webCookieNames: Set<String> = [
-        "uin", "p_uin", "skey", "p_skey", "qqmusic_key", "qm_keyst", "music_key", "wxskey",
+        "uin", "wxuin", "p_uin", "wxopenid", "skey", "p_skey",
+        "qqmusic_key", "qm_keyst", "music_key", "wxskey", "wx_skey",
         "musickey", "pt4_token", "pt2gguin", "pt_login_sig", "pt4_aid",
         "qmusic_s", "pgv_pvid", "pgv_info", "ptnick", "nick", "nickname",
     ]
@@ -129,15 +157,36 @@ final class QQMusicAuth: ObservableObject {
         return dict
     }
 
-    /// uin（可能带 o 前缀）转显示昵称；优先 ptlogin 下发的 ptnick_* / nick Cookie（Mineradio 同款兜底）
+    /// QQ/微信账号 ID 转显示昵称；优先 ptlogin 下发的 ptnick_* / nick Cookie。
     static func fallbackNickname(_ dict: [String: String]) -> String {
         if let key = dict.keys.first(where: { $0.hasPrefix("ptnick") }),
            let raw = dict[key], !raw.isEmpty {
             return raw.removingPercentEncoding ?? raw
         }
         if let nick = dict["nick"], !nick.isEmpty { return nick }
-        let clean = (dict["uin"] ?? "").replacingOccurrences(of: "o", with: "")
+        let clean = normalizedUIN(accountID(from: dict))
         return clean.isEmpty ? "QQ音乐用户" : "QQ音乐用户 \(clean)"
+    }
+
+    private static func accountID(from cookies: [String: String]) -> String {
+        for key in ["uin", "wxuin", "pt2gguin"] {
+            guard let value = cookies[key],
+                  hasUsableAccountID(value) else { continue }
+            return value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return "0"
+    }
+
+    private static func hasUsableAccountID(_ raw: String?) -> Bool {
+        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return false }
+        return value != "0" && value != "o0"
+    }
+
+    private static func normalizedUIN(_ raw: String) -> String {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return "" }
+        return value.hasPrefix("o") ? String(value.dropFirst()) : value
     }
     // MARK: - 扫码登录
 

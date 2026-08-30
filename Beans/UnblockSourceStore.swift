@@ -61,6 +61,7 @@ final class UnblockSourceStore: ObservableObject {
         "CERU_KEY-1C0F7359-2863-46F7-A63C-B0E0E744CDFE",
         "CERU_KEY-B2495961-F872-4F31-9893-F6E8F15B5D62",
         "CERU_KEY-51A42014-7122-4D7A-9964-51DEE617FDB5",
+        "CERU_KEY-DCF912D8-1AF2-43E0-B5BE-1AE9ACB628CA",
     ]
     private static let paidURLTemplate = "\(paidAPIURL)/url?source={source}&songId={id}&quality={quality}"
     private static var paidHeaders: [String: String] {
