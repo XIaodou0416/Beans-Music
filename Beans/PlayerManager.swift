@@ -91,6 +91,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private let historyKey = "beans.history"
     private let countsKey = "beans.playcounts"
     private let audioMixKey = "beans.audio.mixothers.v1"
+    private let playModeKey = "beans.player.playMode"
     private let thirdPartyVIPNoticeKey = "beans.showThirdPartyVIPNotice"
     private let defaults = UserDefaults.standard
 
@@ -105,6 +106,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        loadPlayMode()
         loadHistory()
         loadPlayCounts()
         observeInterruptions()
@@ -199,6 +201,7 @@ final class PlayerManager: NSObject, ObservableObject {
         case .repeatOne: playMode = .shuffle
         case .shuffle: playMode = .sequential
         }
+        defaults.set(playMode.rawValue, forKey: playModeKey)
         buildPlayOrder()
     }
 
@@ -301,6 +304,12 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     // MARK: - 播放顺序
+
+    private func loadPlayMode() {
+        guard let raw = defaults.string(forKey: playModeKey),
+              let saved = PlayMode(rawValue: raw) else { return }
+        playMode = saved
+    }
 
     private func buildPlayOrder(avoiding removedID: Int? = nil) {
         switch playMode {
