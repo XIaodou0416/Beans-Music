@@ -447,7 +447,7 @@ final class QQMusicAPI {
             ]
             for cookie in cookies {
                 guard let json = try? await musicu(payload, cookie: cookie, timeout: 15) else { continue }
-                for item in playlistArray(from: json) {
+                for item in Self.playlistArray(from: json) {
                     let id = Self.integerValue(item["dissid"] ?? item["diss_id"] ?? item["tid"])
                     if id > 0 { return id }
                 }
