@@ -2504,6 +2504,9 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.playerDustDensity") private var playerDustDensity = 1.0
     @AppStorage("beans.playerDustSize") private var playerDustSize = 1.0
     @AppStorage("beans.playerControlsUseCoverColor") private var controlsUseCoverColor = true
+    @AppStorage("beans.playerMainIconColorHex") private var playerMainIconColorHex = ""
+    @AppStorage("beans.playerSecondaryIconColorHex") private var playerSecondaryIconColorHex = ""
+    @AppStorage("beans.playerPrimaryButtonColorHex") private var playerPrimaryButtonColorHex = ""
     @AppStorage("beans.progressBarStyle") private var progressBarStyle = 0
     @AppStorage("beans.progressAccentHex") private var progressAccentHex = ""
     @AppStorage("beans.lyricFontSize") private var fontSize = 17
