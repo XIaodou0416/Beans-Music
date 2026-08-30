@@ -2,7 +2,7 @@ name: Build Test IPA
 
 on:
   push:
-    branches: [v134-features]
+    branches: [v134-features, test/qq-wechat-sync-20260830]
 
 permissions:
   contents: write
