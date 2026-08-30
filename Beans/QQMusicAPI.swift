@@ -927,8 +927,7 @@ final class QQMusicAPI {
                 name: "我的喜欢",
                 coverURL: URL(string: "https://y.gtimg.cn/mediastyle/global/img/cover_like.png"),
                 trackCount: integerValue(item["song_cnt"] ?? item["songnum"] ?? item["total_song_num"]),
-                source: .qq,
-                rawID: "liked"
+                source: .qq
             )
         }
 
