@@ -27,6 +27,7 @@ struct ArtistHomeSheet: View {
     @State private var albums: [Album] = []
     @State private var loading = true
     @State private var errorMessage: String?
+    @State private var searchText = ""
 
     var body: some View {
         BeansNavigationStack {
@@ -111,7 +112,7 @@ struct ArtistHomeSheet: View {
                 HStack(spacing: 10) {
                     Button {
                         BeansHaptics.tap()
-                        player.play(songs: hotSongs, startAt: 0)
+                        player.play(songs: displayedHotSongs, startAt: 0)
                         dismiss()
                     } label: {
                         Label("播放全部", systemImage: "play.fill")
@@ -124,7 +125,7 @@ struct ArtistHomeSheet: View {
                     .buttonStyle(.plain)
                     Button {
                         BeansHaptics.tap()
-                        player.play(songs: hotSongs.shuffled(), startAt: 0)
+                        player.play(songs: displayedHotSongs.shuffled(), startAt: 0)
                         dismiss()
                     } label: {
                         Label("随机播放", systemImage: "shuffle")
@@ -139,6 +140,31 @@ struct ArtistHomeSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 2)
             }
+            if !hotSongs.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.beansComment)
+                    TextField("搜索歌手歌曲", text: $searchText)
+                        .font(BeansFont.appFont(14))
+                        .autocorrectionDisabled()
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 2)
+            }
             if hotSongs.isEmpty {
                 Text("暂无歌曲")
                     .font(BeansFont.appFont(13))
@@ -146,10 +172,10 @@ struct ArtistHomeSheet: View {
                     .padding(.horizontal, 16)
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(hotSongs.enumerated()), id: \.element.identityKey) { index, song in
+                    ForEach(Array(displayedHotSongs.enumerated()), id: \.element.identityKey) { index, song in
                         Button {
                             BeansHaptics.tap()
-                            player.play(songs: hotSongs, startAt: index)
+                            player.play(songs: displayedHotSongs, startAt: index)
                         } label: {
                             HStack(spacing: 12) {
                                 Text("\(index + 1)")
@@ -179,9 +205,31 @@ struct ArtistHomeSheet: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                player.playNext(song)
+                            } label: {
+                                Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward")
+                            }
+                            Button {
+                                player.play(songs: displayedHotSongs, startAt: index)
+                            } label: {
+                                Label("立即播放", systemImage: "play.fill")
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+
+    private var displayedHotSongs: [Song] {
+        let kw = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !kw.isEmpty else { return hotSongs }
+        return hotSongs.filter { song in
+            song.name.lowercased().contains(kw)
+                || song.artists.lowercased().contains(kw)
+                || song.album.lowercased().contains(kw)
         }
     }
 
@@ -269,7 +317,7 @@ struct ArtistHomeSheet: View {
                 artist = first
                 id = Int(first.id.replacingOccurrences(of: "netease-", with: "")) ?? 0
             }
-            async let songs = (try? NetEaseAPI.shared.artistHotSongs(artistID: id)) ?? []
+            async let songs = (try? NetEaseAPI.shared.artistHotSongs(artistID: id, limit: 300)) ?? []
             async let albums = (try? NetEaseAPI.shared.artistAlbums(artistID: id)) ?? []
             let (s, a) = await (songs, albums)
             hotSongs = s
@@ -277,7 +325,7 @@ struct ArtistHomeSheet: View {
             // 接口异常时兜底：分页搜索补全歌手歌曲（避免再次退回 30 首）。
             if hotSongs.isEmpty {
                 var fallback: [Song] = []
-                for offset in stride(from: 0, to: 120, by: 30) {
+                for offset in stride(from: 0, to: 300, by: 30) {
                     let page = (try? await NetEaseAPI.shared.search(keyword: artistName, limit: 30, offset: offset)) ?? []
                     if page.isEmpty { break }
                     fallback.append(contentsOf: page)
@@ -301,10 +349,10 @@ struct ArtistHomeSheet: View {
             artist = first
             mid = first.id
         }
-        var songs = (try? await QQMusicAPI.shared.artistHotSongs(mid: mid, name: artistName)) ?? []
+        var songs = (try? await QQMusicAPI.shared.artistHotSongs(mid: mid, name: artistName, limit: 300)) ?? []
         if songs.isEmpty {
             var fallback: [Song] = []
-            for offset in stride(from: 0, to: 120, by: 30) {
+            for offset in stride(from: 0, to: 300, by: 30) {
                 let page = (try? await QQMusicAPI.shared.searchSongs(keyword: artistName, limit: 30, offset: offset)) ?? []
                 if page.isEmpty { break }
                 fallback.append(contentsOf: page)
@@ -324,9 +372,9 @@ struct ArtistHomeSheet: View {
         if let first = artists.first {
             artist = first
         }
-        async let exact = KugouMusicAPI.shared.searchSongs(keyword: artistName, limit: 100)
-        async let hot = KugouMusicAPI.shared.searchSongs(keyword: "\(artistName) 热门", limit: 80)
-        async let works = KugouMusicAPI.shared.searchSongs(keyword: "\(artistName) 歌曲", limit: 80)
+        async let exact = KugouMusicAPI.shared.searchSongs(keyword: artistName, limit: 140)
+        async let hot = KugouMusicAPI.shared.searchSongs(keyword: "\(artistName) 热门", limit: 100)
+        async let works = KugouMusicAPI.shared.searchSongs(keyword: "\(artistName) 歌曲", limit: 100)
         let batches = [
             (try? await exact) ?? [],
             (try? await hot) ?? [],
@@ -346,6 +394,7 @@ struct ArtistHomeSheet: View {
         if hotSongs.isEmpty {
             hotSongs = songs
         }
+        hotSongs = Array(hotSongs.prefix(300))
         loading = false
     }
 }

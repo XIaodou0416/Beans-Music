@@ -37,7 +37,7 @@ struct PlaylistView: View {
                         header
                         Section {
                             ForEach(Array(displayedTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true) {
+                                SongCell(song: song, glassRow: true, playbackContext: displayedTracks, playbackIndex: index) {
                                     player.play(songs: displayedTracks, startAt: index)
                                 }
                                 .listRowBackground(Color.clear)

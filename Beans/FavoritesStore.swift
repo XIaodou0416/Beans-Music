@@ -73,6 +73,16 @@ final class FavoritesStore: ObservableObject {
         updateQQ(song, liked: false)
     }
 
+    /// 登录 QQ / 微信后从 QQ 音乐云端同步“我的喜欢”。
+    /// 只有云端明确返回歌曲时才覆盖本地，避免接口空响应误清空收藏。
+    @MainActor
+    func syncQQFromCloud() async {
+        guard QQMusicAuth.shared.isLoggedIn else { return }
+        guard let songs = try? await QQMusicAPI.shared.favoriteSongs(limit: 300), !songs.isEmpty else { return }
+        qqFavoriteSongs = songs
+        saveSongs(qqFavoriteSongs, key: qqKey)
+    }
+
     private func updateNetease(_ song: Song, liked: Bool) {
         if liked {
             neteaseFavoriteSongs.removeAll { $0.id == song.id }

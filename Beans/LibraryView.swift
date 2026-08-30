@@ -527,6 +527,7 @@ struct LibraryView: View {
         qqLoading = true
         let list = (try? await QQMusicAPI.shared.userPlaylists(uin: qqAuth.uin)) ?? []
         qqPlaylists = list
+        await favorites.syncQQFromCloud()
         qqSavedAt = Date()
         qqLoading = false
         // 封面兜底：歌单封面缺失时默认取第一首歌曲封面（列表先展示，封面后台补齐）

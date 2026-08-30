@@ -391,14 +391,19 @@ final class QQMusicAPI {
         guard qqAuth.isLoggedIn else { return [] }
         let gtk = qqAuth.gtk
         let favURL = "https://c.y.qq.com/splcloud/fcgi-bin/fcg_musiclist_getmyfav.fcg?dirid=201&dirinfo=1&g_tk=\(gtk)&format=json&utf8=1"
-        let favJson = try await get(favURL, referer: "https://y.qq.com/n/yqq/playlist", cookie: qqAuth.cookieHeader)
-        let mapid = favJson["map"] as? Int ?? 0
-        guard mapid > 0 else { return [] }
-        let detailURL = "https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&new_format=1&disstid=\(mapid)&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0"
-        let detailJson = try await get(detailURL, referer: "https://y.qq.com/", cookie: qqAuth.cookieHeader)
-        let cdlist = detailJson["cdlist"] as? [[String: Any]] ?? []
-        let songlist = cdlist.first?["songlist"] as? [[String: Any]] ?? []
-        return songlist.prefix(limit).compactMap { song(from: $0) }
+        let cookieCandidates = [qqAuth.playlistCookieHeader, qqAuth.cookieHeader]
+            .filter { !$0.isEmpty }
+            .reduce(into: [String]()) { result, value in
+                if !result.contains(value) { result.append(value) }
+            }
+        for cookie in cookieCandidates {
+            guard let favJson = try? await get(favURL, referer: "https://y.qq.com/n/yqq/playlist", cookie: cookie) else { continue }
+            let mapid = Self.integerValue(favJson["map"] ?? favJson["mapid"] ?? favJson["id"])
+            guard mapid > 0 else { continue }
+            let songs = try await playlistSongs(listID: mapid, preferredCookie: cookie, limit: limit)
+            if !songs.isEmpty { return songs }
+        }
+        return []
     }
 
     // MARK: - 红心收藏
@@ -1019,9 +1024,16 @@ final class QQMusicAPI {
 
     /// QQ 歌单内歌曲（主通道 fcg_ucc_getcdinfo_byids_cp，Mineradio 逆向；兜底 musicu GetPlaylistDetail）
     func playlistSongs(listID: Int) async throws -> [Song] {
+        try await playlistSongs(listID: listID, preferredCookie: nil, limit: 100)
+    }
+
+    private func playlistSongs(listID: Int, preferredCookie: String?, limit: Int) async throws -> [Song] {
+        if listID == -201 {
+            return try await favoriteSongs(limit: limit)
+        }
         let qqAuth = QQMusicAuth.shared
-        let cookie = qqAuth.isLoggedIn ? qqAuth.cookieHeader : ""
-        let loginUin = qqAuth.isLoggedIn ? qqAuth.uin : "0"
+        let cookie = preferredCookie ?? (qqAuth.isLoggedIn ? qqAuth.playlistCookieHeader : "")
+        let loginUin = qqAuth.isLoggedIn ? qqAuth.playlistUin : "0"
         let detailURL = "https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&new_format=1&disstid=\(listID)&loginUin=\(loginUin)&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0"
         if let detailJson = try? await get(detailURL, referer: "https://y.qq.com/n/yqq/playlist", cookie: cookie),
            let cdlist = detailJson["cdlist"] as? [[String: Any]],
@@ -1036,14 +1048,14 @@ final class QQMusicAPI {
         }
         // 兜底：musicu GetPlaylistDetail
         let payload: [String: Any] = [
-            "comm": ["ct": 24, "cv": 0],
+            "comm": ["ct": 24, "cv": 0, "uin": Int(loginUin) ?? 0, "g_tk": qqAuth.gtk, "platform": "yqq"],
             "req_1": [
                 "module": "music.playlist.PlayListDataServer",
                 "method": "GetPlaylistDetail",
-                "param": ["id": listID, "uin": 0, "song_begin": 0, "song_num": 100]
+                "param": ["id": listID, "uin": Int(loginUin) ?? 0, "song_begin": 0, "song_num": limit]
             ]
         ]
-        let json = try await musicu(payload)
+        let json = try await musicu(payload, cookie: cookie)
         let list = nestedArray(json, path: ["req_1", "data", "songlist"])
         return list.compactMap { item -> Song? in
             let raw = (item["track_info"] as? [String: Any]) ?? item

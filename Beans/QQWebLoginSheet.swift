@@ -88,6 +88,7 @@ struct QQWebLoginPanel: View {
         message = "✓ QQ 音乐登录成功"
         BeansHaptics.success()
         ToastCenter.shared.show("QQ 音乐登录成功")
+        Task { await FavoritesStore.shared.syncQQFromCloud() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             onSuccess()
         }
@@ -177,6 +178,7 @@ struct QQCookieImportPanel: View {
         message = "✓ QQ 音乐登录成功"
         BeansHaptics.success()
         ToastCenter.shared.show("QQ 音乐登录成功")
+        Task { await FavoritesStore.shared.syncQQFromCloud() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             onSuccess()
         }

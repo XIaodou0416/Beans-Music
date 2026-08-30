@@ -9,6 +9,8 @@ struct SongCell: View {
     var showCover = true
     /// 玻璃行模式：为行添加清透液态玻璃底（二级列表页统一风格用）
     var glassRow = false
+    var playbackContext: [Song] = []
+    var playbackIndex: Int?
     var onTap: (() -> Void)?
 
     @State private var showAddToPlaylist = false
@@ -79,8 +81,12 @@ struct SongCell: View {
             }
             if !isCurrent {
                 Button {
-                    if let index = player.queue.firstIndex(of: song) {
+                    if let playbackIndex, !playbackContext.isEmpty {
+                        player.play(songs: playbackContext, startAt: playbackIndex)
+                    } else if let index = player.queue.firstIndex(of: song) {
                         player.playQueueIndex(index)
+                    } else {
+                        player.play(songs: [song], startAt: 0)
                     }
                 } label: {
                     Label("立即播放", systemImage: "play.fill")
