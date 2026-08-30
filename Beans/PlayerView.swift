@@ -1,14 +1,6 @@
 import SwiftUI
 import UIKit
 
-// MARK: - 全屏播放器（全新重写：极简稳定布局）
-// 布局原则：
-// - 布局全部使用 SwiftUI 自动布局（VStack/HStack/ZStack），任何屏幕与加载时序下都稳定；
-//   封面⇄歌词切换动画使用 matchedGeometryEffect 共享元素（封面从居中飞到左上角），仅作用于过渡动画，不影响布局约束。
-// - 专辑模式与歌词模式是两个独立视图，if/else + transition 切换，各自内部自然居中，任何屏幕与加载时序下都稳定。
-// - 封面使用固定尺寸 CoverImage（AsyncImage 仅在 overlay 中渲染），封面加载、切歌都不会影响布局。
-// - 底部控制栏为普通材质圆角面板，按钮等宽对称分布，无液态玻璃依赖。
-// 音频播放 / 网络 / 登录业务逻辑保持不变。
 
 struct PlayerView: View {
     @EnvironmentObject private var theme: ThemeStore
@@ -159,7 +151,7 @@ struct PlayerView: View {
     }
 
     private var playerButtonStyle: BeansPlayerButtonStyle {
-        return BeansPlayerButtonStyle(rawValue: playerButtonStyleRaw) ?? .glass
+        BeansPlayerButtonStyle(rawValue: playerButtonStyleRaw) ?? .glass
     }
 
     private var coverPlayerStyle: BeansCoverPlayerStyle {
@@ -1489,40 +1481,6 @@ struct PlayerView: View {
                     )
             }
             .frame(width: size, height: size)
-        case .minimal:
-            ZStack {
-                if primary {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [controlAccent.opacity(0.92), controlAccent.opacity(0.58)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .shadow(color: controlAccent.opacity(0.32), radius: 14, y: 7)
-                } else if active {
-                    Circle()
-                        .fill(controlAccent.opacity(0.16))
-                } else {
-                    Circle()
-                        .fill(Color.white.opacity(0.001))
-                }
-                Circle()
-                    .strokeBorder(
-                        primary ? .white.opacity(0.20) : (active ? controlAccent.opacity(0.42) : palette.secondary.opacity(0.18)),
-                        lineWidth: 0.8
-                    )
-            }
-            .frame(width: size, height: size)
-        case .soft:
-            Circle()
-                .fill(primary ? controlAccent.opacity(0.72) : Color.white.opacity(active ? 0.18 : 0.10))
-                .overlay {
-                    Circle().strokeBorder((active || primary) ? controlAccent.opacity(0.55) : Color.white.opacity(0.16), lineWidth: 0.8)
-                }
-                .shadow(color: primary ? controlAccent.opacity(0.26) : .black.opacity(0.08), radius: primary ? 12 : 6, y: primary ? 6 : 3)
-                .frame(width: size, height: size)
         case .outline:
             Circle()
                 .fill(Color.white.opacity(primary ? 0.10 : 0.001))

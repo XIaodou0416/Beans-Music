@@ -92,9 +92,11 @@ struct ProfileView: View {
             }
             Spacer()
             HStack(spacing: 10) {
-                GlassIconButton(systemName: "arrow.up.arrow.down") {
-                    BeansHaptics.tap()
-                    showSectionSort = true
+                if !homeHeaderHideSort {
+                    GlassIconButton(systemName: "arrow.up.arrow.down") {
+                        BeansHaptics.tap()
+                        showSectionSort = true
+                    }
                 }
                 GlassIconButton(systemName: "gearshape.fill") {
                     BeansHaptics.tap()
@@ -1115,6 +1117,7 @@ struct SettingsView: View {
     @AppStorage("beans.homeGreetingSize") private var homeGreetingSize = 30.0
     @AppStorage("beans.homeGreetingHeight") private var homeGreetingHeight = 0.0
     @AppStorage("beans.homeGreetingColorHex") private var homeGreetingColorHex = ""
+    @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
@@ -1643,8 +1646,22 @@ struct SettingsView: View {
                         ), supportsOpacity: false)
                         .labelsHidden()
                     }
-                    TextField("留空自动显示早上好/下午好/晚上好", text: $homeGreetingText)
-                        .textFieldStyle(.roundedBorder)
+                    TextEditor(text: $homeGreetingText)
+                        .font(BeansFont.appFont(15))
+                        .frame(minHeight: 88, maxHeight: 180)
+                        .padding(6)
+                        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay {
+                            if homeGreetingText.isEmpty {
+                                Text("留空自动显示早上好/下午好/晚上好")
+                                    .font(BeansFont.appFont(13))
+                                    .foregroundStyle(Color.beansComment.opacity(0.8))
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 14)
+                                    .allowsHitTesting(false)
+                            }
+                        }
                     VStack(spacing: 8) {
                         HStack {
                             Text("文字大小")
@@ -1652,18 +1669,20 @@ struct SettingsView: View {
                             Text("\(Int(homeGreetingSize))")
                                 .foregroundStyle(Color.beansComment)
                         }
-                        Slider(value: $homeGreetingSize, in: 20...44, step: 1)
+                        Slider(value: $homeGreetingSize, in: 20...64, step: 1)
                         HStack {
                             Text("标题区高度")
                             Spacer()
                             Text(homeGreetingHeight <= 0 ? "自动" : "\(Int(homeGreetingHeight))")
                                 .foregroundStyle(Color.beansComment)
                         }
-                        Slider(value: $homeGreetingHeight, in: 0...140, step: 1)
+                        Slider(value: $homeGreetingHeight, in: 0...260, step: 1)
                     }
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansLabel)
-                    Toggle("隐藏主页排序按钮", isOn: $homeHeaderHideSort)
+                    Toggle("隐藏主页用户名", isOn: $homeHideUsername)
+                        .font(BeansFont.appFont(13))
+                    Toggle("隐藏所有界面排序按钮", isOn: $homeHeaderHideSort)
                         .font(BeansFont.appFont(13))
                     Toggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
                         .font(BeansFont.appFont(13))

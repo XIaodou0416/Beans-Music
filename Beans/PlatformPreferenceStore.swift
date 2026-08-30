@@ -6,8 +6,10 @@ final class PlatformPreferenceStore: ObservableObject {
     static let shared = PlatformPreferenceStore()
 
     private static let key = "beans.enabledPlatforms.v1"
+    private static let orderKey = "beans.platformOrder.v1"
 
     @Published private(set) var selectedRaw: Set<String>
+    @Published var orderedRaw: [String]
 
     var changes: AnyPublisher<Set<String>, Never> { $selectedRaw.eraseToAnyPublisher() }
 
@@ -16,18 +18,23 @@ final class PlatformPreferenceStore: ObservableObject {
         if saved.isEmpty {
             selectedRaw = Set(SearchProvider.allCases.map(\.rawValue))
         } else {
-            selectedRaw = Set(saved)
+            selectedRaw = Set(saved.map(Self.migrateRawValue))
         }
+        orderedRaw = UserDefaults.standard.stringArray(forKey: Self.orderKey)?
+            .map(Self.migrateRawValue) ?? []
         normalize()
+        normalizeOrder()
     }
 
     var enabledSearchProviders: [SearchProvider] {
-        let list = SearchProvider.allCases.filter { selectedRaw.contains($0.rawValue) }
+        let list = orderedSearchProviders.filter { selectedRaw.contains($0.rawValue) }
         return list.isEmpty ? [.netease] : list
     }
 
     var enabledLibraryProviders: [LibraryProvider] {
-        LibraryProvider.allCases.filter { selectedRaw.contains($0.searchProvider.rawValue) }
+        enabledSearchProviders.compactMap { provider in
+            LibraryProvider(rawValue: provider.rawValue)
+        }
     }
 
     var summaryText: String {
@@ -62,7 +69,20 @@ final class PlatformPreferenceStore: ObservableObject {
 
     func resetToDefault() {
         selectedRaw = Set(SearchProvider.allCases.map(\.rawValue))
+        orderedRaw = SearchProvider.allCases.map(\.rawValue)
         save()
+        saveOrder()
+    }
+
+    var orderedSearchProviders: [SearchProvider] {
+        orderedRaw.compactMap(SearchProvider.init(rawValue:))
+    }
+
+    func moveProviders(from offsets: IndexSet, to destination: Int) {
+        orderedRaw.move(fromOffsets: offsets, toOffset: destination)
+        normalizeOrder()
+        saveOrder()
+        objectWillChange.send()
     }
 
     private func normalize() {
@@ -75,6 +95,23 @@ final class PlatformPreferenceStore: ObservableObject {
 
     private func save() {
         UserDefaults.standard.set(Array(selectedRaw), forKey: Self.key)
+    }
+
+    private func normalizeOrder() {
+        let defaults = SearchProvider.allCases.map(\.rawValue)
+        var result = orderedRaw.filter { defaults.contains($0) }
+        for raw in defaults where !result.contains(raw) {
+            result.append(raw)
+        }
+        orderedRaw = result
+    }
+
+    private func saveOrder() {
+        UserDefaults.standard.set(orderedRaw, forKey: Self.orderKey)
+    }
+
+    private static func migrateRawValue(_ raw: String) -> String {
+        raw == "网易云" ? SearchProvider.netease.rawValue : raw
     }
 }
 
@@ -93,7 +130,7 @@ struct PlatformPreferencePicker: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            ForEach(SearchProvider.allCases) { provider in
+            ForEach(store.orderedSearchProviders) { provider in
                 Button {
                     BeansHaptics.select()
                     store.set(provider, enabled: !store.isEnabled(provider))

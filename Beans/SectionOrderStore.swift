@@ -42,6 +42,7 @@ struct SectionOrderSheet: View {
     /// 全部可用板块名（用于补全新板块）
     let sections: [String]
     @Binding var order: [String]
+    var platformOrder: Binding<[String]>? = nil
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
 
@@ -67,20 +68,41 @@ struct SectionOrderSheet: View {
     private var listView: some View {
         BeansNavigationStack {
             List {
-                ForEach(order, id: \.self) { name in
-                    HStack(spacing: 12) {
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.beansComment.opacity(0.55))
-                        Text(name)
-                            .font(BeansFont.appFont(15))
-                            .foregroundStyle(Color.beansLabel)
+                Section("页面板块") {
+                    ForEach(order, id: \.self) { name in
+                        HStack(spacing: 12) {
+                            Image(systemName: "line.3.horizontal")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.beansComment.opacity(0.55))
+                            Text(name)
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                        }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
+                    .onMove { from, to in
+                        withAnimation(.default) {
+                            order.move(fromOffsets: from, toOffset: to)
+                        }
+                    }
                 }
-                .onMove { from, to in
-                    withAnimation(.default) {
-                        order.move(fromOffsets: from, toOffset: to)
+
+                if let platformOrder {
+                    Section("平台顺序（所有界面同步）") {
+                        ForEach(platformOrder.wrappedValue, id: \.self) { rawValue in
+                            HStack(spacing: 12) {
+                                Image(systemName: "line.3.horizontal")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(Color.beansComment.opacity(0.55))
+                                Text(rawValue)
+                                    .font(BeansFont.appFont(15))
+                                    .foregroundStyle(Color.beansLabel)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .onMove { from, to in
+                            PlatformPreferenceStore.shared.moveProviders(from: from, to: to)
+                        }
                     }
                 }
             }

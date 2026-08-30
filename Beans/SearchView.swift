@@ -39,7 +39,7 @@ struct FlowLayout: Layout {
 }
 
 enum SearchProvider: String, CaseIterable, Identifiable {
-    case netease = "网易云"
+    case netease = "网易云音乐"
     case qq = "QQ音乐"
     case kugou = "酷狗音乐"
 

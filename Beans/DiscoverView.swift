@@ -27,6 +27,7 @@ struct DiscoverView: View {
     @AppStorage("beans.homeGreetingSize") private var homeGreetingSize = 30.0
     @AppStorage("beans.homeGreetingHeight") private var homeGreetingHeight = 0.0
     @AppStorage("beans.homeGreetingColorHex") private var homeGreetingColorHex = ""
+    @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
@@ -167,7 +168,15 @@ struct DiscoverView: View {
                     .environmentObject(auth)
             }
             .sheet(isPresented: $showSectionSort) {
-                SectionOrderSheet(title: "主页板块排序", sections: availableSections, order: $homeOrder)
+                SectionOrderSheet(
+                    title: "主页板块排序",
+                    sections: availableSections,
+                    order: $homeOrder,
+                    platformOrder: Binding(
+                        get: { platformPrefs.orderedRaw },
+                        set: { platformPrefs.orderedRaw = $0 }
+                    )
+                )
                     .onDisappear { SectionOrderStore.save(SectionOrderStore.homeKey, homeOrder) }
             }
         }
@@ -181,9 +190,13 @@ struct DiscoverView: View {
                     Text(greeting)
                         .font(BeansFont.appFont(CGFloat(homeGreetingSize), .bold))
                         .foregroundStyle(homeGreetingColor)
-                    Text(auth.user?.nickname ?? "发现好音乐")
-                        .font(BeansFont.appFont(13))
-                        .foregroundStyle(Color.beansComment)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !homeHideUsername {
+                        Text(auth.user?.nickname ?? "发现好音乐")
+                            .font(BeansFont.appFont(13))
+                            .foregroundStyle(Color.beansComment)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer()
                 HStack(spacing: 10) {

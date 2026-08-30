@@ -197,8 +197,6 @@ enum BeansUIStyle: String, CaseIterable {
 
 enum BeansPlayerButtonStyle: String, CaseIterable, Identifiable {
     case glass
-    case minimal
-    case soft
     case outline
 
     var id: String { rawValue }
@@ -206,8 +204,6 @@ enum BeansPlayerButtonStyle: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .glass: return "经典圆形"
-        case .minimal: return "极简无比"
-        case .soft: return "柔和底板"
         case .outline: return "线框图标"
         }
     }
@@ -215,8 +211,6 @@ enum BeansPlayerButtonStyle: String, CaseIterable, Identifiable {
     var previewIcon: String {
         switch self {
         case .glass: return "circle"
-        case .minimal: return "minus.circle"
-        case .soft: return "circle.fill"
         case .outline: return "circle.dashed"
         }
     }
@@ -224,8 +218,6 @@ enum BeansPlayerButtonStyle: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .glass: return "保留原来的圆形玻璃按钮"
-        case .minimal: return "弱化底板，只保留轻量触控反馈"
-        case .soft: return "半透明柔和圆底，按钮更清晰"
         case .outline: return "细线描边，适合极简布局"
         }
     }

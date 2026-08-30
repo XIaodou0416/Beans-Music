@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum LibraryProvider: String, CaseIterable, Identifiable {
-    case netease = "网易云"
+    case netease = "网易云音乐"
     case qq = "QQ音乐"
     case kugou = "酷狗"
 
@@ -54,6 +54,7 @@ struct LibraryView: View {
     @State private var pendingDelete: Playlist?
     @State private var showDeleteConfirm = false
     @State private var source: LibraryProvider = .netease
+    @AppStorage("beans.homeHeaderHideSort") private var hideSortButton = false
     @State private var qqPlaylists: [Playlist] = []
     @State private var qqLoading = false
     @State private var qqSavedAt = Date.distantPast
@@ -172,10 +173,12 @@ struct LibraryView: View {
                 }
                 Spacer()
                 HStack(spacing: 10) {
+                if !hideSortButton {
                     GlassIconButton(systemName: "arrow.up.arrow.down") {
                         BeansHaptics.tap()
                         showSectionSort = true
                     }
+                }
                 }
             }
         }
