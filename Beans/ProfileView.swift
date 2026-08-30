@@ -1140,9 +1140,10 @@ struct SettingsView: View {
     @AppStorage("beans.homeGreetingLine3OffsetY") private var homeGreetingLine3OffsetY = 0.0
     @AppStorage("beans.homeGreetingGlowEnabled") private var homeGreetingGlowEnabled = false
     @AppStorage("beans.homeGreetingGlowIntensity") private var homeGreetingGlowIntensity = 0.45
-    @AppStorage("beans.homeGreetingTilt") private var homeGreetingTilt = 0.0
     @AppStorage("beans.homeGreetingUnderline") private var homeGreetingUnderline = false
     @AppStorage("beans.homeGreetingGradient") private var homeGreetingGradient = false
+    @AppStorage("beans.homeGreetingGradientStartHex") private var homeGreetingGradientStartHex = ""
+    @AppStorage("beans.homeGreetingGradientEndHex") private var homeGreetingGradientEndHex = ""
     @AppStorage("beans.homeGreetingFont") private var homeGreetingFontName = ""
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
@@ -1867,16 +1868,18 @@ struct SettingsView: View {
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansLabel)
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("文字倾斜度")
-                            Spacer()
-                            Text("\(Int(homeGreetingTilt))°")
-                                .foregroundStyle(Color.beansComment)
-                        }
-                        Slider(value: $homeGreetingTilt, in: -15...15, step: 1)
-                            .tint(Color.beansAmber)
                         Toggle("显示底部横线", isOn: $homeGreetingUnderline)
                         Toggle("开启上下渐变字", isOn: $homeGreetingGradient)
+                        if homeGreetingGradient {
+                            ColorPicker("渐变起始颜色", selection: Binding(
+                                get: { Color(hex: homeGreetingGradientStartHex) ?? (Color(hex: homeGreetingColorHex) ?? Color.beansLabel) },
+                                set: { homeGreetingGradientStartHex = $0.hexString }
+                            ), supportsOpacity: false)
+                            ColorPicker("渐变结束颜色", selection: Binding(
+                                get: { Color(hex: homeGreetingGradientEndHex) ?? (Color(hex: homeGreetingColorHex) ?? Color.beansLabel) },
+                                set: { homeGreetingGradientEndHex = $0.hexString }
+                            ), supportsOpacity: false)
+                        }
                     }
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansLabel)

@@ -38,9 +38,10 @@ struct DiscoverView: View {
     @AppStorage("beans.homeGreetingLine3OffsetY") private var homeGreetingLine3OffsetY = 0.0
     @AppStorage("beans.homeGreetingGlowEnabled") private var homeGreetingGlowEnabled = false
     @AppStorage("beans.homeGreetingGlowIntensity") private var homeGreetingGlowIntensity = 0.45
-    @AppStorage("beans.homeGreetingTilt") private var homeGreetingTilt = 0.0
     @AppStorage("beans.homeGreetingUnderline") private var homeGreetingUnderline = false
     @AppStorage("beans.homeGreetingGradient") private var homeGreetingGradient = false
+    @AppStorage("beans.homeGreetingGradientStartHex") private var homeGreetingGradientStartHex = ""
+    @AppStorage("beans.homeGreetingGradientEndHex") private var homeGreetingGradientEndHex = ""
     @AppStorage("beans.homeGreetingFont") private var homeGreetingFontName = ""
     @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
@@ -248,7 +249,6 @@ struct DiscoverView: View {
                                         : 0
                                 )
                                 .fixedSize(horizontal: false, vertical: true)
-                                .rotationEffect(.degrees(homeGreetingTilt), anchor: .leading)
                                 .offset(y: greetingLineOffsetY(index))
                         }
                     }
@@ -767,8 +767,10 @@ struct DiscoverView: View {
     private func greetingLineStyle(_ index: Int) -> AnyShapeStyle {
         let color = greetingLineColor(index)
         if homeGreetingGradient {
+            let start = Color(hex: homeGreetingGradientStartHex) ?? color
+            let end = Color(hex: homeGreetingGradientEndHex) ?? color.opacity(0.42)
             return AnyShapeStyle(LinearGradient(
-                colors: [color, color.opacity(0.42)],
+                colors: [start, end],
                 startPoint: .top,
                 endPoint: .bottom
             ))
