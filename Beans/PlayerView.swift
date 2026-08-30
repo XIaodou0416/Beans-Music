@@ -2773,15 +2773,15 @@ struct PlayerSettingsSheet: View {
         let _ = theme.accent
         BeansNavigationStack {
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: 12) {
                     playingCard
                     lyricDisplayCard
                     lyricEffectCard
                     layoutCard
                     coverCard
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
             .background {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
@@ -2855,9 +2855,9 @@ struct PlayerSettingsSheet: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            PlayerSettingsLiquidGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
+            .background {
+                PlayerSettingsLiquidGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
     }
 
     /// 开关行（标题 + 可选的短说明）

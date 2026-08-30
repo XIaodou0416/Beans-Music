@@ -3,7 +3,7 @@ import SwiftUI
 enum LibraryProvider: String, CaseIterable, Identifiable {
     case netease = "网易云音乐"
     case qq = "QQ音乐"
-    case kugou = "酷狗"
+    case kugou = "酷狗音乐"
 
     var id: String { rawValue }
 
@@ -138,7 +138,15 @@ struct LibraryView: View {
                 .environmentObject(theme)
         }
         .sheet(isPresented: $showSectionSort) {
-            SectionOrderSheet(title: "音乐库板块排序", sections: SectionOrderStore.libraryDefaults, order: $libraryOrder)
+            SectionOrderSheet(
+                title: "音乐库板块排序",
+                sections: SectionOrderStore.libraryDefaults,
+                order: $libraryOrder,
+                platformOrder: Binding(
+                    get: { platformPrefs.orderedRaw },
+                    set: { platformPrefs.orderedRaw = $0 }
+                )
+            )
                 .onDisappear { SectionOrderStore.save(SectionOrderStore.libraryKey, libraryOrder) }
         }
         .sheet(item: $selectedPlaylist) { playlist in
@@ -187,7 +195,7 @@ struct LibraryView: View {
 
     private var librarySubtitle: String {
         switch source {
-        case .netease: return "网易云歌单"
+        case .netease: return "网易云音乐歌单"
         case .qq: return "QQ 音乐收藏与歌单"
         case .kugou: return "酷狗云端歌单"
         }

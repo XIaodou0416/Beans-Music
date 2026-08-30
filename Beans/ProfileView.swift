@@ -59,9 +59,9 @@ struct ProfileView: View {
         var parts: [String] = []
         if platformPrefs.isEnabled(SearchProvider.netease), auth.isLoggedIn {
             if let nick = auth.user?.nickname, !nick.isEmpty {
-                parts.append("网易云 \(nick)")
+                parts.append("网易云音乐 \(nick)")
             } else {
-                parts.append("网易云 UID \(auth.user?.uid ?? 0)")
+                parts.append("网易云音乐 UID \(auth.user?.uid ?? 0)")
             }
         }
         if platformPrefs.isEnabled(SearchProvider.qq), qqAuth.isLoggedIn {
@@ -172,7 +172,15 @@ struct ProfileView: View {
                 .environmentObject(player)
         }
         .sheet(isPresented: $showSectionSort) {
-            SectionOrderSheet(title: "我的板块排序", sections: SectionOrderStore.profileDefaults, order: $profileOrder)
+            SectionOrderSheet(
+                title: "我的板块排序",
+                sections: SectionOrderStore.profileDefaults,
+                order: $profileOrder,
+                platformOrder: Binding(
+                    get: { platformPrefs.orderedRaw },
+                    set: { platformPrefs.orderedRaw = $0 }
+                )
+            )
                 .onDisappear { SectionOrderStore.save(SectionOrderStore.profileKey, profileOrder) }
         }
         .sheet(isPresented: $showUsageGuide) {
@@ -293,7 +301,7 @@ struct ProfileView: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
-                            Text(auth.user?.nickname ?? (auth.isLoggedIn ? "网易云已登录" : "免登录 · 点击登录"))
+                            Text(auth.user?.nickname ?? (auth.isLoggedIn ? "网易云音乐已登录" : "免登录 · 点击登录"))
                                 .font(BeansFont.appFont(20, .bold))
                                 .foregroundStyle(Color.beansLabel)
                                 .lineLimit(1)
@@ -332,7 +340,7 @@ struct ProfileView: View {
     private var platformStatusRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             if platformPrefs.isEnabled(SearchProvider.netease), auth.isLoggedIn {
-                platformChip(imageName: "BrandNetease", name: "网易云", status: auth.user?.nickname ?? "已登录", badge: auth.user?.vipBadge)
+                platformChip(imageName: "BrandNetease", name: "网易云音乐", status: auth.user?.nickname ?? "已登录", badge: auth.user?.vipBadge)
             }
             if platformPrefs.isEnabled(SearchProvider.qq), qqAuth.isLoggedIn {
                 platformChip(imageName: "BrandQQ", name: "QQ 音乐", status: qqAuth.nickname.isEmpty ? "已登录" : qqAuth.nickname, badge: qqAuth.vipBadge)

@@ -118,6 +118,10 @@ struct SectionOrderSheet: View {
                     Button("恢复默认") {
                         withAnimation(.default) {
                             order = sections
+                            if let platformOrder {
+                                PlatformPreferenceStore.shared.resetOrder()
+                                platformOrder.wrappedValue = SearchProvider.allCases.map(\.rawValue)
+                            }
                         }
                     }
                 }

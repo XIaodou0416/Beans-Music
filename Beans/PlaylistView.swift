@@ -20,6 +20,7 @@ struct PlaylistView: View {
     @State private var errorMessage: String?
     @State private var searchText = ""
     @State private var sortMode: PlaylistSortMode = .original
+    @AppStorage("beans.homeHeaderHideSort") private var hideSortButton = false
 
     var body: some View {
         let _ = theme.accent
@@ -112,20 +113,22 @@ struct PlaylistView: View {
                 .padding(.vertical, 9)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                Menu {
-                    Picker("排序", selection: $sortMode) {
-                        ForEach(PlaylistSortMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
+                if !hideSortButton {
+                    Menu {
+                        Picker("排序", selection: $sortMode) {
+                            ForEach(PlaylistSortMode.allCases) { mode in
+                                Text(mode.rawValue).tag(mode)
+                            }
                         }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 38, height: 38)
+                            .background(.ultraThinMaterial, in: Circle())
                     }
-                } label: {
-                    Image(systemName: "arrow.up.arrow.down")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.beansAmber)
-                        .frame(width: 38, height: 38)
-                        .background(.ultraThinMaterial, in: Circle())
+                    .buttonStyle(GlassPressButtonStyle())
                 }
-                .buttonStyle(GlassPressButtonStyle())
             }
         }
         .padding(14)

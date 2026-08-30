@@ -69,9 +69,14 @@ final class PlatformPreferenceStore: ObservableObject {
 
     func resetToDefault() {
         selectedRaw = Set(SearchProvider.allCases.map(\.rawValue))
-        orderedRaw = SearchProvider.allCases.map(\.rawValue)
+        resetOrder()
         save()
+    }
+
+    func resetOrder() {
+        orderedRaw = SearchProvider.allCases.map(\.rawValue)
         saveOrder()
+        objectWillChange.send()
     }
 
     var orderedSearchProviders: [SearchProvider] {

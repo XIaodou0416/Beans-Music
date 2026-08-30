@@ -154,6 +154,8 @@ final class QQMusicAPI {
         value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }
         value = value.replacingOccurrences(of: "\\/", with: "/")
+        value = decodeJSONStringValue(value)
+        if value.hasPrefix("data:image") { return nil }
         if value.hasPrefix("http://") {
             value = "https://" + String(value.dropFirst(7))
         } else if value.hasPrefix("//") {
@@ -164,6 +166,7 @@ final class QQMusicAPI {
             value = "https://y.gtimg.cn/" + value.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         }
         return URL(string: value)
+            ?? value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed).flatMap(URL.init(string:))
     }
 
     private func musicuSearchPayload(keyword: String, limit: Int, type: QQSearchType) -> [String: Any] {
@@ -1327,7 +1330,7 @@ final class QQMusicAPI {
                 .prefix(max(1, limit))
             if !playlists.isEmpty {
                 BeansLogger.shared.log("QQ 官网热门歌单 SSR 解析完成 count=\(playlists.count) elapsed=\(Self.elapsed(startedAt))", level: .info)
-                return Array(playlists)
+                return await enrichHotPlaylistCovers(Array(playlists))
             }
             BeansLogger.shared.log("QQ 官网热门歌单 SSR 存在但 hotRecommend 为空，尝试正则兜底", level: .warn)
         } else {
@@ -1358,8 +1361,36 @@ final class QQMusicAPI {
             if playlists.count >= max(1, limit) { break }
         }
         BeansLogger.shared.log("QQ 官网热门歌单加载完成 count=\(playlists.count) elapsed=\(Self.elapsed(startedAt))", level: playlists.isEmpty ? .warn : .info)
-        if !playlists.isEmpty { return playlists }
+        if !playlists.isEmpty { return await enrichHotPlaylistCovers(playlists) }
         return try await recommendPlaylistsFallback(limit: limit)
+    }
+
+    /// 官网 SSR 为了懒加载通常只返回占位 data URI，使用歌单详情接口一次性补齐真实 logo。
+    private func enrichHotPlaylistCovers(_ playlists: [Playlist]) async -> [Playlist] {
+        let ids = playlists.map(\.id).map(String.init).joined(separator: ",")
+        guard !ids.isEmpty else { return playlists }
+        let url = "https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&new_format=1&disstid=\(ids)&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0"
+        guard let json = try? await get(url, referer: "https://y.qq.com/") else {
+            BeansLogger.shared.log("QQ 热门歌单封面补全请求失败，保留 SSR 封面", level: .warn)
+            return playlists
+        }
+        let cdlist = json["cdlist"] as? [[String: Any]] ?? []
+        var covers: [Int: URL] = [:]
+        for item in cdlist {
+            let id = integerValue(item["disstid"] ?? item["dissid"])
+            if let cover = normalizedQQImageURL(item["logo"]) ?? normalizedQQImageURL(item["coveradurl"]) {
+                covers[id] = cover
+            }
+        }
+        let result = playlists.map { playlist -> Playlist in
+            var updated = playlist
+            if let cover = covers[playlist.id] {
+                updated.coverURL = cover
+            }
+            return updated
+        }
+        BeansLogger.shared.log("QQ 热门歌单封面补全完成 requested=\(playlists.count) resolved=\(covers.count)", level: .info)
+        return result
     }
 
     /// QQ 推荐歌单 musicu 兜底接口
