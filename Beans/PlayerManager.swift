@@ -63,7 +63,12 @@ final class PlayerManager: NSObject, ObservableObject {
     var duration: Double = 0 {
         didSet { clock.update(duration: duration) }
     }
-    @Published var playMode: PlayMode = .sequential
+    @Published var playMode: PlayMode = .sequential {
+        didSet {
+            guard oldValue != playMode else { return }
+            defaults.set(playMode.rawValue, forKey: playModeKey)
+        }
+    }
     @Published var rate: Double = 1.0
     @Published var sleepTimerEndsAt: Date?
     @Published var sleepTimerRemaining: Int = 0
@@ -110,6 +115,10 @@ final class PlayerManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        if let raw = defaults.string(forKey: playModeKey),
+           let saved = PlayMode(rawValue: raw) {
+            playMode = saved
+        }
         loadHistory()
         loadPlayCounts()
     }
@@ -212,7 +221,6 @@ final class PlayerManager: NSObject, ObservableObject {
         case .repeatOne: playMode = .shuffle
         case .shuffle: playMode = .sequential
         }
-        defaults.set(playMode.rawValue, forKey: playModeKey)
         buildPlayOrder()
     }
 
@@ -418,6 +426,9 @@ final class PlayerManager: NSObject, ObservableObject {
                     } else {
                         let hint = thirdPartyAttempted ? "（第三方音源尝试后无结果）" : "（第三方音源未命中）"
                         BeansLogger.shared.log("播放失败：\(song.name) - 无法解析播放地址\(hint)｜音质=\(quality.level) 免费听歌=\(enableUnblock ? "开" : "关")", level: .error)
+                        if song.isVIP && enableUnblock {
+                            ToastCenter.shared.show("VIP 歌曲播放失败，可能是 API 调用上限了，等待恢复即可", duration: 3)
+                        }
                     }
                 }
                 return

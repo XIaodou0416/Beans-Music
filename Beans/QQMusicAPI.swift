@@ -807,7 +807,7 @@ final class QQMusicAPI {
         let requestUin = qqAuth.playlistUin
         let cookieCandidates = [qqAuth.playlistCookieHeader, qqAuth.cookieHeader]
             .filter { !$0.isEmpty }
-        let legacyUins = [requestUin, uin]
+        let legacyUins = (qqAuth.isWeChatLogin ? [] : [requestUin, uin])
             .filter { !$0.isEmpty && $0 != "0" }
             .reduce(into: [String]()) { result, value in
                 if !result.contains(value) { result.append(value) }
@@ -860,7 +860,7 @@ final class QQMusicAPI {
 
         // 官方 App 接口能直接根据微信登录 Cookie 识别账号，不依赖 wxuin 充当 QQ uin。
         // order：1=创建，2=收藏，3=我喜欢。空响应仍继续尝试下一个身份参数。
-        let officialUins = [requestUin, "0"].reduce(into: [String]()) { result, value in
+        let officialUins = (qqAuth.isWeChatLogin ? ["0", requestUin] : [requestUin, "0"]).reduce(into: [String]()) { result, value in
             if !result.contains(value) { result.append(value) }
         }
         for (order, loaded) in [(1, createdLoaded), (2, collectedLoaded), (3, false)] {

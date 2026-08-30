@@ -49,9 +49,18 @@ final class QQMusicAuth: ObservableObject {
         Self.accountID(from: cookies)
     }
 
+    var isWeChatLogin: Bool {
+        Self.hasUsableAccountID(cookies["wxuin"]) || !(cookies["wxopenid"] ?? "").isEmpty
+    }
+
     /// QQ 歌单接口使用的 QQ 账号 ID。微信登录通常没有可用的 QQ uin，
     /// 此时返回 0，让官方接口根据 wxuin / wxopenid Cookie 识别账号。
     var playlistUin: String {
+        if isWeChatLogin,
+           !Self.hasUsableAccountID(cookies["p_uin"]),
+           !Self.hasUsableAccountID(cookies["pt2gguin"]) {
+            return "0"
+        }
         for key in ["uin", "p_uin", "pt2gguin"] {
             guard let value = cookies[key],
                   Self.hasUsableAccountID(value) else { continue }

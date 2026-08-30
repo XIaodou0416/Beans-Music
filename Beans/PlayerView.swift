@@ -57,9 +57,11 @@ struct PlayerView: View {
     @AppStorage("beans.playerDustSize") private var playerDustSize = 1.0
     /// 播放控件颜色是否跟随封面主色；关闭后使用全局主题色
     @AppStorage("beans.playerControlsUseCoverColor") private var controlsUseCoverColor = true
+    @AppStorage("beans.playerMainIconColorHex") private var playerMainIconColorHex = ""
+    @AppStorage("beans.playerSecondaryIconColorHex") private var playerSecondaryIconColorHex = ""
+    @AppStorage("beans.playerPrimaryButtonColorHex") private var playerPrimaryButtonColorHex = ""
     /// 播放器顶部与底部控制按钮的统一样式
     @AppStorage("beans.playerButtonStyle") private var playerButtonStyleRaw = BeansPlayerButtonStyle.glass.rawValue
-    /// 显示歌词翻译（借鉴 Kumone：网易云 tlyric）
     @AppStorage("beans.lyricTranslation") private var lyricTranslation = true
     /// 进度条样式：0 流光 / 1 辉光 / 2 极光 / 3 波浪
     @AppStorage("beans.progressBarStyle") private var progressBarStyle = 0
@@ -144,6 +146,9 @@ struct PlayerView: View {
     }
 
     private var controlAccent: Color {
+        if playerPrimaryButtonColorHex.hasPrefix("#"), let color = Color(hex: playerPrimaryButtonColorHex) {
+            return color
+        }
         controlsUseCoverColor ? palette.accent : Color.beansAmber
     }
 
@@ -164,10 +169,16 @@ struct PlayerView: View {
     }
 
     private var playerButtonText: Color {
+        if playerMainIconColorHex.hasPrefix("#"), let color = Color(hex: playerMainIconColorHex) {
+            return color
+        }
         palette.text
     }
 
     private var playerButtonSecondaryText: Color {
+        if playerSecondaryIconColorHex.hasPrefix("#"), let color = Color(hex: playerSecondaryIconColorHex) {
+            return color
+        }
         palette.secondary
     }
 
@@ -2631,6 +2642,36 @@ struct PlayerSettingsSheet: View {
         )
     }
 
+    private var playerMainIconColor: Binding<Color> {
+        Binding(
+            get: {
+                if playerMainIconColorHex.hasPrefix("#"), let c = Color(hex: playerMainIconColorHex) { return c }
+                return Color.beansLabel
+            },
+            set: { playerMainIconColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var playerSecondaryIconColor: Binding<Color> {
+        Binding(
+            get: {
+                if playerSecondaryIconColorHex.hasPrefix("#"), let c = Color(hex: playerSecondaryIconColorHex) { return c }
+                return Color.beansComment
+            },
+            set: { playerSecondaryIconColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var playerPrimaryButtonColor: Binding<Color> {
+        Binding(
+            get: {
+                if playerPrimaryButtonColorHex.hasPrefix("#"), let c = Color(hex: playerPrimaryButtonColorHex) { return c }
+                return Color.beansAmber
+            },
+            set: { playerPrimaryButtonColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
     private var albumTitleColor: Binding<Color> {
         Binding(
             get: {
@@ -2878,6 +2919,27 @@ struct PlayerSettingsSheet: View {
             CompactSettingGroup {
                 settingToggle("控件跟随封面取色", isOn: $controlsUseCoverColor,
                               caption: "关闭后使用全局主题色")
+                Divider().opacity(0.35)
+                ColorPicker("顶部/底部主图标颜色", selection: playerMainIconColor, supportsOpacity: false)
+                    .font(BeansFont.appFont(13))
+                ColorPicker("顶部/底部次级图标颜色", selection: playerSecondaryIconColor, supportsOpacity: false)
+                    .font(BeansFont.appFont(13))
+                ColorPicker("播放按钮强调色", selection: playerPrimaryButtonColor, supportsOpacity: false)
+                    .font(BeansFont.appFont(13))
+                Button {
+                    playerMainIconColorHex = ""
+                    playerSecondaryIconColorHex = ""
+                    playerPrimaryButtonColorHex = ""
+                    BeansHaptics.select()
+                } label: {
+                    Text("恢复播放页控件颜色默认")
+                        .font(BeansFont.appFont(12, .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.beansAmber.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(.plain)
                 Divider().opacity(0.35)
                 settingToggle("上下滑动切歌", isOn: $swipeSwitchSong,
                               caption: "上滑下一首，下滑上一首")
