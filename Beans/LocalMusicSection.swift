@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - 本地音乐库区块（音乐库页面顶部：本机歌单，可新建 / 播放 / 添加歌曲）
 
 struct LocalMusicSection: View {
-    private enum SyncTarget: String, CaseIterable, Identifiable {
+    fileprivate enum SyncTarget: String, CaseIterable, Identifiable {
         case netease = "网易云音乐"
         case qq = "QQ音乐"
         case kugou = "酷狗音乐"
@@ -23,6 +23,7 @@ struct LocalMusicSection: View {
     @State private var syncing = false
     @State private var syncMessage = ""
     @State private var showSyncPicker = false
+    @State private var selectedSyncTargets: Set<SyncTarget> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -52,7 +53,7 @@ struct LocalMusicSection: View {
                     showSyncPicker = true
                 }
                 .disabled(syncing)
-                Text("选择平台后，将喜欢歌曲同步到对应的本地歌单")
+                Text("选择两个或三个平台，合并同步到一个本地歌单")
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
             }
@@ -130,14 +131,18 @@ struct LocalMusicSection: View {
         } message: {
             Text("本地歌单保存在设备上，覆盖安装不会丢失，不依赖平台账号")
         }
-        .confirmationDialog("选择要同步的平台", isPresented: $showSyncPicker, titleVisibility: .visible) {
-            Button("网易云音乐") { Task { await sync(target: .netease) } }
-            Button("QQ音乐") { Task { await sync(target: .qq) } }
-            Button("酷狗音乐") { Task { await sync(target: .kugou) } }
-            Button("全部平台") { Task { await sync(target: .all) } }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("选择后会创建或更新对应的本地歌单")
+        .sheet(isPresented: $showSyncPicker) {
+            SyncPlatformPicker(
+                selectedTargets: $selectedSyncTargets,
+                onCancel: {
+                    showSyncPicker = false
+                },
+                onConfirm: {
+                    let targets = selectedSyncTargets
+                    showSyncPicker = false
+                    Task { await sync(targets: targets) }
+                }
+            )
         }
         .sheet(item: $selected) { playlist in
             LocalPlaylistDetailSheet(playlistID: playlist.id)
@@ -146,13 +151,17 @@ struct LocalMusicSection: View {
         }
     }
 
-    private func sync(target: SyncTarget) async {
+    private func sync(targets: Set<SyncTarget>) async {
         guard !syncing else { return }
+        guard targets.count >= 2 else {
+            ToastCenter.shared.show("至少选择两个平台")
+            return
+        }
         syncing = true
         syncMessage = ""
         var songs: [Song] = []
         var details: [String] = []
-        if target == .netease || target == .all, let user = auth.user, auth.isLoggedIn {
+        if targets.contains(.netease), let user = auth.user, auth.isLoggedIn {
             do {
                 let lists = try await NetEaseAPI.shared.userPlaylists(uid: user.uid)
                 let liked = lists.first { list in
@@ -170,16 +179,16 @@ struct LocalMusicSection: View {
                 BeansLogger.shared.log("三平台同步：网易云失败 \(error.localizedDescription)", level: .error)
                 details.append("网易云请求失败")
             }
-        } else if target == .netease || target == .all {
+        } else if targets.contains(.netease) {
             details.append("网易云未登录")
         }
-        if (target == .netease || target == .all), !favorites.neteaseFavoriteSongs.isEmpty {
+        if targets.contains(.netease), !favorites.neteaseFavoriteSongs.isEmpty {
             let cachedIDs = Set(songs.filter { $0.source == .netease }.map(\.id))
             let cached = favorites.neteaseFavoriteSongs.filter { !cachedIDs.contains($0.id) }
             songs.append(contentsOf: cached)
             if !cached.isEmpty { details.append("网易云缓存补充 \(cached.count) 首") }
         }
-        if target == .qq || target == .all, QQMusicAuth.shared.isLoggedIn {
+        if targets.contains(.qq), QQMusicAuth.shared.isLoggedIn {
             do {
                 let qqSongs = try await QQMusicAPI.shared.favoriteSongs(limit: 300)
                 songs.append(contentsOf: qqSongs)
@@ -188,10 +197,10 @@ struct LocalMusicSection: View {
                 BeansLogger.shared.log("三平台同步：QQ音乐失败 \(error.localizedDescription)", level: .error)
                 details.append("QQ音乐请求失败")
             }
-        } else if target == .qq || target == .all {
+        } else if targets.contains(.qq) {
             details.append("QQ音乐未登录")
         }
-        if target == .kugou || target == .all, KugouMusicAuth.shared.isLoggedIn {
+        if targets.contains(.kugou), KugouMusicAuth.shared.isLoggedIn {
             do {
                 let lists = try await KugouMusicAPI.shared.userPlaylists()
                 BeansLogger.shared.log("三平台同步：酷狗歌单 \(lists.map(\.name).joined(separator: "|"))", level: .info)
@@ -210,23 +219,80 @@ struct LocalMusicSection: View {
                 BeansLogger.shared.log("三平台同步：酷狗音乐失败 \(error.localizedDescription)", level: .error)
                 details.append("酷狗音乐请求失败")
             }
-        } else if target == .kugou || target == .all {
+        } else if targets.contains(.kugou) {
             details.append("酷狗音乐未登录")
         }
         var unique: [Song] = []
         var seen = Set<String>()
         for song in songs where seen.insert(song.identityKey).inserted { unique.append(song) }
         let playlistName: String
-        switch target {
-        case .netease: playlistName = "网易云喜欢"
-        case .qq: playlistName = "QQ音乐喜欢"
-        case .kugou: playlistName = "酷狗音乐喜欢"
-        case .all: playlistName = "三平台喜欢"
-        }
+        playlistName = targets
+            .sorted { $0.rawValue < $1.rawValue }
+            .map(\.rawValue)
+            .joined(separator: " + ") + "喜欢"
         let added = store.syncSongs(unique, intoPlaylistNamed: playlistName)
         syncing = false
         syncMessage = details.joined(separator: "，") + "；合计 \(unique.count) 首"
         ToastCenter.shared.show(unique.isEmpty ? "没有获取到该平台的喜欢歌曲" : "已同步 \(unique.count) 首，新增 \(added) 首到本地歌单“\(playlistName)”")
+    }
+}
+
+fileprivate struct SyncPlatformPicker: View {
+    @Binding var selectedTargets: Set<LocalMusicSection.SyncTarget>
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    private var canConfirm: Bool {
+        selectedTargets.count >= 2
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(LocalMusicSection.SyncTarget.allCases) { target in
+                        Toggle(isOn: Binding(
+                            get: { selectedTargets.contains(target) },
+                            set: { isSelected in
+                                if isSelected {
+                                    selectedTargets.insert(target)
+                                } else {
+                                    selectedTargets.remove(target)
+                                }
+                            }
+                        )) {
+                            Label(target.rawValue, systemImage: icon(for: target))
+                        }
+                    }
+                } header: {
+                    Text("同步平台")
+                } footer: {
+                    Text(canConfirm ? "所选平台的喜欢歌曲会合并到同一个本地歌单。" : "至少选择两个平台。")
+                }
+            }
+            .navigationTitle("一键同步歌单")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("开始同步", action: onConfirm)
+                        .disabled(!canConfirm)
+                }
+            }
+        }
+        .onAppear {
+            selectedTargets = []
+        }
+    }
+
+    private func icon(for target: LocalMusicSection.SyncTarget) -> String {
+        switch target {
+        case .netease: return "music.note"
+        case .qq: return "q.circle"
+        case .kugou: return "dog"
+        }
     }
 }
 

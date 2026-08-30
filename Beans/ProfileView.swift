@@ -168,10 +168,11 @@ struct ProfileView: View {
                 .environmentObject(auth)
                 .environmentObject(theme)
         }
-        .sheet(isPresented: $showSettings) {
+        .fullScreenCover(isPresented: $showSettings) {
             SettingsView()
                 .environmentObject(theme)
                 .environmentObject(player)
+                .ignoresSafeArea(.all)
         }
         .sheet(isPresented: $showSectionSort) {
             SectionOrderSheet(
