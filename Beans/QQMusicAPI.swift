@@ -1377,8 +1377,8 @@ final class QQMusicAPI {
         let cdlist = json["cdlist"] as? [[String: Any]] ?? []
         var covers: [Int: URL] = [:]
         for item in cdlist {
-            let id = integerValue(item["disstid"] ?? item["dissid"])
-            if let cover = normalizedQQImageURL(item["logo"]) ?? normalizedQQImageURL(item["coveradurl"]) {
+            let id = Self.integerValue(item["disstid"] ?? item["dissid"])
+            if let cover = Self.normalizedQQImageURL(item["logo"]) ?? Self.normalizedQQImageURL(item["coveradurl"]) {
                 covers[id] = cover
             }
         }
