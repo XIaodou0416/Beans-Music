@@ -110,7 +110,6 @@ struct PlayerView: View {
     @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.classic.rawValue
     /// 侧边滑动手势当前位移（刷视频式切歌过渡）
     @State private var swipeOffset: CGFloat = 0
-    @State private var dismissDragOffset: CGFloat = 0
     @State private var coverDrag: CGSize = .zero
     @State private var coverSwitchPulse = false
     @State private var animatedSongKey = ""
@@ -362,10 +361,6 @@ struct PlayerView: View {
                                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
                         }
                     }
-                    .offset(y: dismissDragOffset)
-                    .scaleEffect(1 - min(dismissDragOffset / 1200, 0.06))
-                    .opacity(1 - min(dismissDragOffset / 520, 0.32))
-                    .simultaneousGesture(playerDismissDragGesture(topInset: geo.safeAreaInsets.top))
                 }
             }
         }
@@ -1799,39 +1794,7 @@ struct PlayerView: View {
     }
 
     private func closePlayer() {
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.88)) {
-            isPresented = false
-        }
-    }
-
-    private func playerDismissDragGesture(topInset: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 18)
-            .onChanged { value in
-                guard !showPlayerSettings, !layoutMode else { return }
-                guard value.startLocation.y <= topInset + 150 else { return }
-                guard value.translation.height > 0, abs(value.translation.height) > abs(value.translation.width) else { return }
-                dismissDragOffset = min(value.translation.height, 220)
-            }
-            .onEnded { value in
-                guard value.startLocation.y <= topInset + 150 else {
-                    dismissDragOffset = 0
-                    return
-                }
-                if value.translation.height > 92 && abs(value.translation.height) > abs(value.translation.width) {
-                    BeansHaptics.medium()
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
-                        dismissDragOffset = 320
-                        isPresented = false
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                        dismissDragOffset = 0
-                    }
-                } else {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                        dismissDragOffset = 0
-                    }
-                }
-            }
+        isPresented = false
     }
 
     /// 刷抖音式切歌：松手后旧封面继续飞出屏幕，新封面从对侧滑入（上滑下一首：旧向上飞、新从底部上来；下滑反之）
