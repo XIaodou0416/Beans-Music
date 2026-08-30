@@ -14,6 +14,7 @@ struct ProfileView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
+    @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
 
     @State private var showHistory = false
 
