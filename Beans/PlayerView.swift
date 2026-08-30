@@ -149,37 +149,37 @@ struct PlayerView: View {
         if playerPrimaryButtonColorHex.hasPrefix("#"), let color = Color(hex: playerPrimaryButtonColorHex) {
             return color
         }
-        controlsUseCoverColor ? palette.accent : Color.beansAmber
+        return controlsUseCoverColor ? palette.accent : Color.beansAmber
     }
 
     private var controlAccentSoft: Color {
-        controlsUseCoverColor ? palette.accentSoft : Color.beansAmber.opacity(0.28)
+        return controlsUseCoverColor ? palette.accentSoft : Color.beansAmber.opacity(0.28)
     }
 
     private var playerButtonStyle: BeansPlayerButtonStyle {
-        BeansPlayerButtonStyle(rawValue: playerButtonStyleRaw) ?? .glass
+        return BeansPlayerButtonStyle(rawValue: playerButtonStyleRaw) ?? .glass
     }
 
     private var coverPlayerStyle: BeansCoverPlayerStyle {
-        BeansCoverPlayerStyle(rawValue: coverPlayerStyleRaw) ?? .classic
+        return BeansCoverPlayerStyle(rawValue: coverPlayerStyleRaw) ?? .classic
     }
 
     private var playerDustMode: BeansPlayerDustMode {
-        BeansPlayerDustMode(rawValue: playerDustModeRaw) ?? .off
+        return BeansPlayerDustMode(rawValue: playerDustModeRaw) ?? .off
     }
 
     private var playerButtonText: Color {
         if playerMainIconColorHex.hasPrefix("#"), let color = Color(hex: playerMainIconColorHex) {
             return color
         }
-        palette.text
+        return palette.text
     }
 
     private var playerButtonSecondaryText: Color {
         if playerSecondaryIconColorHex.hasPrefix("#"), let color = Color(hex: playerSecondaryIconColorHex) {
             return color
         }
-        palette.secondary
+        return palette.secondary
     }
 
     private var albumTitleColor: Color {
