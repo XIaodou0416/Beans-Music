@@ -36,6 +36,12 @@ struct DiscoverView: View {
     @AppStorage("beans.homeGreetingLine1OffsetY") private var homeGreetingLine1OffsetY = 0.0
     @AppStorage("beans.homeGreetingLine2OffsetY") private var homeGreetingLine2OffsetY = 0.0
     @AppStorage("beans.homeGreetingLine3OffsetY") private var homeGreetingLine3OffsetY = 0.0
+    @AppStorage("beans.homeGreetingLine1GradientStartHex") private var homeGreetingLine1GradientStartHex = ""
+    @AppStorage("beans.homeGreetingLine2GradientStartHex") private var homeGreetingLine2GradientStartHex = ""
+    @AppStorage("beans.homeGreetingLine3GradientStartHex") private var homeGreetingLine3GradientStartHex = ""
+    @AppStorage("beans.homeGreetingLine1GradientEndHex") private var homeGreetingLine1GradientEndHex = ""
+    @AppStorage("beans.homeGreetingLine2GradientEndHex") private var homeGreetingLine2GradientEndHex = ""
+    @AppStorage("beans.homeGreetingLine3GradientEndHex") private var homeGreetingLine3GradientEndHex = ""
     @AppStorage("beans.homeGreetingGlowEnabled") private var homeGreetingGlowEnabled = false
     @AppStorage("beans.homeGreetingGlowIntensity") private var homeGreetingGlowIntensity = 0.45
     @AppStorage("beans.homeGreetingUnderline") private var homeGreetingUnderline = false
@@ -767,8 +773,24 @@ struct DiscoverView: View {
     private func greetingLineStyle(_ index: Int) -> AnyShapeStyle {
         let color = greetingLineColor(index)
         if homeGreetingGradient {
-            let start = Color(hex: homeGreetingGradientStartHex) ?? color
-            let end = Color(hex: homeGreetingGradientEndHex) ?? color.opacity(0.42)
+            let startHex: String
+            let endHex: String
+            switch index {
+            case 0:
+                startHex = homeGreetingLine1GradientStartHex
+                endHex = homeGreetingLine1GradientEndHex
+            case 1:
+                startHex = homeGreetingLine2GradientStartHex
+                endHex = homeGreetingLine2GradientEndHex
+            case 2:
+                startHex = homeGreetingLine3GradientStartHex
+                endHex = homeGreetingLine3GradientEndHex
+            default:
+                startHex = ""
+                endHex = ""
+            }
+            let start = Color(hex: startHex) ?? Color(hex: homeGreetingGradientStartHex) ?? color
+            let end = Color(hex: endHex) ?? Color(hex: homeGreetingGradientEndHex) ?? color.opacity(0.42)
             return AnyShapeStyle(LinearGradient(
                 colors: [start, end],
                 startPoint: .top,

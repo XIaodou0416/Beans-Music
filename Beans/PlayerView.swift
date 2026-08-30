@@ -2781,7 +2781,9 @@ struct PlayerSettingsSheet: View {
                     coverCard
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.vertical, 16)
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
             }
             .background {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
@@ -2852,8 +2854,8 @@ struct PlayerSettingsSheet: View {
                 content()
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 PlayerSettingsLiquidGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))

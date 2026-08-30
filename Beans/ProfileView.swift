@@ -1138,6 +1138,12 @@ struct SettingsView: View {
     @AppStorage("beans.homeGreetingLine1OffsetY") private var homeGreetingLine1OffsetY = 0.0
     @AppStorage("beans.homeGreetingLine2OffsetY") private var homeGreetingLine2OffsetY = 0.0
     @AppStorage("beans.homeGreetingLine3OffsetY") private var homeGreetingLine3OffsetY = 0.0
+    @AppStorage("beans.homeGreetingLine1GradientStartHex") private var homeGreetingLine1GradientStartHex = ""
+    @AppStorage("beans.homeGreetingLine2GradientStartHex") private var homeGreetingLine2GradientStartHex = ""
+    @AppStorage("beans.homeGreetingLine3GradientStartHex") private var homeGreetingLine3GradientStartHex = ""
+    @AppStorage("beans.homeGreetingLine1GradientEndHex") private var homeGreetingLine1GradientEndHex = ""
+    @AppStorage("beans.homeGreetingLine2GradientEndHex") private var homeGreetingLine2GradientEndHex = ""
+    @AppStorage("beans.homeGreetingLine3GradientEndHex") private var homeGreetingLine3GradientEndHex = ""
     @AppStorage("beans.homeGreetingGlowEnabled") private var homeGreetingGlowEnabled = false
     @AppStorage("beans.homeGreetingGlowIntensity") private var homeGreetingGlowIntensity = 0.45
     @AppStorage("beans.homeGreetingUnderline") private var homeGreetingUnderline = false
@@ -1248,20 +1254,68 @@ struct SettingsView: View {
         )
     }
 
+    private func greetingLineGradientStartBinding(_ index: Int) -> Binding<Color> {
+        Binding(
+            get: {
+                let raw: String
+                switch index {
+                case 0: raw = homeGreetingLine1GradientStartHex
+                case 1: raw = homeGreetingLine2GradientStartHex
+                default: raw = homeGreetingLine3GradientStartHex
+                }
+                return Color(hex: raw) ?? (Color(hex: homeGreetingGradientStartHex) ?? Color.beansLabel)
+            },
+            set: { color in
+                switch index {
+                case 0: homeGreetingLine1GradientStartHex = color.hexString
+                case 1: homeGreetingLine2GradientStartHex = color.hexString
+                default: homeGreetingLine3GradientStartHex = color.hexString
+                }
+            }
+        )
+    }
+
+    private func greetingLineGradientEndBinding(_ index: Int) -> Binding<Color> {
+        Binding(
+            get: {
+                let raw: String
+                switch index {
+                case 0: raw = homeGreetingLine1GradientEndHex
+                case 1: raw = homeGreetingLine2GradientEndHex
+                default: raw = homeGreetingLine3GradientEndHex
+                }
+                return Color(hex: raw) ?? (Color(hex: homeGreetingGradientEndHex) ?? Color.beansLabel)
+            },
+            set: { color in
+                switch index {
+                case 0: homeGreetingLine1GradientEndHex = color.hexString
+                case 1: homeGreetingLine2GradientEndHex = color.hexString
+                default: homeGreetingLine3GradientEndHex = color.hexString
+                }
+            }
+        )
+    }
+
     private func resetGreetingLineStyle(_ index: Int) {
         switch index {
         case 0:
             homeGreetingLine1Size = 0
             homeGreetingLine1ColorHex = ""
             homeGreetingLine1OffsetY = 0
+            homeGreetingLine1GradientStartHex = ""
+            homeGreetingLine1GradientEndHex = ""
         case 1:
             homeGreetingLine2Size = 0
             homeGreetingLine2ColorHex = ""
             homeGreetingLine2OffsetY = 0
+            homeGreetingLine2GradientStartHex = ""
+            homeGreetingLine2GradientEndHex = ""
         default:
             homeGreetingLine3Size = 0
             homeGreetingLine3ColorHex = ""
             homeGreetingLine3OffsetY = 0
+            homeGreetingLine3GradientStartHex = ""
+            homeGreetingLine3GradientEndHex = ""
         }
     }
 
@@ -1920,6 +1974,13 @@ struct SettingsView: View {
                                 }
                                 Slider(value: greetingLineOffsetBinding(index), in: -80...80, step: 1)
                                     .tint(Color.beansAmber)
+                                if homeGreetingGradient {
+                                    HStack(spacing: 12) {
+                                        ColorPicker("渐变起始", selection: greetingLineGradientStartBinding(index), supportsOpacity: false)
+                                        Spacer()
+                                        ColorPicker("渐变结束", selection: greetingLineGradientEndBinding(index), supportsOpacity: false)
+                                    }
+                                }
                             }
                             .padding(10)
                             .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
