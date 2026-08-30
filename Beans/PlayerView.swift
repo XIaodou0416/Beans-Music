@@ -395,7 +395,8 @@ struct PlayerView: View {
         .sheet(isPresented: $showSleepTimer) { SleepTimerSheet().environmentObject(player) }
         .sheet(isPresented: $showAddToPlaylist) {
             if let song {
-                AddToPlaylistSheet(song: song).environmentObject(auth)
+                AddToPlaylistSheet(song: song)
+                    .environmentObject(auth)
             }
         }
         .sheet(isPresented: $showComments) {
@@ -572,11 +573,15 @@ struct PlayerView: View {
             Button {
                 BeansHaptics.tap()
                 if let song {
-                    Task {
-                        if await favorites.toggle(song) {
-                            ToastCenter.shared.show(favorites.isLiked(song) ? "已收藏" : "已取消收藏")
-                        } else {
-                            ToastCenter.shared.show("收藏失败，请稍后再试")
+                    if song.source == .netease && !favorites.isLiked(song) {
+                        showAddToPlaylist = true
+                    } else {
+                        Task {
+                            if await favorites.toggle(song) {
+                                ToastCenter.shared.show(favorites.isLiked(song) ? "已收藏" : "已取消收藏")
+                            } else {
+                                ToastCenter.shared.show("收藏失败，请稍后再试")
+                            }
                         }
                     }
                 }
@@ -970,7 +975,11 @@ struct PlayerView: View {
                 HStack(spacing: 12) {
                     controlPanelAction(icon: favorites.isLiked(song) ? "heart.fill" : "heart", title: "收藏", active: favorites.isLiked(song)) {
                         if let song {
-                            Task { _ = await favorites.toggle(song) }
+                            if song.source == .netease && !favorites.isLiked(song) {
+                                showAddToPlaylist = true
+                            } else {
+                                Task { _ = await favorites.toggle(song) }
+                            }
                         }
                     }
                     controlPanelAction(icon: "text.bubble", title: "评论") {
@@ -3442,7 +3451,7 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
     let shape: S
 
     private var uiStyle: BeansUIStyle {
-        BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid
+        uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
     }
 
     var body: some View {
@@ -3458,10 +3467,6 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
                 shape.fill(.ultraThinMaterial)
             case .compact:
                 shape.fill(Color.beansGlassFill.opacity(0.62))
-            case .outline:
-                shape
-                    .fill(Color.beansGlassFill.opacity(0.72))
-                    .overlay { shape.stroke(Color.beansAmber.opacity(0.30), lineWidth: 0.9) }
             }
         }
     }

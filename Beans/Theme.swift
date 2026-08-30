@@ -183,14 +183,12 @@ enum BeansUIStyle: String, CaseIterable {
     case liquid = "liquid"
     case clear = "clear"
     case compact = "compact"
-    case outline = "outline"
 
     var title: String {
         switch self {
         case .liquid: return "默认液态"
-        case .clear: return "清透磨砂"
+        case .clear: return "磨砂玻璃"
         case .compact: return "紧凑淡雅"
-        case .outline: return "描边高亮"
         }
     }
 }
@@ -316,7 +314,8 @@ final class ThemeStore: ObservableObject {
         backgroundSyncAll = UserDefaults.standard.object(forKey: syncAllKey) as? Bool ?? true
         backgroundImagePath = UserDefaults.standard.string(forKey: backgroundImageKey) ?? ""
         wallpaperPaths = UserDefaults.standard.stringArray(forKey: wallpaperListKey) ?? []
-        uiStyle = BeansUIStyle(rawValue: UserDefaults.standard.string(forKey: uiStyleKey) ?? "") ?? .liquid
+        let savedUIStyle = UserDefaults.standard.string(forKey: uiStyleKey) ?? ""
+        uiStyle = savedUIStyle == "outline" ? .clear : (BeansUIStyle(rawValue: savedUIStyle) ?? .liquid)
     }
 
     /// 在首帧之后恢复壁纸，避免覆盖安装后同步读写大图备份阻塞应用启动。

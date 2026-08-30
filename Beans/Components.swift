@@ -49,10 +49,12 @@ struct GlassBackdrop: View {
     var customColor: Color? = nil
     /// 主页模式：即使“同步到全部页面”关闭，也始终显示壁纸/背景色（仅发现页传 true）
     var homeMode: Bool = false
+    /// 详情页使用原生氛围背景，不跟随全局壁纸同步
+    var ignoreCustomBackground: Bool = false
 
     /// 当前页面是否启用自定义背景：同步开启时全部页面生效，关闭时仅主页生效
     private var showCustomBackground: Bool {
-        theme.backgroundSyncAll || homeMode
+        !ignoreCustomBackground && (theme.backgroundSyncAll || homeMode)
     }
 
     /// 背景图上叠加的可读性遮罩：浅色模式几乎不压暗，深色模式适度压暗
@@ -126,7 +128,7 @@ struct BeansGlass<S: Shape>: View {
     let shape: S
 
     private var uiStyle: BeansUIStyle {
-        BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid
+        uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
     }
 
     private var isLiquid: Bool {
@@ -153,12 +155,6 @@ struct BeansGlass<S: Shape>: View {
             case .compact:
                 shape
                     .fill(Color.beansGlassFill.opacity(0.62))
-            case .outline:
-                shape
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        shape.stroke(Color.beansAmber.opacity(0.30), lineWidth: 0.9)
-                    }
             }
         }
     }
@@ -172,7 +168,7 @@ struct GlassCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     private var uiStyle: BeansUIStyle {
-        BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid
+        uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
     }
 
     private var isLiquid: Bool {
@@ -210,12 +206,6 @@ struct GlassCard<Content: View>: View {
                     RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
                         .fill(uiStyle == .compact ? Color.beansGlassFill.opacity(0.62) : Color.clear)
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
-                }
-                .overlay {
-                    if uiStyle == .outline {
-                        RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
-                            .strokeBorder(Color.beansAmber.opacity(0.30), lineWidth: 0.9)
-                    }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
                 .beansCardShadow(radius: uiStyle == .compact ? 4 : 9, y: uiStyle == .compact ? 1 : 3)

@@ -6,16 +6,38 @@ struct LocalMusicSection: View {
     @ObservedObject private var store = LocalLibraryStore.shared
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var favorites: FavoritesStore
 
     @State private var showCreate = false
     @State private var newName = ""
     @State private var selected: LocalPlaylist?
+    @State private var syncing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "本地音乐库", trailing: "新建") {
-                newName = ""
-                showCreate = true
+            HStack {
+                SectionHeader(title: "本地音乐库")
+                Button {
+                    Task { await syncAllLikes() }
+                } label: {
+                    Image(systemName: syncing ? "arrow.triangle.2.circlepath" : "arrow.triangle.2.circlepath")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .rotationEffect(.degrees(syncing ? 360 : 0))
+                        .animation(syncing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: syncing)
+                }
+                .buttonStyle(.plain)
+                .disabled(syncing)
+                .accessibilityLabel("一键同步三平台喜欢")
+                Button {
+                    newName = ""
+                    showCreate = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                }
+                .buttonStyle(.plain)
             }
             if store.playlists.isEmpty {
                 EmptyStateView(icon: "internaldrive", text: "还没有本地歌单\n新建一个歌单，把喜欢的歌曲收藏到本机")
@@ -92,6 +114,34 @@ struct LocalMusicSection: View {
                 .environmentObject(auth)
         }
     }
+
+    private func syncAllLikes() async {
+        guard !syncing else { return }
+        syncing = true
+        var songs: [Song] = []
+        songs.append(contentsOf: favorites.neteaseFavoriteSongs)
+        songs.append(contentsOf: favorites.qqFavoriteSongs)
+        if let user = auth.user,
+           let lists = try? await NetEaseAPI.shared.userPlaylists(uid: user.uid),
+           let liked = lists.first(where: { $0.name == "我喜欢的音乐" }) {
+            songs.append(contentsOf: (try? await NetEaseAPI.shared.playlistTracks(id: liked.id)) ?? [])
+        }
+        if QQMusicAuth.shared.isLoggedIn {
+            songs.append(contentsOf: (try? await QQMusicAPI.shared.favoriteSongs(limit: 300)) ?? [])
+        }
+        if KugouMusicAuth.shared.isLoggedIn,
+           let liked = (try? await KugouMusicAPI.shared.userPlaylists())?.first(where: {
+               $0.name.contains("喜欢") || $0.name.contains("收藏")
+           }) {
+            songs.append(contentsOf: (try? await KugouMusicAPI.shared.playlistSongs(listID: liked.id)) ?? [])
+        }
+        var unique: [Song] = []
+        var seen = Set<String>()
+        for song in songs where seen.insert(song.identityKey).inserted { unique.append(song) }
+        let added = store.syncSongs(unique)
+        syncing = false
+        ToastCenter.shared.show(unique.isEmpty ? "没有获取到已登录平台的喜欢歌曲" : "已同步 \(unique.count) 首，新增 \(added) 首到三平台喜欢")
+    }
 }
 
 // MARK: - 本地歌单详情（播放全部 / 单曲播放 / 移除歌曲 / 添加歌曲）
@@ -114,7 +164,9 @@ struct LocalPlaylistDetailSheet: View {
 
     var body: some View {
         BeansNavigationStack {
-            Group {
+            ZStack {
+                GlassBackdrop(ignoreCustomBackground: true)
+                Group {
                 if let playlist {
                     List {
                         Section {
@@ -148,10 +200,12 @@ struct LocalPlaylistDetailSheet: View {
                             }
                         }
                     }
+                    .beansScrollContentBackgroundHidden()
                     .listStyle(.plain)
                 } else {
                     EmptyStateView(icon: "music.note.list", text: "歌单不存在或已删除")
                 }
+            }
             }
             .navigationTitle(playlist?.name ?? "本地歌单")
             .navigationBarTitleDisplayMode(.inline)

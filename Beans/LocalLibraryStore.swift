@@ -68,6 +68,19 @@ final class LocalLibraryStore: ObservableObject {
         playlists[idx].songs.append(song)
     }
 
+    @discardableResult
+    func syncSongs(_ songs: [Song], intoPlaylistNamed name: String = "三平台喜欢") -> Int {
+        let target: LocalPlaylist
+        if let existing = playlists.first(where: { $0.name == name }) {
+            target = existing
+        } else {
+            target = createPlaylist(name: name)
+        }
+        let before = playlists.first(where: { $0.id == target.id })?.songs.count ?? 0
+        for song in songs { addSong(song, to: target.id) }
+        return (playlists.first(where: { $0.id == target.id })?.songs.count ?? before) - before
+    }
+
     func removeSong(playlistID: UUID, songIdentity: String) {
         guard let idx = playlists.firstIndex(where: { $0.id == playlistID }) else { return }
         playlists[idx].songs.removeAll { $0.identityKey == songIdentity }

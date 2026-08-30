@@ -39,6 +39,7 @@ struct ProfileView: View {
     @State private var updateShareFile: ShareFileItem?
     @State private var updateShareFileURL: URL?
     @State private var didRefreshProfileAccount = false
+    @State private var donationExpanded = false
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
@@ -711,22 +712,33 @@ struct ProfileView: View {
     /// 我的页底部赞助入口与赞助排行榜
     private var donationCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                Image(systemName: "heart.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(Color.beansAmber)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("自愿赞助")
-                        .font(BeansFont.appFont(16, .bold))
-                        .foregroundStyle(Color.beansLabel)
-                    Text("感谢每一份喜欢与支持")
-                        .font(BeansFont.appFont(11))
+            Button {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                    donationExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "heart.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(Color.beansAmber)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("自愿赞助")
+                            .font(BeansFont.appFont(16, .bold))
+                            .foregroundStyle(Color.beansLabel)
+                        Text(donationExpanded ? "点击收起赞助信息" : "点击展开赞助信息")
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    Spacer()
+                    Image(systemName: donationExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.beansComment)
                 }
-                Spacer()
             }
+            .buttonStyle(.plain)
 
-            Image("DonationQR")
+            if donationExpanded {
+                Image("DonationQR")
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: 300)
@@ -737,13 +749,13 @@ struct ProfileView: View {
                         .strokeBorder(Color.beansComment.opacity(0.14), lineWidth: 0.8)
                 }
 
-            Text("虽然没有服务器运营成本，但是软件本身使用AI构建，需要消耗大量token，音源接口也由本人购买，本身就会有些压力，因为软件本身公益所以自愿赞助，感谢各位的喜欢")
+                Text("虽然没有服务器运营成本，但是软件本身使用AI构建，需要消耗大量token，音源接口也由本人购买，本身就会有些压力，因为软件本身公益所以自愿赞助，感谢各位的喜欢")
                 .font(BeansFont.appFont(13))
                 .foregroundStyle(Color.beansLabel)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("赞助人员")
                         .font(BeansFont.appFont(15, .semibold))
@@ -776,6 +788,7 @@ struct ProfileView: View {
                     if index < Self.donors.count - 1 {
                         Divider().overlay(Color.beansComment.opacity(0.12))
                     }
+                }
                 }
             }
         }
