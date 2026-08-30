@@ -16,11 +16,14 @@ struct LocalMusicSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                SectionHeader(title: "本地音乐库")
+                Text("本地音乐库")
+                    .font(BeansFont.appFont(21, .bold))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer(minLength: 8)
                 Button {
                     Task { await syncAllLikes() }
                 } label: {
-                    Image(systemName: syncing ? "arrow.triangle.2.circlepath" : "arrow.triangle.2.circlepath")
+                    Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.beansAmber)
                         .rotationEffect(.degrees(syncing ? 360 : 0))
@@ -29,6 +32,7 @@ struct LocalMusicSection: View {
                 .buttonStyle(.plain)
                 .disabled(syncing)
                 .accessibilityLabel("一键同步三平台喜欢")
+                .help("一键同步网易云、QQ音乐、酷狗音乐的喜欢歌曲")
                 Button {
                     newName = ""
                     showCreate = true
@@ -38,6 +42,8 @@ struct LocalMusicSection: View {
                         .foregroundStyle(Color.beansAmber)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("新建本地歌单")
+                .help("新建本地歌单")
             }
             if store.playlists.isEmpty {
                 EmptyStateView(icon: "internaldrive", text: "还没有本地歌单\n新建一个歌单，把喜欢的歌曲收藏到本机")
