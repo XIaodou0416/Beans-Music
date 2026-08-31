@@ -207,7 +207,7 @@ struct OnboardingView: View {
                        detail: "进度条 / 按钮 / 指示线任意摆放缩放")
                 diyRow(icon: "text.quote", tint: Color(red: 0.96, green: 0.56, blue: 0.70),
                        title: "歌词全套定制",
-                       detail: "颜色 / 渐变 / 发光 / 模糊 / 3D 倾斜")
+                       detail: "颜色 / 渐变 / 发光 / 模糊")
             }
             .padding(.horizontal, 28)
 
