@@ -293,7 +293,6 @@ struct ReferencePlaybackView: View {
                         .frame(width: 38, height: 38)
                         .contentShape(Rectangle())
                 }
-                .menuOrder(.fixed)
             }
         }
     }
