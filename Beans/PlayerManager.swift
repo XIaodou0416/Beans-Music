@@ -705,12 +705,15 @@ final class PlayerManager: NSObject, ObservableObject {
                     "uri=\(event.uri ?? "?")"
                 ].joined(separator: " ")
             }.joined(separator: " | ")
+            let errorDescription = error?.localizedDescription ?? "未知错误"
+            let errorCode = nsError.map { "\($0.domain):(\($0.code))" } ?? "?"
+            let errorLogDescription = eventDetails.isEmpty ? "无" : eventDetails
             BeansLogger.shared.log(
-                "播放地址加载失败：\(error?.localizedDescription ?? "未知错误")"
+                "播放地址加载失败：\(errorDescription)"
                     + "｜域名=\(url.host ?? "?")"
                     + "｜第三方=\(isThirdParty ? "是" : "否")"
-                    + "｜NSError=\(nsError.map { "\($0.domain):(\($0.code))" } ?? "?")"
-                    + "｜AVErrorLog=\(eventDetails.isEmpty ? "无" : eventDetails)",
+                    + "｜NSError=\(errorCode)"
+                    + "｜AVErrorLog=\(errorLogDescription)",
                 level: .error
             )
         }
