@@ -421,10 +421,22 @@ final class PlayerManager: NSObject, ObservableObject {
                     resolvedThirdParty = await kugouFallback(song: song, enableUnblock: enableUnblock)
                 }
             } else if song.source == .qq, let mid = song.qqMid {
-                // 是否有播放权益以 vkey 实际返回为准；会员接口识别失败时也必须尝试官方地址。
-                urlString = try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid)
-                if urlString == nil {
-                    (urlString, resolvedThirdParty) = await qqFallback(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
+                // QQ 官方接口可能返回表面有效但实际无法播放的地址；有用户密钥时优先走第三方。
+                if enableUnblock {
+                    resolvedThirdParty = await UnblockService.resolve(
+                        name: song.name,
+                        artists: song.artists,
+                        neteaseID: 0,
+                        songSource: .qq,
+                        qqMid: mid,
+                        strict: strictUnlock
+                    )
+                }
+                if resolvedThirdParty == nil {
+                    urlString = try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid)
+                }
+                if resolvedThirdParty == nil && urlString == nil {
+                    (urlString, resolvedThirdParty) = await qqFallback(song: song, quality: quality, enableUnblock: false, strict: strictUnlock)
                 }
             } else {
                 (urlString, resolvedThirdParty) = await neteaseResolve(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
