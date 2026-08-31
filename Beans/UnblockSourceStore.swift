@@ -190,10 +190,20 @@ final class UnblockSourceStore: ObservableObject {
               !script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw SourceImportError.invalidConfiguration
         }
+        let lowerName = fileName.lowercased()
+        var inferredHeaders: [String: String] = [:]
+        if lowerName.contains("qz2tx") || lowerName.contains("qq") || lowerName.contains("tencent") {
+            inferredHeaders["source"] = "tx"
+        } else if lowerName.contains("netease") || lowerName.contains("163") || lowerName.contains("wy") {
+            inferredHeaders["source"] = "wy"
+        } else if lowerName.contains("kugou") || lowerName.contains("kg") {
+            inferredHeaders["source"] = "kg"
+        }
         var source = ThirdPartySource(
             name: fileName.replacingOccurrences(of: ".js", with: ""),
             kind: "js-plugin",
             template: "https://local.beans.invalid/{id}",
+            headers: inferredHeaders,
             script: script,
             isPreset: false
         )

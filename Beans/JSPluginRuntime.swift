@@ -25,6 +25,13 @@ enum JSPluginRuntime {
         quality: String,
         apiKey: String?
     ) async -> URL? {
+        if source == "tx", script.contains("source.shiqianjiang.cn/api/music/url") {
+            return await resolveShiqianjiang(
+                id: id,
+                quality: quality,
+                apiKey: apiKey
+            )
+        }
         await Task.detached(priority: .userInitiated) {
             resolveSync(
                 script: script,
@@ -36,6 +43,51 @@ enum JSPluginRuntime {
                 apiKey: apiKey
             )
         }.value
+    }
+
+    /// 兼容常见的打包音源：它们把请求逻辑封装在 webpack 内部，
+    /// 在 JavaScriptCore 中无法替换其 Node/浏览器适配器，因此由原生网络层执行同一请求。
+    private static func resolveShiqianjiang(id: String, quality: String, apiKey: String?) async -> URL? {
+        guard let apiKey, !apiKey.isEmpty else {
+            BeansLogger.shared.log("JS 音源需要用户密钥：聆澜接口", level: .debug)
+            return nil
+        }
+        let mappedQuality: String
+        switch quality {
+        case "standard": mappedQuality = "128k"
+        case "exhigh": mappedQuality = "320k"
+        case "lossless": mappedQuality = "flac"
+        case "jyeffect": mappedQuality = "atmos"
+        case "sky": mappedQuality = "atmos"
+        case "jymaster": mappedQuality = "master"
+        default: mappedQuality = quality
+        }
+        var components = URLComponents(string: "https://source.shiqianjiang.cn/api/music/url")
+        components?.queryItems = [
+            URLQueryItem(name: "songId", value: id),
+            URLQueryItem(name: "quality", value: mappedQuality),
+            URLQueryItem(name: "source", value: "tx"),
+        ]
+        guard let url = components?.url else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        request.setValue("QZMusic/2.0", forHTTPHeaderField: "User-Agent")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200,
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let rawURL = object["url"] as? String,
+                  let playURL = URL(string: rawURL),
+                  ["http", "https"].contains(playURL.scheme?.lowercased() ?? "") else {
+                BeansLogger.shared.log("JS 音源接口未返回播放地址：音质=\(mappedQuality)", level: .debug)
+                return nil
+            }
+            return playURL
+        } catch {
+            BeansLogger.shared.log("JS 音源原生请求失败：\(error.localizedDescription)", level: .debug)
+            return nil
+        }
     }
 
     private static func resolveSync(
