@@ -192,9 +192,16 @@ enum UnblockService {
         }
         guard let value = valueAtAnyPath(obj, source.urlPath),
               let resolvedURL = value as? String, !resolvedURL.isEmpty,
-              let playURL = URL(string: resolvedURL) else {
+              let rawPlayURL = URL(string: resolvedURL),
+              let playURL = normalizedQQPlaybackURL(rawPlayURL) else {
             BeansLogger.shared.log("第三方音源响应中没有播放地址：\(source.name)\(keyLabel)", level: .debug)
             return nil
+        }
+        if rawPlayURL != playURL {
+            BeansLogger.shared.log(
+                "第三方音源切换 QQ CDN 节点：\(rawPlayURL.host ?? "?") -> \(playURL.host ?? "?")",
+                level: .debug
+            )
         }
         if let host = playURL.host?.lowercased(), excludedHosts.contains(host) {
             BeansLogger.shared.log(
@@ -205,6 +212,18 @@ enum UnblockService {
         }
         BeansLogger.shared.log("第三方音源命中：\(source.name)\(keyLabel)", level: .info)
         return Resolved(url: playURL, source: source.name)
+    }
+
+    /// 部分第三方接口会固定返回 aqqmusic.tc.qq.com，该节点在 iOS AVPlayer
+    /// 上经常先进入 playing 随后以 -11849 失败。将其切到同路径的稳定 QQ CDN
+    /// 节点，避免把同一个失效地址反复交给播放器。
+    private static func normalizedQQPlaybackURL(_ url: URL) -> URL? {
+        guard let host = url.host?.lowercased(), host == "aqqmusic.tc.qq.com" else {
+            return url
+        }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.host = "isure6.ptqqmusic.gitv.tv"
+        return components?.url ?? url
     }
 
     private static func requestFingerprint(for source: ThirdPartySource) -> String {
