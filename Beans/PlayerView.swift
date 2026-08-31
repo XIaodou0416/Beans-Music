@@ -2255,18 +2255,20 @@ struct LyricsSection: View {
     /// Apple Music 风格渐隐：当前行最大最亮，已播放行与未播放行按距离逐层变暗变淡
     private func lyricRow(index: Int, line: LyricLine) -> some View {
         let playbackIndex = currentIndex ?? 0
-        // 手动滚动时 focusedIndex 只用于滚动吸附，不能改变歌词的播放状态样式。
-        // 颜色、字号、渐变、发光和清晰度始终只跟随实际播放行。
+        // 手动滚动时，以视口中心行为清晰度焦点；颜色和渐变仍只跟随实际播放行。
+        // 这样拖动歌词不会暂停播放，也不会让整页歌词一起变糊。
+        let visualIndex = isUserScrolling ? (focusedIndex ?? currentIndex) : currentIndex
         let isCurrent = currentIndex != nil && index == playbackIndex
+        let isFocused = index == visualIndex
         let isPlayed = (currentIndex ?? -1) >= 0 && index < playbackIndex
-        let distance = abs(index - playbackIndex)
-        let opacity: Double = isCurrent
+        let distance = abs(index - (visualIndex ?? playbackIndex))
+        let opacity: Double = isFocused
             ? 1.0
             : (isPlayed ? 0.28 : 0.62) - Double(min(distance, 4)) * 0.05
-        let size = isCurrent ? baseFontSize + 4 : baseFontSize - CGFloat(min(distance, 2)) * 1.5
+        let size = isFocused ? baseFontSize + 4 : baseFontSize - CGFloat(min(distance, 2)) * 1.5
         // 歌词行模糊：当前行与邻近行保持清晰，距离越远才越柔和（避免只剩一行清晰显得突兀）
         // 模糊起始距离与强度由用户控制（0 强度 = 完全关闭模糊）
-        let blurRadius: CGFloat = isCurrent ? 0 : min(CGFloat(max(distance - Int(blurStart), 0)) * blurAmount, 7.0)
+        let blurRadius: CGFloat = isFocused ? 0 : min(CGFloat(max(distance - Int(blurStart), 0)) * blurAmount, 7.0)
 
         // 当前行用渐变（封面色或自定义），光晕跟随渐变起始色
         let lineStyle: AnyShapeStyle
@@ -2296,7 +2298,7 @@ struct LyricsSection: View {
                 )
                 .blur(radius: blurRadius)
                 .opacity(max(opacity, 0.15))
-                .scaleEffect(isCurrent ? 1.05 : 1, anchor: .leading)
+                .scaleEffect(isFocused ? 1.05 : 1, anchor: .leading)
                 .multilineTextAlignment(alignment == .leading ? .leading : .center)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
@@ -2313,7 +2315,7 @@ struct LyricsSection: View {
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
         .padding(.horizontal, alignment == .leading ? 40 : 36)
-        .animation(.easeInOut(duration: 0.25), value: currentIndex)
+        .animation(.easeInOut(duration: 0.25), value: visualIndex)
     }
 
     private func toggleSelect(_ index: Int) {

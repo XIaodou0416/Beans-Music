@@ -98,6 +98,8 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastNowPlayingArtworkKey: String?
     /// 酷狗高音质地址在部分账号/系统上会返回但无法由 AVPlayer 打开；每首歌只自动降级一次。
     private var kugouStandardFallbackSongKey: String?
+    /// 第三方地址偶发过期或节点不可用时，每首歌只重新解析一次，避免重试风暴。
+    private var thirdPartyRetrySongKey: String?
     private static let nowPlayingArtworkCache = NSCache<NSURL, UIImage>()
 
     private let historyKey = "beans.history"
@@ -646,6 +648,45 @@ final class PlayerManager: NSObject, ObservableObject {
         return true
     }
 
+    @discardableResult
+    private func retryThirdPartyIfNeeded() -> Bool {
+        guard let song = currentSong,
+              song.source == .qq,
+              let qqMid = song.qqMid,
+              !qqMid.isEmpty,
+              thirdPartyRetrySongKey != song.identityKey else { return false }
+
+        thirdPartyRetrySongKey = song.identityKey
+        let generation = loadGeneration
+        let resume = progress
+        let strict = shouldLockOfficialOnly(song)
+        BeansLogger.shared.log("第三方播放地址失效，重新解析一次：歌曲=\(song.name)｜系统=\(UIDevice.current.systemVersion)", level: .debug)
+        Task {
+            let resolved = await UnblockService.resolve(
+                name: song.name,
+                artists: song.artists,
+                neteaseID: 0,
+                songSource: .qq,
+                qqMid: qqMid,
+                strict: strict
+            )
+            await MainActor.run {
+                guard generation == self.loadGeneration,
+                      self.currentSong?.identityKey == song.identityKey,
+                      let resolved else { return }
+                let notice = self.thirdPartyVIPNotice(for: song, sourceTitle: resolved.sourceTitle)
+                self.setupPlayer(
+                    url: resolved.url,
+                    thirdPartyVIPNotice: notice,
+                    resumeAt: resume,
+                    isThirdParty: true
+                )
+                BeansLogger.shared.log("第三方播放地址重试成功：\(song.name)｜域名=\(resolved.url.host ?? "?")", level: .info)
+            }
+        }
+        return true
+    }
+
     private func setupPlayer(
         url: URL,
         thirdPartyVIPNotice: ThirdPartyVIPNotice? = nil,
@@ -691,6 +732,7 @@ final class PlayerManager: NSObject, ObservableObject {
         playbackConfirmed = false
         itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             guard let self, self.player === player, item.status == .failed else { return }
+            if isThirdParty && self.retryThirdPartyIfNeeded() { return }
             if self.retryKugouAtStandardIfNeeded(error: item.error) { return }
             self.loadFailed = true
             self.isBuffering = false
@@ -777,6 +819,7 @@ final class PlayerManager: NSObject, ObservableObject {
             }
         }
         failureObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] _ in
+            if isThirdParty && self?.retryThirdPartyIfNeeded() == true { return }
             if self?.retryKugouAtStandardIfNeeded(error: item.error) == true { return }
             self?.loadFailed = true
             self?.isBuffering = false
