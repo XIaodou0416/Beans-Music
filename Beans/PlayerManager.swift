@@ -416,8 +416,7 @@ final class PlayerManager: NSObject, ObservableObject {
         Task {
             var urlString: String?
             var resolvedThirdParty: UnblockService.Resolved?
-            // 版权受限歌手（周杰伦）：允许第三方音源，但启用严格模式（歌名+歌手+时长三重匹配原唱，校验不过拒绝，绝不播放翻唱）
-            // 免费听歌（灰色歌曲解锁）总开关：默认开启，优先使用内置预设音源兜底。
+            // 免费听歌（灰色歌曲解锁）总开关：默认开启，官方失败后走同名歌曲与第三方音源兜底。
             let enableUnblock = defaults.object(forKey: "beans.enableUnblock") as? Bool ?? true
             let strictUnlock = shouldLockOfficialOnly(song)
             let quality = (forceKugouStandard && song.source == .kugou) ? .standard : BeansAudioQuality.current
@@ -454,24 +453,19 @@ final class PlayerManager: NSObject, ObservableObject {
                     guard generation == self.loadGeneration else { return }
                     self.isBuffering = false
                     self.loadFailed = true
-                    if song.source != .kugou, self.shouldLockOfficialOnly(song) {
-                        BeansLogger.shared.log("播放失败：\(song.name) - 未找到原唱音源（官方受限），拒绝翻唱版本", level: .error)
-                        ToastCenter.shared.show("《\(song.name)》未找到原唱音源（官方受限），已停止播放，拒绝翻唱版本")
-                    } else {
-                        let hasUserSourceKey = (UserDefaults.standard
-                            .string(forKey: UnblockSourceStore.userAPIKeysKey)?
-                            .split(whereSeparator: { $0 == "\n" || $0 == "," || $0 == ";" })
-                            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                            .filter { !$0.isEmpty }
-                            .isEmpty ?? true) == false
-                        let failureMessage = enableUnblock
-                            ? (hasUserSourceKey
-                               ? "播放失败，请查看密钥有效性"
-                               : "播放失败，您已开启第三方音源功能，请填写密钥后播放")
-                            : "播放失败，未获取到可用音源"
-                        BeansLogger.shared.log("播放失败：\(song.name) - \(failureMessage)｜音质=\(quality.level)", level: .error)
-                        ToastCenter.shared.show(failureMessage, duration: 3)
-                    }
+                    let hasUserSourceKey = (UserDefaults.standard
+                        .string(forKey: UnblockSourceStore.userAPIKeysKey)?
+                        .split(whereSeparator: { $0 == "\n" || $0 == "," || $0 == ";" })
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                        .isEmpty ?? true) == false
+                    let failureMessage = enableUnblock
+                        ? (hasUserSourceKey
+                           ? "播放失败，可能是音源调用上限或地址失效，请稍后重试"
+                           : "播放失败，您已开启第三方音源功能，请填写密钥后播放")
+                        : "播放失败，未获取到可用音源"
+                    BeansLogger.shared.log("播放失败：\(song.name) - \(failureMessage)｜音质=\(quality.level)", level: .error)
+                    ToastCenter.shared.show(failureMessage, duration: 3)
                 }
                 return
             }
@@ -511,22 +505,10 @@ final class PlayerManager: NSObject, ObservableObject {
         return (urlString, resolved)
     }
 
-    /// QQ 歌曲兜底：先在网易云按 歌名+歌手 匹配同名歌曲，免费完整 URL 直接播，VIP/无 URL 交给第三方解锁
-    private func qqFallback(song: Song, quality: BeansAudioQuality, enableUnblock: Bool, strict: Bool = false) async -> (String?, UnblockService.Resolved?) {
+    /// QQ 歌曲兜底：优先复用网易云可播链路；仍不可播时再尝试 QQ 第三方源。
+    private func qqFallback(song: Song, quality: BeansAudioQuality, enableUnblock: Bool, strict: Bool = false, excludedHosts: Set<String> = []) async -> (String?, UnblockService.Resolved?) {
         var urlString: String?
         var resolved: UnblockService.Resolved?
-        if enableUnblock {
-            resolved = await UnblockService.resolve(
-                name: song.name,
-                artists: song.artists,
-                neteaseID: 0,
-                songSource: .qq,
-                qqMid: song.qqMid,
-                qqMediaMid: song.qqMediaMid,
-                strict: strict
-            )
-        }
-        if resolved != nil { return (nil, resolved) }
         if let matched = await matchNetEaseSong(name: song.name, artists: song.artists, durationMS: Int(song.duration * 1000), strict: strict) {
             let infos = try? await NetEaseAPI.shared.songURLInfo(ids: [matched.id], level: quality.level)
             var info = infos?[matched.id]
@@ -546,6 +528,22 @@ final class PlayerManager: NSObject, ObservableObject {
                     strict: strict
                 )
             }
+        }
+        if resolved != nil || urlString != nil {
+            BeansLogger.shared.log("QQ兜底：\(song.name) 网易云链路=命中 官方=\(urlString != nil ? "是" : "否") 第三方=\(resolved != nil ? "命中" : "未命中")", level: .debug)
+            return (urlString, resolved)
+        }
+        if enableUnblock {
+            resolved = await UnblockService.resolve(
+                name: song.name,
+                artists: song.artists,
+                neteaseID: 0,
+                songSource: .qq,
+                qqMid: song.qqMid,
+                qqMediaMid: song.qqMediaMid,
+                strict: strict,
+                excludedHosts: excludedHosts
+            )
         }
         BeansLogger.shared.log("QQ兜底：\(song.name) 官方=\(urlString != nil ? "是" : "否") 第三方=\(resolved != nil ? "命中" : "未用/未命中")", level: .debug)
         return (urlString, resolved)
@@ -593,11 +591,9 @@ final class PlayerManager: NSObject, ObservableObject {
         return nil
     }
 
-    /// 版权受限歌手名单：这些歌手的歌曲必须严格校验原唱（第三方搜索会误匹配翻唱，如周杰伦）
-    /// 兼容第三方返回的英文歌手名（Jay Chou），统一按别名判断，避免漏判导致播放翻唱
+    /// 不再按歌手硬拦截跨平台兜底，避免 QQ 官方失败后把可播的网易云链路一并阻断。
     private func shouldLockOfficialOnly(_ song: Song) -> Bool {
-        let artists = song.artists.lowercased()
-        return artists.contains("周杰伦") || artists.contains("jay chou") || artists.contains("jaychou")
+        false
     }
 
     /// 在网易云按 歌名+歌手 匹配同名歌曲（QQ vkey 失败时的免费播放兜底）
@@ -669,13 +665,10 @@ final class PlayerManager: NSObject, ObservableObject {
             level: .debug
         )
         Task {
-            let resolved = await UnblockService.resolve(
-                name: song.name,
-                artists: song.artists,
-                neteaseID: 0,
-                songSource: .qq,
-                qqMid: qqMid,
-                qqMediaMid: song.qqMediaMid,
+            let (urlString, resolved) = await self.qqFallback(
+                song: song,
+                quality: BeansAudioQuality.current,
+                enableUnblock: true,
                 strict: strict,
                 excludedHosts: excludedHosts
             )
@@ -691,6 +684,9 @@ final class PlayerManager: NSObject, ObservableObject {
                         isThirdParty: true
                     )
                     BeansLogger.shared.log("第三方播放地址重试成功：\(song.name)｜域名=\(resolved.url.host ?? "?")", level: .info)
+                } else if let urlString, let url = URL(string: urlString) {
+                    self.setupPlayer(url: url, resumeAt: resume)
+                    BeansLogger.shared.log("第三方播放地址重试转网易云成功：\(song.name)｜域名=\(url.host ?? "?")", level: .info)
                 } else {
                     self.loadFailed = true
                     self.isBuffering = false
