@@ -35,7 +35,7 @@ enum JSPluginRuntime {
                 apiKey: apiKey
             )
         }
-        await Task.detached(priority: .userInitiated) {
+        return await Task.detached(priority: .userInitiated) {
             resolveSync(
                 script: script,
                 id: id,
