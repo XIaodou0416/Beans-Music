@@ -160,6 +160,7 @@ struct ReferencePlaybackView: View {
         .offset(x: swipeOffset)
         .opacity(1 - min(abs(swipeOffset) / 260, 0.35))
         .gesture(swipeGesture)
+        .simultaneousGesture(closeGesture)
     }
 
     private var lyricsPage: some View {
