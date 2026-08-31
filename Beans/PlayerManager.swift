@@ -398,6 +398,7 @@ final class PlayerManager: NSObject, ObservableObject {
         guard let song = currentSong else { return }
         loadGeneration += 1
         let generation = loadGeneration
+        thirdPartyRetrySongKey = nil
         let initialProgress = max(0, min(resumeAt ?? 0, max(song.duration, 0)))
         // 切歌立即暂停旧音频，避免新歌加载期间旧歌继续播放造成“切歌卡住”感
         player?.pause()
@@ -698,16 +699,22 @@ final class PlayerManager: NSObject, ObservableObject {
         UIApplication.shared.beginReceivingRemoteControlEvents()
         removeCurrentObservers()
         pendingThirdPartyVIPNotice = thirdPartyVIPNotice
-        // 只有 QQ 官方解析出的地址才附加 QQ 请求头。第三方服务可能使用
-        // qq.com 子域名，但其签名和鉴权规则不同，不能按域名误判。
+        // QQ CDN 地址需要基础请求头；第三方地址也可能落在 QQ CDN，
+        // 但第三方请求不能复用 QQ 登录 Cookie。
         let item: AVPlayerItem
-        if !isThirdParty && url.host?.contains("qq.com") == true {
+        if url.host?.contains("qq.com") == true {
             var headers = [
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0",
+                "User-Agent": isThirdParty
+                    ? "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 Version/16.0 Mobile/15E148 Safari/604.1"
+                    : "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0",
                 "Referer": "https://y.qq.com/",
             ]
-            let cookie = QQMusicAuth.shared.cookieHeader
-            if !cookie.isEmpty { headers["Cookie"] = cookie }
+            // 第三方地址虽然可能来自 QQ CDN，但不能混入用户 QQ Cookie；
+            // 官方地址才使用登录态，避免第三方签名 URL 被错误鉴权。
+            if !isThirdParty {
+                let cookie = QQMusicAuth.shared.cookieHeader
+                if !cookie.isEmpty { headers["Cookie"] = cookie }
+            }
             let asset = AVURLAsset(url: url, options: [
                 "AVURLAssetHTTPHeaderFieldsKey": headers
             ])
