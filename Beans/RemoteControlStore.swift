@@ -37,7 +37,9 @@ final class RemoteControlStore: ObservableObject {
     }
 
     private func apply(_ config: RemoteConfig) {
-        guard config.enabled, let control = config.appControl, control.enabled else {
+        // 旧版本曾支持 App 云控；服务端移除后启动时清理历史覆盖值。
+        clearRemoteOverrides()
+        guard config.enabled else {
             clearRemoteOverrides()
             return
         }
@@ -55,24 +57,6 @@ final class RemoteControlStore: ObservableObject {
             PlatformPreferenceStore.shared.applyRemoteEnabledProviders(enabled)
         }
 
-        setString(control.homeGreetingText, key: "beans.homeGreetingText", defaults: defaults)
-        set(control.homeHideUsername, key: "beans.homeHideUsername", defaults: defaults)
-        set(control.homeHideSort, key: "beans.homeHeaderHideSort", defaults: defaults)
-        set(control.homeHideRefresh, key: "beans.homeHeaderHideRefresh", defaults: defaults)
-        set(control.tabLabelsVisible, key: "beans.tabLabelsVisible", defaults: defaults)
-        set(control.enableHighRefresh, key: "beans.enableHighRefresh", defaults: defaults)
-        set(control.enableThirdPartySources, key: "beans.enableUnblock", defaults: defaults)
-        set(control.showThirdPartyVipNotice, key: "beans.showThirdPartyVIPNotice", defaults: defaults)
-
-        setHex(control.playerMainIconColor, key: "beans.playerMainIconColorHex", defaults: defaults)
-        setHex(control.playerSecondaryIconColor, key: "beans.playerSecondaryIconColorHex", defaults: defaults)
-        setHex(control.playerPrimaryButtonColor, key: "beans.playerPrimaryButtonColorHex", defaults: defaults)
-        setHex(control.progressAccentColor, key: "beans.progressAccentHex", defaults: defaults)
-        setHex(control.albumTitleColor, key: "beans.albumTitleColorHex", defaults: defaults)
-        setHex(control.albumArtistColor, key: "beans.albumArtistColorHex", defaults: defaults)
-        setHex(control.albumPreviewLyricColor, key: "beans.albumPreviewLyricColorHex", defaults: defaults)
-
-        HighRefreshKeeper.shared.configure(enabled: defaults.bool(forKey: "beans.enableHighRefresh"))
         defaults.synchronize()
     }
 
@@ -147,32 +131,12 @@ private struct RemoteConfig: Decodable {
     let announcementEnabled: Bool
     let updatedAt: String?
     let platforms: RemotePlatforms?
-    let appControl: RemoteAppControl?
 }
 
 private struct RemotePlatforms: Decodable {
     let netease: Bool?
     let qq: Bool?
     let kugou: Bool?
-}
-
-private struct RemoteAppControl: Decodable {
-    let enabled: Bool
-    let homeGreetingText: String?
-    let homeHideUsername: Bool?
-    let homeHideSort: Bool?
-    let homeHideRefresh: Bool?
-    let tabLabelsVisible: Bool?
-    let enableHighRefresh: Bool?
-    let enableThirdPartySources: Bool?
-    let showThirdPartyVipNotice: Bool?
-    let playerMainIconColor: String?
-    let playerSecondaryIconColor: String?
-    let playerPrimaryButtonColor: String?
-    let progressAccentColor: String?
-    let albumTitleColor: String?
-    let albumArtistColor: String?
-    let albumPreviewLyricColor: String?
 }
 
 private extension JSONDecoder {

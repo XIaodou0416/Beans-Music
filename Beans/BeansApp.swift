@@ -40,6 +40,7 @@ struct BeansApp: App {
                 player.restorePersistedPlayMode()
                 FontManager.reinstallIfNeeded()
                 theme.restoreWallpapersIfNeeded()
+                await DeviceReporter.shared.reportLaunch()
                 await RemoteControlStore.shared.refreshIfNeeded(force: true)
             }
             .onChange(of: scenePhase) { phase in
