@@ -25,6 +25,9 @@ enum JSPluginRuntime {
         quality: String,
         apiKey: String?
     ) async -> URL? {
+        if script.contains("globalThis.lx") && script.contains("lxmusicapi.onrender.com") {
+            return await resolveKeepAlive(source: source, id: id, quality: quality)
+        }
         if source == "tx", script.contains("source.shiqianjiang.cn/api/music/url") {
             return await resolveShiqianjiang(
                 id: id,
@@ -43,6 +46,34 @@ enum JSPluginRuntime {
                 apiKey: apiKey
             )
         }.value
+    }
+
+    private static func resolveKeepAlive(source: String, id: String, quality: String) async -> URL? {
+        let level = quality == "standard" ? "128k" : "320k"
+        guard let url = URL(string: "https://lxmusicapi.onrender.com/url/\(source)/\(id)/\(level)") else {
+            return nil
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("lx-music-mobile/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("share-v3", forHTTPHeaderField: "X-Request-Key")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200,
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let code = object["code"] as? Int, code == 0,
+                  let rawURL = object["url"] as? String,
+                  let playURL = URL(string: rawURL),
+                  ["http", "https"].contains(playURL.scheme?.lowercased() ?? "") else {
+                return nil
+            }
+            BeansLogger.shared.log("网络 JS 音源命中：\(source) 音质=\(level)", level: .info)
+            return playURL
+        } catch {
+            BeansLogger.shared.log("网络 JS 音源请求失败：\(error.localizedDescription)", level: .debug)
+            return nil
+        }
     }
 
     /// 兼容常见的打包音源：它们把请求逻辑封装在 webpack 内部，

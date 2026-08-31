@@ -243,8 +243,17 @@ private struct SourceImportWrapper: Decodable {
 
 enum SourceImportError: LocalizedError {
     case invalidConfiguration
+    case networkFailure
+    case fileTooLarge
 
     var errorDescription: String? {
-        "没有找到有效的自定义音源配置"
+        switch self {
+        case .invalidConfiguration:
+            return "没有找到有效的自定义音源配置"
+        case .networkFailure:
+            return "网络音源下载失败"
+        case .fileTooLarge:
+            return "JS 音源文件不能超过 2MB"
+        }
     }
 }
