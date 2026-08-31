@@ -224,7 +224,6 @@ struct ReferencePlaybackView: View {
                 }
             }
         }
-        .gesture(swipeGesture)
     }
 
     private var lyricsHeader: some View {
