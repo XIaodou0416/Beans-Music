@@ -83,7 +83,7 @@ struct RootView: View {
 
     private var miniPlayerBottomPadding: CGFloat {
         if tabCompact && player.currentSong != nil { return usesSystemFloatingTabBar ? 18 : 24 }
-        usesSystemFloatingTabBar ? 62 : 80
+        return usesSystemFloatingTabBar ? 62 : 80
     }
 
     private var visibleTabs: [RootTab] {
