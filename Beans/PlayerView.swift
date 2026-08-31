@@ -2446,7 +2446,7 @@ struct LyricsSection: View {
     /// 长按歌词进入多选复制模式（可多选 / 全选复制）
     @State private var selectionMode = false
     @State private var selected: Set<Int> = []
-    /// 用户手动滚动时暂停自动跟随（借鉴 Kumone：3 秒后恢复）
+    /// 用户手动滚动时暂停自动跟随，停手后延迟恢复。
     @State private var isUserScrolling = false
     @State private var resumeScrollTask: Task<Void, Never>?
     /// 歌词手动滚动时，以视口中心最近的一行作为视觉焦点。
@@ -2518,7 +2518,8 @@ struct LyricsSection: View {
                             .id(index)
                     }
                 }
-                .padding(.vertical, appleMusicStyle ? 188 : 210)
+                .padding(.top, appleMusicStyle ? 72 : 210)
+                .padding(.bottom, appleMusicStyle ? 96 : 210)
                 .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity)
@@ -2527,7 +2528,7 @@ struct LyricsSection: View {
             .beansScrollIndicatorsHidden()
             .rotation3DEffect(.degrees(Double(tilt)), axis: (x: 1, y: 0, z: 0), anchor: .bottom, perspective: 0.5)
             .rotation3DEffect(.degrees(Double(tiltY)), axis: (x: 0, y: 1, z: 0), anchor: .center, perspective: 0.5)
-            // 上下渐隐遮罩（借鉴 Kumone 歌词界面）：歌词接近顶部/底部时自然淡出
+            // 上下渐隐遮罩：歌词接近顶部或底部时自然淡出。
             .mask(
                 LinearGradient(
                     stops: [
@@ -2562,6 +2563,27 @@ struct LyricsSection: View {
                     abs($0.value - centerY) < abs($1.value - centerY)
                 }?.key
             }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 4)
+                    .onChanged { _ in
+                        isUserScrolling = true
+                        resumeScrollTask?.cancel()
+                    }
+                    .onEnded { _ in
+                        resumeScrollTask?.cancel()
+                        let selectedIndex = focusedIndex
+                        if let selectedIndex {
+                            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.38)) {
+                                proxy.scrollTo(selectedIndex, anchor: .center)
+                            }
+                        }
+                        resumeScrollTask = Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(3))
+                            guard !Task.isCancelled else { return }
+                            isUserScrolling = false
+                        }
+                    }
+            )
             .onAppear {
                 // 延迟到布局稳定后再定位当前行，避免从封面页调整进度后切回歌词错位
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
@@ -2584,15 +2606,19 @@ struct LyricsSection: View {
         let isCurrent = index == visualIndex
         let isPlayed = (currentIndex ?? -1) >= 0 && index < playbackIndex
         let distance = abs(index - (visualIndex ?? playbackIndex))
-        let opacity: Double = isCurrent
-            ? 1.0
-            : (isPlayed ? 0.28 : 0.62) - Double(min(distance, 4)) * (appleMusicStyle ? 0.08 : 0.05)
-        let size = isCurrent
-            ? baseFontSize + (appleMusicStyle ? 7 : 4)
-            : baseFontSize - CGFloat(min(distance, 2)) * (appleMusicStyle ? 2.0 : 1.5)
+        let opacity: Double = appleMusicStyle
+            ? (isCurrent ? 1.0 : 0.38)
+            : (isCurrent
+               ? 1.0
+               : (isPlayed ? 0.28 : 0.62) - Double(min(distance, 4)) * 0.05)
+        let size = appleMusicStyle
+            ? 27
+            : (isCurrent ? baseFontSize + 4 : baseFontSize - CGFloat(min(distance, 2)) * 1.5)
         // 歌词行模糊：当前行与邻近行保持清晰，距离越远才越柔和（避免只剩一行清晰显得突兀）
         // 模糊起始距离与强度由用户控制（0 强度 = 完全关闭模糊）
-        let blurRadius: CGFloat = isCurrent ? 0 : min(CGFloat(max(distance - Int(blurStart), 0)) * blurAmount * (appleMusicStyle ? 1.25 : 1), 7.0)
+        let blurRadius: CGFloat = appleMusicStyle
+            ? (isCurrent ? 0 : 0.6)
+            : (isCurrent ? 0 : min(CGFloat(max(distance - Int(blurStart), 0)) * blurAmount, 7.0))
 
         // 当前行用渐变（封面色或自定义），光晕跟随渐变起始色
         let lineStyle: AnyShapeStyle
@@ -2604,10 +2630,10 @@ struct LyricsSection: View {
         let glowColor = glowColorOverride ?? (gradientStart ?? accent)
 
         let lineFont: Font = BeansFont.appFont(size)
-        // 翻译行：仅当前行展示（借鉴 Kumone 的歌词翻译显示）
+        // 翻译行只展示在当前视觉焦点行下方。
         let translationText = (isCurrent && showTranslation) ? line.translation : nil
 
-        return VStack(spacing: 3) {
+        return VStack(alignment: appleMusicStyle || alignment == .leading ? .leading : .center, spacing: 3) {
             Text(line.text.isEmpty ? " " : line.text)
                 .font(lineFont)
                 .foregroundStyle(lineStyle)
@@ -2622,23 +2648,23 @@ struct LyricsSection: View {
                 )
                 .blur(radius: blurRadius)
                 .opacity(max(opacity, 0.15))
-                .scaleEffect(isCurrent ? (appleMusicStyle ? 1.08 : 1.05) : (appleMusicStyle ? 0.98 : 1))
-                .multilineTextAlignment(alignment == .leading ? .leading : .center)
+                .scaleEffect(isCurrent ? (appleMusicStyle ? 1.07 : 1.05) : (appleMusicStyle ? 0.82 : 1), anchor: .leading)
+                .multilineTextAlignment(appleMusicStyle || alignment == .leading ? .leading : .center)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
             if let translationText, !translationText.isEmpty {
                 Text(translationText)
-                    .font(BeansFont.appFont(size * 0.68, .regular))
+                    .font(BeansFont.appFont(appleMusicStyle ? 15 : size * 0.68, .regular))
                     .foregroundStyle(secondary.opacity(isCurrent ? 0.9 : 0.45))
-                    .multilineTextAlignment(alignment == .leading ? .leading : .center)
+                    .multilineTextAlignment(appleMusicStyle || alignment == .leading ? .leading : .center)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                     .blur(radius: blurRadius * 0.5)
                     .opacity(max(opacity, 0.2))
             }
         }
-        .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
-        .padding(.horizontal, alignment == .leading ? 40 : (appleMusicStyle ? 24 : 36))
+        .frame(maxWidth: .infinity, alignment: appleMusicStyle || alignment == .leading ? .leading : .center)
+        .padding(.horizontal, appleMusicStyle ? 2 : (alignment == .leading ? 40 : 36))
         .animation(.easeInOut(duration: 0.25), value: visualIndex)
     }
 
