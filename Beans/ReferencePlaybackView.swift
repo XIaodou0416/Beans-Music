@@ -1,4 +1,5 @@
 import SwiftUI
+import MediaPlayer
 
 private struct ReferenceLyricCenterKey: PreferenceKey {
     static var defaultValue: [UUID: CGFloat] = [:]
@@ -20,8 +21,19 @@ struct ReferencePlaybackView: View {
     let onFavorite: () -> Void
     let onMore: () -> Void
     let onQueue: () -> Void
+    let onComments: () -> Void
 
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
+    @AppStorage("beans.appleMusic.showVolume") private var showVolumeControl = true
+    @AppStorage("beans.appleMusic.primaryHex") private var primaryHex = ""
+    @AppStorage("beans.appleMusic.secondaryHex") private var secondaryHex = ""
+    @AppStorage("beans.appleMusic.accentHex") private var accentHex = ""
+    @AppStorage("beans.appleMusic.topY") private var topOffsetY = 0.0
+    @AppStorage("beans.appleMusic.coverScale") private var coverScale = 1.0
+    @AppStorage("beans.appleMusic.titleY") private var titleOffsetY = 0.0
+    @AppStorage("beans.appleMusic.lyricY") private var lyricOffsetY = 0.0
+    @AppStorage("beans.appleMusic.controlsY") private var controlsOffsetY = 0.0
+    @AppStorage("beans.appleMusic.actionsY") private var actionsOffsetY = 0.0
     @State private var swipeOffset: CGFloat = 0
     @State private var lyricCenters: [UUID: CGFloat] = [:]
     @State private var focusedLyricID: UUID?
@@ -57,8 +69,6 @@ struct ReferencePlaybackView: View {
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
-            .contentShape(Rectangle())
-            .gesture(closeGesture)
         }
         .preferredColorScheme(.dark)
         .background {
@@ -81,6 +91,8 @@ struct ReferencePlaybackView: View {
                 BeansHaptics.medium()
                 onClose()
             }
+            .gesture(closeGesture)
+            .offset(y: CGFloat(topOffsetY))
             .accessibilityLabel("收起播放器")
     }
 
@@ -106,6 +118,7 @@ struct ReferencePlaybackView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .shadow(color: .black.opacity(0.46), radius: 36, y: 18)
                 .scaleEffect(player.isPlaying ? 1 : 0.965)
+                .scaleEffect(CGFloat(coverScale))
                 .animation(.spring(response: 0.36, dampingFraction: 0.84), value: player.isPlaying)
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.985))
@@ -114,7 +127,7 @@ struct ReferencePlaybackView: View {
                 HStack(spacing: 8) {
                     Text(song?.name ?? "未在播放")
                         .font(BeansFont.appFont(22, .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(primaryColor)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     if song?.isVIP == true {
@@ -128,19 +141,21 @@ struct ReferencePlaybackView: View {
                 }
                 Text(subtitle)
                     .font(BeansFont.appFont(13.5, .medium))
-                    .foregroundStyle(.white.opacity(0.64))
+                    .foregroundStyle(secondaryColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             .frame(maxWidth: 420)
             .padding(.top, 22)
+            .offset(y: CGFloat(titleOffsetY))
 
-            MiniLyricsPreview(lines: previewLyrics) {
+            MiniLyricsPreview(lines: previewLyrics, primary: primaryColor, secondary: secondaryColor) {
                 guard !lyrics.isEmpty else { return }
                 BeansHaptics.tap()
                 showLyrics = true
             }
             .padding(.top, 18)
+            .offset(y: CGFloat(lyricOffsetY))
 
             Spacer(minLength: 0)
         }
@@ -230,15 +245,27 @@ struct ReferencePlaybackView: View {
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.94))
 
+            Button {
+                BeansHaptics.tap()
+                onFavorite()
+            } label: {
+                Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(localLibrary.containsSong(song) ? Color(red: 0.98, green: 0.32, blue: 0.42) : primaryColor.opacity(0.86))
+                    .frame(width: 42, height: 42)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
             VStack(alignment: .leading, spacing: 3) {
                 Text(song?.name ?? "未在播放")
                     .font(BeansFont.appFont(15, .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(primaryColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text(subtitle)
                     .font(BeansFont.appFont(12, .medium))
-                    .foregroundStyle(.white.opacity(0.58))
+                    .foregroundStyle(secondaryColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -249,7 +276,7 @@ struct ReferencePlaybackView: View {
             } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(primaryColor.opacity(0.72))
                     .frame(width: 38, height: 38)
             }
             .buttonStyle(.plain)
@@ -290,16 +317,19 @@ struct ReferencePlaybackView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(primaryColor)
             .frame(maxWidth: 320)
+            .offset(y: CGFloat(controlsOffsetY))
 
-            HStack(spacing: 18) {
+            if showVolumeControl {
+                ReferenceVolumeControl(accent: primaryColor, secondary: secondaryColor)
+                    .frame(maxWidth: 420)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
+            HStack(spacing: 48) {
                 referenceActionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
                     player.togglePlayMode()
-                }
-                Spacer(minLength: 0)
-                referenceActionButton(icon: localLibrary.containsSong(song) ? "heart.fill" : "heart", active: localLibrary.containsSong(song), tint: Color(red: 0.98, green: 0.32, blue: 0.42)) {
-                    onFavorite()
                 }
                 referenceActionButton(icon: "list.bullet") {
                     onQueue()
@@ -309,7 +339,9 @@ struct ReferencePlaybackView: View {
                 }
             }
             .frame(maxWidth: 420)
+            .offset(y: CGFloat(actionsOffsetY))
         }
+        .gesture(commentsGesture)
     }
 
     private func referenceActionButton(icon: String, active: Bool = false, tint: Color = .white, action: @escaping () -> Void) -> some View {
@@ -319,8 +351,9 @@ struct ReferencePlaybackView: View {
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(active ? tint : .white.opacity(0.74))
-                .frame(width: 44, height: 44)
+                .foregroundStyle(active ? accentColor : primaryColor.opacity(0.78))
+                .frame(width: 58, height: 58)
+                .background(Color.white.opacity(active ? 0.18 : 0.10), in: Circle())
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -395,14 +428,22 @@ struct ReferencePlaybackView: View {
             player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
         } label: {
             VStack(alignment: .leading, spacing: 5) {
-                Text(line.text.isEmpty ? " " : line.text)
-                    .font(BeansFont.appFont(isFocused ? 27 : 23, isFocused ? .bold : .semibold))
-                    .foregroundStyle(.white.opacity(isFocused ? 1 : 0.36))
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(line.text.isEmpty ? " " : line.text)
+                        .font(BeansFont.appFont(isFocused ? 27 : 23, isFocused ? .bold : .semibold))
+                        .foregroundStyle(primaryColor.opacity(isFocused ? 1 : 0.36))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if isFocused {
+                        Spacer(minLength: 8)
+                        Text(beansTimeString(line.time))
+                            .font(BeansFont.appFont(11, .semibold, .monospaced))
+                            .foregroundStyle(secondaryColor.opacity(0.82))
+                    }
+                }
                 if isFocused, let translation = line.translation, !translation.isEmpty {
                     Text(translation)
                         .font(BeansFont.appFont(15, .medium))
-                        .foregroundStyle(.white.opacity(0.72))
+                        .foregroundStyle(secondaryColor.opacity(0.72))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -476,10 +517,34 @@ struct ReferencePlaybackView: View {
     private var closeGesture: some Gesture {
         DragGesture(minimumDistance: 18)
             .onEnded { value in
-                guard value.translation.height > 88, abs(value.translation.height) > abs(value.translation.width) else { return }
+                guard value.translation.height > 56, abs(value.translation.height) > abs(value.translation.width) else { return }
                 BeansHaptics.medium()
                 onClose()
             }
+    }
+
+    private var commentsGesture: some Gesture {
+        DragGesture(minimumDistance: 25)
+            .onEnded { value in
+                guard value.translation.height < -54, abs(value.translation.height) > abs(value.translation.width) else { return }
+                BeansHaptics.medium()
+                onComments()
+            }
+    }
+
+    private var primaryColor: Color {
+        if primaryHex.hasPrefix("#"), let color = Color(hex: primaryHex) { return color }
+        return .white
+    }
+
+    private var secondaryColor: Color {
+        if secondaryHex.hasPrefix("#"), let color = Color(hex: secondaryHex) { return color }
+        return .white.opacity(0.58)
+    }
+
+    private var accentColor: Color {
+        if accentHex.hasPrefix("#"), let color = Color(hex: accentHex) { return color }
+        return Color(red: 1.0, green: 0.28, blue: 0.36)
     }
 }
 
@@ -555,8 +620,56 @@ private struct ReferenceScrubber: View {
     }
 }
 
+private struct ReferenceVolumeControl: View {
+    let accent: Color
+    let secondary: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "speaker.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(secondary.opacity(0.84))
+            ReferenceSystemVolumeView(accent: accent, secondary: secondary)
+                .frame(height: 32)
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(secondary.opacity(0.84))
+        }
+        .frame(height: 34)
+    }
+}
+
+private struct ReferenceSystemVolumeView: UIViewRepresentable {
+    let accent: Color
+    let secondary: Color
+
+    func makeUIView(context: Context) -> MPVolumeView {
+        let view = MPVolumeView(frame: .zero)
+        view.showsRouteButton = false
+        styleVolumeSlider(in: view)
+        return view
+    }
+
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {
+        styleVolumeSlider(in: uiView)
+    }
+
+    private func styleVolumeSlider(in view: MPVolumeView) {
+        DispatchQueue.main.async {
+            let sliders = view.subviews.compactMap { $0 as? UISlider }
+            sliders.forEach { slider in
+                slider.minimumTrackTintColor = UIColor(accent.opacity(0.88))
+                slider.maximumTrackTintColor = UIColor(secondary.opacity(0.32))
+                slider.thumbTintColor = UIColor(accent)
+            }
+        }
+    }
+}
+
 private struct MiniLyricsPreview: View {
     let lines: [LyricLine]
+    let primary: Color
+    let secondary: Color
     let action: () -> Void
 
     var body: some View {
@@ -565,12 +678,12 @@ private struct MiniLyricsPreview: View {
                 if lines.isEmpty {
                     Text("暂无歌词")
                         .font(BeansFont.appFont(15, .semibold))
-                        .foregroundStyle(.white.opacity(0.54))
+                        .foregroundStyle(secondary.opacity(0.54))
                 } else {
                     ForEach(Array(lines.enumerated()), id: \.element.id) { index, line in
                         Text(line.text.isEmpty ? " " : line.text)
                             .font(BeansFont.appFont(index == 1 ? 17 : 15, index == 1 ? .semibold : .medium))
-                            .foregroundStyle(.white.opacity(index == 1 ? 0.86 : 0.38))
+                            .foregroundStyle((index == 1 ? primary : secondary).opacity(index == 1 ? 0.86 : 0.5))
                             .lineLimit(1)
                             .minimumScaleFactor(0.72)
                     }
