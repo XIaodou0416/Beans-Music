@@ -740,10 +740,11 @@ final class PlayerManager: NSObject, ObservableObject {
             playbackHeaders = [
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0",
                 "Referer": "https://y.qq.com/",
-                "Origin": "https://y.qq.com",
             ]
             let cookie = QQMusicAuth.shared.cookieHeader
-            playbackHeaders["Cookie"] = cookie.isEmpty ? "uin=0; qqmusic_fromtag=66" : cookie
+            if !cookie.isEmpty {
+                playbackHeaders["Cookie"] = cookie
+            }
             let asset = AVURLAsset(url: url, options: [
                 "AVURLAssetHTTPHeaderFieldsKey": playbackHeaders
             ])
