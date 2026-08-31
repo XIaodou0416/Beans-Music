@@ -325,6 +325,45 @@ struct PlayerView: View {
         Group {
             if showPlayerSettings {
                 Color.clear.ignoresSafeArea()
+            } else if coverPlayerStyle == .appleMusic {
+                ZStack {
+                    ReferencePlaybackView(
+                        song: song,
+                        lyrics: lyrics,
+                        showLyrics: $showLyrics,
+                        onClose: closePlayer,
+                        onFavorite: {
+                            guard let song else { return }
+                            toggleLocalFavorite(song)
+                        },
+                        onMore: {
+                            withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+                                showMoreActions = true
+                            }
+                        },
+                        onQueue: {
+                            showQueue = true
+                        }
+                    )
+
+                    if showMoreActions {
+                        Color.black.opacity(0.001)
+                            .ignoresSafeArea()
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+                                    showMoreActions = false
+                                }
+                            }
+                            .zIndex(70)
+
+                        playerMoreActionsPanel
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .padding(.top, 76)
+                            .zIndex(80)
+                            .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
+                    }
+                }
             } else {
                 GeometryReader { geo in
                     ZStack {
@@ -503,7 +542,7 @@ struct PlayerView: View {
                 colors: [palette.backgroundTop, palette.backgroundBottom],
                 startPoint: .top, endPoint: .bottom
             )
-            if coverPlayerStyle != .appleMusic && !lyricBackgroundImagePath.isEmpty && (showLyrics || lyricBackgroundSyncCover) {
+            if !lyricBackgroundImagePath.isEmpty && (showLyrics || lyricBackgroundSyncCover) {
                 lyricPlayerBackgroundLayer
             } else if theme.backgroundSyncAll, let image = theme.customBackgroundImage {
                 WallpaperImage(image: image)
@@ -518,24 +557,22 @@ struct PlayerView: View {
                 CoverBlurBackground(url: song?.coverURL, scheme: colorScheme)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            if coverPlayerStyle != .appleMusic {
-                AmbientGlowView(
+            AmbientGlowView(
+                accent: palette.accent,
+                secondary: palette.secondary,
+                isPlaying: playerVisualsActive,
+                dustMode: playerDustMode,
+                dustDensity: playerDustDensity,
+                dustSize: playerDustSize,
+                breath: playerBreath
+            )
+            if djVisualEnabled {
+                DJVisualView(
                     accent: palette.accent,
                     secondary: palette.secondary,
                     isPlaying: playerVisualsActive,
-                    dustMode: playerDustMode,
-                    dustDensity: playerDustDensity,
-                    dustSize: playerDustSize,
-                    breath: playerBreath
+                    intensity: djVisualIntensity
                 )
-                if djVisualEnabled {
-                    DJVisualView(
-                        accent: palette.accent,
-                        secondary: palette.secondary,
-                        isPlaying: playerVisualsActive,
-                        intensity: djVisualIntensity
-                    )
-                }
             }
             LinearGradient(
                 colors: colorScheme == .dark
@@ -573,9 +610,6 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var headerBar: some View {
-        if coverPlayerStyle == .appleMusic {
-            referenceTopIndicator
-        } else {
         HStack(spacing: 12) {
             Button {
                 BeansHaptics.tap()
@@ -640,26 +674,6 @@ struct PlayerView: View {
         .padding(.horizontal, 20)
         .padding(.top, 2)
         .padding(.bottom, 1)
-        }
-    }
-
-    /// Apple Music 模式唯一的返回入口：从顶部指示线向下滑动关闭播放器。
-    private var referenceTopIndicator: some View {
-        Capsule()
-            .fill(palette.text.opacity(0.72))
-            .frame(width: 38, height: 5)
-            .padding(.top, 8)
-            .padding(.bottom, 8)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 12)
-                    .onEnded { value in
-                        guard value.translation.height > 45 else { return }
-                        BeansHaptics.medium()
-                        closePlayer()
-                    }
-            )
     }
 
     private var playerMoreActionsPanel: some View {
@@ -775,113 +789,11 @@ struct PlayerView: View {
     @ViewBuilder
     private func albumPanel(geo: GeometryProxy) -> some View {
         switch coverPlayerStyle {
-        case .classic:
+        case .classic, .appleMusic:
             classicAlbumPanel(geo: geo)
         case .controlPanel:
             controlPanelAlbumPanel(geo: geo)
-        case .appleMusic:
-            referenceAlbumPanel(geo: geo)
         }
-    }
-
-    /// Apple Music 风格：大封面、清晰标题、细进度条和低干扰的底部控制。
-    /// 点击封面仍然进入歌词页，左右滑动仍然切换歌曲。
-    private func referenceAlbumPanel(geo: GeometryProxy) -> some View {
-        let contentWidth = max(geo.size.width - 64, 0)
-        let size = min(contentWidth, min(geo.size.height * 0.52, 378))
-        let radius: CGFloat = 18
-
-        return VStack(spacing: 0) {
-            Spacer(minLength: 8)
-
-            Button {
-                toggleLyrics()
-            } label: {
-                CoverImage(
-                    url: song?.coverURL,
-                    size: size,
-                    cornerRadius: radius,
-                    emptyHint: player.isBuffering ? "等待开始播放…" : nil
-                )
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-                .modifier(CoverSpin(enabled: false, isPlaying: false))
-                .scaleEffect(coverSwitchPulse ? 0.965 : 1)
-                .blur(radius: coverSwitchPulse ? 1.2 : 0)
-                .rotation3DEffect(.degrees(Double(coverDrag.height / -24)), axis: (x: 1, y: 0, z: 0), perspective: 0.48)
-                .rotation3DEffect(.degrees(Double(coverDrag.width / 24)), axis: (x: 0, y: 1, z: 0), perspective: 0.48)
-                .shadow(color: .black.opacity(0.34), radius: 24, y: 14)
-                .animation(.spring(response: 0.34, dampingFraction: 0.86), value: coverDrag)
-                .animation(.easeOut(duration: 0.24), value: coverSwitchPulse)
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.975))
-            .gesture(
-                DragGesture(minimumDistance: 15)
-                    .onChanged { value in
-                        guard swipeSwitchSong else { return }
-                        coverDrag = value.translation
-                        if abs(value.translation.width) > abs(value.translation.height) {
-                            swipeOffset = value.translation.width
-                        }
-                    }
-                    .onEnded { value in
-                        handleSwipeEnd(horizontal: value.translation.width)
-                    }
-            )
-            .modifier(Layoutable(part: .cover, enabled: false, data: $layoutData))
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    Text(song?.name ?? "未在播放")
-                        .font(BeansFont.appFont(22, .bold))
-                        .foregroundStyle(AnyShapeStyle(palette.text))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.62)
-                    if song?.isVIP == true {
-                        Text("VIP")
-                            .font(BeansFont.appFont(9, .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Color(red: 0.93, green: 0.25, blue: 0.22), in: Capsule())
-                    }
-                }
-                Text(subtitle)
-                    .font(BeansFont.appFont(14, .medium))
-                    .foregroundStyle(AnyShapeStyle(palette.secondary))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .contentShape(Rectangle())
-                    .onTapGesture { openArtistHome() }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 20)
-            .padding(.horizontal, 24)
-            .modifier(Layoutable(part: .title, enabled: false, data: $layoutData))
-
-            progressBlock(styleOverride: 0, accentOverride: palette.text)
-                .padding(.top, 18)
-                .padding(.horizontal, 24)
-                .modifier(Layoutable(part: .progress, enabled: false, data: $layoutData))
-
-            Spacer(minLength: 8)
-        }
-        .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .offset(x: swipeOffset)
-        .opacity(1 - min(abs(swipeOffset) / 260, 0.35))
-        .gesture(
-            DragGesture(minimumDistance: 15)
-                .onChanged { value in
-                    guard swipeSwitchSong else { return }
-                    if abs(value.translation.width) > abs(value.translation.height) {
-                        swipeOffset = value.translation.width
-                    }
-                }
-                .onEnded { value in
-                    handleSwipeEnd(horizontal: value.translation.width)
-                }
-        )
     }
 
     private func classicAlbumPanel(geo: GeometryProxy) -> some View {
@@ -1336,9 +1248,6 @@ struct PlayerView: View {
     private func lyricsPanel(geo: GeometryProxy) -> some View {
         ZStack {
             VStack(spacing: 0) {
-                if coverPlayerStyle == .appleMusic {
-                    referenceLyricsHeader
-                } else {
                 HStack(spacing: 12) {
                 Button {
                     toggleLyrics()
@@ -1397,7 +1306,6 @@ struct PlayerView: View {
             .padding(.horizontal, 20)
             .padding(.top, 4)
             .padding(.bottom, 3)
-                }
 
             // 歌词视口截止到底栏上方：当前行在可见区居中（26 版风格，无渐隐遮挡）
             Group {
@@ -1406,34 +1314,27 @@ struct PlayerView: View {
                 } else {
                     LyricsSection(
                         lyrics: lyrics,
-                        accent: coverPlayerStyle == .appleMusic ? palette.text : lyricCurrentColor,
-                        secondary: coverPlayerStyle == .appleMusic ? palette.secondary : lyricDimColor,
-                        gradientStart: coverPlayerStyle == .appleMusic ? nil : lyricGradStart,
-                        gradientEnd: coverPlayerStyle == .appleMusic ? nil : lyricGradEnd,
-                        baseFontSize: coverPlayerStyle == .appleMusic ? 18 : CGFloat(lyricFontSize) * CGFloat(lyricScale),
-                        lineSpacing: coverPlayerStyle == .appleMusic ? 28 : CGFloat(lyricLineSpacing),
-                        glowRadius: coverPlayerStyle == .appleMusic ? 0 : lyricGlowRadius,
-                        showTranslation: coverPlayerStyle == .appleMusic ? true : lyricTranslation,
-                        alignment: coverPlayerStyle == .appleMusic ? .center : lyricAlign,
-                        offsetX: coverPlayerStyle == .appleMusic ? 0 : CGFloat(lyricOffsetX),
-                        anchor: coverPlayerStyle == .appleMusic ? .center : lyricAnchor,
-                        glowColorOverride: coverPlayerStyle == .appleMusic ? nil : lyricGlowColor,
-                        blurStart: coverPlayerStyle == .appleMusic ? 1 : CGFloat(lyricBlurStart),
-                        blurAmount: coverPlayerStyle == .appleMusic ? 1.5 : lyricBlurAmount,
-                        tilt: coverPlayerStyle == .appleMusic ? 0 : CGFloat(lyricTilt),
-                        tiltY: coverPlayerStyle == .appleMusic ? 0 : CGFloat(lyricTiltY),
-                        lyricOffset: CGFloat(lyricOffset),
-                        appleMusicStyle: coverPlayerStyle == .appleMusic
+                        accent: lyricCurrentColor,
+                        secondary: lyricDimColor,
+                        gradientStart: lyricGradStart,
+                        gradientEnd: lyricGradEnd,
+                        baseFontSize: CGFloat(lyricFontSize) * CGFloat(lyricScale),
+                        lineSpacing: CGFloat(lyricLineSpacing),
+                        glowRadius: lyricGlowRadius,
+                        showTranslation: lyricTranslation,
+                        alignment: lyricAlign,
+                        offsetX: CGFloat(lyricOffsetX),
+                        anchor: lyricAnchor,
+                        glowColorOverride: lyricGlowColor,
+                        blurStart: CGFloat(lyricBlurStart),
+                        blurAmount: CGFloat(lyricBlurAmount),
+                        tilt: CGFloat(lyricTilt),
+                        tiltY: CGFloat(lyricTiltY),
+                        lyricOffset: CGFloat(lyricOffset)
                     ) { line in
                         BeansHaptics.tap()
                         player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
                     }
-                }
-                if coverPlayerStyle == .appleMusic {
-                    progressBlock(styleOverride: 0, accentOverride: palette.text)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 12)
-                        .modifier(Layoutable(part: .progress, enabled: false, data: $layoutData))
                 }
             }
             .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
@@ -1441,68 +1342,6 @@ struct PlayerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .id("lyricsPanel-\(song?.identityKey ?? "none")")
-    }
-
-    private var referenceLyricsHeader: some View {
-        HStack(spacing: 12) {
-            Button {
-                toggleLyrics()
-            } label: {
-                CoverImage(url: song?.coverURL, size: 54, cornerRadius: 10)
-                    .modifier(CoverSpin(enabled: false, isPlaying: false))
-                    .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.94))
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(song?.name ?? "未在播放")
-                    .font(BeansFont.appFont(15, .semibold))
-                    .foregroundStyle(AnyShapeStyle(palette.text))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Text(subtitle)
-                    .font(BeansFont.appFont(12, .medium))
-                    .foregroundStyle(AnyShapeStyle(palette.secondary))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .contentShape(Rectangle())
-                    .onTapGesture { openArtistHome() }
-            }
-            Spacer(minLength: 0)
-            referenceIconButton(
-                systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart",
-                color: localLibrary.containsSong(song) ? Color(red: 0.95, green: 0.33, blue: 0.42) : playerButtonText
-            ) {
-                if let song {
-                    toggleLocalFavorite(song)
-                }
-            }
-            .modifier(Layoutable(part: .topFavorite, enabled: layoutMode && coverPlayerStyle != .appleMusic, data: $layoutData))
-            referenceIconButton(systemName: "ellipsis", color: playerButtonText) {
-                withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
-                    showMoreActions = true
-                }
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .background(.ultraThinMaterial.opacity(0.28))
-    }
-
-    /// Apple Music 风格的纯图标按钮：保留 44pt 点击热区，不绘制外圈和底板。
-    private func referenceIconButton(systemName: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button {
-            BeansHaptics.tap()
-            action()
-        } label: {
-            Image(systemName: systemName)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(color)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - 空态兜底（歌曲数据为空时不出现空白页）
@@ -1566,15 +1405,11 @@ struct PlayerView: View {
     @ViewBuilder
     private func controlDeck(bottomInset: CGFloat) -> some View {
         VStack(spacing: 0) {
-            if coverPlayerStyle != .appleMusic {
-                progressBlock()
-                    .modifier(Layoutable(part: .progress, enabled: layoutMode, data: $layoutData))
-            }
+            progressBlock()
+                .modifier(Layoutable(part: .progress, enabled: layoutMode, data: $layoutData))
             deckRow
                 .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
-            if coverPlayerStyle != .appleMusic {
-                deckGrabber
-            }
+            deckGrabber
         }
         .padding(.horizontal, 24)
         .padding(.top, 0)
@@ -1611,10 +1446,7 @@ struct PlayerView: View {
                         })
                     : AnyGesture(DragGesture(minimumDistance: 25)
                         .onEnded { value in
-                            if coverPlayerStyle == .appleMusic, value.translation.height > 50 {
-                                BeansHaptics.medium()
-                                closePlayer()
-                            } else if value.translation.height < -50, song != nil {
+                            if value.translation.height < -50, song != nil {
                                 BeansHaptics.medium()
                                 showComments = true
                             }
@@ -1692,9 +1524,6 @@ struct PlayerView: View {
 
     @ViewBuilder
     private func playerButtonSurface(size: CGFloat, active: Bool = false, primary: Bool = false) -> some View {
-        if coverPlayerStyle == .appleMusic {
-            Color.clear.frame(width: size, height: size)
-        } else {
         switch playerButtonStyle {
         case .glass:
             ZStack {
@@ -1724,7 +1553,6 @@ struct PlayerView: View {
                 }
                 .frame(width: size, height: size)
         }
-        }
     }
 
     /// 循环 / 随机播放按钮（随机模式高亮）
@@ -1735,7 +1563,7 @@ struct PlayerView: View {
         } label: {
             Image(systemName: player.playMode.icon)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(player.playMode == .shuffle ? (coverPlayerStyle == .appleMusic ? palette.text : controlAccent) : (coverPlayerStyle == .appleMusic ? palette.secondary : playerButtonSecondaryText))
+                .foregroundStyle(player.playMode == .shuffle ? controlAccent : playerButtonSecondaryText)
                 .frame(width: 30, height: 30)
                 .background {
                     playerButtonSurface(size: 30, active: player.playMode == .shuffle)
@@ -1743,7 +1571,7 @@ struct PlayerView: View {
                 .clipShape(Circle())
         }
         .buttonStyle(GlassPressButtonStyle())
-                .modifier(Layoutable(part: .loop, enabled: layoutMode && coverPlayerStyle != .appleMusic, data: $layoutData))
+                .modifier(Layoutable(part: .loop, enabled: layoutMode, data: $layoutData))
     }
 
     /// 播放列表按钮
@@ -1754,7 +1582,7 @@ struct PlayerView: View {
         } label: {
             Image(systemName: "list.bullet")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(coverPlayerStyle == .appleMusic ? palette.secondary : playerButtonSecondaryText)
+                .foregroundStyle(playerButtonSecondaryText)
                 .frame(width: 30, height: 30)
                 .background {
                     playerButtonSurface(size: 30)
@@ -1762,7 +1590,7 @@ struct PlayerView: View {
                 .clipShape(Circle())
         }
         .buttonStyle(GlassPressButtonStyle())
-        .modifier(Layoutable(part: .queue, enabled: layoutMode && coverPlayerStyle != .appleMusic, data: $layoutData))
+        .modifier(Layoutable(part: .queue, enabled: layoutMode, data: $layoutData))
     }
 
     private func deckButton(icon: String, accent: Bool = false, expand: Bool = true, part: PlayerLayoutPart? = nil, action: @escaping () -> Void) -> some View {
@@ -1772,7 +1600,7 @@ struct PlayerView: View {
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(accent ? controlAccent : (coverPlayerStyle == .appleMusic ? palette.text : playerButtonText))
+                .foregroundStyle(accent ? controlAccent : playerButtonText)
                 .frame(width: 34, height: 34)
                 .background {
                     playerButtonSurface(size: 34, active: accent)
@@ -1781,7 +1609,7 @@ struct PlayerView: View {
         }
         .buttonStyle(GlassPressButtonStyle())
         .frame(maxWidth: expand ? .infinity : nil)
-        .modifier(Layoutable(part: part ?? .controls, enabled: layoutMode && coverPlayerStyle != .appleMusic && part != nil, data: $layoutData))
+        .modifier(Layoutable(part: part ?? .controls, enabled: layoutMode && part != nil, data: $layoutData))
     }
 
     private var playButton: some View {
@@ -2438,8 +2266,6 @@ struct LyricsSection: View {
     var tiltY: CGFloat = 0
     /// 歌词进度偏移（秒）：正数提前、负数延后
     var lyricOffset: CGFloat = 0
-    /// Apple Music 模式：当前行突出显示，邻近行按距离递减并带柔和模糊。
-    var appleMusicStyle: Bool = false
     let onTapLine: (LyricLine) -> Void
 
     /// 长按歌词进入多选复制模式（可多选 / 全选复制）
@@ -2473,7 +2299,7 @@ struct LyricsSection: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: appleMusicStyle ? max(lineSpacing, 26) : lineSpacing) {
+                LazyVStack(spacing: lineSpacing) {
                     ForEach(Array(lyrics.enumerated()), id: \.element.id) { index, line in
                         lyricRow(index: index, line: line, focusIndex: focusedIndex)
                             .background {
@@ -2517,8 +2343,8 @@ struct LyricsSection: View {
                             .id(index)
                     }
                 }
-                .padding(.top, appleMusicStyle ? 72 : 210)
-                .padding(.bottom, appleMusicStyle ? 96 : 210)
+                .padding(.top, 210)
+                .padding(.bottom, 210)
                 .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity)
@@ -2605,19 +2431,13 @@ struct LyricsSection: View {
         let isCurrent = index == visualIndex
         let isPlayed = (currentIndex ?? -1) >= 0 && index < playbackIndex
         let distance = abs(index - (visualIndex ?? playbackIndex))
-        let opacity: Double = appleMusicStyle
-            ? (isCurrent ? 1.0 : 0.38)
-            : (isCurrent
-               ? 1.0
-               : (isPlayed ? 0.28 : 0.62) - Double(min(distance, 4)) * 0.05)
-        let size = appleMusicStyle
-            ? 27
-            : (isCurrent ? baseFontSize + 4 : baseFontSize - CGFloat(min(distance, 2)) * 1.5)
+        let opacity: Double = isCurrent
+            ? 1.0
+            : (isPlayed ? 0.28 : 0.62) - Double(min(distance, 4)) * 0.05
+        let size = isCurrent ? baseFontSize + 4 : baseFontSize - CGFloat(min(distance, 2)) * 1.5
         // 歌词行模糊：当前行与邻近行保持清晰，距离越远才越柔和（避免只剩一行清晰显得突兀）
         // 模糊起始距离与强度由用户控制（0 强度 = 完全关闭模糊）
-        let blurRadius: CGFloat = appleMusicStyle
-            ? (isCurrent ? 0 : 0.6)
-            : (isCurrent ? 0 : min(CGFloat(max(distance - Int(blurStart), 0)) * blurAmount, 7.0))
+        let blurRadius: CGFloat = isCurrent ? 0 : min(CGFloat(max(distance - Int(blurStart), 0)) * blurAmount, 7.0)
 
         // 当前行用渐变（封面色或自定义），光晕跟随渐变起始色
         let lineStyle: AnyShapeStyle
@@ -2632,7 +2452,7 @@ struct LyricsSection: View {
         // 翻译行只展示在当前视觉焦点行下方。
         let translationText = (isCurrent && showTranslation) ? line.translation : nil
 
-        return VStack(alignment: appleMusicStyle || alignment == .leading ? .leading : .center, spacing: 3) {
+        return VStack(alignment: alignment == .leading ? .leading : .center, spacing: 3) {
             Text(line.text.isEmpty ? " " : line.text)
                 .font(lineFont)
                 .foregroundStyle(lineStyle)
@@ -2647,23 +2467,23 @@ struct LyricsSection: View {
                 )
                 .blur(radius: blurRadius)
                 .opacity(max(opacity, 0.15))
-                .scaleEffect(isCurrent ? (appleMusicStyle ? 1.07 : 1.05) : (appleMusicStyle ? 0.82 : 1), anchor: .leading)
-                .multilineTextAlignment(appleMusicStyle || alignment == .leading ? .leading : .center)
+                .scaleEffect(isCurrent ? 1.05 : 1, anchor: .leading)
+                .multilineTextAlignment(alignment == .leading ? .leading : .center)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
             if let translationText, !translationText.isEmpty {
                 Text(translationText)
-                    .font(BeansFont.appFont(appleMusicStyle ? 15 : size * 0.68, .regular))
+                    .font(BeansFont.appFont(size * 0.68, .regular))
                     .foregroundStyle(secondary.opacity(isCurrent ? 0.9 : 0.45))
-                    .multilineTextAlignment(appleMusicStyle || alignment == .leading ? .leading : .center)
+                    .multilineTextAlignment(alignment == .leading ? .leading : .center)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                     .blur(radius: blurRadius * 0.5)
                     .opacity(max(opacity, 0.2))
             }
         }
-        .frame(maxWidth: .infinity, alignment: appleMusicStyle || alignment == .leading ? .leading : .center)
-        .padding(.horizontal, appleMusicStyle ? 2 : (alignment == .leading ? 40 : 36))
+        .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
+        .padding(.horizontal, alignment == .leading ? 40 : 36)
         .animation(.easeInOut(duration: 0.25), value: visualIndex)
     }
 
