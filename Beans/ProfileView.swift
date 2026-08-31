@@ -2485,7 +2485,6 @@ struct SettingsView: View {
                     .foregroundStyle(Color.beansComment)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
