@@ -113,6 +113,25 @@ enum UnblockService {
             return nil
         }
         let apiKeys = orderedAPIKeys(for: source)
+        if source.kind == "js-plugin", let script = source.script {
+            for songID in songIDs {
+                for quality in qualityCandidates(for: source, songSource: songSource) {
+                    if let url = await JSPluginRuntime.resolve(
+                        script: script,
+                        id: songID,
+                        name: name,
+                        artists: artists,
+                        source: expectedProvider,
+                        quality: quality,
+                        apiKey: apiKeys.first?.1
+                    ) {
+                        BeansLogger.shared.log("JS 音源命中：\(source.name) 音质=\(quality)", level: .info)
+                        return Resolved(url: url, source: source.name)
+                    }
+                }
+            }
+            return nil
+        }
         for (idIndex, songID) in songIDs.enumerated() {
             var baseURLString = source.template
             baseURLString = baseURLString.replacingOccurrences(of: "{id}", with: songID)
@@ -123,11 +142,11 @@ enum UnblockService {
             baseURLString = baseURLString.replacingOccurrences(of: "{keyword}", with: urlEncoded(keyword))
             baseURLString = baseURLString.replacingOccurrences(of: "{artist}", with: urlEncoded(artists))
             for quality in qualityCandidates(for: source, songSource: songSource) {
-                let urlString = baseURLString.replacingOccurrences(of: "{quality}", with: quality)
-                guard let url = URL(string: urlString) else { continue }
+                let qualityURLTemplate = baseURLString.replacingOccurrences(of: "{quality}", with: quality)
                 let idLabel = songSource == .qq && songIDs.count > 1 ? " ID=\(idIndex + 1)/\(songIDs.count)" : ""
                 if !apiKeys.isEmpty {
                     for (originalIndex, apiKey) in apiKeys {
+                        guard let url = URL(string: qualityURLTemplate.replacingOccurrences(of: "{apikey}", with: urlEncoded(apiKey))) else { continue }
                         if let resolved = await presetSourceRequestOnce(
                             source: source,
                             url: url,
@@ -142,7 +161,8 @@ enum UnblockService {
                             return resolved
                         }
                     }
-                } else if let resolved = await presetSourceRequestOnce(
+                } else if let url = URL(string: qualityURLTemplate.replacingOccurrences(of: "{apikey}", with: "")),
+                          let resolved = await presetSourceRequestOnce(
                     source: source,
                     url: url,
                     apiKey: nil,

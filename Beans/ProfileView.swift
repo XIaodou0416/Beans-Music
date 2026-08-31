@@ -1256,6 +1256,8 @@ struct SettingsView: View {
     @State private var showRestoreConfirm = false
     @State private var showResetSettingsConfirm = false
     @State private var showSourceHelp = false
+    @State private var showSourceImporter = false
+    @State private var showCustomSourceHelp = false
     @State private var backupExpanded = false
     @State private var backupIncludeAccounts = false
     @State private var backupIncludeWallpapers = true
@@ -1453,6 +1455,12 @@ struct SettingsView: View {
             }
             .ignoresSafeArea()
         }
+        .fullScreenCover(isPresented: $showSourceImporter) {
+            BackupDocumentPicker { url in
+                importCustomSource(from: url)
+            }
+            .ignoresSafeArea()
+        }
         .sheet(isPresented: $showChangelog) {
             ChangelogListView()
                 .environmentObject(theme)
@@ -1495,6 +1503,24 @@ struct SettingsView: View {
             Button("知道了", role: .cancel) {}
         } message: {
             Text("音源购买渠道非 Beans Music 本人，价格便宜，可以自行前往支持。购买后获得的密钥仅属于你自己，请填写到上方输入框中使用。")
+        }
+        .alert("自定义音源格式", isPresented: $showCustomSourceHelp) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text("""
+            可导入 JSON 接口配置或受限 JS 音源插件。
+
+            {
+              "name": "我的音源",
+              "template": "https://example.com/url?source={source}&id={id}&quality={quality}&key={apikey}",
+              "urlPath": "data.url",
+              "headers": { "source": "tx" }
+            }
+
+            可用变量：{id}、{source}、{quality}、{name}、{artist}、{keyword}、{apikey}。
+            urlPath 支持点号路径，例如 data.url；接口需要密钥时，在设置中填写密钥。
+            JS 插件需要导出 getMediaSource(song, quality, apiKey)，并返回播放地址或 { "url": "..." }。
+            """)
         }
         .confirmationDialog("导入备份将覆盖当前部分设置，是否继续？", isPresented: $showRestoreConfirm, titleVisibility: .visible) {
             Button("恢复", role: .destructive) {
@@ -1545,6 +1571,22 @@ struct SettingsView: View {
             ToastCenter.shared.show("主页问候字体已应用：\(name)")
         } else {
             ToastCenter.shared.show("主页问候字体安装失败，请使用 ttf / otf 文件")
+        }
+    }
+
+    private func importCustomSource(from url: URL) {
+        do {
+            let data = try Data(contentsOf: url)
+            let count: Int
+            if url.pathExtension.lowercased() == "js" {
+                count = try sourceStore.importJavaScript(data, fileName: url.deletingPathExtension().lastPathComponent)
+            } else {
+                count = try sourceStore.importJSON(data)
+            }
+            BeansHaptics.success()
+            ToastCenter.shared.show("已导入 \(count) 个自定义音源")
+        } catch {
+            ToastCenter.shared.show(error.localizedDescription)
         }
     }
 
@@ -2331,6 +2373,30 @@ struct SettingsView: View {
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 10) {
+                    Button {
+                        showSourceImporter = true
+                    } label: {
+                        Label("导入自定义音源", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.beansAmber)
+
+                    Button {
+                        showCustomSourceHelp = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 17))
+                            .foregroundStyle(Color.beansAmber)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text("仅支持 JSON 配置")
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                    Spacer()
+                }
 
                 ForEach(sourceStore.sources) { source in
                     HStack(spacing: 10) {
