@@ -49,6 +49,8 @@ struct RootView: View {
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
+    @AppStorage("beans.remoteAnnouncement.imageURL") private var remoteAnnouncementImageURL = ""
+    @AppStorage("beans.remoteAnnouncement.textColor") private var remoteAnnouncementTextColor = ""
     @AppStorage("beans.remoteAnnouncement.updatedAt") private var remoteAnnouncementUpdatedAt = ""
     @AppStorage("beans.remoteAnnouncement.seenKey") private var remoteAnnouncementSeenKey = ""
     /// 版本更新说明弹窗
@@ -235,7 +237,12 @@ struct RootView: View {
             }
         } message: {
             Text(remoteAnnouncementText)
+                .foregroundStyle(remoteAnnouncementColor)
         }
+    }
+
+    private var remoteAnnouncementColor: Color {
+        Color(hex: remoteAnnouncementTextColor) ?? Color.beansLabel
     }
 
     private var remoteAnnouncementKey: String {

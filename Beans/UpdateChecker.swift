@@ -19,6 +19,8 @@ struct UpdateChecker {
         let htmlURL: URL
         /// Release 附带的 IPA 安装包直链（用于自动下载）
         let assetURL: URL?
+        let notesImageURL: URL?
+        let notesTextColorHex: String?
     }
 
     enum CheckResult {
@@ -83,7 +85,9 @@ struct UpdateChecker {
             name: json["name"] as? String ?? tag,
             body: json["body"] as? String ?? "",
             htmlURL: url,
-            assetURL: assetURL
+            assetURL: assetURL,
+            notesImageURL: nil,
+            notesTextColorHex: nil
         )
     }
 
@@ -107,7 +111,9 @@ struct UpdateChecker {
             name: payload.title.isEmpty ? "Beans Music \(payload.version)" : payload.title,
             body: payload.notes.joined(separator: "\n"),
             htmlURL: assetURL ?? releasePageURL,
-            assetURL: assetURL
+            assetURL: assetURL,
+            notesImageURL: payload.notesImageURL.flatMap(URL.init(string:)),
+            notesTextColorHex: payload.notesTextColorHex
         )
     }
 
@@ -134,11 +140,15 @@ private struct ServerUpdatePayload: Decodable {
     let title: String
     let notes: [String]
     let ipaURL: String?
+    let notesImageURL: String?
+    let notesTextColorHex: String?
 
     enum CodingKeys: String, CodingKey {
         case version
         case title
         case notes
         case ipaURL = "ipa_url"
+        case notesImageURL = "notes_image_url"
+        case notesTextColorHex = "notes_text_color"
     }
 }

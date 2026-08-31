@@ -9,14 +9,18 @@ struct VersionLog: Identifiable {
     let notices: [String]
     let features: [String]
     let fixes: [String]
+    let imageURL: URL?
+    let textColorHex: String?
 
-    init(id: String, version: String, title: String, notices: [String] = [], features: [String], fixes: [String]) {
+    init(id: String, version: String, title: String, notices: [String] = [], features: [String], fixes: [String], imageURL: URL? = nil, textColorHex: String? = nil) {
         self.id = id
         self.version = version
         self.title = title
         self.notices = notices
         self.features = features
         self.fixes = fixes
+        self.imageURL = imageURL
+        self.textColorHex = textColorHex
     }
 }
 
@@ -55,7 +59,9 @@ enum ChangelogStore {
             version: remote.version,
             title: remote.name,
             features: notes,
-            fixes: []
+            fixes: [],
+            imageURL: remote.notesImageURL,
+            textColorHex: remote.notesTextColorHex
         )
     }
 
@@ -212,7 +218,20 @@ private struct VersionLogCard: View {
                     .foregroundStyle(Color.beansAmber)
                 Text(log.title)
                     .font(BeansFont.appFont(14, .semibold))
-                    .foregroundStyle(Color.beansLabel)
+                    .foregroundStyle(log.textColor)
+            }
+            if let imageURL = log.imageURL {
+                AsyncImage(url: imageURL) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFit()
+                    } else if phase.error != nil {
+                        EmptyView()
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity, minHeight: 80)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             if !log.notices.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -269,11 +288,16 @@ private struct VersionLogCard: View {
                         .padding(.top, 2)
                     Text(item)
                         .font(BeansFont.appFont(13))
-                        .foregroundStyle(Color.beansLabel)
+                        .foregroundStyle(log.textColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
+    }
+
+    private var textColor: Color {
+        if let raw = log.textColorHex, let color = Color(hex: raw) { return color }
+        return Color.beansLabel
     }
 }
 

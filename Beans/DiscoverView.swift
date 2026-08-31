@@ -56,6 +56,8 @@ struct DiscoverView: View {
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
+    @AppStorage("beans.remoteAnnouncement.imageURL") private var remoteAnnouncementImageURL = ""
+    @AppStorage("beans.remoteAnnouncement.textColor") private var remoteAnnouncementTextColor = ""
     private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
     /// 首页数据源：网易云 / QQ音乐（与搜索页同一控件样式）
     private var source: SearchProvider {
@@ -237,9 +239,22 @@ struct DiscoverView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.beansAmber)
                 .padding(.top, 2)
-            Text(remoteAnnouncementText)
+            VStack(alignment: .leading, spacing: 8) {
+                if let url = URL(string: remoteAnnouncementImageURL), !remoteAnnouncementImageURL.isEmpty {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFit()
+                        } else if phase.error == nil {
+                            ProgressView().frame(maxWidth: .infinity, minHeight: 60)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: 180)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                Text(remoteAnnouncementText)
+                    .foregroundStyle(remoteAnnouncementColor)
+            }
                 .font(BeansFont.appFont(13, .medium))
-                .foregroundStyle(Color.beansLabel)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
@@ -248,6 +263,10 @@ struct DiscoverView: View {
             BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .beansCardShadow(radius: 8, y: 3)
+    }
+
+    private var remoteAnnouncementColor: Color {
+        Color(hex: remoteAnnouncementTextColor) ?? Color.beansLabel
     }
 
     /// 顶部问候区：大标题 + 刷新按钮

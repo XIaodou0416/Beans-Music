@@ -93,10 +93,10 @@ struct ReferencePlaybackView: View {
         Capsule()
             .fill(.white.opacity(0.7))
             .frame(width: 42, height: 5)
-            .padding(.top, 8)
-            .padding(.bottom, 16)
-            .frame(maxWidth: .infinity)
+            .frame(width: 64, height: 29)
             .offset(y: CGFloat(topOffsetY))
+            .contentShape(Rectangle())
+            .gesture(closeGesture)
             .accessibilityLabel("收起播放器")
     }
 
@@ -160,7 +160,6 @@ struct ReferencePlaybackView: View {
         .offset(x: swipeOffset)
         .opacity(1 - min(abs(swipeOffset) / 260, 0.35))
         .gesture(swipeGesture)
-        .simultaneousGesture(closeGesture)
     }
 
     private var lyricsPage: some View {
@@ -230,7 +229,6 @@ struct ReferencePlaybackView: View {
             }
         }
         .gesture(swipeGesture)
-        .simultaneousGesture(closeGesture)
     }
 
     private var lyricsHeader: some View {
