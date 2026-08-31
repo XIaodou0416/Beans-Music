@@ -1162,7 +1162,7 @@ struct SettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
-    /// 音质等级（借鉴 Kumone）
+    /// 音质等级。
     @AppStorage("beans.audioQuality") private var audioQualityRaw = BeansAudioQuality.exhigh.rawValue
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
@@ -2118,7 +2118,7 @@ struct SettingsView: View {
         }
     }
 
-    /// 播放与歌词设置（借鉴 Kumone：音质 / 免费听歌 / 显示歌词翻译）
+    /// 播放与歌词设置。
     private var playbackSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button {

@@ -110,6 +110,17 @@ final class LocalLibraryStore: ObservableObject {
         playlists[idx].songs.removeAll { $0.identityKey == songIdentity }
     }
 
+    @discardableResult
+    func removeSongFromAllPlaylists(_ song: Song) -> Int {
+        var removed = 0
+        for index in playlists.indices {
+            let before = playlists[index].songs.count
+            playlists[index].songs.removeAll { $0.identityKey == song.identityKey }
+            removed += before - playlists[index].songs.count
+        }
+        return removed
+    }
+
     private func save() {
         if let data = try? JSONEncoder().encode(playlists) {
             defaults.set(data, forKey: key)

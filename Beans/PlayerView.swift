@@ -158,6 +158,19 @@ struct PlayerView: View {
         return BeansCoverPlayerStyle(rawValue: coverPlayerStyleRaw) ?? .classic
     }
 
+    private func toggleLocalFavorite(_ song: Song) {
+        if localLibrary.containsSong(song) {
+            let removed = localLibrary.removeSongFromAllPlaylists(song)
+            ToastCenter.shared.show(removed > 0 ? "已取消收藏" : "歌曲不在本地歌单中")
+            BeansHaptics.success()
+        } else if localLibrary.playlists.count > 1 {
+            showAddToLocalPlaylist = true
+        } else {
+            ToastCenter.shared.show(localLibrary.addToDefaultFavorites(song))
+            BeansHaptics.success()
+        }
+    }
+
     private var playerDustMode: BeansPlayerDustMode {
         return BeansPlayerDustMode(rawValue: playerDustModeRaw) ?? .off
     }
@@ -561,7 +574,7 @@ struct PlayerView: View {
     @ViewBuilder
     private var headerBar: some View {
         if coverPlayerStyle == .appleMusic {
-            appleMusicTopGrabber
+            referenceTopIndicator
         } else {
         HStack(spacing: 12) {
             Button {
@@ -609,12 +622,7 @@ struct PlayerView: View {
             Button {
                 BeansHaptics.tap()
                 if let song {
-                    if localLibrary.playlists.count > 1 {
-                        showAddToLocalPlaylist = true
-                    } else {
-                        ToastCenter.shared.show(localLibrary.addToDefaultFavorites(song))
-                        BeansHaptics.success()
-                    }
+                    toggleLocalFavorite(song)
                 }
             } label: {
                 Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
@@ -636,7 +644,7 @@ struct PlayerView: View {
     }
 
     /// Apple Music 模式唯一的返回入口：从顶部指示线向下滑动关闭播放器。
-    private var appleMusicTopGrabber: some View {
+    private var referenceTopIndicator: some View {
         Capsule()
             .fill(palette.text.opacity(0.72))
             .frame(width: 38, height: 5)
@@ -772,14 +780,15 @@ struct PlayerView: View {
         case .controlPanel:
             controlPanelAlbumPanel(geo: geo)
         case .appleMusic:
-            appleMusicAlbumPanel(geo: geo)
+            referenceAlbumPanel(geo: geo)
         }
     }
 
     /// Apple Music 风格：大封面、清晰标题、细进度条和低干扰的底部控制。
     /// 点击封面仍然进入歌词页，左右滑动仍然切换歌曲。
-    private func appleMusicAlbumPanel(geo: GeometryProxy) -> some View {
-        let size = min(geo.size.width - 48, min(geo.size.height * 0.52, 372))
+    private func referenceAlbumPanel(geo: GeometryProxy) -> some View {
+        let contentWidth = max(geo.size.width - 64, 0)
+        let size = min(contentWidth, min(geo.size.height * 0.52, 378))
         let radius: CGFloat = 18
 
         return VStack(spacing: 0) {
@@ -1124,12 +1133,7 @@ struct PlayerView: View {
                     controlPanelAction(icon: localLibrary.containsSong(song) ? "heart.fill" : "heart", title: "收藏", active: localLibrary.containsSong(song)) {
                         if let song {
                             BeansHaptics.tap()
-                            if localLibrary.playlists.count > 1 {
-                                showAddToLocalPlaylist = true
-                            } else {
-                                ToastCenter.shared.show(localLibrary.addToDefaultFavorites(song))
-                                BeansHaptics.success()
-                            }
+                            toggleLocalFavorite(song)
                         }
                     }
                     controlPanelAction(icon: "text.bubble", title: "评论") {
@@ -1333,7 +1337,7 @@ struct PlayerView: View {
         ZStack {
             VStack(spacing: 0) {
                 if coverPlayerStyle == .appleMusic {
-                    appleMusicLyricsHeader
+                    referenceLyricsHeader
                 } else {
                 HStack(spacing: 12) {
                 Button {
@@ -1439,7 +1443,7 @@ struct PlayerView: View {
         .id("lyricsPanel-\(song?.identityKey ?? "none")")
     }
 
-    private var appleMusicLyricsHeader: some View {
+    private var referenceLyricsHeader: some View {
         HStack(spacing: 12) {
             Button {
                 toggleLyrics()
@@ -1465,21 +1469,16 @@ struct PlayerView: View {
                     .onTapGesture { openArtistHome() }
             }
             Spacer(minLength: 0)
-            appleMusicIconButton(
+            referenceIconButton(
                 systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart",
                 color: localLibrary.containsSong(song) ? Color(red: 0.95, green: 0.33, blue: 0.42) : playerButtonText
             ) {
                 if let song {
-                    if localLibrary.playlists.count > 1 {
-                        showAddToLocalPlaylist = true
-                    } else {
-                        ToastCenter.shared.show(localLibrary.addToDefaultFavorites(song))
-                        BeansHaptics.success()
-                    }
+                    toggleLocalFavorite(song)
                 }
             }
             .modifier(Layoutable(part: .topFavorite, enabled: layoutMode && coverPlayerStyle != .appleMusic, data: $layoutData))
-            appleMusicIconButton(systemName: "ellipsis", color: playerButtonText) {
+            referenceIconButton(systemName: "ellipsis", color: playerButtonText) {
                 withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
                     showMoreActions = true
                 }
@@ -1492,7 +1491,7 @@ struct PlayerView: View {
     }
 
     /// Apple Music 风格的纯图标按钮：保留 44pt 点击热区，不绘制外圈和底板。
-    private func appleMusicIconButton(systemName: String, color: Color, action: @escaping () -> Void) -> some View {
+    private func referenceIconButton(systemName: String, color: Color, action: @escaping () -> Void) -> some View {
         Button {
             BeansHaptics.tap()
             action()

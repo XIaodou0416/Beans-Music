@@ -1,6 +1,6 @@
 import Foundation
 
-/// 音质等级（借鉴 Kumone：standard / higher / exhigh / lossless / hires）
+/// 音质等级。
 enum BeansAudioQuality: String, CaseIterable, Identifiable {
     case standard
     case higher
