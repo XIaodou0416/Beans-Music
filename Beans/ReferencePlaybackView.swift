@@ -29,7 +29,6 @@ struct ReferencePlaybackView: View {
 
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
     @AppStorage("beans.appleMusic.showVolume") private var showVolumeControl = true
-    @AppStorage("beans.swipeSwitchSong") private var swipeSwitchSong = true
     @AppStorage("beans.appleMusic.primaryHex") private var primaryHex = ""
     @AppStorage("beans.appleMusic.secondaryHex") private var secondaryHex = ""
     @AppStorage("beans.appleMusic.accentHex") private var accentHex = ""
@@ -40,7 +39,6 @@ struct ReferencePlaybackView: View {
     @AppStorage("beans.appleMusic.lyricY") private var lyricOffsetY = 0.0
     @AppStorage("beans.appleMusic.controlsY") private var controlsOffsetY = 0.0
     @AppStorage("beans.appleMusic.actionsY") private var actionsOffsetY = 0.0
-    @State private var swipeOffset: CGFloat = 0
     @State private var lyricCenters: [UUID: CGFloat] = [:]
     @State private var focusedLyricID: UUID?
     @State private var lyricsViewportHeight: CGFloat = 0
@@ -157,9 +155,6 @@ struct ReferencePlaybackView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 32)
-        .offset(x: swipeOffset)
-        .opacity(1 - min(abs(swipeOffset) / 260, 0.35))
-        .gesture(swipeGesture)
         .simultaneousGesture(closeGesture)
     }
 
@@ -502,34 +497,6 @@ struct ReferencePlaybackView: View {
                     try? await Task.sleep(nanoseconds: 2_500_000_000)
                     guard !Task.isCancelled else { return }
                     isDraggingLyrics = false
-                }
-            }
-    }
-
-    private var swipeGesture: some Gesture {
-        DragGesture(minimumDistance: 15)
-            .onChanged { value in
-                guard swipeSwitchSong else {
-                    swipeOffset = 0
-                    return
-                }
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                swipeOffset = value.translation.width
-            }
-            .onEnded { value in
-                guard swipeSwitchSong else {
-                    swipeOffset = 0
-                    return
-                }
-                if value.translation.width < -82 {
-                    BeansHaptics.medium()
-                    player.next()
-                } else if value.translation.width > 82 {
-                    BeansHaptics.medium()
-                    player.previous()
-                }
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
-                    swipeOffset = 0
                 }
             }
     }

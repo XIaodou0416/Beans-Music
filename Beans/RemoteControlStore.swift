@@ -51,14 +51,6 @@ final class RemoteControlStore: ObservableObject {
         defaults.set(config.announcementTextColor ?? "", forKey: "beans.remoteAnnouncement.textColor")
         defaults.set(config.updatedAt ?? "", forKey: "beans.remoteAnnouncement.updatedAt")
 
-        if let platforms = config.platforms {
-            var enabled: [SearchProvider] = []
-            if platforms.netease == true { enabled.append(.netease) }
-            if platforms.qq == true { enabled.append(.qq) }
-            if platforms.kugou == true { enabled.append(.kugou) }
-            PlatformPreferenceStore.shared.applyRemoteEnabledProviders(enabled)
-        }
-
         defaults.synchronize()
     }
 
