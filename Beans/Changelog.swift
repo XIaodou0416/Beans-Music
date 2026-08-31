@@ -218,7 +218,7 @@ private struct VersionLogCard: View {
                     .foregroundStyle(Color.beansAmber)
                 Text(log.title)
                     .font(BeansFont.appFont(14, .semibold))
-                    .foregroundStyle(log.textColor)
+                    .foregroundStyle(textColor)
             }
             if let imageURL = log.imageURL {
                 AsyncImage(url: imageURL) { phase in
@@ -288,7 +288,7 @@ private struct VersionLogCard: View {
                         .padding(.top, 2)
                     Text(item)
                         .font(BeansFont.appFont(13))
-                        .foregroundStyle(log.textColor)
+                        .foregroundStyle(textColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
