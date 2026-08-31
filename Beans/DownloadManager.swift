@@ -116,6 +116,21 @@ final class DownloadManager {
     }
 
     private func resolveURL(song: Song, quality: DownloadQuality) async -> String? {
+        // 下载优先复用已配置的第三方音源，避免播放能用第三方而下载仍走官方地址。
+        let thirdPartyID = song.source == .netease ? song.id : 0
+        let thirdPartyKugouID = song.kugouHash ?? song.kugouAlbumAudioId
+        if let resolved = await UnblockService.resolve(
+            name: song.name,
+            artists: song.artists,
+            neteaseID: thirdPartyID,
+            songSource: song.source,
+            qqMid: song.qqMid,
+            kugouID: thirdPartyKugouID
+        ) {
+            BeansLogger.shared.log("下载使用第三方音源：\(song.name) 来源=\(resolved.source)", level: .info)
+            return resolved.url.absoluteString
+        }
+
         if song.source == .qq, let mid = song.qqMid {
             return try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid, br: quality.qqBR)
         } else if song.source == .kugou {
