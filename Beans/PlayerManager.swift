@@ -704,7 +704,7 @@ final class PlayerManager: NSObject, ObservableObject {
                     "comment=\(event.errorComment ?? "?")",
                     "uri=\(event.uri ?? "?")"
                 ].joined(separator: " ")
-            }.joined(separator: " | ")
+            }.joined(separator: " | ") ?? ""
             let errorDescription = error?.localizedDescription ?? "未知错误"
             let errorCode = nsError.map { "\($0.domain):(\($0.code))" } ?? "?"
             let errorLogDescription = eventDetails.isEmpty ? "无" : eventDetails
