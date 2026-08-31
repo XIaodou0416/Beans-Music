@@ -125,6 +125,7 @@ final class DownloadManager {
             neteaseID: thirdPartyID,
             songSource: song.source,
             qqMid: song.qqMid,
+            qqMediaMid: song.qqMediaMid,
             kugouID: thirdPartyKugouID
         ) {
             BeansLogger.shared.log("下载使用第三方音源：\(song.name) 来源=\(resolved.source)", level: .info)

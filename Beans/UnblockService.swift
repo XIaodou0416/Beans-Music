@@ -25,6 +25,7 @@ enum UnblockService {
         neteaseID: Int,
         songSource: SongSource = .netease,
         qqMid: String? = nil,
+        qqMediaMid: String? = nil,
         kugouID: String? = nil,
         strict: Bool = false,
         excludedHosts: Set<String> = []
@@ -52,6 +53,7 @@ enum UnblockService {
                         neteaseID: neteaseID,
                         songSource: songSource,
                         qqMid: qqMid,
+                        qqMediaMid: qqMediaMid,
                         kugouID: kugouID,
                         excludedHosts: excludedHosts
                     )
@@ -88,6 +90,7 @@ enum UnblockService {
         neteaseID: Int,
         songSource: SongSource,
         qqMid: String?,
+        qqMediaMid: String?,
         kugouID: String?,
         excludedHosts: Set<String>
     ) async -> Resolved? {
@@ -96,56 +99,61 @@ enum UnblockService {
         if let provider = source.headers["source"], !provider.isEmpty, provider != expectedProvider {
             return nil
         }
-        let songID: String
+        let songIDs: [String]
         switch songSource {
         case .netease where neteaseID > 0:
-            songID = String(neteaseID)
+            songIDs = [String(neteaseID)]
         case .qq:
             guard let qqMid, !qqMid.isEmpty else { return nil }
-            songID = qqMid
+            songIDs = qqIDCandidates(songMid: qqMid, mediaMid: qqMediaMid)
         case .kugou:
             guard let kugouID, !kugouID.isEmpty else { return nil }
-            songID = kugouID
+            songIDs = [kugouID]
         default:
             return nil
         }
-        var baseURLString = source.template
-        baseURLString = baseURLString.replacingOccurrences(of: "{id}", with: songID)
-        baseURLString = baseURLString.replacingOccurrences(of: "{source}", with: expectedProvider)
-        baseURLString = baseURLString.replacingOccurrences(of: "{name}", with: urlEncoded(name))
-        let keyword = ([name, artists].filter { !$0.isEmpty }).joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        baseURLString = baseURLString.replacingOccurrences(of: "{keyword}", with: urlEncoded(keyword))
-        baseURLString = baseURLString.replacingOccurrences(of: "{artist}", with: urlEncoded(artists))
         let apiKeys = orderedAPIKeys()
-        for quality in qualityCandidates(for: source, songSource: songSource) {
-            let urlString = baseURLString.replacingOccurrences(of: "{quality}", with: quality)
-            guard let url = URL(string: urlString) else { continue }
-            if !apiKeys.isEmpty {
-                for (originalIndex, apiKey) in apiKeys {
-                    if let resolved = await presetSourceRequestOnce(
-                        source: source,
-                        url: url,
-                        apiKey: apiKey,
-                        keyIndex: originalIndex + 1,
-                        keyTotal: apiKeys.count,
-                        quality: quality,
-                        excludedHosts: excludedHosts
-                    ) {
-                        rememberWorkingKey(originalIndex)
-                        return resolved
+        for (idIndex, songID) in songIDs.enumerated() {
+            var baseURLString = source.template
+            baseURLString = baseURLString.replacingOccurrences(of: "{id}", with: songID)
+            baseURLString = baseURLString.replacingOccurrences(of: "{source}", with: expectedProvider)
+            baseURLString = baseURLString.replacingOccurrences(of: "{name}", with: urlEncoded(name))
+            let keyword = ([name, artists].filter { !$0.isEmpty }).joined(separator: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            baseURLString = baseURLString.replacingOccurrences(of: "{keyword}", with: urlEncoded(keyword))
+            baseURLString = baseURLString.replacingOccurrences(of: "{artist}", with: urlEncoded(artists))
+            for quality in qualityCandidates(for: source, songSource: songSource) {
+                let urlString = baseURLString.replacingOccurrences(of: "{quality}", with: quality)
+                guard let url = URL(string: urlString) else { continue }
+                let idLabel = songSource == .qq && songIDs.count > 1 ? " ID=\(idIndex + 1)/\(songIDs.count)" : ""
+                if !apiKeys.isEmpty {
+                    for (originalIndex, apiKey) in apiKeys {
+                        if let resolved = await presetSourceRequestOnce(
+                            source: source,
+                            url: url,
+                            apiKey: apiKey,
+                            keyIndex: originalIndex + 1,
+                            keyTotal: apiKeys.count,
+                            quality: quality,
+                            idLabel: idLabel,
+                            excludedHosts: excludedHosts
+                        ) {
+                            rememberWorkingKey(originalIndex)
+                            return resolved
+                        }
                     }
+                } else if let resolved = await presetSourceRequestOnce(
+                    source: source,
+                    url: url,
+                    apiKey: nil,
+                    keyIndex: 0,
+                    keyTotal: 0,
+                    quality: quality,
+                    idLabel: idLabel,
+                    excludedHosts: excludedHosts
+                ) {
+                    return resolved
                 }
-            } else if let resolved = await presetSourceRequestOnce(
-                source: source,
-                url: url,
-                apiKey: nil,
-                keyIndex: 0,
-                keyTotal: 0,
-                quality: quality,
-                excludedHosts: excludedHosts
-            ) {
-                return resolved
             }
         }
 
@@ -162,6 +170,7 @@ enum UnblockService {
         keyIndex: Int,
         keyTotal: Int,
         quality: String,
+        idLabel: String = "",
         excludedHosts: Set<String>
     ) async -> Resolved? {
         var request = URLRequest(url: url)
@@ -171,7 +180,7 @@ enum UnblockService {
         if let apiKey, !apiKey.isEmpty {
             request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
-        let keyLabel = (keyTotal > 1 ? " 密钥=\(keyIndex)/\(keyTotal)" : "") + " 音质=\(quality)"
+        let keyLabel = idLabel + (keyTotal > 1 ? " 密钥=\(keyIndex)/\(keyTotal)" : "") + " 音质=\(quality)"
         let metadataKeys: Set<String> = ["source", "quality", "br", "apiKey", "apiKeys"]
         for (key, value) in source.headers where !metadataKeys.contains(key) {
             request.setValue(value, forHTTPHeaderField: key)
@@ -311,6 +320,16 @@ enum UnblockService {
         return ([configured] + fallback).filter { quality in
             let trimmed = quality.trimmingCharacters(in: .whitespacesAndNewlines)
             return !trimmed.isEmpty && seen.insert(trimmed).inserted
+        }
+    }
+
+    private static func qqIDCandidates(songMid: String, mediaMid: String?) -> [String] {
+        var seen = Set<String>()
+        return [mediaMid, songMid].compactMap { raw in
+            guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty,
+                  seen.insert(value).inserted else { return nil }
+            return value
         }
     }
 

@@ -439,6 +439,7 @@ final class PlayerManager: NSObject, ObservableObject {
                         neteaseID: 0,
                         songSource: .qq,
                         qqMid: mid,
+                        qqMediaMid: song.qqMediaMid,
                         strict: strictUnlock
                     )
                 }
@@ -534,6 +535,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 neteaseID: 0,
                 songSource: .qq,
                 qqMid: song.qqMid,
+                qqMediaMid: song.qqMediaMid,
                 strict: strict
             )
         }
@@ -686,6 +688,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 neteaseID: 0,
                 songSource: .qq,
                 qqMid: qqMid,
+                qqMediaMid: song.qqMediaMid,
                 strict: strict,
                 excludedHosts: excludedHosts
             )
@@ -739,6 +742,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 neteaseID: 0,
                 songSource: .qq,
                 qqMid: qqMid,
+                qqMediaMid: song.qqMediaMid,
                 strict: strict
             )
             await MainActor.run {
