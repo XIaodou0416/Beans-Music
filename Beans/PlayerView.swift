@@ -339,14 +339,26 @@ struct PlayerView: View {
                             guard let song else { return }
                             toggleLocalFavorite(song)
                         },
-                        onMore: {
-                            showNativeMoreActions = true
-                        },
                         onQueue: {
                             showQueue = true
                         },
                         onComments: {
                             if song != nil { showComments = true }
+                        },
+                        onSleepTimer: {
+                            showSleepTimer = true
+                        },
+                        onAddToLocalPlaylist: {
+                            showAddToLocalPlaylist = true
+                        },
+                        onDownload: {
+                            showDownloadPicker = true
+                        },
+                        onShare: {
+                            showShare = true
+                        },
+                        onPlayerSettings: {
+                            showPlayerSettings = true
                         }
                     )
 

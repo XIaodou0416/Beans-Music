@@ -19,9 +19,13 @@ struct ReferencePlaybackView: View {
     @Binding var showLyrics: Bool
     let onClose: () -> Void
     let onFavorite: () -> Void
-    let onMore: () -> Void
     let onQueue: () -> Void
     let onComments: () -> Void
+    let onSleepTimer: () -> Void
+    let onAddToLocalPlaylist: () -> Void
+    let onDownload: () -> Void
+    let onShare: () -> Void
+    let onPlayerSettings: () -> Void
 
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
     @AppStorage("beans.appleMusic.showVolume") private var showVolumeControl = true
@@ -268,16 +272,28 @@ struct ReferencePlaybackView: View {
                     .truncationMode(.tail)
             }
             Spacer(minLength: 0)
-            HStack(spacing: 2) {
-                referenceActionButton(
+            HStack(spacing: 0) {
+                compactActionButton(
                     icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
                     active: localLibrary.containsSong(song)
                 ) {
                     onFavorite()
                 }
-                referenceActionButton(icon: "ellipsis") {
-                    onMore()
+                Menu {
+                    Button("评论", action: onComments)
+                    Button("定时关闭", action: onSleepTimer)
+                    Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                    Button("下载歌曲", action: onDownload)
+                    Button("分享歌曲", action: onShare)
+                    Button("播放器设置", action: onPlayerSettings)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(primaryColor.opacity(0.78))
+                        .frame(width: 38, height: 38)
+                        .contentShape(Rectangle())
                 }
+                .menuOrder(.fixed)
             }
         }
     }
@@ -353,6 +369,20 @@ struct ReferencePlaybackView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(active ? accentColor : primaryColor.opacity(0.78))
                 .frame(width: 58, height: 58)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func compactActionButton(icon: String, active: Bool = false, action: @escaping () -> Void) -> some View {
+        Button {
+            BeansHaptics.tap()
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(active ? accentColor : primaryColor.opacity(0.78))
+                .frame(width: 38, height: 38)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
