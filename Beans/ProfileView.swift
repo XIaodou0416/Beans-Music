@@ -1471,7 +1471,6 @@ struct SettingsView: View {
             ) { value in
                 importCustomSource(fromRemoteURL: value)
             }
-            .presentationDetents([.medium])
         }
         .sheet(isPresented: $showChangelog) {
             ChangelogListView()
@@ -3157,7 +3156,7 @@ private struct NetworkSourceImportSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section("JS 音源地址") {
                     TextField("粘贴 https://.../*.js", text: $urlText)
