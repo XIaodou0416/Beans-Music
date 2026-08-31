@@ -753,10 +753,12 @@ final class PlayerManager: NSObject, ObservableObject {
         UIApplication.shared.beginReceivingRemoteControlEvents()
         removeCurrentObservers()
         pendingThirdPartyVIPNotice = thirdPartyVIPNotice
-        // QQ CDN 地址需要基础请求头；第三方地址也可能落在 QQ CDN，
-        // 1.5.7 已验证这套请求头在低系统上兼容性最好，第三方地址也沿用同一套。
+        // QQ CDN 地址需要基础请求头；第三方地址也可能落在
+        // ptqqmusic.gitv.tv / aqqmusic.tc.qq.com 等 QQ CDN 域名。
+        // 这些地址在低系统上如果缺少 Referer/Cookie，常见表现是先进入
+        // playing，随后以 AVFoundation -11849 失败。
         let item: AVPlayerItem
-        if url.host?.contains("qq.com") == true {
+        if isQQAudioHost(url.host) {
             var headers = [
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0",
                 "Referer": "https://y.qq.com/",
@@ -883,6 +885,13 @@ final class PlayerManager: NSObject, ObservableObject {
             BeansLogger.shared.log("播放中断：AVPlayerItem 播放失败（解码或网络错误）", level: .error)
         }
         updateNowPlaying()
+    }
+
+    private func isQQAudioHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return host.contains("qq.com")
+            || host.contains("qqmusic")
+            || host.contains("ptqqmusic")
     }
 
     private func removeCurrentObservers() {

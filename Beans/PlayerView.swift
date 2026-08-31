@@ -2315,6 +2315,15 @@ struct LyricsSection: View {
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
         .padding(.horizontal, alignment == .leading ? 40 : 36)
+        .overlay(alignment: .trailing) {
+            if isUserScrolling && isFocused {
+                Text(beansTimeString(line.time))
+                    .font(BeansFont.appFont(11, .semibold, .monospaced))
+                    .foregroundStyle(secondary.opacity(0.82))
+                    .padding(.trailing, alignment == .leading ? 40 : 36)
+                    .transition(.opacity)
+            }
+        }
         .animation(.easeInOut(duration: 0.25), value: visualIndex)
     }
 
