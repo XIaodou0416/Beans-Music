@@ -28,6 +28,7 @@ struct ReferencePlaybackView: View {
     @AppStorage("beans.appleMusic.primaryHex") private var primaryHex = ""
     @AppStorage("beans.appleMusic.secondaryHex") private var secondaryHex = ""
     @AppStorage("beans.appleMusic.accentHex") private var accentHex = ""
+    @AppStorage("beans.appleMusic.volumeHex") private var volumeHex = ""
     @AppStorage("beans.appleMusic.topY") private var topOffsetY = 0.0
     @AppStorage("beans.appleMusic.coverScale") private var coverScale = 1.0
     @AppStorage("beans.appleMusic.titleY") private var titleOffsetY = 0.0
@@ -128,7 +129,7 @@ struct ReferencePlaybackView: View {
             .buttonStyle(GlassPressButtonStyle(scale: 0.985))
 
             VStack(spacing: 5) {
-                HStack(spacing: 8) {
+                HStack(spacing: 9) {
                     Text(song?.name ?? "未在播放")
                         .font(BeansFont.appFont(22, .bold))
                         .foregroundStyle(primaryColor)
@@ -142,6 +143,16 @@ struct ReferencePlaybackView: View {
                             .padding(.vertical, 2)
                             .background(Color(red: 0.93, green: 0.25, blue: 0.22), in: Capsule())
                     }
+                    Button {
+                        BeansHaptics.tap()
+                        onFavorite()
+                    } label: {
+                        Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(localLibrary.containsSong(song) ? accentColor : primaryColor.opacity(0.86))
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
                 }
                 Text(subtitle)
                     .font(BeansFont.appFont(13.5, .medium))
@@ -249,24 +260,23 @@ struct ReferencePlaybackView: View {
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.94))
 
-            Button {
-                BeansHaptics.tap()
-                onFavorite()
-            } label: {
-                Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(localLibrary.containsSong(song) ? Color(red: 0.98, green: 0.32, blue: 0.42) : primaryColor.opacity(0.86))
-                    .frame(width: 42, height: 42)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
             VStack(alignment: .leading, spacing: 3) {
-                Text(song?.name ?? "未在播放")
-                    .font(BeansFont.appFont(15, .semibold))
-                    .foregroundStyle(primaryColor)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                HStack(spacing: 7) {
+                    Text(song?.name ?? "未在播放")
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(primaryColor)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Button {
+                        BeansHaptics.tap()
+                        onFavorite()
+                    } label: {
+                        Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(localLibrary.containsSong(song) ? accentColor : primaryColor.opacity(0.78))
+                    }
+                    .buttonStyle(.plain)
+                }
                 Text(subtitle)
                     .font(BeansFont.appFont(12, .medium))
                     .foregroundStyle(secondaryColor)
@@ -326,7 +336,7 @@ struct ReferencePlaybackView: View {
             .offset(y: CGFloat(controlsOffsetY))
 
             if showVolumeControl {
-                ReferenceVolumeControl(accent: primaryColor, secondary: secondaryColor)
+                ReferenceVolumeControl(accent: volumeColor, secondary: secondaryColor)
                     .frame(maxWidth: 420)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
@@ -357,7 +367,6 @@ struct ReferencePlaybackView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(active ? accentColor : primaryColor.opacity(0.78))
                 .frame(width: 58, height: 58)
-                .background(Color.white.opacity(active ? 0.18 : 0.10), in: Circle())
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -521,19 +530,24 @@ struct ReferencePlaybackView: View {
     private var closeGesture: some Gesture {
         DragGesture(minimumDistance: 3, coordinateSpace: .global)
             .onChanged { value in
-                dismissDragOffset = max(value.translation.height, 0)
+                guard value.translation.height > 0,
+                      value.translation.height > abs(value.translation.width) * 1.15 else { return }
+                let raw = value.translation.height
+                dismissDragOffset = raw < 120 ? raw : 120 + (raw - 120) * 0.45
             }
             .onEnded { value in
                 let translation = max(value.translation.height, 0)
                 let prediction = max(value.predictedEndTranslation.height, 0)
                 if translation > 110 || prediction > 190 {
                     BeansHaptics.medium()
-                    withAnimation(.spring(response: 0.52, dampingFraction: 0.9, blendDuration: 0.1)) {
-                        dismissDragOffset = translation
+                    withAnimation(.interactiveSpring(response: 0.48, dampingFraction: 0.86, blendDuration: 0.08)) {
+                        dismissDragOffset = max(translation, 180)
                     }
-                    onClose()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
+                        onClose()
+                    }
                 } else {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82, blendDuration: 0.04)) {
+                    withAnimation(.interactiveSpring(response: 0.30, dampingFraction: 0.72, blendDuration: 0.04)) {
                         dismissDragOffset = 0
                     }
                 }
@@ -562,6 +576,11 @@ struct ReferencePlaybackView: View {
     private var accentColor: Color {
         if accentHex.hasPrefix("#"), let color = Color(hex: accentHex) { return color }
         return Color(red: 1.0, green: 0.28, blue: 0.36)
+    }
+
+    private var volumeColor: Color {
+        if volumeHex.hasPrefix("#"), let color = Color(hex: volumeHex) { return color }
+        return primaryColor
     }
 }
 

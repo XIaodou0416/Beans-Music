@@ -16,6 +16,7 @@ struct DiscoverView: View {
     @State private var selectedPlaylist: Playlist?
     @State private var showDailyList = false
     @State private var showSectionSort = false
+    @State private var showUnifiedSearch = false
     /// 主页板块顺序（每日推荐 / 排行榜 / 歌单广场，可自定义）
     @State private var homeOrder = SectionOrderStore.load(SectionOrderStore.homeKey, defaults: SectionOrderStore.homeDefaults)
 
@@ -210,6 +211,11 @@ struct DiscoverView: View {
                     .environmentObject(player)
                     .environmentObject(auth)
             }
+            .sheet(isPresented: $showUnifiedSearch) {
+                HomeUnifiedSearchSheet()
+                    .environmentObject(theme)
+                    .environmentObject(player)
+            }
             .sheet(isPresented: $showSectionSort) {
                 SectionOrderSheet(
                     title: "主页板块排序",
@@ -291,6 +297,10 @@ struct DiscoverView: View {
                 }
                 Spacer()
                 HStack(spacing: 10) {
+                    GlassIconButton(systemName: "magnifyingglass") {
+                        BeansHaptics.tap()
+                        showUnifiedSearch = true
+                    }
                     if !homeHeaderHideSort {
                         GlassIconButton(systemName: "arrow.up.arrow.down") {
                             BeansHaptics.tap()
@@ -1391,5 +1401,240 @@ struct KugouTopListDetailView: View {
             errorMessage = error.localizedDescription
             loading = false
         }
+    }
+}
+
+private struct HomeUnifiedSearchSheet: View {
+    @EnvironmentObject private var theme: ThemeStore
+    @EnvironmentObject private var player: PlayerManager
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+
+    @State private var keyword = ""
+    @State private var results: [Song] = []
+    @State private var searching = false
+    @State private var errorMessage: String?
+    @State private var searchTask: Task<Void, Never>?
+    @State private var debounceTask: Task<Void, Never>?
+    @State private var searchController = SearchFieldController()
+
+    private var providers: [SearchProvider] {
+        platformPrefs.enabledSearchProviders
+    }
+
+    var body: some View {
+        BeansNavigationStack {
+            ZStack {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                VStack(spacing: 12) {
+                    searchField
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                    content
+                }
+            }
+            .navigationTitle("全平台搜索")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+        }
+        .onChange(of: keyword) { newValue in
+            debounceTask?.cancel()
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                results = []
+                errorMessage = nil
+                return
+            }
+            debounceTask = Task {
+                try? await Task.sleep(nanoseconds: 420_000_000)
+                guard !Task.isCancelled else { return }
+                await startSearch(trimmed)
+            }
+        }
+        .onDisappear {
+            debounceTask?.cancel()
+            searchTask?.cancel()
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.beansComment)
+            SearchTextField(
+                text: $keyword,
+                controller: searchController,
+                placeholder: "搜索三平台歌曲",
+                textColor: UIColor.beansLabel,
+                onSubmit: { text in
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    debounceTask?.cancel()
+                    Task { await startSearch(trimmed) }
+                }
+            )
+            .frame(height: 34)
+            .frame(maxWidth: .infinity)
+
+            if searching {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Color.beansAmber)
+            }
+
+            if !keyword.isEmpty {
+                Button {
+                    keyword = ""
+                    results = []
+                    errorMessage = nil
+                    debounceTask?.cancel()
+                    searchTask?.cancel()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.beansComment.opacity(0.85))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button {
+                let text = searchController.commit()
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                debounceTask?.cancel()
+                Task { await startSearch(trimmed) }
+            } label: {
+                Text("搜索")
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background { BeansGlass(shape: Capsule()) }
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+        .background {
+            BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .beansCardShadow(radius: 8, y: 3)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if keyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            EmptyStateView(icon: "magnifyingglass", text: "输入歌名后会同时搜索网易云、QQ音乐和酷狗音乐")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let errorMessage, results.isEmpty {
+            ErrorStateView(message: errorMessage) {
+                Task { await startSearch(keyword) }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if searching && results.isEmpty {
+            LoadingStateView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if results.isEmpty {
+            EmptyStateView(icon: "music.note", text: "暂未找到相关歌曲")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    HStack {
+                        Text("找到 \(results.count) 首 · 全平台")
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansComment)
+                        Spacer()
+                        Button {
+                            BeansHaptics.tap()
+                            player.play(songs: results, startAt: 0)
+                        } label: {
+                            Label("播放全部", systemImage: "play.fill")
+                                .font(BeansFont.appFont(12, .semibold))
+                                .foregroundStyle(Color.beansAmber)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background { BeansGlass(shape: Capsule()) }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.vertical, 8)
+
+                    ForEach(Array(results.enumerated()), id: \.element.identityKey) { index, song in
+                        SongCell(song: song) {
+                            BeansHaptics.tap()
+                            player.play(songs: results, startAt: index)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background {
+                            BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 120)
+            }
+            .beansScrollIndicatorsHidden()
+            .beansScrollDismissesKeyboard()
+        }
+    }
+
+    private func startSearch(_ text: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        searchTask?.cancel()
+        searchTask = Task {
+            searching = true
+            errorMessage = nil
+            BeansLogger.shared.log("主页聚合搜索：\(trimmed)", level: .info)
+            defer { if !Task.isCancelled { searching = false } }
+
+            let enabledProviders = providers
+            async let netease: [Song] = searchSongs(on: .netease, keyword: trimmed, enabledProviders: enabledProviders)
+            async let qq: [Song] = searchSongs(on: .qq, keyword: trimmed, enabledProviders: enabledProviders)
+            async let kugou: [Song] = searchSongs(on: .kugou, keyword: trimmed, enabledProviders: enabledProviders)
+
+            let merged = await (netease + qq + kugou)
+            guard !Task.isCancelled else { return }
+            results = deduplicated(merged)
+            if results.isEmpty {
+                errorMessage = "三个平台都没有返回可展示的歌曲"
+            } else {
+                BeansHaptics.success()
+            }
+            BeansLogger.shared.log("主页聚合搜索完成：\(trimmed) 结果=\(results.count)", level: .info)
+        }
+        await searchTask?.value
+    }
+
+    private func searchSongs(on provider: SearchProvider, keyword: String, enabledProviders: [SearchProvider]) async -> [Song] {
+        guard enabledProviders.contains(provider) else { return [] }
+        switch provider {
+        case .netease:
+            return (try? await NetEaseAPI.shared.search(keyword: keyword, limit: 30)) ?? []
+        case .qq:
+            return (try? await QQMusicAPI.shared.searchSongs(keyword: keyword, limit: 30)) ?? []
+        case .kugou:
+            return (try? await KugouMusicAPI.shared.searchSongs(keyword: keyword, limit: 30)) ?? []
+        }
+    }
+
+    private func deduplicated(_ songs: [Song]) -> [Song] {
+        var seen = Set<String>()
+        var output: [Song] = []
+        for song in songs {
+            let key = "\(song.source.rawValue)-\(song.name.lowercased())-\(song.artists.lowercased())"
+            if seen.insert(key).inserted {
+                output.append(song)
+            }
+        }
+        return output
     }
 }

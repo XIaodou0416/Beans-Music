@@ -1170,6 +1170,7 @@ struct SettingsView: View {
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
+    @AppStorage("beans.hideSearchTab") private var hideSearchTab = false
     /// 官方地址不可用时，是否尝试第三方音源
     @AppStorage("beans.enableUnblock") private var enableBuiltInSources = true
     /// 第三方音源播放会员歌成功时提醒，默认开启
@@ -1621,6 +1622,27 @@ struct SettingsView: View {
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
                             Text("关闭后底栏只保留图标，界面更简洁")
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color.beansAmber)
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
+                Toggle(isOn: $hideSearchTab) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "magnifyingglass.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("隐藏搜索界面")
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text("开启后底栏不显示搜索页，主页顶部保留统一搜索入口")
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }

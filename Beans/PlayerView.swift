@@ -180,6 +180,7 @@ struct PlayerView: View {
         if playerMainIconColorHex.hasPrefix("#"), let color = Color(hex: playerMainIconColorHex) {
             return color
         }
+        if playerButtonStyle == .appleMusic { return .white }
         return palette.text
     }
 
@@ -187,6 +188,7 @@ struct PlayerView: View {
         if playerSecondaryIconColorHex.hasPrefix("#"), let color = Color(hex: playerSecondaryIconColorHex) {
             return color
         }
+        if playerButtonStyle == .appleMusic { return .white.opacity(0.88) }
         return palette.secondary
     }
 
@@ -1320,6 +1322,18 @@ struct PlayerView: View {
         .padding(.horizontal, 8)
     }
 
+    private var secondaryPlayerButtonSize: CGFloat {
+        playerButtonStyle == .appleMusic ? 42 : 30
+    }
+
+    private var deckPlayerButtonSize: CGFloat {
+        playerButtonStyle == .appleMusic ? 46 : 34
+    }
+
+    private var primaryPlayerButtonSize: CGFloat {
+        playerButtonStyle == .appleMusic ? 62 : 56
+    }
+
     @ViewBuilder
     private func playerButtonSurface(size: CGFloat, active: Bool = false, primary: Bool = false) -> some View {
         switch playerButtonStyle {
@@ -1352,11 +1366,11 @@ struct PlayerView: View {
                 .frame(width: size, height: size)
         case .appleMusic:
             Circle()
-                .fill(primary ? Color.white.opacity(0.96) : Color.black.opacity(0.24))
+                .fill(primary ? Color.white.opacity(0.98) : Color.black.opacity(active ? 0.54 : 0.38))
                 .overlay {
-                    Circle().strokeBorder(Color.white.opacity(primary ? 0.46 : 0.16), lineWidth: primary ? 1.1 : 0.8)
+                    Circle().strokeBorder(Color.white.opacity(primary ? 0.50 : 0.24), lineWidth: primary ? 1.1 : 0.8)
                 }
-                .shadow(color: .black.opacity(primary ? 0.22 : 0.12), radius: primary ? 13 : 7, y: primary ? 7 : 3)
+                .shadow(color: .black.opacity(primary ? 0.24 : 0.18), radius: primary ? 14 : 9, y: primary ? 7 : 4)
                 .frame(width: size, height: size)
         }
     }
@@ -1368,11 +1382,11 @@ struct PlayerView: View {
             player.togglePlayMode()
         } label: {
             Image(systemName: player.playMode.icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: playerButtonStyle == .appleMusic ? 17 : 12, weight: .semibold))
                 .foregroundStyle(player.playMode == .shuffle ? controlAccent : playerButtonSecondaryText)
-                .frame(width: 30, height: 30)
+                .frame(width: secondaryPlayerButtonSize, height: secondaryPlayerButtonSize)
                 .background {
-                    playerButtonSurface(size: 30, active: player.playMode == .shuffle)
+                    playerButtonSurface(size: secondaryPlayerButtonSize, active: player.playMode == .shuffle)
                 }
                 .clipShape(Circle())
         }
@@ -1387,11 +1401,11 @@ struct PlayerView: View {
             showQueue = true
         } label: {
             Image(systemName: "list.bullet")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: playerButtonStyle == .appleMusic ? 17 : 12, weight: .semibold))
                 .foregroundStyle(playerButtonSecondaryText)
-                .frame(width: 30, height: 30)
+                .frame(width: secondaryPlayerButtonSize, height: secondaryPlayerButtonSize)
                 .background {
-                    playerButtonSurface(size: 30)
+                    playerButtonSurface(size: secondaryPlayerButtonSize)
                 }
                 .clipShape(Circle())
         }
@@ -1405,11 +1419,11 @@ struct PlayerView: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: playerButtonStyle == .appleMusic ? 19 : 17, weight: .medium))
                 .foregroundStyle(accent ? controlAccent : playerButtonText)
-                .frame(width: 34, height: 34)
+                .frame(width: deckPlayerButtonSize, height: deckPlayerButtonSize)
                 .background {
-                    playerButtonSurface(size: 34, active: accent)
+                    playerButtonSurface(size: deckPlayerButtonSize, active: accent)
                 }
                 .clipShape(Circle())
         }
@@ -1425,9 +1439,9 @@ struct PlayerView: View {
         } label: {
             PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22)
                 .foregroundStyle(playerButtonStyle == .appleMusic ? Color.black : Color.white)
-                .frame(width: 56, height: 56)
+                .frame(width: primaryPlayerButtonSize, height: primaryPlayerButtonSize)
                 .background {
-                    playerButtonSurface(size: 56, primary: true)
+                    playerButtonSurface(size: primaryPlayerButtonSize, primary: true)
                 }
                 .clipShape(Circle())
         }
@@ -2445,6 +2459,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.appleMusic.primaryHex") private var applePrimaryHex = ""
     @AppStorage("beans.appleMusic.secondaryHex") private var appleSecondaryHex = ""
     @AppStorage("beans.appleMusic.accentHex") private var appleAccentHex = ""
+    @AppStorage("beans.appleMusic.volumeHex") private var appleVolumeHex = ""
     @AppStorage("beans.appleMusic.topY") private var appleTopY = 0.0
     @AppStorage("beans.appleMusic.coverScale") private var appleCoverScale = 1.0
     @AppStorage("beans.appleMusic.titleY") private var appleTitleY = 0.0
@@ -2639,6 +2654,16 @@ struct PlayerSettingsSheet: View {
                 return Color(red: 1.0, green: 0.28, blue: 0.36)
             },
             set: { appleAccentHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var appleVolumeColor: Binding<Color> {
+        Binding(
+            get: {
+                if appleVolumeHex.hasPrefix("#"), let c = Color(hex: appleVolumeHex) { return c }
+                return applePrimaryColor.wrappedValue
+            },
+            set: { appleVolumeHex = "#" + UIColor($0).hexString }
         )
     }
 
@@ -3025,6 +3050,8 @@ struct PlayerSettingsSheet: View {
                     .font(BeansFont.appFont(13))
                 ColorPicker("高亮颜色", selection: appleAccentColor, supportsOpacity: false)
                     .font(BeansFont.appFont(13))
+                ColorPicker("音量条颜色", selection: appleVolumeColor, supportsOpacity: false)
+                    .font(BeansFont.appFont(13))
             }
             Divider().opacity(0.5)
             settingSlider("顶部指示线 Y", valueText: "\(Int(appleTopY))") {
@@ -3055,6 +3082,7 @@ struct PlayerSettingsSheet: View {
                 applePrimaryHex = ""
                 appleSecondaryHex = ""
                 appleAccentHex = ""
+                appleVolumeHex = ""
                 appleTopY = 0
                 appleCoverScale = 1
                 appleTitleY = 0

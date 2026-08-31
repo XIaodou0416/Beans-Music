@@ -28,6 +28,12 @@ enum RootTab: String, CaseIterable, Identifiable {
     }
 }
 
+private extension RootTab {
+    static func visible(hideSearch: Bool) -> [RootTab] {
+        allCases.filter { !(hideSearch && $0 == .search) }
+    }
+}
+
 struct RootView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
@@ -47,6 +53,7 @@ struct RootView: View {
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
+    @AppStorage("beans.hideSearchTab") private var hideSearchTab = false
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
     @AppStorage("beans.remoteAnnouncement.updatedAt") private var remoteAnnouncementUpdatedAt = ""
@@ -64,6 +71,7 @@ struct RootView: View {
     @State private var updateDownloadError = ""
     @State private var showUpdateDownloadError = false
     @State private var showRemoteAnnouncement = false
+    @State private var tabCompact = false
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
     }
@@ -74,7 +82,12 @@ struct RootView: View {
     }
 
     private var miniPlayerBottomPadding: CGFloat {
+        if tabCompact && player.currentSong != nil { return usesSystemFloatingTabBar ? 18 : 24 }
         usesSystemFloatingTabBar ? 62 : 80
+    }
+
+    private var visibleTabs: [RootTab] {
+        RootTab.visible(hideSearch: hideSearchTab)
     }
 
     private var legacyTabResolvedCornerRadius: CGFloat {
@@ -96,9 +109,11 @@ struct RootView: View {
                 DiscoverView()
                     .tabItem { Label(tabLabelsVisible ? "主页" : "", systemImage: "house.fill") }
                     .tag(RootTab.discover)
-                SearchView()
-                    .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
-                    .tag(RootTab.search)
+                if !hideSearchTab {
+                    SearchView()
+                        .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
+                        .tag(RootTab.search)
+                }
                 LibraryView()
                     .tabItem { Label(tabLabelsVisible ? "音乐库" : "", systemImage: "music.note.list") }
                     .tag(RootTab.library)
@@ -115,6 +130,7 @@ struct RootView: View {
                 legacyFloatingTabBar
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .opacity(tabCompact && player.currentSong != nil ? 0.92 : 1)
                     .zIndex(8)
             }
 
@@ -145,6 +161,13 @@ struct RootView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
         .animation(.easeInOut(duration: 0.22), value: selection)
+        .animation(.spring(response: 0.36, dampingFraction: 0.78, blendDuration: 0.06), value: tabCompact)
+        .simultaneousGesture(tabCompactGesture)
+        .onChange(of: hideSearchTab) { hidden in
+            if hidden, selection == .search {
+                selection = .discover
+            }
+        }
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
@@ -313,7 +336,7 @@ struct RootView: View {
 
     private var legacyFloatingTabBar: some View {
         HStack(spacing: 4) {
-            ForEach(RootTab.allCases) { tab in
+            ForEach(visibleTabs) { tab in
                 Button {
                     guard selection != tab else { return }
                     BeansHaptics.select()
@@ -322,6 +345,7 @@ struct RootView: View {
                     }
                 } label: {
                     let selected = selection == tab
+                    let hiddenByCompact = tabCompact && player.currentSong != nil && !selected
                     VStack(spacing: 3) {
                         Image(systemName: tab.icon)
                             .font(.system(size: 17, weight: selected ? .semibold : .medium))
@@ -336,6 +360,10 @@ struct RootView: View {
                     .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel.opacity(0.70))
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
+                    .opacity(hiddenByCompact ? 0 : 1)
+                    .scaleEffect(hiddenByCompact ? 0.72 : 1)
+                    .frame(width: hiddenByCompact ? 0 : nil)
+                    .clipped()
                     .background {
                         if selected {
                             RoundedRectangle(cornerRadius: 17, style: .continuous)
@@ -353,7 +381,7 @@ struct RootView: View {
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 5)
-        .frame(width: legacyTabResolvedWidth)
+        .frame(width: tabCompact && player.currentSong != nil ? 72 : legacyTabResolvedWidth)
         .background {
             RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous)
                 .fill(.clear)
@@ -381,6 +409,25 @@ struct RootView: View {
         .padding(.horizontal, 18)
         .padding(.bottom, 12)
         .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
+    }
+
+    private var tabCompactGesture: some Gesture {
+        DragGesture(minimumDistance: 18, coordinateSpace: .global)
+            .onChanged { value in
+                let vertical = value.translation.height
+                guard abs(vertical) > abs(value.translation.width) * 1.2 else { return }
+                let shouldCompact = vertical > 18
+                if shouldCompact != tabCompact {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.76, blendDuration: 0.04)) {
+                        tabCompact = shouldCompact
+                    }
+                }
+            }
+            .onEnded { _ in
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.82, blendDuration: 0.06)) {
+                    tabCompact = false
+                }
+            }
     }
 }
 
