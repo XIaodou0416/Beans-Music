@@ -745,7 +745,108 @@ struct PlayerView: View {
             classicAlbumPanel(geo: geo)
         case .controlPanel:
             controlPanelAlbumPanel(geo: geo)
+        case .appleMusic:
+            appleMusicAlbumPanel(geo: geo)
         }
+    }
+
+    /// Apple Music 风格：大封面、清晰标题、细进度条和低干扰的底部控制。
+    /// 点击封面仍然进入歌词页，左右滑动仍然切换歌曲。
+    private func appleMusicAlbumPanel(geo: GeometryProxy) -> some View {
+        let size = min(geo.size.width - 48, min(geo.size.height * 0.52, 372))
+        let radius: CGFloat = circularCover ? size / 2 : 12
+
+        return VStack(spacing: 0) {
+            Spacer(minLength: 8)
+
+            Button {
+                toggleLyrics()
+            } label: {
+                CoverImage(
+                    url: song?.coverURL,
+                    size: size,
+                    cornerRadius: radius,
+                    emptyHint: player.isBuffering ? "等待开始播放…" : nil
+                )
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+                .modifier(CoverSpin(enabled: circularCover && circularCoverSpin, isPlaying: playerVisualsActive))
+                .scaleEffect(coverSwitchPulse ? 0.965 : 1)
+                .blur(radius: coverSwitchPulse ? 1.2 : 0)
+                .rotation3DEffect(.degrees(Double(coverDrag.height / -24)), axis: (x: 1, y: 0, z: 0), perspective: 0.48)
+                .rotation3DEffect(.degrees(Double(coverDrag.width / 24)), axis: (x: 0, y: 1, z: 0), perspective: 0.48)
+                .shadow(color: .black.opacity(0.34), radius: 24, y: 14)
+                .animation(.spring(response: 0.34, dampingFraction: 0.86), value: coverDrag)
+                .animation(.easeOut(duration: 0.24), value: coverSwitchPulse)
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.975))
+            .gesture(
+                DragGesture(minimumDistance: 15)
+                    .onChanged { value in
+                        guard swipeSwitchSong else { return }
+                        coverDrag = value.translation
+                        if abs(value.translation.width) > abs(value.translation.height) {
+                            swipeOffset = value.translation.width
+                        }
+                    }
+                    .onEnded { value in
+                        handleSwipeEnd(horizontal: value.translation.width)
+                    }
+            )
+            .modifier(Layoutable(part: .cover, enabled: layoutMode, data: $layoutData))
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text(song?.name ?? "未在播放")
+                        .font(BeansFont.appFont(22, .bold))
+                        .foregroundStyle(albumTitleForeground)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.62)
+                    if song?.isVIP == true {
+                        Text("VIP")
+                            .font(BeansFont.appFont(9, .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color(red: 0.93, green: 0.25, blue: 0.22), in: Capsule())
+                    }
+                }
+                Text(subtitle)
+                    .font(BeansFont.appFont(14, .medium))
+                    .foregroundStyle(albumArtistForeground)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openArtistHome() }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 20)
+            .padding(.horizontal, 24)
+            .modifier(Layoutable(part: .title, enabled: layoutMode, data: $layoutData))
+
+            progressBlock
+                .padding(.top, 18)
+                .padding(.horizontal, 24)
+                .modifier(Layoutable(part: .progress, enabled: layoutMode, data: $layoutData))
+
+            Spacer(minLength: 8)
+        }
+        .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .offset(x: swipeOffset)
+        .opacity(1 - min(abs(swipeOffset) / 260, 0.35))
+        .gesture(
+            DragGesture(minimumDistance: 15)
+                .onChanged { value in
+                    guard swipeSwitchSong else { return }
+                    if abs(value.translation.width) > abs(value.translation.height) {
+                        swipeOffset = value.translation.width
+                    }
+                }
+                .onEnded { value in
+                    handleSwipeEnd(horizontal: value.translation.width)
+                }
+        )
     }
 
     private func classicAlbumPanel(geo: GeometryProxy) -> some View {
@@ -1339,10 +1440,13 @@ struct PlayerView: View {
     /// 底部控制栏预留高度（越小歌词视口越大；需 >= 控制栏实际高度避免遮挡；可视化开启时控制栏更高）
     private var deckInset: CGFloat { 116 }
 
+    @ViewBuilder
     private func controlDeck(bottomInset: CGFloat) -> some View {
         VStack(spacing: 0) {
-            progressBlock
-                .modifier(Layoutable(part: .progress, enabled: layoutMode, data: $layoutData))
+            if coverPlayerStyle != .appleMusic {
+                progressBlock
+                    .modifier(Layoutable(part: .progress, enabled: layoutMode, data: $layoutData))
+            }
             deckRow
                 .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
             deckGrabber
@@ -2691,7 +2795,7 @@ struct PlayerSettingsSheet: View {
 
     private var coverPlayerStyleSelector: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text("封面页样式")
+            Text("播放器风格")
                 .font(BeansFont.appFont(13, .semibold))
                 .foregroundStyle(Color.beansLabel)
             ForEach(BeansCoverPlayerStyle.allCases) { style in

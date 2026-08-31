@@ -96,6 +96,8 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastPublishedProgress: Double = -1
     private var lastPersistedProgress: Double = -1
     private var lastNowPlayingArtworkKey: String?
+    /// 酷狗高音质地址在部分账号/系统上会返回但无法由 AVPlayer 打开；每首歌只自动降级一次。
+    private var kugouStandardFallbackSongKey: String?
     private static let nowPlayingArtworkCache = NSCache<NSURL, UIImage>()
 
     private let historyKey = "beans.history"
@@ -390,7 +392,7 @@ final class PlayerManager: NSObject, ObservableObject {
         updateNowPlaying()
     }
 
-    private func loadCurrent(resumeAt: Double? = nil) {
+    private func loadCurrent(resumeAt: Double? = nil, forceKugouStandard: Bool = false) {
         guard let song = currentSong else { return }
         loadGeneration += 1
         let generation = loadGeneration
@@ -411,10 +413,10 @@ final class PlayerManager: NSObject, ObservableObject {
             // 免费听歌（灰色歌曲解锁）总开关：默认开启，优先使用内置预设音源兜底。
             let enableUnblock = defaults.object(forKey: "beans.enableUnblock") as? Bool ?? true
             let strictUnlock = shouldLockOfficialOnly(song)
-            let quality = BeansAudioQuality.current
+            let quality = (forceKugouStandard && song.source == .kugou) ? .standard : BeansAudioQuality.current
             BeansLogger.shared.log("▶ 开始播放：\(song.name) - \(song.artists)｜平台=\(song.source.rawValue) id=\(song.id) 音质=\(quality.level) 免费听歌=\(enableUnblock ? "开" : "关") 官方受限=\(strictUnlock ? "是" : "否")", level: .info)
             if song.source == .kugou {
-                urlString = try? await KugouMusicAPI.shared.songURL(song: song)
+                urlString = try? await KugouMusicAPI.shared.songURL(song: song, quality: quality)
                 if urlString == nil {
                     resolvedThirdParty = await kugouFallback(song: song, enableUnblock: enableUnblock)
                 }
@@ -605,6 +607,20 @@ final class PlayerManager: NSObject, ObservableObject {
         return nil
     }
 
+    /// 仅在高音质地址已经交给 AVPlayer 但实际无法打开时回退标准音质。
+    /// 这样正常账号仍优先使用高音质，兼容部分旧系统或账号返回的不可解码资源。
+    @discardableResult
+    private func retryKugouAtStandardIfNeeded(error: Error?) -> Bool {
+        guard let song = currentSong,
+              song.source == .kugou,
+              BeansAudioQuality.current != .standard,
+              kugouStandardFallbackSongKey != song.identityKey else { return false }
+        kugouStandardFallbackSongKey = song.identityKey
+        let resume = progress
+        BeansLogger.shared.log("酷狗高音质地址无法打开，自动回退标准音质：歌曲=\(song.name) 系统=\(UIDevice.current.systemVersion) 错误=\(error?.localizedDescription ?? "未知错误")", level: .debug)
+        loadCurrent(resumeAt: resume, forceKugouStandard: true)
+        return true
+    }
 
     private func setupPlayer(url: URL, thirdPartyVIPNotice: ThirdPartyVIPNotice? = nil, resumeAt: Double = 0) {
         prepareForSystemPlayback()
@@ -646,6 +662,7 @@ final class PlayerManager: NSObject, ObservableObject {
         playbackConfirmed = false
         itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             guard let self, self.player === player, item.status == .failed else { return }
+            if self.retryKugouAtStandardIfNeeded(error: item.error) { return }
             self.loadFailed = true
             self.isBuffering = false
             self.isPlaying = false
@@ -708,6 +725,7 @@ final class PlayerManager: NSObject, ObservableObject {
             }
         }
         failureObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] _ in
+            if self?.retryKugouAtStandardIfNeeded(error: item.error) == true { return }
             self?.loadFailed = true
             self?.isBuffering = false
             BeansLogger.shared.log("播放中断：AVPlayerItem 播放失败（解码或网络错误）", level: .error)

@@ -496,13 +496,14 @@ final class KugouMusicAPI {
             .compactMap(Self.mapTrack)
     }
 
-    func songURL(song: Song) async throws -> String? {
+    func songURL(song: Song, quality: BeansAudioQuality? = nil) async throws -> String? {
         await refreshMembershipStatusIfNeeded()
+        let requestedQuality = quality ?? BeansAudioQuality.current
         var primary = song.kugouHash
         var qualityHashes = song.kugouQualityHashes
         var albumAudioId = song.kugouAlbumAudioId
         var albumId = song.kugouAlbumId
-        if Self.qualityHashCandidates(primary: primary, qualityHashes: qualityHashes).isEmpty,
+        if Self.qualityHashCandidates(primary: primary, qualityHashes: qualityHashes, quality: requestedQuality).isEmpty,
            let completed = try? await completePlaybackMetadata(for: song) {
             primary = completed.kugouHash ?? primary
             qualityHashes = completed.kugouQualityHashes ?? qualityHashes
@@ -510,16 +511,16 @@ final class KugouMusicAPI {
             albumId = completed.kugouAlbumId ?? albumId
             BeansLogger.shared.log("酷狗播放元数据补齐：\(song.name) hash=\((primary ?? "").isEmpty ? "无" : "有") albumAudioId=\(albumAudioId ?? "")", level: .debug)
         }
-        let hashes = Self.qualityHashCandidates(primary: primary, qualityHashes: qualityHashes)
+        let hashes = Self.qualityHashCandidates(primary: primary, qualityHashes: qualityHashes, quality: requestedQuality)
         guard !hashes.isEmpty else { return nil }
-        return try await songURL(hashes: hashes, albumAudioId: albumAudioId, albumId: albumId)
+        return try await songURL(hashes: hashes, albumAudioId: albumAudioId, albumId: albumId, quality: requestedQuality)
     }
 
     func songURL(hash: String, albumAudioId: String?, albumId: String?) async throws -> String? {
-        try await songURL(hashes: [hash], albumAudioId: albumAudioId, albumId: albumId)
+        try await songURL(hashes: [hash], albumAudioId: albumAudioId, albumId: albumId, quality: BeansAudioQuality.current)
     }
 
-    private func songURL(hashes: [String], albumAudioId: String?, albumId: String?) async throws -> String? {
+    private func songURL(hashes: [String], albumAudioId: String?, albumId: String?, quality: BeansAudioQuality) async throws -> String? {
         let auth = KugouMusicAuth.shared
         let vipTypes = Self.vipTypeCandidates(auth.vipType, loggedIn: auth.isLoggedIn)
         var lastCode = 0
@@ -539,7 +540,7 @@ final class KugouMusicAPI {
             // 酷狗新版客户端使用 v5/url。旧版 i/v2 在部分新曲和会员曲目上
             // 只返回 status，不返回播放地址，因此再尝试一次官方新版通道。
             for vipType in vipTypes {
-                let v5 = try await songURLV5Once(hash: hash, albumAudioId: albumAudioId, albumId: albumId, vipType: vipType)
+                let v5 = try await songURLV5Once(hash: hash, albumAudioId: albumAudioId, albumId: albumId, vipType: vipType, quality: quality)
                 lastCode = v5.code
                 lastStatus = v5.status
                 if let url = v5.url, !url.isEmpty {
@@ -560,11 +561,11 @@ final class KugouMusicAPI {
     }
 
     /// 酷狗官方新版播放地址接口，参数结构与酷狗客户端的 v5/url 通道一致。
-    private func songURLV5Once(hash: String, albumAudioId: String?, albumId: String?, vipType: Int) async throws -> (url: String?, status: Int, code: Int) {
+    private func songURLV5Once(hash: String, albumAudioId: String?, albumId: String?, vipType: Int, quality requestedQuality: BeansAudioQuality) async throws -> (url: String?, status: Int, code: Int) {
         let auth = KugouMusicAuth.shared
         var components = URLComponents(string: "\(gateway)/v5/url")!
         let quality: String
-        switch BeansAudioQuality.current {
+        switch requestedQuality {
         case .standard:
             quality = "128"
         case .higher, .exhigh:
@@ -1290,8 +1291,8 @@ final class KugouMusicAPI {
         return result
     }
 
-    private static func qualityHashCandidates(primary: String?, qualityHashes: [String: String]?) -> [String] {
-        let requested = BeansAudioQuality.current
+    private static func qualityHashCandidates(primary: String?, qualityHashes: [String: String]?, quality requestedQuality: BeansAudioQuality? = nil) -> [String] {
+        let requested = requestedQuality ?? BeansAudioQuality.current
         let order: [String]
         switch requested {
         case .hires:
