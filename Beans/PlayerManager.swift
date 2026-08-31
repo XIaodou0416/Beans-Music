@@ -438,7 +438,6 @@ final class PlayerManager: NSObject, ObservableObject {
                 return
             }
             guard let urlString, let url = URL(string: urlString) else {
-                let thirdPartyAttempted = resolvedThirdParty != nil
                 await MainActor.run {
                     guard generation == self.loadGeneration else { return }
                     self.isBuffering = false
@@ -447,11 +446,19 @@ final class PlayerManager: NSObject, ObservableObject {
                         BeansLogger.shared.log("播放失败：\(song.name) - 未找到原唱音源（官方受限），拒绝翻唱版本", level: .error)
                         ToastCenter.shared.show("《\(song.name)》未找到原唱音源（官方受限），已停止播放，拒绝翻唱版本")
                     } else {
-                        let hint = thirdPartyAttempted ? "（第三方音源尝试后无结果）" : "（第三方音源未命中）"
-                        BeansLogger.shared.log("播放失败：\(song.name) - 无法解析播放地址\(hint)｜音质=\(quality.level) 免费听歌=\(enableUnblock ? "开" : "关")", level: .error)
-                        if song.isVIP && enableUnblock {
-                            ToastCenter.shared.show("VIP 歌曲播放失败，可能是 API 调用上限了，等待恢复即可", duration: 3)
-                        }
+                        let hasUserSourceKey = !UserDefaults.standard
+                            .string(forKey: UnblockSourceStore.userAPIKeysKey)?
+                            .split(whereSeparator: { $0 == "\n" || $0 == "," || $0 == ";" })
+                            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            .filter { !$0.isEmpty }
+                            .isEmpty ?? true
+                        let failureMessage = enableUnblock
+                            ? (hasUserSourceKey
+                               ? "播放失败，请查看密钥有效性"
+                               : "播放失败，您已开启第三方音源功能，请填写密钥后播放")
+                            : "播放失败，未获取到可用音源"
+                        BeansLogger.shared.log("播放失败：\(song.name) - \(failureMessage)｜音质=\(quality.level)", level: .error)
+                        ToastCenter.shared.show(failureMessage, duration: 3)
                     }
                 }
                 return

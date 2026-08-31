@@ -2399,6 +2399,14 @@ private struct WaveBar: View {
     }
 }
 
+private struct LyricCenterPreferenceKey: PreferenceKey {
+    static var defaultValue: [Int: CGFloat] = [:]
+
+    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
 // MARK: - 歌词（居中显示 + 逐行高亮 + 自动滚动 + 点击跳转）
 
 struct LyricsSection: View {
@@ -2441,6 +2449,9 @@ struct LyricsSection: View {
     /// 用户手动滚动时暂停自动跟随（借鉴 Kumone：3 秒后恢复）
     @State private var isUserScrolling = false
     @State private var resumeScrollTask: Task<Void, Never>?
+    /// 歌词手动滚动时，以视口中心最近的一行作为视觉焦点。
+    @State private var focusedIndex: Int?
+    @State private var viewportHeight: CGFloat = 0
 
     /// 二分查找当前行（歌词按时间升序），避免逐行扫描降低 CPU
     private var currentIndex: Int? {
@@ -2465,7 +2476,15 @@ struct LyricsSection: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: appleMusicStyle ? max(lineSpacing, 26) : lineSpacing) {
                     ForEach(Array(lyrics.enumerated()), id: \.element.id) { index, line in
-                        lyricRow(index: index, line: line)
+                        lyricRow(index: index, line: line, focusIndex: focusedIndex)
+                            .background {
+                                GeometryReader { rowGeometry in
+                                    Color.clear.preference(
+                                        key: LyricCenterPreferenceKey.self,
+                                        value: [index: rowGeometry.frame(in: .named("beansLyricsViewport")).midY]
+                                    )
+                                }
+                            }
                             .contentShape(Rectangle())
                             .overlay(alignment: .topTrailing) {
                                 if selectionMode {
@@ -2504,6 +2523,7 @@ struct LyricsSection: View {
             }
             .frame(maxWidth: .infinity)
             .offset(x: offsetX)
+            .coordinateSpace(name: "beansLyricsViewport")
             .beansScrollIndicatorsHidden()
             .rotation3DEffect(.degrees(Double(tilt)), axis: (x: 1, y: 0, z: 0), anchor: .bottom, perspective: 0.5)
             .rotation3DEffect(.degrees(Double(tiltY)), axis: (x: 0, y: 1, z: 0), anchor: .center, perspective: 0.5)
@@ -2526,6 +2546,22 @@ struct LyricsSection: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
+            .overlay {
+                GeometryReader { viewportGeometry in
+                    Color.clear
+                        .onAppear { viewportHeight = viewportGeometry.size.height }
+                        .onChange(of: viewportGeometry.size.height) { newHeight in
+                            viewportHeight = newHeight
+                        }
+                }
+            }
+            .onPreferenceChange(LyricCenterPreferenceKey.self) { positions in
+                guard viewportHeight > 0, !positions.isEmpty else { return }
+                let centerY = viewportHeight / 2
+                focusedIndex = positions.min {
+                    abs($0.value - centerY) < abs($1.value - centerY)
+                }?.key
+            }
             .onAppear {
                 // 延迟到布局稳定后再定位当前行，避免从封面页调整进度后切回歌词错位
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
@@ -2542,10 +2578,12 @@ struct LyricsSection: View {
     }
 
     /// Apple Music 风格渐隐：当前行最大最亮，已播放行与未播放行按距离逐层变暗变淡
-    private func lyricRow(index: Int, line: LyricLine) -> some View {
-        let isCurrent = index == currentIndex
-        let isPlayed = (currentIndex ?? -1) >= 0 && index < (currentIndex ?? 0)
-        let distance = abs(index - (currentIndex ?? 0))
+    private func lyricRow(index: Int, line: LyricLine, focusIndex: Int?) -> some View {
+        let playbackIndex = currentIndex ?? 0
+        let visualIndex = focusIndex ?? currentIndex
+        let isCurrent = index == visualIndex
+        let isPlayed = (currentIndex ?? -1) >= 0 && index < playbackIndex
+        let distance = abs(index - (visualIndex ?? playbackIndex))
         let opacity: Double = isCurrent
             ? 1.0
             : (isPlayed ? 0.28 : 0.62) - Double(min(distance, 4)) * (appleMusicStyle ? 0.08 : 0.05)
@@ -2601,7 +2639,7 @@ struct LyricsSection: View {
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
         .padding(.horizontal, alignment == .leading ? 40 : (appleMusicStyle ? 24 : 36))
-        .animation(.easeInOut(duration: 0.25), value: currentIndex)
+        .animation(.easeInOut(duration: 0.25), value: visualIndex)
     }
 
     private func toggleSelect(_ index: Int) {
