@@ -96,7 +96,17 @@ struct ReferencePlaybackView: View {
                 BeansHaptics.medium()
                 onClose()
             }
-            .gesture(closeGesture)
+            .overlay(alignment: .top) {
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .contentShape(Rectangle())
+                    .gesture(closeGesture)
+                    .onTapGesture {
+                        BeansHaptics.medium()
+                        onClose()
+                    }
+            }
             .offset(y: CGFloat(topOffsetY))
             .accessibilityLabel("收起播放器")
     }
@@ -258,16 +268,17 @@ struct ReferencePlaybackView: View {
                     .truncationMode(.tail)
             }
             Spacer(minLength: 0)
-            Button {
-                BeansHaptics.tap()
-                onMore()
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(primaryColor.opacity(0.78))
-                    .frame(width: 38, height: 38)
+            HStack(spacing: 2) {
+                referenceActionButton(
+                    icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
+                    active: localLibrary.containsSong(song)
+                ) {
+                    onFavorite()
+                }
+                referenceActionButton(icon: "ellipsis") {
+                    onMore()
+                }
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -315,7 +326,7 @@ struct ReferencePlaybackView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            HStack(spacing: 38) {
+            HStack(spacing: 48) {
                 referenceActionButton(icon: showLyrics ? "photo" : "quote.bubble", active: showLyrics) {
                     guard !lyrics.isEmpty else { return }
                     showLyrics.toggle()
@@ -325,17 +336,6 @@ struct ReferencePlaybackView: View {
                 }
                 referenceActionButton(icon: "list.bullet") {
                     onQueue()
-                }
-                HStack(spacing: 0) {
-                    referenceActionButton(
-                        icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
-                        active: localLibrary.containsSong(song)
-                    ) {
-                        onFavorite()
-                    }
-                    referenceActionButton(icon: "ellipsis") {
-                        onMore()
-                    }
                 }
             }
             .frame(maxWidth: 420)
