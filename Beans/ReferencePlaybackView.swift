@@ -301,9 +301,7 @@ struct ReferencePlaybackView: View {
                 } label: {
                     PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24)
                         .frame(width: 66, height: 66)
-                        .background(.white, in: Circle())
-                        .foregroundStyle(.black)
-                        .shadow(color: .black.opacity(0.22), radius: 14, y: 8)
+                        .foregroundStyle(primaryColor)
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.92))
 
