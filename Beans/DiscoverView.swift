@@ -53,6 +53,8 @@ struct DiscoverView: View {
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
+    @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
+    @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
     private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
     /// 首页数据源：网易云 / QQ音乐（与搜索页同一控件样式）
     private var source: SearchProvider {
@@ -94,6 +96,9 @@ struct DiscoverView: View {
                     ScrollViewReader { proxy in
                     VStack(alignment: .leading, spacing: 26) {
                         header
+                        if remoteAnnouncementEnabled, !remoteAnnouncementText.isEmpty {
+                            remoteAnnouncementBanner
+                        }
                         providerPicker
                         if let errorMessage {
                             ErrorStateView(message: errorMessage) {
@@ -218,6 +223,25 @@ struct DiscoverView: View {
                     .onDisappear { SectionOrderStore.save(SectionOrderStore.homeKey, homeOrder) }
             }
         }
+    }
+
+    private var remoteAnnouncementBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "megaphone.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.beansAmber)
+                .padding(.top, 2)
+            Text(remoteAnnouncementText)
+                .font(BeansFont.appFont(13, .medium))
+                .foregroundStyle(Color.beansLabel)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background {
+            BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .beansCardShadow(radius: 8, y: 3)
     }
 
     /// 顶部问候区：大标题 + 刷新按钮

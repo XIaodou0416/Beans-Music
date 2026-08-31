@@ -38,6 +38,10 @@ final class RemoteControlStore: ObservableObject {
         guard config.enabled, let control = config.appControl, control.enabled else { return }
         let defaults = UserDefaults.standard
 
+        defaults.set(config.announcementEnabled && !config.announcement.isEmpty, forKey: "beans.remoteAnnouncement.enabled")
+        defaults.set(config.announcement, forKey: "beans.remoteAnnouncement.text")
+        defaults.set(config.updatedAt ?? "", forKey: "beans.remoteAnnouncement.updatedAt")
+
         if let platforms = config.platforms {
             var enabled: [SearchProvider] = []
             if platforms.netease == true { enabled.append(.netease) }
@@ -82,6 +86,9 @@ final class RemoteControlStore: ObservableObject {
 
 private struct RemoteConfig: Decodable {
     let enabled: Bool
+    let announcement: String
+    let announcementEnabled: Bool
+    let updatedAt: String?
     let platforms: RemotePlatforms?
     let appControl: RemoteAppControl?
 }

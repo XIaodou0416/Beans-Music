@@ -8,6 +8,7 @@ struct UpdateChecker {
     static let repoPath = "XIaodou0416/Beans-Music"
     static let releasePageURL = URL(string: "https://github.com/\(repoPath)/releases/latest")!
     private static let latestAPI = URL(string: "https://api.github.com/repos/\(repoPath)/releases/latest")!
+    private static let serverUpdateAPI = URL(string: "http://189.24.78.193/beans/update.json")!
     private static let suppressedVersionKey = "beans.updateCheck.suppressedVersion"
 
     /// 最新 Release 信息
@@ -55,6 +56,9 @@ struct UpdateChecker {
 
     /// 拉取最新 Release（公开仓库无需 Token）
     static func fetchLatest() async throws -> ReleaseInfo {
+        if let serverInfo = try? await fetchServerLatest() {
+            return serverInfo
+        }
         var request = URLRequest(url: latestAPI)
         request.setValue("Beans-Music/\(currentVersion)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
@@ -83,6 +87,30 @@ struct UpdateChecker {
         )
     }
 
+    /// 优先读取 Beans 后台发布配置；失败时由 fetchLatest 自动回落 GitHub Releases。
+    static func fetchServerLatest() async throws -> ReleaseInfo {
+        var request = URLRequest(url: serverUpdateAPI)
+        request.timeoutInterval = 8
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("Beans-Music/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        let payload = try JSONDecoder().decode(ServerUpdatePayload.self, from: data)
+        guard !payload.version.isEmpty else {
+            throw URLError(.cannotParseResponse)
+        }
+        let assetURL = payload.ipaURL.flatMap(URL.init(string:))
+        return ReleaseInfo(
+            version: payload.version,
+            name: payload.title.isEmpty ? "Beans Music \(payload.version)" : payload.title,
+            body: payload.notes.joined(separator: "\n"),
+            htmlURL: assetURL ?? releasePageURL,
+            assetURL: assetURL
+        )
+    }
+
     /// 三段式版本号比较：remote 大于 current 返回 true
     static func isNewer(_ remote: String, than current: String) -> Bool {
         func parts(_ v: String) -> [Int] {
@@ -99,4 +127,18 @@ struct UpdateChecker {
         return false
     }
 
+}
+
+private struct ServerUpdatePayload: Decodable {
+    let version: String
+    let title: String
+    let notes: [String]
+    let ipaURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case version
+        case title
+        case notes
+        case ipaURL = "ipa_url"
+    }
 }

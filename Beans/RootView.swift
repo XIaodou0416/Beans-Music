@@ -47,6 +47,10 @@ struct RootView: View {
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
+    @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
+    @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
+    @AppStorage("beans.remoteAnnouncement.updatedAt") private var remoteAnnouncementUpdatedAt = ""
+    @AppStorage("beans.remoteAnnouncement.seenKey") private var remoteAnnouncementSeenKey = ""
     /// 版本更新说明弹窗
     @State private var showWhatsNew = false
     /// 自动检测更新结果
@@ -59,6 +63,7 @@ struct RootView: View {
     @State private var updateShareFileURL: URL?
     @State private var updateDownloadError = ""
     @State private var showUpdateDownloadError = false
+    @State private var showRemoteAnnouncement = false
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
     }
@@ -174,6 +179,8 @@ struct RootView: View {
                 updateInfo = info
                 showUpdateAlert = true
             }
+            await RemoteControlStore.shared.refreshIfNeeded(force: true)
+            presentRemoteAnnouncementIfNeeded()
         }
         .overlay {
             if showUpdateAlert, let info = updateInfo {
@@ -217,6 +224,23 @@ struct RootView: View {
         } message: {
             Text("\(updateDownloadError)\n如果长时间无反应，可能需要特殊网络环境才能访问 GitHub。")
         }
+        .alert("Beans Music 公告", isPresented: $showRemoteAnnouncement) {
+            Button("知道了") {
+                remoteAnnouncementSeenKey = remoteAnnouncementKey
+            }
+        } message: {
+            Text(remoteAnnouncementText)
+        }
+    }
+
+    private var remoteAnnouncementKey: String {
+        "\(remoteAnnouncementUpdatedAt)|\(remoteAnnouncementText)"
+    }
+
+    private func presentRemoteAnnouncementIfNeeded() {
+        guard remoteAnnouncementEnabled, !remoteAnnouncementText.isEmpty else { return }
+        guard remoteAnnouncementSeenKey != remoteAnnouncementKey else { return }
+        showRemoteAnnouncement = true
     }
 
     private func startUpdateDownload(info: UpdateChecker.ReleaseInfo, assetURL: URL) {
