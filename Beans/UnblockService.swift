@@ -26,7 +26,8 @@ enum UnblockService {
         songSource: SongSource = .netease,
         qqMid: String? = nil,
         kugouID: String? = nil,
-        strict: Bool = false
+        strict: Bool = false,
+        excludedHosts: Set<String> = []
     ) async -> Resolved? {
         let hasSongIdentity = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !artists.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -51,7 +52,8 @@ enum UnblockService {
                         neteaseID: neteaseID,
                         songSource: songSource,
                         qqMid: qqMid,
-                        kugouID: kugouID
+                        kugouID: kugouID,
+                        excludedHosts: excludedHosts
                     )
                 }
             }
@@ -86,7 +88,8 @@ enum UnblockService {
         neteaseID: Int,
         songSource: SongSource,
         qqMid: String?,
-        kugouID: String?
+        kugouID: String?,
+        excludedHosts: Set<String>
     ) async -> Resolved? {
         guard !source.template.isEmpty else { return nil }
         let expectedProvider = providerCode(for: songSource)
@@ -124,7 +127,8 @@ enum UnblockService {
                     url: url,
                     apiKey: apiKey,
                     keyIndex: originalIndex + 1,
-                    keyTotal: apiKeys.count
+                    keyTotal: apiKeys.count,
+                    excludedHosts: excludedHosts
                 ) {
                     rememberWorkingKey(originalIndex)
                     return resolved
@@ -134,7 +138,14 @@ enum UnblockService {
             return nil
         }
 
-        return await presetSourceRequestOnce(source: source, url: url, apiKey: nil, keyIndex: 0, keyTotal: 0)
+        return await presetSourceRequestOnce(
+            source: source,
+            url: url,
+            apiKey: nil,
+            keyIndex: 0,
+            keyTotal: 0,
+            excludedHosts: excludedHosts
+        )
     }
 
     private static func presetSourceRequestOnce(
@@ -142,7 +153,8 @@ enum UnblockService {
         url: URL,
         apiKey: String?,
         keyIndex: Int,
-        keyTotal: Int
+        keyTotal: Int,
+        excludedHosts: Set<String>
     ) async -> Resolved? {
         var request = URLRequest(url: url)
         request.timeoutInterval = 7
@@ -182,6 +194,13 @@ enum UnblockService {
               let resolvedURL = value as? String, !resolvedURL.isEmpty,
               let playURL = URL(string: resolvedURL) else {
             BeansLogger.shared.log("第三方音源响应中没有播放地址：\(source.name)\(keyLabel)", level: .debug)
+            return nil
+        }
+        if let host = playURL.host?.lowercased(), excludedHosts.contains(host) {
+            BeansLogger.shared.log(
+                "第三方音源跳过已失败节点：\(source.name)\(keyLabel) 域名=\(host)",
+                level: .debug
+            )
             return nil
         }
         BeansLogger.shared.log("第三方音源命中：\(source.name)\(keyLabel)", level: .info)
