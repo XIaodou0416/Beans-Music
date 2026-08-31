@@ -29,6 +29,7 @@ struct ReferencePlaybackView: View {
 
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
     @AppStorage("beans.appleMusic.showVolume") private var showVolumeControl = true
+    @AppStorage("beans.swipeSwitchSong") private var swipeSwitchSong = true
     @AppStorage("beans.appleMusic.primaryHex") private var primaryHex = ""
     @AppStorage("beans.appleMusic.secondaryHex") private var secondaryHex = ""
     @AppStorage("beans.appleMusic.accentHex") private var accentHex = ""
@@ -510,10 +511,18 @@ struct ReferencePlaybackView: View {
     private var swipeGesture: some Gesture {
         DragGesture(minimumDistance: 15)
             .onChanged { value in
+                guard swipeSwitchSong else {
+                    swipeOffset = 0
+                    return
+                }
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 swipeOffset = value.translation.width
             }
             .onEnded { value in
+                guard swipeSwitchSong else {
+                    swipeOffset = 0
+                    return
+                }
                 if value.translation.width < -82 {
                     BeansHaptics.medium()
                     player.next()
