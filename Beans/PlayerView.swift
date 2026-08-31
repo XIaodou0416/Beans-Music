@@ -1088,20 +1088,6 @@ struct PlayerView: View {
                 }
 
                 Spacer(minLength: 0)
-
-                Button {
-                    toggleLyrics()
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(palette.secondary)
-                        .frame(width: 34, height: 34)
-                        .background {
-                                                        BeansGlass(shape: Circle())
-                        }
-                        .clipShape(Circle())
-                }
-                .buttonStyle(GlassPressButtonStyle())
             }
             .padding(.horizontal, 20)
             .padding(.top, 4)

@@ -44,6 +44,7 @@ struct ProfileView: View {
     @State private var donationExpanded = false
     @State private var remoteDonors: [Donor] = []
     @State private var loadingRemoteDonors = false
+    @State private var showWeChatOpenError = false
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
@@ -158,6 +159,11 @@ struct ProfileView: View {
             HighRefreshConfigurator()
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
+        }
+        .alert("无法打开微信", isPresented: $showWeChatOpenError) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text("请使用微信扫描上方二维码完成赞助。")
         }
         .sheet(isPresented: $showHistory) {
             HistoryView()
@@ -776,11 +782,17 @@ struct ProfileView: View {
                         .strokeBorder(Color.beansComment.opacity(0.14), lineWidth: 0.8)
                 }
 
-                Text("虽然没有服务器运营成本，但是软件本身使用AI构建，需要消耗大量token，音源接口也由本人购买，本身就会有些压力，因为软件本身公益所以自愿赞助，感谢各位的喜欢")
-                .font(BeansFont.appFont(13))
-                .foregroundStyle(Color.beansLabel)
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    openWeChatPayment()
+                } label: {
+                    Label("打开微信", systemImage: "arrow.up.forward.app")
+                        .font(BeansFont.appFont(13, .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(Color.beansAmber.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.98))
 
                 VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -824,6 +836,22 @@ struct ProfileView: View {
             BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .beansCardShadow(radius: 9, y: 3)
+    }
+
+    private func openWeChatPayment() {
+        guard let paymentURL = URL(string: "wxp://f2f03Cvy7dWnLLRbIhQJqY-MxVACiIS4JBNSui8VmUk3_Qg") else {
+            showWeChatOpenError = true
+            return
+        }
+
+        UIApplication.shared.open(paymentURL, options: [:]) { opened in
+            guard !opened, let weChatURL = URL(string: "weixin://") else { return }
+            UIApplication.shared.open(weChatURL, options: [:]) { openedWeChat in
+                if !openedWeChat {
+                    showWeChatOpenError = true
+                }
+            }
+        }
     }
 
     private var displayedDonors: [Donor] {
