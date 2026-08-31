@@ -39,6 +39,7 @@ struct ReferencePlaybackView: View {
     @State private var focusedLyricID: UUID?
     @State private var lyricsViewportHeight: CGFloat = 0
     @State private var isDraggingLyrics = false
+    @State private var dismissDragOffset: CGFloat = 0
     @State private var resumeTask: Task<Void, Never>?
 
     var body: some View {
@@ -63,10 +64,13 @@ struct ReferencePlaybackView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .animation(.easeInOut(duration: 0.22), value: showLyrics)
 
-                    controlPanel
+                    playbackControls
                         .padding(.horizontal, 24)
                         .padding(.bottom, max(14, geometry.safeAreaInsets.bottom + 4))
                 }
+                .offset(y: dismissDragOffset)
+                .scaleEffect(1 - min(dismissDragOffset / 900, 0.035))
+                .opacity(1 - min(dismissDragOffset / 520, 0.22))
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
@@ -283,7 +287,7 @@ struct ReferencePlaybackView: View {
         }
     }
 
-    private var controlPanel: some View {
+    private var playbackControls: some View {
         VStack(spacing: 15) {
             ReferenceScrubber()
             HStack(spacing: 28) {
@@ -515,11 +519,24 @@ struct ReferencePlaybackView: View {
     }
 
     private var closeGesture: some Gesture {
-        DragGesture(minimumDistance: 18)
+        DragGesture(minimumDistance: 3, coordinateSpace: .global)
+            .onChanged { value in
+                dismissDragOffset = max(value.translation.height, 0)
+            }
             .onEnded { value in
-                guard value.translation.height > 56, abs(value.translation.height) > abs(value.translation.width) else { return }
-                BeansHaptics.medium()
-                onClose()
+                let translation = max(value.translation.height, 0)
+                let prediction = max(value.predictedEndTranslation.height, 0)
+                if translation > 110 || prediction > 190 {
+                    BeansHaptics.medium()
+                    withAnimation(.spring(response: 0.52, dampingFraction: 0.9, blendDuration: 0.1)) {
+                        dismissDragOffset = translation
+                    }
+                    onClose()
+                } else {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82, blendDuration: 0.04)) {
+                        dismissDragOffset = 0
+                    }
+                }
             }
     }
 

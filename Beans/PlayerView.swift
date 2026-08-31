@@ -104,16 +104,6 @@ struct PlayerView: View {
     @AppStorage("beans.albumTextGlow") private var albumTextGlow = false
     @AppStorage("beans.albumTextGlowIntensity") private var albumTextGlowIntensity = 1.0
     @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.classic.rawValue
-    @AppStorage("beans.appleMusic.showVolume") private var appleShowVolume = true
-    @AppStorage("beans.appleMusic.primaryHex") private var applePrimaryHex = ""
-    @AppStorage("beans.appleMusic.secondaryHex") private var appleSecondaryHex = ""
-    @AppStorage("beans.appleMusic.accentHex") private var appleAccentHex = ""
-    @AppStorage("beans.appleMusic.topY") private var appleTopY = 0.0
-    @AppStorage("beans.appleMusic.coverScale") private var appleCoverScale = 1.0
-    @AppStorage("beans.appleMusic.titleY") private var appleTitleY = 0.0
-    @AppStorage("beans.appleMusic.lyricY") private var appleLyricY = 0.0
-    @AppStorage("beans.appleMusic.controlsY") private var appleControlsY = 0.0
-    @AppStorage("beans.appleMusic.actionsY") private var appleActionsY = 0.0
     /// 侧边滑动手势当前位移（刷视频式切歌过渡）
     @State private var swipeOffset: CGFloat = 0
     @State private var coverDrag: CGSize = .zero
@@ -2451,6 +2441,16 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.playerSettings.layoutExpanded") private var layoutExpanded = false
     @AppStorage("beans.playerSettings.coverExpanded") private var coverExpanded = false
     @AppStorage("beans.playerSettings.appleMusicExpanded") private var appleMusicExpanded = false
+    @AppStorage("beans.appleMusic.showVolume") private var appleShowVolume = true
+    @AppStorage("beans.appleMusic.primaryHex") private var applePrimaryHex = ""
+    @AppStorage("beans.appleMusic.secondaryHex") private var appleSecondaryHex = ""
+    @AppStorage("beans.appleMusic.accentHex") private var appleAccentHex = ""
+    @AppStorage("beans.appleMusic.topY") private var appleTopY = 0.0
+    @AppStorage("beans.appleMusic.coverScale") private var appleCoverScale = 1.0
+    @AppStorage("beans.appleMusic.titleY") private var appleTitleY = 0.0
+    @AppStorage("beans.appleMusic.lyricY") private var appleLyricY = 0.0
+    @AppStorage("beans.appleMusic.controlsY") private var appleControlsY = 0.0
+    @AppStorage("beans.appleMusic.actionsY") private var appleActionsY = 0.0
     @State private var showLyricBackgroundPicker = false
 
     private var tiltYText: String {
