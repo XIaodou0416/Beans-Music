@@ -754,21 +754,15 @@ final class PlayerManager: NSObject, ObservableObject {
         removeCurrentObservers()
         pendingThirdPartyVIPNotice = thirdPartyVIPNotice
         // QQ CDN 地址需要基础请求头；第三方地址也可能落在 QQ CDN，
-        // 但第三方请求不能复用 QQ 登录 Cookie。
+        // 1.5.7 已验证这套请求头在低系统上兼容性最好，第三方地址也沿用同一套。
         let item: AVPlayerItem
         if url.host?.contains("qq.com") == true {
             var headers = [
-                "User-Agent": isThirdParty
-                    ? "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 Version/16.0 Mobile/15E148 Safari/604.1"
-                    : "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0",
                 "Referer": "https://y.qq.com/",
             ]
-            // 第三方地址虽然可能来自 QQ CDN，但不能混入用户 QQ Cookie；
-            // 官方地址才使用登录态，避免第三方签名 URL 被错误鉴权。
-            if !isThirdParty {
-                let cookie = QQMusicAuth.shared.cookieHeader
-                if !cookie.isEmpty { headers["Cookie"] = cookie }
-            }
+            let cookie = QQMusicAuth.shared.cookieHeader
+            if !cookie.isEmpty { headers["Cookie"] = cookie }
             let asset = AVURLAsset(url: url, options: [
                 "AVURLAssetHTTPHeaderFieldsKey": headers
             ])
