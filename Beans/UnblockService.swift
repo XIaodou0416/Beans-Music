@@ -1,6 +1,6 @@
 import Foundation
 
-/// 灰色歌曲 / VIP 试听解锁：使用内置第三方音源预设。
+/// 灰色歌曲 / VIP 试听解锁：使用用户填写密钥的第三方音源。
 /// 由 PlayerManager 在网易云 / QQ 无完整 URL 时自动调用。
 enum UnblockService {
     struct Resolved {
@@ -18,7 +18,7 @@ enum UnblockService {
         return URLSession(configuration: config)
     }()
 
-    /// 入口：并发尝试可用于当前平台的音源，返回第一个可用地址。
+    /// 入口：并发尝试用户导入且可用于当前平台的音源，返回第一个可用地址。
     static func resolve(
         name: String,
         artists: String,
@@ -31,9 +31,9 @@ enum UnblockService {
         let hasSongIdentity = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !artists.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasSongIdentity else { return nil }
-        let sources = UnblockSourceStore.shared.presetSources
+        let sources = UnblockSourceStore.shared.sources
             .filter { $0.enabled && canUse(source: $0, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID) }
-        guard !sources.isEmpty else { return nil }
+        guard !sources.isEmpty, !userAPIKeys().isEmpty else { return nil }
 
         // LX、CR、QT 三个预设最终访问同一个接口，只保留每个请求指纹的第一个，
         // 避免同一首歌重复请求同一个服务，尤其避免酷狗回退时触发请求风暴。
@@ -116,7 +116,7 @@ enum UnblockService {
         urlString = urlString.replacingOccurrences(of: "{keyword}", with: urlEncoded(keyword))
         urlString = urlString.replacingOccurrences(of: "{artist}", with: urlEncoded(artists))
         guard let url = URL(string: urlString) else { return nil }
-        let apiKeys = orderedAPIKeys(for: source)
+        let apiKeys = orderedAPIKeys()
         if !apiKeys.isEmpty {
             for (originalIndex, apiKey) in apiKeys {
                 if let resolved = await presetSourceRequestOnce(
@@ -126,11 +126,11 @@ enum UnblockService {
                     keyIndex: originalIndex + 1,
                     keyTotal: apiKeys.count
                 ) {
-                    rememberWorkingKey(originalIndex, for: source)
+                    rememberWorkingKey(originalIndex)
                     return resolved
                 }
             }
-            BeansLogger.shared.log("内置音源全部密钥未命中：\(source.name) 共 \(apiKeys.count) 个", level: .debug)
+            BeansLogger.shared.log("第三方音源用户密钥全部未命中：\(source.name) 共 \(apiKeys.count) 个", level: .debug)
             return nil
         }
 
@@ -147,7 +147,7 @@ enum UnblockService {
         var request = URLRequest(url: url)
         request.timeoutInterval = 7
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("BeansMusic-Preset/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("BeansMusic-UserSource/1.0", forHTTPHeaderField: "User-Agent")
         if let apiKey, !apiKey.isEmpty {
             request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
@@ -161,30 +161,30 @@ enum UnblockService {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            BeansLogger.shared.log("内置音源请求失败：\(source.name)\(keyLabel) \(error.localizedDescription)", level: .debug)
+            BeansLogger.shared.log("第三方音源请求失败：\(source.name)\(keyLabel) \(error.localizedDescription)", level: .debug)
             return nil
         }
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            BeansLogger.shared.log("内置音源 HTTP 失败：\(source.name)\(keyLabel) 状态=\(status)", level: .debug)
+            BeansLogger.shared.log("第三方音源 HTTP 失败：\(source.name)\(keyLabel) 状态=\(status)", level: .debug)
             return nil
         }
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            BeansLogger.shared.log("内置音源响应格式错误：\(source.name)\(keyLabel)", level: .debug)
+            BeansLogger.shared.log("第三方音源响应格式错误：\(source.name)\(keyLabel)", level: .debug)
             return nil
         }
         if let code = responseCode(from: obj), code != 0 && code != 200 {
             let message = obj["message"] as? String ?? obj["msg"] as? String ?? "code=\(code)"
-            BeansLogger.shared.log("内置音源返回失败：\(source.name)\(keyLabel) \(message)", level: .debug)
+            BeansLogger.shared.log("第三方音源返回失败：\(source.name)\(keyLabel) \(message)", level: .debug)
             return nil
         }
         guard let value = valueAtAnyPath(obj, source.urlPath),
               let resolvedURL = value as? String, !resolvedURL.isEmpty,
               let playURL = URL(string: resolvedURL) else {
-            BeansLogger.shared.log("内置音源响应中没有播放地址：\(source.name)\(keyLabel)", level: .debug)
+            BeansLogger.shared.log("第三方音源响应中没有播放地址：\(source.name)\(keyLabel)", level: .debug)
             return nil
         }
-        BeansLogger.shared.log("内置音源命中：\(source.name)\(keyLabel)", level: .info)
+        BeansLogger.shared.log("第三方音源命中：\(source.name)\(keyLabel)", level: .info)
         return Resolved(url: playURL, source: source.name)
     }
 
@@ -197,39 +197,35 @@ enum UnblockService {
         return "\(source.template)|\(source.urlPath)|\(headers)"
     }
 
-    private static func orderedAPIKeys(for source: ThirdPartySource) -> [(Int, String)] {
-        if let apiKeys = source.headers["apiKeys"] {
-            let keys = apiKeys
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            if !keys.isEmpty {
-                var seen = Set<String>()
-                let unique = keys.enumerated().compactMap { index, key -> (Int, String)? in
-                    seen.insert(key).inserted ? (index, key) : nil
-                }
-                let preferred = UserDefaults.standard.integer(forKey: preferredKeyIndexDefaultsKey(for: source))
-                guard let hit = unique.firstIndex(where: { $0.0 == preferred }), hit > 0 else {
-                    return unique
-                }
-                var reordered = unique
-                let item = reordered.remove(at: hit)
-                reordered.insert(item, at: 0)
-                return reordered
-            }
-        }
-        if let apiKey = source.headers["apiKey"]?.trimmingCharacters(in: .whitespacesAndNewlines), !apiKey.isEmpty {
-            return [(0, apiKey)]
-        }
-        return []
+    private static func userAPIKeys() -> [String] {
+        UserDefaults.standard.string(forKey: UnblockSourceStore.userAPIKeysKey)?
+            .split(whereSeparator: { $0 == "\n" || $0 == "," || $0 == ";" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty } ?? []
     }
 
-    private static func rememberWorkingKey(_ index: Int, for source: ThirdPartySource) {
-        UserDefaults.standard.set(index, forKey: preferredKeyIndexDefaultsKey(for: source))
+    private static func orderedAPIKeys() -> [(Int, String)] {
+        let keys = userAPIKeys()
+        var seen = Set<String>()
+        let unique = keys.enumerated().compactMap { index, key -> (Int, String)? in
+            seen.insert(key).inserted ? (index, key) : nil
+        }
+        let preferred = UserDefaults.standard.integer(forKey: preferredKeyIndexDefaultsKey())
+        guard let hit = unique.firstIndex(where: { $0.0 == preferred }), hit > 0 else {
+            return unique
+        }
+        var reordered = unique
+        let item = reordered.remove(at: hit)
+        reordered.insert(item, at: 0)
+        return reordered
     }
 
-    private static func preferredKeyIndexDefaultsKey(for source: ThirdPartySource) -> String {
-        "beans.unblock.preferredKeyIndex.\(source.id)"
+    private static func rememberWorkingKey(_ index: Int) {
+        UserDefaults.standard.set(index, forKey: preferredKeyIndexDefaultsKey())
+    }
+
+    private static func preferredKeyIndexDefaultsKey() -> String {
+        "beans.unblock.preferredKeyIndex.user"
     }
 
     private static func responseCode(from object: [String: Any]) -> Int? {

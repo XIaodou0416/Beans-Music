@@ -1170,7 +1170,7 @@ struct SettingsView: View {
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
-    /// 官方地址不可用时，是否尝试内置音源
+    /// 官方地址不可用时，是否尝试第三方音源
     @AppStorage("beans.enableUnblock") private var enableBuiltInSources = true
     /// 第三方音源播放会员歌成功时提醒，默认开启
     @AppStorage("beans.showThirdPartyVIPNotice") private var showThirdPartyVIPNotice = true
@@ -1209,6 +1209,7 @@ struct SettingsView: View {
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
+    @AppStorage("beans.thirdPartyAPIKeys") private var thirdPartyAPIKeys = ""
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
     @State private var appearanceExpanded = false
@@ -1226,6 +1227,8 @@ struct SettingsView: View {
     @State private var pendingRestore: [String: Any]?
     @State private var showRestoreConfirm = false
     @State private var showResetSettingsConfirm = false
+    @State private var showSourceHelp = false
+    @State private var backupExpanded = false
     @State private var backupIncludeAccounts = false
     @State private var backupIncludeWallpapers = true
     @State private var backupMessage: String?
@@ -1238,7 +1241,7 @@ struct SettingsView: View {
     }
 
     private var presetSourceCount: Int {
-        sourceStore.presetSources.count
+        sourceStore.sources.count
     }
 
     private var homeGreetingLines: [String] {
@@ -1454,6 +1457,16 @@ struct SettingsView: View {
                 handleBackupImport(url)
             }
             .ignoresSafeArea()
+        }
+        .alert("密钥说明", isPresented: $showSourceHelp) {
+            Button("前往购买") {
+                if let url = URL(string: "https://xxd.shop.shiqianjiang.cn/") {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text("音源购买渠道非 Beans Music 本人，价格便宜，可以自行前往支持。购买后获得的密钥仅属于你自己，请填写到上方输入框中使用。")
         }
         .confirmationDialog("导入备份将覆盖当前部分设置，是否继续？", isPresented: $showRestoreConfirm, titleVisibility: .visible) {
             Button("恢复", role: .destructive) {
@@ -2123,7 +2136,7 @@ struct SettingsView: View {
                         Text("播放设置")
                             .font(BeansFont.appFont(15))
                             .foregroundStyle(Color.beansLabel)
-                        Text("\(BeansAudioQuality(rawValue: audioQualityRaw)?.displayName ?? "高品质") · \(enableBuiltInSources ? "内置音源已开" : "内置音源已关")")
+                        Text("\(BeansAudioQuality(rawValue: audioQualityRaw)?.displayName ?? "高品质") · \(enableBuiltInSources ? "第三方音源已开" : "第三方音源已关")")
                             .font(BeansFont.appFont(11))
                             .foregroundStyle(Color.beansComment)
                             .lineLimit(1)
@@ -2223,10 +2236,10 @@ struct SettingsView: View {
                         .foregroundStyle(Color.beansAmber)
                         .frame(width: 28)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("使用内置音源")
+                            Text("使用第三方音源")
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text("仅在官方地址不可用或为试听片段时回退到预设")
+                            Text("仅在官方地址不可用或为试听片段时回退到用户密钥音源")
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -2245,7 +2258,7 @@ struct SettingsView: View {
                             Text("第三方播放会员歌提醒")
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text("未识别到对应会员且会员歌曲通过内置音源播放成功时提示")
+                                Text("未识别到对应会员且会员歌曲通过第三方音源播放成功时提示")
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -2258,7 +2271,7 @@ struct SettingsView: View {
                     Image(systemName: "shippingbox.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(Color.beansAmber)
-                    Text("内置音源预设")
+                    Text("第三方音源")
                         .font(BeansFont.appFont(13, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     Spacer()
@@ -2267,14 +2280,38 @@ struct SettingsView: View {
                         .foregroundStyle(Color.beansComment)
                 }
 
-                ForEach(sourceStore.presetSources) { source in
+                HStack {
+                    Text("第三方音源密钥")
+                        .font(BeansFont.appFont(13, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Spacer()
+                    Button { showSourceHelp = true } label: {
+                        Image(systemName: "questionmark.circle")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Color.beansAmber)
+                    }
+                    .buttonStyle(.plain)
+                }
+                SecureField("填写你购买的专属密钥", text: $thirdPartyAPIKeys)
+                    .font(BeansFont.appFont(13))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 11)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Text("输入后才会启用第三方音源。密钥只保存在本机，不会上传到 Beans 服务器。")
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(Color.beansComment)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                ForEach(sourceStore.sources) { source in
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(source.name)
                                 .font(BeansFont.appFont(13, .medium))
                                 .foregroundStyle(Color.beansLabel)
                                 .lineLimit(1)
-                            Text("内置预设 · \(source.kind.replacingOccurrences(of: "paid-", with: "").uppercased())")
+                            Text("自定义接口 · \(source.kind.uppercased())")
                                 .font(BeansFont.appFont(10))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -2282,9 +2319,16 @@ struct SettingsView: View {
                         Toggle("", isOn: sourceEnabledBinding(source.id))
                             .labelsHidden()
                             .tint(Color.beansAmber)
+                        Button {
+                            sourceStore.sources.removeAll { $0.id == source.id }
+                            ToastCenter.shared.show("已移除音源")
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(Color.red.opacity(0.85))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-
             }
             .padding(16)
             .background {
@@ -2298,10 +2342,10 @@ struct SettingsView: View {
 
     private func sourceEnabledBinding(_ id: String) -> Binding<Bool> {
         Binding(
-            get: { sourceStore.presetSources.first(where: { $0.id == id })?.enabled ?? false },
+            get: { sourceStore.sources.first(where: { $0.id == id })?.enabled ?? false },
             set: { value in
-                guard let index = sourceStore.presetSources.firstIndex(where: { $0.id == id }) else { return }
-                sourceStore.presetSources[index].enabled = value
+                guard let index = sourceStore.sources.firstIndex(where: { $0.id == id }) else { return }
+                sourceStore.sources[index].enabled = value
             }
         )
     }
@@ -2375,7 +2419,35 @@ struct SettingsView: View {
     /// 配置备份与恢复：导出全部 beans.* 设置为 JSON 分享；导入后写回 UserDefaults
     private var backupSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "备份与恢复")
+            Button {
+                BeansHaptics.select()
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    backupExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "externaldrive.fill")
+                        .foregroundStyle(Color.beansAmber)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("备份与恢复")
+                            .font(BeansFont.appFont(15))
+                            .foregroundStyle(Color.beansLabel)
+                        Text("导出或恢复应用配置")
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    Spacer()
+                    Image(systemName: backupExpanded ? "chevron.up" : "chevron.down")
+                        .foregroundStyle(Color.beansComment)
+                }
+                .padding(14)
+                .background {
+                    BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+            }
+            .buttonStyle(.plain)
+
+            if backupExpanded {
             VStack(spacing: 10) {
                 Toggle("备份登录信息", isOn: $backupIncludeAccounts)
                     .tint(Color.beansAmber)
@@ -2413,6 +2485,8 @@ struct SettingsView: View {
                     .foregroundStyle(Color.beansComment)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 
@@ -2444,6 +2518,7 @@ struct SettingsView: View {
         key.hasPrefix("beans.search.")
             || key.hasPrefix("beans.log")
             || key.hasPrefix("beans.crash")
+            || key == UnblockSourceStore.userAPIKeysKey
             || key == "beans.launchInProgress"
             || key == "beans.wallpapers.deleted"
     }
