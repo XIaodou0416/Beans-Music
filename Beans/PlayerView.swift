@@ -14,6 +14,7 @@ struct PlayerView: View {
 
     @State private var lyrics: [LyricLine] = []
     @State private var showLyrics = false
+    @AppStorage("beans.player.lastLyricsPage") private var lastLyricsPage = false
     @State private var showQueue = false
     @State private var showSleepTimer = false
     @State private var showAddToPlaylist = false
@@ -468,6 +469,7 @@ struct PlayerView: View {
             PlayerLayoutStore.save(newValue)
         }
         .onAppear {
+            showLyrics = lastLyricsPage
             if let path = LyricBackgroundStore.restoreFromBackup(), lyricBackgroundImagePath != path {
                 lyricBackgroundImagePath = path
             }
@@ -482,6 +484,9 @@ struct PlayerView: View {
                     }
                 }
             }
+        }
+        .onChange(of: showLyrics) { newValue in
+            lastLyricsPage = newValue
         }
         .sheet(isPresented: $showQueue) {
             QueueView()

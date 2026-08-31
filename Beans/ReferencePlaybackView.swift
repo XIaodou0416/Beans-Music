@@ -96,20 +96,12 @@ struct ReferencePlaybackView: View {
             .padding(.bottom, 16)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
-            .onTapGesture {
-                BeansHaptics.medium()
-                onClose()
-            }
             .overlay(alignment: .top) {
                 Color.clear
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
                     .contentShape(Rectangle())
                     .gesture(closeGesture)
-                    .onTapGesture {
-                        BeansHaptics.medium()
-                        onClose()
-                    }
             }
             .offset(y: CGFloat(topOffsetY))
             .accessibilityLabel("收起播放器")
@@ -342,7 +334,7 @@ struct ReferencePlaybackView: View {
             }
 
             HStack(spacing: 48) {
-                referenceActionButton(icon: showLyrics ? "photo" : "quote.bubble", active: showLyrics) {
+                referenceActionButton(icon: "quote.bubble", active: showLyrics) {
                     guard !lyrics.isEmpty else { return }
                     showLyrics.toggle()
                 }
