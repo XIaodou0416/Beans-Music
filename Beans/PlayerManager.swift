@@ -446,12 +446,12 @@ final class PlayerManager: NSObject, ObservableObject {
                         BeansLogger.shared.log("播放失败：\(song.name) - 未找到原唱音源（官方受限），拒绝翻唱版本", level: .error)
                         ToastCenter.shared.show("《\(song.name)》未找到原唱音源（官方受限），已停止播放，拒绝翻唱版本")
                     } else {
-                        let hasUserSourceKey = !UserDefaults.standard
+                        let hasUserSourceKey = (UserDefaults.standard
                             .string(forKey: UnblockSourceStore.userAPIKeysKey)?
                             .split(whereSeparator: { $0 == "\n" || $0 == "," || $0 == ";" })
                             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                             .filter { !$0.isEmpty }
-                            .isEmpty ?? true
+                            .isEmpty ?? true) == false
                         let failureMessage = enableUnblock
                             ? (hasUserSourceKey
                                ? "播放失败，请查看密钥有效性"
