@@ -210,7 +210,7 @@ enum UnblockService {
         guard let value = valueAtAnyPath(obj, source.urlPath),
               let resolvedURL = value as? String, !resolvedURL.isEmpty,
               let rawPlayURL = URL(string: resolvedURL),
-              let playURL = await playablePlaybackURL(from: rawPlayURL, source: source, keyLabel: keyLabel, excludedHosts: excludedHosts) else {
+              let playURL = playablePlaybackURL(from: rawPlayURL, source: source, keyLabel: keyLabel, excludedHosts: excludedHosts) else {
             BeansLogger.shared.log("第三方音源响应中没有播放地址：\(source.name)\(keyLabel)", level: .debug)
             return nil
         }
@@ -231,11 +231,11 @@ enum UnblockService {
         return Resolved(url: playURL, source: source.name)
     }
 
-    /// 部分第三方接口会固定返回不稳定的 QQ CDN 节点。先替换为同路径候选并做
-    /// 小范围探测，避免把明显不可用的地址直接交给 AVPlayer。
-    private static func playablePlaybackURL(from rawURL: URL, source: ThirdPartySource, keyLabel: String, excludedHosts: Set<String>) async -> URL? {
+    /// 部分第三方接口会固定返回不稳定的 QQ CDN 节点。
+    /// 不在这里做 Range 探测：部分 QQ CDN 会拒绝探测请求，但 AVPlayer
+    /// 带完整请求头后仍可正常播放。实际失败由 AVPlayer 反馈，再换下一个节点。
+    private static func playablePlaybackURL(from rawURL: URL, source: ThirdPartySource, keyLabel: String, excludedHosts: Set<String>) -> URL? {
         let candidates = qqPlaybackURLCandidates(for: rawURL)
-        var firstAllowed: URL?
         for candidate in candidates {
             guard let host = candidate.host?.lowercased() else { continue }
             if excludedHosts.contains(host) {
@@ -245,33 +245,14 @@ enum UnblockService {
                 )
                 continue
             }
-            if firstAllowed == nil { firstAllowed = candidate }
-            guard isQQPlaybackHost(host) else {
-                return candidate
-            }
             if rawURL != candidate {
                 BeansLogger.shared.log(
-                    "第三方音源切换 QQ CDN 节点：\(rawURL.host ?? "?") -> \(host)",
+                    "第三方音源准备 QQ CDN 备用节点：\(rawURL.host ?? "?") -> \(host)",
                     level: .debug
                 )
             }
-            if await probePlaybackURL(candidate) {
-                BeansLogger.shared.log(
-                    "第三方音源 QQ CDN 探测成功：\(source.name)\(keyLabel) \(safeURLSummary(candidate))",
-                    level: .debug
-                )
-                return candidate
-            }
-            BeansLogger.shared.log(
-                "第三方音源 QQ CDN 探测失败：\(source.name)\(keyLabel) \(safeURLSummary(candidate))",
-                level: .debug
-            )
-        }
-        if firstAllowed != nil {
-            BeansLogger.shared.log(
-                "第三方音源 QQ CDN 候选均未通过探测，尝试下一档音质：\(source.name)\(keyLabel)",
-                level: .debug
-            )
+            BeansLogger.shared.log("第三方音源选择播放地址：\(source.name)\(keyLabel) \(safeURLSummary(candidate))", level: .debug)
+            return candidate
         }
         return nil
     }
@@ -281,12 +262,12 @@ enum UnblockService {
             return [url]
         }
         let hosts = [
+            host,
             "isure6.ptqqmusic.gitv.tv",
             "isure.stream.qqmusic.qq.com",
             "dl.stream.qqmusic.qq.com",
             "ws.stream.qqmusic.qq.com",
-            "streamoc.music.tc.qq.com",
-            host
+            "streamoc.music.tc.qq.com"
         ]
         var seen = Set<String>()
         return hosts.compactMap { replacement in
@@ -331,23 +312,6 @@ enum UnblockService {
                   seen.insert(value).inserted else { return nil }
             return value
         }
-    }
-
-    private static func probePlaybackURL(_ url: URL) async -> Bool {
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 5
-        request.setValue("bytes=0-2047", forHTTPHeaderField: "Range")
-        request.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0", forHTTPHeaderField: "User-Agent")
-        request.setValue("https://y.qq.com/", forHTTPHeaderField: "Referer")
-        request.setValue("https://y.qq.com", forHTTPHeaderField: "Origin")
-        let cookie = QQMusicAuth.shared.cookieHeader
-        request.setValue(cookie.isEmpty ? "uin=0; qqmusic_fromtag=66" : cookie, forHTTPHeaderField: "Cookie")
-        guard let (data, response) = try? await session.data(for: request),
-              let http = response as? HTTPURLResponse,
-              http.statusCode == 200 || http.statusCode == 206,
-              !data.isEmpty else { return false }
-        let contentType = (http.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
-        return !contentType.contains("text/html") && !contentType.contains("application/json")
     }
 
     private static func safeURLSummary(_ url: URL) -> String {

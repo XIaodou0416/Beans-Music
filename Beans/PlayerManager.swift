@@ -416,7 +416,7 @@ final class PlayerManager: NSObject, ObservableObject {
         Task {
             var urlString: String?
             var resolvedThirdParty: UnblockService.Resolved?
-            // 免费听歌（灰色歌曲解锁）总开关：默认开启，官方失败后走同名歌曲与第三方音源兜底。
+            // 免费听歌（灰色歌曲解锁）总开关：默认开启，官方失败后走对应平台第三方音源兜底。
             let enableUnblock = defaults.object(forKey: "beans.enableUnblock") as? Bool ?? true
             let strictUnlock = shouldLockOfficialOnly(song)
             let quality = (forceKugouStandard && song.source == .kugou) ? .standard : BeansAudioQuality.current
@@ -427,7 +427,7 @@ final class PlayerManager: NSObject, ObservableObject {
                     resolvedThirdParty = await kugouFallback(song: song, enableUnblock: enableUnblock)
                 }
             } else if song.source == .qq, let mid = song.qqMid {
-                // 官方优先；官方无地址后走完整兜底：QQ 音源、网易云同名匹配、网易云音源。
+                // QQ 官方地址失败后只走 QQ 第三方音源，不跨平台匹配同名歌曲。
                 urlString = try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid)
                 if urlString == nil {
                     (urlString, resolvedThirdParty) = await qqFallback(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
@@ -692,7 +692,7 @@ final class PlayerManager: NSObject, ObservableObject {
             level: .debug
         )
         Task {
-            let (urlString, resolved) = await self.qqFallback(song: song, quality: BeansAudioQuality.current, enableUnblock: true, strict: strict)
+            let (_, resolved) = await self.qqFallback(song: song, quality: BeansAudioQuality.current, enableUnblock: true, strict: strict)
             await MainActor.run {
                 guard generation == self.loadGeneration,
                       self.currentSong?.identityKey == song.identityKey else { return }
@@ -708,17 +708,11 @@ final class PlayerManager: NSObject, ObservableObject {
                         "QQ 官方失败后第三方切换成功：\(song.name)｜域名=\(resolved.url.host ?? "?")",
                         level: .info
                     )
-                } else if let urlString, let url = URL(string: urlString) {
-                    self.setupPlayer(url: url, resumeAt: resume)
-                    BeansLogger.shared.log(
-                        "QQ 官方失败后网易云同名切换成功：\(song.name)｜域名=\(url.host ?? "?")",
-                        level: .info
-                    )
                 } else {
                     self.loadFailed = true
                     self.isBuffering = false
                     self.isPlaying = false
-                    BeansLogger.shared.log("QQ 官方失败后完整兜底仍未命中：\(song.name)", level: .debug)
+                    BeansLogger.shared.log("QQ 官方失败后 QQ 第三方仍未命中：\(song.name)", level: .debug)
                 }
             }
         }
