@@ -666,7 +666,7 @@ final class PlayerManager: NSObject, ObservableObject {
         let strict = shouldLockOfficialOnly(song)
         let excludedHosts = excludingHost.map { Set([$0.lowercased()]) } ?? []
         BeansLogger.shared.log(
-            "第三方播放地址失效，重新解析一次：歌曲=\(song.name)｜系统=\(UIDevice.current.systemVersion)｜排除域名=\(excludingHost ?? \"无\")",
+            "第三方播放地址失效，重新解析一次：歌曲=\(song.name)｜系统=\(UIDevice.current.systemVersion)｜排除域名=\(excludingHost ?? "无")",
             level: .debug
         )
         Task {
@@ -734,7 +734,7 @@ final class PlayerManager: NSObject, ObservableObject {
                     isThirdParty: true
                 )
                 BeansLogger.shared.log(
-                    "QQ 官方失败后第三方切换成功：\(song.name)｜域名=\(resolved.url.host ?? \"?\")",
+                    "QQ 官方失败后第三方切换成功：\(song.name)｜域名=\(resolved.url.host ?? "?")",
                     level: .info
                 )
             }
