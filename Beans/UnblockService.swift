@@ -109,43 +109,50 @@ enum UnblockService {
         default:
             return nil
         }
-        var urlString = source.template
-        urlString = urlString.replacingOccurrences(of: "{id}", with: songID)
-        urlString = urlString.replacingOccurrences(of: "{source}", with: expectedProvider)
-        urlString = urlString.replacingOccurrences(of: "{quality}", with: source.headers["quality"] ?? "320k")
-        urlString = urlString.replacingOccurrences(of: "{name}", with: urlEncoded(name))
+        var baseURLString = source.template
+        baseURLString = baseURLString.replacingOccurrences(of: "{id}", with: songID)
+        baseURLString = baseURLString.replacingOccurrences(of: "{source}", with: expectedProvider)
+        baseURLString = baseURLString.replacingOccurrences(of: "{name}", with: urlEncoded(name))
         let keyword = ([name, artists].filter { !$0.isEmpty }).joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        urlString = urlString.replacingOccurrences(of: "{keyword}", with: urlEncoded(keyword))
-        urlString = urlString.replacingOccurrences(of: "{artist}", with: urlEncoded(artists))
-        guard let url = URL(string: urlString) else { return nil }
+        baseURLString = baseURLString.replacingOccurrences(of: "{keyword}", with: urlEncoded(keyword))
+        baseURLString = baseURLString.replacingOccurrences(of: "{artist}", with: urlEncoded(artists))
         let apiKeys = orderedAPIKeys()
-        if !apiKeys.isEmpty {
-            for (originalIndex, apiKey) in apiKeys {
-                if let resolved = await presetSourceRequestOnce(
-                    source: source,
-                    url: url,
-                    apiKey: apiKey,
-                    keyIndex: originalIndex + 1,
-                    keyTotal: apiKeys.count,
-                    excludedHosts: excludedHosts
-                ) {
-                    rememberWorkingKey(originalIndex)
-                    return resolved
+        for quality in qualityCandidates(for: source, songSource: songSource) {
+            let urlString = baseURLString.replacingOccurrences(of: "{quality}", with: quality)
+            guard let url = URL(string: urlString) else { continue }
+            if !apiKeys.isEmpty {
+                for (originalIndex, apiKey) in apiKeys {
+                    if let resolved = await presetSourceRequestOnce(
+                        source: source,
+                        url: url,
+                        apiKey: apiKey,
+                        keyIndex: originalIndex + 1,
+                        keyTotal: apiKeys.count,
+                        quality: quality,
+                        excludedHosts: excludedHosts
+                    ) {
+                        rememberWorkingKey(originalIndex)
+                        return resolved
+                    }
                 }
+            } else if let resolved = await presetSourceRequestOnce(
+                source: source,
+                url: url,
+                apiKey: nil,
+                keyIndex: 0,
+                keyTotal: 0,
+                quality: quality,
+                excludedHosts: excludedHosts
+            ) {
+                return resolved
             }
-            BeansLogger.shared.log("第三方音源用户密钥全部未命中：\(source.name) 共 \(apiKeys.count) 个", level: .debug)
-            return nil
         }
 
-        return await presetSourceRequestOnce(
-            source: source,
-            url: url,
-            apiKey: nil,
-            keyIndex: 0,
-            keyTotal: 0,
-            excludedHosts: excludedHosts
-        )
+        if !apiKeys.isEmpty {
+            BeansLogger.shared.log("第三方音源用户密钥全部未命中：\(source.name) 共 \(apiKeys.count) 个", level: .debug)
+        }
+        return nil
     }
 
     private static func presetSourceRequestOnce(
@@ -154,6 +161,7 @@ enum UnblockService {
         apiKey: String?,
         keyIndex: Int,
         keyTotal: Int,
+        quality: String,
         excludedHosts: Set<String>
     ) async -> Resolved? {
         var request = URLRequest(url: url)
@@ -163,7 +171,7 @@ enum UnblockService {
         if let apiKey, !apiKey.isEmpty {
             request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
-        let keyLabel = keyTotal > 1 ? " 密钥=\(keyIndex)/\(keyTotal)" : ""
+        let keyLabel = (keyTotal > 1 ? " 密钥=\(keyIndex)/\(keyTotal)" : "") + " 音质=\(quality)"
         let metadataKeys: Set<String> = ["source", "quality", "br", "apiKey", "apiKeys"]
         for (key, value) in source.headers where !metadataKeys.contains(key) {
             request.setValue(value, forHTTPHeaderField: key)
@@ -250,13 +258,13 @@ enum UnblockService {
                 level: .debug
             )
         }
-        if let firstAllowed {
+        if firstAllowed != nil {
             BeansLogger.shared.log(
-                "第三方音源 QQ CDN 候选均未通过探测，仍交给播放器兜底：\(source.name)\(keyLabel) \(safeURLSummary(firstAllowed))",
+                "第三方音源 QQ CDN 候选均未通过探测，尝试下一档音质：\(source.name)\(keyLabel)",
                 level: .debug
             )
         }
-        return firstAllowed
+        return nil
     }
 
     private static func qqPlaybackURLCandidates(for url: URL) -> [URL] {
@@ -288,16 +296,33 @@ enum UnblockService {
         host.contains("qq.com") || host.contains("qqmusic") || host.contains("ptqqmusic") || host.contains("gitv.tv")
     }
 
+    private static func qualityCandidates(for source: ThirdPartySource, songSource: SongSource) -> [String] {
+        let configured = source.headers["quality"] ?? "320k"
+        let fallback: [String]
+        switch songSource {
+        case .qq:
+            fallback = ["320k", "128k", "flac"]
+        case .netease:
+            fallback = [configured, "exhigh", "higher", "standard"]
+        case .kugou:
+            fallback = [configured, "320k", "128k"]
+        }
+        var seen = Set<String>()
+        return ([configured] + fallback).filter { quality in
+            let trimmed = quality.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !trimmed.isEmpty && seen.insert(trimmed).inserted
+        }
+    }
+
     private static func probePlaybackURL(_ url: URL) async -> Bool {
         var request = URLRequest(url: url)
         request.timeoutInterval = 5
         request.setValue("bytes=0-2047", forHTTPHeaderField: "Range")
         request.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0", forHTTPHeaderField: "User-Agent")
         request.setValue("https://y.qq.com/", forHTTPHeaderField: "Referer")
+        request.setValue("https://y.qq.com", forHTTPHeaderField: "Origin")
         let cookie = QQMusicAuth.shared.cookieHeader
-        if !cookie.isEmpty {
-            request.setValue(cookie, forHTTPHeaderField: "Cookie")
-        }
+        request.setValue(cookie.isEmpty ? "uin=0; qqmusic_fromtag=66" : cookie, forHTTPHeaderField: "Cookie")
         guard let (data, response) = try? await session.data(for: request),
               let http = response as? HTTPURLResponse,
               http.statusCode == 200 || http.statusCode == 206,
