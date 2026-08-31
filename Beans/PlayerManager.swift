@@ -505,52 +505,24 @@ final class PlayerManager: NSObject, ObservableObject {
         return (urlString, resolved)
     }
 
-    /// QQ 歌曲兜底：官方失败后优先走 QQ 第三方接口，最后才尝试网易云同名兜底。
-    private func qqFallback(song: Song, quality: BeansAudioQuality, enableUnblock: Bool, strict: Bool = false, excludedHosts: Set<String> = []) async -> (String?, UnblockService.Resolved?) {
-        var urlString: String?
-        var resolved: UnblockService.Resolved?
-        if enableUnblock {
-            resolved = await UnblockService.resolve(
-                name: song.name,
-                artists: song.artists,
-                neteaseID: 0,
-                songSource: .qq,
-                qqMid: song.qqMid,
-                qqMediaMid: song.qqMediaMid,
-                strict: strict,
-                excludedHosts: excludedHosts
-            )
+    /// QQ 歌曲兜底：官方失败后只走 QQ 第三方接口，不跨平台匹配同名歌曲。
+    private func qqFallback(song: Song, quality _: BeansAudioQuality, enableUnblock: Bool, strict: Bool = false, excludedHosts: Set<String> = []) async -> (String?, UnblockService.Resolved?) {
+        guard enableUnblock else {
+            BeansLogger.shared.log("QQ兜底：\(song.name) 第三方=未启用", level: .debug)
+            return (nil, nil)
         }
-        if let resolved {
-            BeansLogger.shared.log("QQ兜底：\(song.name) QQ第三方=命中", level: .debug)
-            return (nil, resolved)
-        }
-        if let matched = await matchNetEaseSong(name: song.name, artists: song.artists, durationMS: Int(song.duration * 1000), strict: strict) {
-            let infos = try? await NetEaseAPI.shared.songURLInfo(ids: [matched.id], level: quality.level)
-            var info = infos?[matched.id]
-            if (info?.url == nil || info?.freeTrial == true), quality != .standard {
-                let fallback = try? await NetEaseAPI.shared.songURLInfo(ids: [matched.id], level: "standard")
-                info = fallback?[matched.id]
-            }
-            // 免费完整 URL 直接用；试听片段 / 无 URL 交给第三方解锁
-            if let u = info?.url, info?.freeTrial != true {
-                urlString = u
-            } else if enableUnblock {
-                resolved = await UnblockService.resolve(
-                    name: matched.name,
-                    artists: matched.artists,
-                    neteaseID: matched.id,
-                    songSource: .netease,
-                    strict: strict
-                )
-            }
-        }
-        if resolved != nil || urlString != nil {
-            BeansLogger.shared.log("QQ兜底：\(song.name) QQ第三方未命中，网易云链路=命中 官方=\(urlString != nil ? "是" : "否") 第三方=\(resolved != nil ? "命中" : "未命中")", level: .debug)
-            return (urlString, resolved)
-        }
-        BeansLogger.shared.log("QQ兜底：\(song.name) 官方=\(urlString != nil ? "是" : "否") 第三方=\(resolved != nil ? "命中" : "未用/未命中")", level: .debug)
-        return (urlString, resolved)
+        let resolved = await UnblockService.resolve(
+            name: song.name,
+            artists: song.artists,
+            neteaseID: 0,
+            songSource: .qq,
+            qqMid: song.qqMid,
+            qqMediaMid: song.qqMediaMid,
+            strict: strict,
+            excludedHosts: excludedHosts
+        )
+        BeansLogger.shared.log("QQ兜底：\(song.name) QQ第三方=\(resolved != nil ? "命中" : "未命中")", level: .debug)
+        return (nil, resolved)
     }
 
     /// 酷狗兜底：官方播放失败后使用内置音源作为备选。
@@ -669,7 +641,7 @@ final class PlayerManager: NSObject, ObservableObject {
             level: .debug
         )
         Task {
-            let (urlString, resolved) = await self.qqFallback(
+            let (_, resolved) = await self.qqFallback(
                 song: song,
                 quality: BeansAudioQuality.current,
                 enableUnblock: true,
@@ -688,9 +660,6 @@ final class PlayerManager: NSObject, ObservableObject {
                         isThirdParty: true
                     )
                     BeansLogger.shared.log("第三方播放地址重试成功：\(song.name)｜域名=\(resolved.url.host ?? "?")", level: .info)
-                } else if let urlString, let url = URL(string: urlString) {
-                    self.setupPlayer(url: url, resumeAt: resume)
-                    BeansLogger.shared.log("第三方播放地址重试转网易云成功：\(song.name)｜域名=\(url.host ?? "?")", level: .info)
                 } else {
                     self.loadFailed = true
                     self.isBuffering = false
