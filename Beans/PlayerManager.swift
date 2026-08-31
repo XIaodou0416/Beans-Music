@@ -428,23 +428,10 @@ final class PlayerManager: NSObject, ObservableObject {
                     resolvedThirdParty = await kugouFallback(song: song, enableUnblock: enableUnblock)
                 }
             } else if song.source == .qq, let mid = song.qqMid {
-                // 保持 1.5.7 的官方优先链路。只有官方没有地址时才走第三方，
-                // 这样正常账号不会被不稳定的第三方 CDN 抢先；官方地址实际失败时，
-                // setupPlayer 的失败回调再切到第三方。
+                // 官方优先；官方无地址后走完整兜底：QQ 音源、网易云同名匹配、网易云音源。
                 urlString = try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid)
-                if urlString == nil && enableUnblock {
-                    resolvedThirdParty = await UnblockService.resolve(
-                        name: song.name,
-                        artists: song.artists,
-                        neteaseID: 0,
-                        songSource: .qq,
-                        qqMid: mid,
-                        qqMediaMid: song.qqMediaMid,
-                        strict: strictUnlock
-                    )
-                }
-                if resolvedThirdParty == nil && urlString == nil {
-                    (urlString, resolvedThirdParty) = await qqFallback(song: song, quality: quality, enableUnblock: false, strict: strictUnlock)
+                if urlString == nil {
+                    (urlString, resolvedThirdParty) = await qqFallback(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
                 }
             } else {
                 (urlString, resolvedThirdParty) = await neteaseResolve(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
@@ -736,30 +723,34 @@ final class PlayerManager: NSObject, ObservableObject {
             level: .debug
         )
         Task {
-            let resolved = await UnblockService.resolve(
-                name: song.name,
-                artists: song.artists,
-                neteaseID: 0,
-                songSource: .qq,
-                qqMid: qqMid,
-                qqMediaMid: song.qqMediaMid,
-                strict: strict
-            )
+            let (urlString, resolved) = await self.qqFallback(song: song, quality: BeansAudioQuality.current, enableUnblock: true, strict: strict)
             await MainActor.run {
                 guard generation == self.loadGeneration,
-                      self.currentSong?.identityKey == song.identityKey,
-                      let resolved else { return }
-                let notice = self.thirdPartyVIPNotice(for: song, sourceTitle: resolved.sourceTitle)
-                self.setupPlayer(
-                    url: resolved.url,
-                    thirdPartyVIPNotice: notice,
-                    resumeAt: resume,
-                    isThirdParty: true
-                )
-                BeansLogger.shared.log(
-                    "QQ 官方失败后第三方切换成功：\(song.name)｜域名=\(resolved.url.host ?? "?")",
-                    level: .info
-                )
+                      self.currentSong?.identityKey == song.identityKey else { return }
+                if let resolved {
+                    let notice = self.thirdPartyVIPNotice(for: song, sourceTitle: resolved.sourceTitle)
+                    self.setupPlayer(
+                        url: resolved.url,
+                        thirdPartyVIPNotice: notice,
+                        resumeAt: resume,
+                        isThirdParty: true
+                    )
+                    BeansLogger.shared.log(
+                        "QQ 官方失败后第三方切换成功：\(song.name)｜域名=\(resolved.url.host ?? "?")",
+                        level: .info
+                    )
+                } else if let urlString, let url = URL(string: urlString) {
+                    self.setupPlayer(url: url, resumeAt: resume)
+                    BeansLogger.shared.log(
+                        "QQ 官方失败后网易云同名切换成功：\(song.name)｜域名=\(url.host ?? "?")",
+                        level: .info
+                    )
+                } else {
+                    self.loadFailed = true
+                    self.isBuffering = false
+                    self.isPlaying = false
+                    BeansLogger.shared.log("QQ 官方失败后完整兜底仍未命中：\(song.name)", level: .debug)
+                }
             }
         }
         return true

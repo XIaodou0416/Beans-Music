@@ -35,7 +35,7 @@ enum UnblockService {
         guard hasSongIdentity else { return nil }
         let sources = UnblockSourceStore.shared.sources
             .filter { $0.enabled && canUse(source: $0, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID) }
-        guard !sources.isEmpty, !userAPIKeys().isEmpty else { return nil }
+        guard !sources.isEmpty else { return nil }
 
         // LX、CR、QT 三个预设最终访问同一个接口，只保留每个请求指纹的第一个，
         // 避免同一首歌重复请求同一个服务，尤其避免酷狗回退时触发请求风暴。
@@ -112,7 +112,7 @@ enum UnblockService {
         default:
             return nil
         }
-        let apiKeys = orderedAPIKeys()
+        let apiKeys = orderedAPIKeys(for: source)
         for (idIndex, songID) in songIDs.enumerated() {
             var baseURLString = source.template
             baseURLString = baseURLString.replacingOccurrences(of: "{id}", with: songID)
@@ -138,7 +138,7 @@ enum UnblockService {
                             idLabel: idLabel,
                             excludedHosts: excludedHosts
                         ) {
-                            rememberWorkingKey(originalIndex)
+                            rememberWorkingKey(originalIndex, for: source)
                             return resolved
                         }
                     }
@@ -158,7 +158,7 @@ enum UnblockService {
         }
 
         if !apiKeys.isEmpty {
-            BeansLogger.shared.log("第三方音源用户密钥全部未命中：\(source.name) 共 \(apiKeys.count) 个", level: .debug)
+            BeansLogger.shared.log("第三方音源全部密钥未命中：\(source.name) 共 \(apiKeys.count) 个", level: .debug)
         }
         return nil
     }
@@ -373,13 +373,28 @@ enum UnblockService {
             .filter { !$0.isEmpty } ?? []
     }
 
-    private static func orderedAPIKeys() -> [(Int, String)] {
-        let keys = userAPIKeys()
+    private static func sourceAPIKeys(for source: ThirdPartySource) -> [String] {
+        var keys: [String] = []
+        if let raw = source.headers["apiKeys"], !raw.isEmpty {
+            keys.append(contentsOf: raw
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty })
+        }
+        if let raw = source.headers["apiKey"]?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+            keys.append(raw)
+        }
+        keys.append(contentsOf: userAPIKeys())
+        return keys
+    }
+
+    private static func orderedAPIKeys(for source: ThirdPartySource) -> [(Int, String)] {
+        let keys = sourceAPIKeys(for: source)
         var seen = Set<String>()
         let unique = keys.enumerated().compactMap { index, key -> (Int, String)? in
             seen.insert(key).inserted ? (index, key) : nil
         }
-        let preferred = UserDefaults.standard.integer(forKey: preferredKeyIndexDefaultsKey())
+        let preferred = UserDefaults.standard.integer(forKey: preferredKeyIndexDefaultsKey(for: source))
         guard let hit = unique.firstIndex(where: { $0.0 == preferred }), hit > 0 else {
             return unique
         }
@@ -389,12 +404,12 @@ enum UnblockService {
         return reordered
     }
 
-    private static func rememberWorkingKey(_ index: Int) {
-        UserDefaults.standard.set(index, forKey: preferredKeyIndexDefaultsKey())
+    private static func rememberWorkingKey(_ index: Int, for source: ThirdPartySource) {
+        UserDefaults.standard.set(index, forKey: preferredKeyIndexDefaultsKey(for: source))
     }
 
-    private static func preferredKeyIndexDefaultsKey() -> String {
-        "beans.unblock.preferredKeyIndex.user"
+    private static func preferredKeyIndexDefaultsKey(for source: ThirdPartySource) -> String {
+        "beans.unblock.preferredKeyIndex.\(source.id)"
     }
 
     private static func responseCode(from object: [String: Any]) -> Int? {
