@@ -230,6 +230,7 @@ struct ReferencePlaybackView: View {
             }
         }
         .gesture(swipeGesture)
+        .simultaneousGesture(closeGesture)
     }
 
     private var lyricsHeader: some View {
