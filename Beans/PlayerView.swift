@@ -1095,13 +1095,19 @@ struct PlayerView: View {
                                 .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
                         }
                     }
-                    Text(song?.artists ?? "")
-                        .font(BeansFont.appFont(12))
-                        .foregroundStyle(palette.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .contentShape(Rectangle())
-                        .onTapGesture { openArtistHome() }
+                    HStack(spacing: 8) {
+                        Text(song?.artists ?? "")
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(palette.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .contentShape(Rectangle())
+                            .onTapGesture { openArtistHome() }
+                        Text(beansTimeString(clock.progress))
+                            .font(BeansFont.appFont(11, .medium))
+                            .foregroundStyle(palette.secondary.opacity(0.78))
+                            .monospacedDigit()
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -2123,7 +2129,7 @@ struct LyricsSection: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: lineSpacing) {
                     ForEach(Array(lyrics.enumerated()), id: \.element.id) { index, line in
-                        lyricRow(index: index, line: line, focusIndex: focusedIndex)
+                        lyricRow(index: index, line: line)
                             .background {
                                 GeometryReader { rowGeometry in
                                     Color.clear.preference(
@@ -2247,12 +2253,13 @@ struct LyricsSection: View {
     }
 
     /// Apple Music 风格渐隐：当前行最大最亮，已播放行与未播放行按距离逐层变暗变淡
-    private func lyricRow(index: Int, line: LyricLine, focusIndex: Int?) -> some View {
+    private func lyricRow(index: Int, line: LyricLine) -> some View {
         let playbackIndex = currentIndex ?? 0
-        let visualIndex = focusIndex ?? currentIndex
-        let isCurrent = index == visualIndex
+        // 手动滚动时 focusedIndex 只用于滚动吸附，不能改变歌词的播放状态样式。
+        // 颜色、字号、渐变、发光和清晰度始终只跟随实际播放行。
+        let isCurrent = currentIndex != nil && index == playbackIndex
         let isPlayed = (currentIndex ?? -1) >= 0 && index < playbackIndex
-        let distance = abs(index - (visualIndex ?? playbackIndex))
+        let distance = abs(index - playbackIndex)
         let opacity: Double = isCurrent
             ? 1.0
             : (isPlayed ? 0.28 : 0.62) - Double(min(distance, 4)) * 0.05
@@ -2306,7 +2313,7 @@ struct LyricsSection: View {
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
         .padding(.horizontal, alignment == .leading ? 40 : 36)
-        .animation(.easeInOut(duration: 0.25), value: visualIndex)
+        .animation(.easeInOut(duration: 0.25), value: currentIndex)
     }
 
     private func toggleSelect(_ index: Int) {

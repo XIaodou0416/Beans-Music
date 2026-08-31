@@ -445,7 +445,12 @@ final class PlayerManager: NSObject, ObservableObject {
                 let notice = self.thirdPartyVIPNotice(for: song, sourceTitle: resolved.sourceTitle)
                 await MainActor.run {
                     guard generation == self.loadGeneration else { return }
-                    self.setupPlayer(url: resolved.url, thirdPartyVIPNotice: notice, resumeAt: initialProgress)
+                    self.setupPlayer(
+                        url: resolved.url,
+                        thirdPartyVIPNotice: notice,
+                        resumeAt: initialProgress,
+                        isThirdParty: true
+                    )
                 }
                 return
             }
@@ -641,16 +646,21 @@ final class PlayerManager: NSObject, ObservableObject {
         return true
     }
 
-    private func setupPlayer(url: URL, thirdPartyVIPNotice: ThirdPartyVIPNotice? = nil, resumeAt: Double = 0) {
+    private func setupPlayer(
+        url: URL,
+        thirdPartyVIPNotice: ThirdPartyVIPNotice? = nil,
+        resumeAt: Double = 0,
+        isThirdParty: Bool = false
+    ) {
         prepareForSystemPlayback()
         configureAudioSession()
         UIApplication.shared.beginReceivingRemoteControlEvents()
         removeCurrentObservers()
         pendingThirdPartyVIPNotice = thirdPartyVIPNotice
-        // QQ 官方 CDN（isure.stream.qqmusic.qq.com 等）要求 UA/Referer 请求头，
-        // 否则裸 GET 会被拒绝（403），导致播放成功却无声、进度条不动。
+        // 只有 QQ 官方解析出的地址才附加 QQ 请求头。第三方服务可能使用
+        // qq.com 子域名，但其签名和鉴权规则不同，不能按域名误判。
         let item: AVPlayerItem
-        if url.host?.contains("qq.com") == true {
+        if !isThirdParty && url.host?.contains("qq.com") == true {
             var headers = [
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0",
                 "Referer": "https://y.qq.com/",
@@ -685,14 +695,34 @@ final class PlayerManager: NSObject, ObservableObject {
             self.loadFailed = true
             self.isBuffering = false
             self.isPlaying = false
-            BeansLogger.shared.log("播放地址加载失败：\(item.error?.localizedDescription ?? "未知错误")", level: .error)
+            let error = item.error
+            let nsError = error as NSError?
+            let eventDetails = item.errorLog()?.events.map { event in
+                [
+                    "domain=\(event.errorDomain)",
+                    "code=\(event.errorStatusCode)",
+                    "comment=\(event.errorComment ?? "?")",
+                    "uri=\(event.uri ?? "?")"
+                ].joined(separator: " ")
+            }.joined(separator: " | ")
+            BeansLogger.shared.log(
+                "播放地址加载失败：\(error?.localizedDescription ?? "未知错误")"
+                    + "｜域名=\(url.host ?? "?")"
+                    + "｜第三方=\(isThirdParty ? "是" : "否")"
+                    + "｜NSError=\(nsError.map { "\($0.domain):(\($0.code))" } ?? "?")"
+                    + "｜AVErrorLog=\(eventDetails.isEmpty ? "无" : eventDetails)",
+                level: .error
+            )
         }
         timeControlStatusObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             guard let self, self.player === player else { return }
             guard player.timeControlStatus == .playing, !self.playbackConfirmed else { return }
             self.playbackConfirmed = true
             if let song = self.currentSong {
-                BeansLogger.shared.log("▶ 播放成功：\(song.name)｜域名=\(url.host ?? "?")", level: .info)
+                BeansLogger.shared.log(
+                    "▶ 播放进入 playing：\(song.name)｜域名=\(url.host ?? "?")｜第三方=\(isThirdParty ? "是" : "否")",
+                    level: .info
+                )
             }
             self.showPendingThirdPartyVIPNoticeIfNeeded()
         }
