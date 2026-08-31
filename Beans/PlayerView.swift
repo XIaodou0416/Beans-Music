@@ -1365,13 +1365,14 @@ struct PlayerView: View {
                 }
                 .frame(width: size, height: size)
         case .appleMusic:
-            Circle()
-                .fill(primary ? Color.white.opacity(0.98) : Color.black.opacity(active ? 0.54 : 0.38))
-                .overlay {
-                    Circle().strokeBorder(Color.white.opacity(primary ? 0.50 : 0.24), lineWidth: primary ? 1.1 : 0.8)
-                }
-                .shadow(color: .black.opacity(primary ? 0.24 : 0.18), radius: primary ? 14 : 9, y: primary ? 7 : 4)
-                .frame(width: size, height: size)
+            if primary {
+                Circle()
+                    .fill(Color.white.opacity(0.98))
+                    .frame(width: size, height: size)
+            } else {
+                Color.clear
+                    .frame(width: size, height: size)
+            }
         }
     }
 

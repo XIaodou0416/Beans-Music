@@ -108,25 +108,18 @@ struct ReferencePlaybackView: View {
         return VStack(spacing: 0) {
             Spacer(minLength: 8)
 
-            Button {
-                guard !lyrics.isEmpty else { return }
-                BeansHaptics.tap()
-                showLyrics = true
-            } label: {
-                CoverImage(
-                    url: song?.coverURL,
-                    size: artworkSize,
-                    cornerRadius: 18,
-                    emptyHint: player.isBuffering ? "等待开始播放…" : nil
-                )
-                .frame(width: artworkSize, height: artworkSize)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .shadow(color: .black.opacity(0.46), radius: 36, y: 18)
-                .scaleEffect(player.isPlaying ? 1 : 0.965)
-                .scaleEffect(CGFloat(coverScale))
-                .animation(.spring(response: 0.36, dampingFraction: 0.84), value: player.isPlaying)
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.985))
+            CoverImage(
+                url: song?.coverURL,
+                size: artworkSize,
+                cornerRadius: 18,
+                emptyHint: player.isBuffering ? "等待开始播放…" : nil
+            )
+            .frame(width: artworkSize, height: artworkSize)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: .black.opacity(0.46), radius: 36, y: 18)
+            .scaleEffect(player.isPlaying ? 1 : 0.965)
+            .scaleEffect(CGFloat(coverScale))
+            .animation(.spring(response: 0.36, dampingFraction: 0.84), value: player.isPlaying)
 
             VStack(spacing: 5) {
                 HStack(spacing: 9) {
@@ -143,16 +136,6 @@ struct ReferencePlaybackView: View {
                             .padding(.vertical, 2)
                             .background(Color(red: 0.93, green: 0.25, blue: 0.22), in: Capsule())
                     }
-                    Button {
-                        BeansHaptics.tap()
-                        onFavorite()
-                    } label: {
-                        Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(localLibrary.containsSong(song) ? accentColor : primaryColor.opacity(0.86))
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
                 }
                 Text(subtitle)
                     .font(BeansFont.appFont(13.5, .medium))
@@ -267,15 +250,6 @@ struct ReferencePlaybackView: View {
                         .foregroundStyle(primaryColor)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    Button {
-                        BeansHaptics.tap()
-                        onFavorite()
-                    } label: {
-                        Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(localLibrary.containsSong(song) ? accentColor : primaryColor.opacity(0.78))
-                    }
-                    .buttonStyle(.plain)
                 }
                 Text(subtitle)
                     .font(BeansFont.appFont(12, .medium))
@@ -286,11 +260,11 @@ struct ReferencePlaybackView: View {
             Spacer(minLength: 0)
             Button {
                 BeansHaptics.tap()
-                showLyrics = false
+                onMore()
             } label: {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(primaryColor.opacity(0.72))
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(primaryColor.opacity(0.78))
                     .frame(width: 38, height: 38)
             }
             .buttonStyle(.plain)
@@ -341,15 +315,27 @@ struct ReferencePlaybackView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            HStack(spacing: 48) {
+            HStack(spacing: 38) {
+                referenceActionButton(icon: showLyrics ? "photo" : "quote.bubble", active: showLyrics) {
+                    guard !lyrics.isEmpty else { return }
+                    showLyrics.toggle()
+                }
                 referenceActionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
                     player.togglePlayMode()
                 }
                 referenceActionButton(icon: "list.bullet") {
                     onQueue()
                 }
-                referenceActionButton(icon: "ellipsis") {
-                    onMore()
+                HStack(spacing: 0) {
+                    referenceActionButton(
+                        icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
+                        active: localLibrary.containsSong(song)
+                    ) {
+                        onFavorite()
+                    }
+                    referenceActionButton(icon: "ellipsis") {
+                        onMore()
+                    }
                 }
             }
             .frame(maxWidth: 420)
