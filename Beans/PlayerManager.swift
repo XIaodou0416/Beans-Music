@@ -98,10 +98,11 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastNowPlayingArtworkKey: String?
     /// 酷狗高音质地址在部分账号/系统上会返回但无法由 AVPlayer 打开；每首歌只自动降级一次。
     private var kugouStandardFallbackSongKey: String?
-    /// 第三方地址偶发过期或节点不可用时，每首歌只重新解析一次，避免重试风暴。
-    private var thirdPartyRetrySongKey: String?
+    /// 第三方地址偶发过期或节点不可用时，按失败域名重试，避免同一节点反复进入播放器。
+    private var thirdPartyRetryExcludedHostsBySong: [String: Set<String>] = [:]
     /// QQ 官方地址返回成功但实际不可播放时，只切换到第三方一次，避免官方/第三方之间循环。
     private var qqThirdPartyFallbackSongKey: String?
+    private var playbackConfirmationWorkItem: DispatchWorkItem?
     private static let nowPlayingArtworkCache = NSCache<NSURL, UIImage>()
 
     private let historyKey = "beans.history"
@@ -400,7 +401,7 @@ final class PlayerManager: NSObject, ObservableObject {
         guard let song = currentSong else { return }
         loadGeneration += 1
         let generation = loadGeneration
-        thirdPartyRetrySongKey = nil
+        thirdPartyRetryExcludedHostsBySong.removeValue(forKey: song.identityKey)
         qqThirdPartyFallbackSongKey = nil
         let initialProgress = max(0, min(resumeAt ?? 0, max(song.duration, 0)))
         // 切歌立即暂停旧音频，避免新歌加载期间旧歌继续播放造成“切歌卡住”感
@@ -657,16 +658,25 @@ final class PlayerManager: NSObject, ObservableObject {
         guard let song = currentSong,
               song.source == .qq,
               let qqMid = song.qqMid,
-              !qqMid.isEmpty,
-              thirdPartyRetrySongKey != song.identityKey else { return false }
+              !qqMid.isEmpty else { return false }
 
-        thirdPartyRetrySongKey = song.identityKey
         let generation = loadGeneration
         let resume = progress
         let strict = shouldLockOfficialOnly(song)
-        let excludedHosts = excludingHost.map { Set([$0.lowercased()]) } ?? []
+        var excludedHosts = thirdPartyRetryExcludedHostsBySong[song.identityKey] ?? []
+        if let excludingHost, !excludingHost.isEmpty {
+            excludedHosts.insert(excludingHost.lowercased())
+        }
+        guard excludedHosts.count <= 6 else {
+            BeansLogger.shared.log(
+                "第三方播放地址重试停止：歌曲=\(song.name)｜已排除域名=\(excludedHosts.sorted().joined(separator: ","))",
+                level: .debug
+            )
+            return false
+        }
+        thirdPartyRetryExcludedHostsBySong[song.identityKey] = excludedHosts
         BeansLogger.shared.log(
-            "第三方播放地址失效，重新解析一次：歌曲=\(song.name)｜系统=\(UIDevice.current.systemVersion)｜排除域名=\(excludingHost ?? "无")",
+            "第三方播放地址失效，重新解析一次：歌曲=\(song.name)｜系统=\(UIDevice.current.systemVersion)｜排除域名=\(excludedHosts.sorted().joined(separator: ","))",
             level: .debug
         )
         Task {
@@ -681,16 +691,25 @@ final class PlayerManager: NSObject, ObservableObject {
             )
             await MainActor.run {
                 guard generation == self.loadGeneration,
-                      self.currentSong?.identityKey == song.identityKey,
-                      let resolved else { return }
-                let notice = self.thirdPartyVIPNotice(for: song, sourceTitle: resolved.sourceTitle)
-                self.setupPlayer(
-                    url: resolved.url,
-                    thirdPartyVIPNotice: notice,
-                    resumeAt: resume,
-                    isThirdParty: true
-                )
-                BeansLogger.shared.log("第三方播放地址重试成功：\(song.name)｜域名=\(resolved.url.host ?? "?")", level: .info)
+                      self.currentSong?.identityKey == song.identityKey else { return }
+                if let resolved {
+                    let notice = self.thirdPartyVIPNotice(for: song, sourceTitle: resolved.sourceTitle)
+                    self.setupPlayer(
+                        url: resolved.url,
+                        thirdPartyVIPNotice: notice,
+                        resumeAt: resume,
+                        isThirdParty: true
+                    )
+                    BeansLogger.shared.log("第三方播放地址重试成功：\(song.name)｜域名=\(resolved.url.host ?? "?")", level: .info)
+                } else {
+                    self.loadFailed = true
+                    self.isBuffering = false
+                    self.isPlaying = false
+                    BeansLogger.shared.log(
+                        "第三方播放地址重试未命中：歌曲=\(song.name)｜已排除域名=\(excludedHosts.sorted().joined(separator: ","))",
+                        level: .debug
+                    )
+                }
             }
         }
         return true
@@ -758,76 +777,81 @@ final class PlayerManager: NSObject, ObservableObject {
         // 这些地址在低系统上如果缺少 Referer/Cookie，常见表现是先进入
         // playing，随后以 AVFoundation -11849 失败。
         let item: AVPlayerItem
+        var playbackHeaders: [String: String] = [:]
         if isQQAudioHost(url.host) {
-            var headers = [
+            playbackHeaders = [
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0",
                 "Referer": "https://y.qq.com/",
             ]
             let cookie = QQMusicAuth.shared.cookieHeader
-            if !cookie.isEmpty { headers["Cookie"] = cookie }
+            if !cookie.isEmpty { playbackHeaders["Cookie"] = cookie }
             let asset = AVURLAsset(url: url, options: [
-                "AVURLAssetHTTPHeaderFieldsKey": headers
+                "AVURLAssetHTTPHeaderFieldsKey": playbackHeaders
             ])
             item = AVPlayerItem(asset: asset)
         } else if url.host?.contains("kugou.com") == true || url.host?.contains("kgimg.com") == true {
-            var headers = [
+            playbackHeaders = [
                 "User-Agent": "Android15-1070-11440-46-0-DiscoveryDRADProtocol-wifi",
                 "Referer": "https://www.kugou.com/",
             ]
             let cookie = KugouMusicAuth.shared.cookieHeader
-            if !cookie.isEmpty { headers["Cookie"] = cookie }
+            if !cookie.isEmpty { playbackHeaders["Cookie"] = cookie }
             let asset = AVURLAsset(url: url, options: [
-                "AVURLAssetHTTPHeaderFieldsKey": headers
+                "AVURLAssetHTTPHeaderFieldsKey": playbackHeaders
             ])
             item = AVPlayerItem(asset: asset)
         } else {
             item = AVPlayerItem(url: url)
         }
+        let headerKeys = playbackHeaders.keys.sorted().joined(separator: ",")
+        BeansLogger.shared.log(
+            "AVPlayer 准备播放：\(currentSong?.name ?? "?")｜URL=\(playbackURLSummary(url))｜第三方=\(isThirdParty ? "是" : "否")｜headers=\(playbackHeaders.isEmpty ? "未添加" : "已添加")｜headerKeys=\(headerKeys.isEmpty ? "无" : headerKeys)",
+            level: .debug
+        )
         let player = AVPlayer(playerItem: item)
         player.rate = Float(rate)
         self.player = player
         playbackConfirmed = false
         itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             guard let self, self.player === player, item.status == .failed else { return }
+            self.logPlaybackFailure(
+                reason: "AVPlayerItem.status.failed",
+                item: item,
+                url: url,
+                isThirdParty: isThirdParty,
+                playbackHeaders: playbackHeaders
+            )
             if isThirdParty && self.retryThirdPartyIfNeeded(excludingHost: url.host) { return }
             if !isThirdParty && self.fallbackQQToThirdPartyIfNeeded() { return }
             if self.retryKugouAtStandardIfNeeded(error: item.error) { return }
             self.loadFailed = true
             self.isBuffering = false
             self.isPlaying = false
-            let error = item.error
-            let nsError = error as NSError?
-            let eventDetails = item.errorLog()?.events.map { event in
-                [
-                    "domain=\(event.errorDomain)",
-                    "code=\(event.errorStatusCode)",
-                    "comment=\(event.errorComment ?? "?")",
-                    "uri=\(event.uri ?? "?")"
-                ].joined(separator: " ")
-            }.joined(separator: " | ") ?? ""
-            let errorDescription = error?.localizedDescription ?? "未知错误"
-            let errorCode = nsError.map { "\($0.domain):(\($0.code))" } ?? "?"
-            let errorLogDescription = eventDetails.isEmpty ? "无" : eventDetails
-            BeansLogger.shared.log(
-                "播放地址加载失败：\(errorDescription)"
-                    + "｜域名=\(url.host ?? "?")"
-                    + "｜第三方=\(isThirdParty ? "是" : "否")"
-                    + "｜NSError=\(errorCode)"
-                    + "｜AVErrorLog=\(errorLogDescription)",
-                level: .error
-            )
         }
         timeControlStatusObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             guard let self, self.player === player else { return }
             guard player.timeControlStatus == .playing, !self.playbackConfirmed else { return }
-            self.playbackConfirmed = true
-            if let song = self.currentSong {
-                BeansLogger.shared.log(
-                    "▶ 播放进入 playing：\(song.name)｜域名=\(url.host ?? "?")｜第三方=\(isThirdParty ? "是" : "否")",
-                    level: .info
-                )
+            self.playbackConfirmationWorkItem?.cancel()
+            let confirmation = DispatchWorkItem { [weak self, weak player, weak item] in
+                guard let self,
+                      let player,
+                      let item,
+                      self.player === player,
+                      player.currentItem === item,
+                      player.timeControlStatus == .playing,
+                      item.status == .readyToPlay,
+                      !self.playbackConfirmed else { return }
+                self.playbackConfirmed = true
+                if let song = self.currentSong {
+                    BeansLogger.shared.log(
+                        "▶ 播放成功确认：\(song.name)｜URL=\(self.playbackURLSummary(url))｜第三方=\(isThirdParty ? "是" : "否")｜itemStatus=\(self.playerItemStatusDescription(item.status))",
+                        level: .info
+                    )
+                }
+                self.showPendingThirdPartyVIPNoticeIfNeeded()
             }
-            self.showPendingThirdPartyVIPNoticeIfNeeded()
+            self.playbackConfirmationWorkItem = confirmation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: confirmation)
         }
         if resumeAt > 0.5 {
             let seekTime = CMTime(seconds: resumeAt, preferredTimescale: 600)
@@ -877,12 +901,18 @@ final class PlayerManager: NSObject, ObservableObject {
             }
         }
         failureObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] _ in
+            self?.logPlaybackFailure(
+                reason: "AVPlayerItemFailedToPlayToEndTime",
+                item: item,
+                url: url,
+                isThirdParty: isThirdParty,
+                playbackHeaders: playbackHeaders
+            )
             if !isThirdParty && self?.fallbackQQToThirdPartyIfNeeded() == true { return }
             if isThirdParty && self?.retryThirdPartyIfNeeded(excludingHost: url.host) == true { return }
             if self?.retryKugouAtStandardIfNeeded(error: item.error) == true { return }
             self?.loadFailed = true
             self?.isBuffering = false
-            BeansLogger.shared.log("播放中断：AVPlayerItem 播放失败（解码或网络错误）", level: .error)
         }
         updateNowPlaying()
     }
@@ -892,6 +922,71 @@ final class PlayerManager: NSObject, ObservableObject {
         return host.contains("qq.com")
             || host.contains("qqmusic")
             || host.contains("ptqqmusic")
+    }
+
+    private func playbackURLSummary(_ url: URL) -> String {
+        let host = url.host ?? "?"
+        let path = url.path.isEmpty ? "/" : url.path
+        let shortPath = path.count > 72 ? String(path.prefix(72)) + "..." : path
+        return "\(host)\(shortPath)"
+    }
+
+    private func playerItemStatusDescription(_ status: AVPlayerItem.Status) -> String {
+        switch status {
+        case .unknown: return "unknown"
+        case .readyToPlay: return "readyToPlay"
+        case .failed: return "failed"
+        @unknown default: return "unknown(\(status.rawValue))"
+        }
+    }
+
+    private func sanitizedLogURI(_ rawURI: String?) -> String {
+        guard let rawURI, !rawURI.isEmpty else { return "?" }
+        if var components = URLComponents(string: rawURI) {
+            components.query = nil
+            components.fragment = nil
+            if let host = components.host {
+                let path = components.path.isEmpty ? "/" : components.path
+                let shortPath = path.count > 72 ? String(path.prefix(72)) + "..." : path
+                return "\(host)\(shortPath)"
+            }
+            return components.string.map { String($0.prefix(96)) } ?? String(rawURI.prefix(96))
+        }
+        return String(rawURI.prefix(96))
+    }
+
+    private func logPlaybackFailure(
+        reason: String,
+        item: AVPlayerItem,
+        url: URL,
+        isThirdParty: Bool,
+        playbackHeaders: [String: String]
+    ) {
+        let error = item.error
+        let nsError = error as NSError?
+        let errorDescription = error?.localizedDescription ?? "未知错误"
+        let errorCode = nsError.map { "\($0.domain):\($0.code)" } ?? "?"
+        let eventDetails = item.errorLog()?.events.map { event in
+            [
+                "domain=\(event.errorDomain)",
+                "code=\(event.errorStatusCode)",
+                "uri=\(sanitizedLogURI(event.uri))",
+                "comment=\(event.errorComment ?? "?")"
+            ].joined(separator: " ")
+        }.joined(separator: " | ") ?? ""
+        let headerKeys = playbackHeaders.keys.sorted().joined(separator: ",")
+        BeansLogger.shared.log(
+            "播放地址加载失败：原因=\(reason)"
+                + "｜错误=\(errorDescription)"
+                + "｜URL=\(playbackURLSummary(url))"
+                + "｜第三方=\(isThirdParty ? "是" : "否")"
+                + "｜headers=\(playbackHeaders.isEmpty ? "未添加" : "已添加")"
+                + "｜headerKeys=\(headerKeys.isEmpty ? "无" : headerKeys)"
+                + "｜itemStatus=\(playerItemStatusDescription(item.status))"
+                + "｜NSError=\(errorCode)"
+                + "｜AVErrorLog=\(eventDetails.isEmpty ? "无" : eventDetails)",
+            level: .error
+        )
     }
 
     private func removeCurrentObservers() {
@@ -909,6 +1004,8 @@ final class PlayerManager: NSObject, ObservableObject {
         failureObserver = nil
         itemStatusObserver = nil
         timeControlStatusObserver = nil
+        playbackConfirmationWorkItem?.cancel()
+        playbackConfirmationWorkItem = nil
         playbackConfirmed = false
         pendingThirdPartyVIPNotice = nil
         lastPublishedProgress = -1
