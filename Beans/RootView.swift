@@ -28,12 +28,6 @@ enum RootTab: String, CaseIterable, Identifiable {
     }
 }
 
-private extension RootTab {
-    static func visible(hideSearch: Bool) -> [RootTab] {
-        allCases.filter { !(hideSearch && $0 == .search) }
-    }
-}
-
 struct RootView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
@@ -53,7 +47,6 @@ struct RootView: View {
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
-    @AppStorage("beans.hideSearchTab") private var hideSearchTab = false
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
     @AppStorage("beans.remoteAnnouncement.updatedAt") private var remoteAnnouncementUpdatedAt = ""
@@ -86,10 +79,6 @@ struct RootView: View {
         return usesSystemFloatingTabBar ? 62 : 80
     }
 
-    private var visibleTabs: [RootTab] {
-        RootTab.visible(hideSearch: hideSearchTab)
-    }
-
     private var legacyTabResolvedCornerRadius: CGFloat {
         CGFloat(legacyTabCornerRadius)
     }
@@ -109,11 +98,9 @@ struct RootView: View {
                 DiscoverView()
                     .tabItem { Label(tabLabelsVisible ? "主页" : "", systemImage: "house.fill") }
                     .tag(RootTab.discover)
-                if !hideSearchTab {
-                    SearchView()
-                        .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
-                        .tag(RootTab.search)
-                }
+                SearchView()
+                    .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
+                    .tag(RootTab.search)
                 LibraryView()
                     .tabItem { Label(tabLabelsVisible ? "音乐库" : "", systemImage: "music.note.list") }
                     .tag(RootTab.library)
@@ -163,11 +150,6 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.22), value: selection)
         .animation(.spring(response: 0.36, dampingFraction: 0.78, blendDuration: 0.06), value: tabCompact)
         .simultaneousGesture(tabCompactGesture)
-        .onChange(of: hideSearchTab) { hidden in
-            if hidden, selection == .search {
-                selection = .discover
-            }
-        }
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
@@ -336,7 +318,7 @@ struct RootView: View {
 
     private var legacyFloatingTabBar: some View {
         HStack(spacing: 4) {
-            ForEach(visibleTabs) { tab in
+            ForEach(RootTab.allCases) { tab in
                 Button {
                     guard selection != tab else { return }
                     BeansHaptics.select()
