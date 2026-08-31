@@ -42,6 +42,23 @@ enum ChangelogStore {
 
     static var latest: VersionLog? { logs.first }
 
+    /// 更新日志由服务器后台维护；网络不可用时继续显示内置历史记录。
+    static func fetchRemoteLatest() async -> VersionLog? {
+        guard let remote = try? await UpdateChecker.fetchServerLatest() else { return nil }
+        let notes = remote.body
+            .split(whereSeparator: { $0 == "\n" || $0 == "\r" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !remote.version.isEmpty else { return nil }
+        return VersionLog(
+            id: "server-\(remote.version)",
+            version: remote.version,
+            title: remote.name,
+            features: notes,
+            fixes: []
+        )
+    }
+
     static let logs: [VersionLog] = [
         VersionLog(
             id: "1.5.8",
@@ -221,13 +238,14 @@ enum ChangelogStore {
 
 struct WhatsNewSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var remoteLog: VersionLog?
 
     var body: some View {
         BeansNavigationStack {
             ZStack {
                 GlassBackdrop(customColor: ThemeStore.shared.backgroundSyncAll ? ThemeStore.shared.customBackground : nil)
                 ScrollView {
-                    if let log = ChangelogStore.latest {
+                    if let log = remoteLog ?? ChangelogStore.latest {
                         VersionLogCard(log: log)
                             .padding(16)
                     }
@@ -248,6 +266,9 @@ struct WhatsNewSheet: View {
             }
         }
         .modifier(BeansSheetModifier(detents: [.medium, .large]))
+        .task {
+            remoteLog = await ChangelogStore.fetchRemoteLatest()
+        }
         .onDisappear {
             ChangelogStore.markSeen()
         }
@@ -256,6 +277,7 @@ struct WhatsNewSheet: View {
 
 struct ChangelogListView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var remoteLog: VersionLog?
 
     var body: some View {
         BeansNavigationStack {
@@ -263,7 +285,13 @@ struct ChangelogListView: View {
                 GlassBackdrop(customColor: ThemeStore.shared.backgroundSyncAll ? ThemeStore.shared.customBackground : nil)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        ForEach(ChangelogStore.logs) { log in
+                        if let remoteLog {
+                            VersionLogCard(log: remoteLog)
+                        }
+                        ForEach(ChangelogStore.logs.filter { log in
+                            guard let remoteLog else { return true }
+                            return log.version != remoteLog.version
+                        }) { log in
                             VersionLogCard(log: log)
                         }
                     }
@@ -280,6 +308,9 @@ struct ChangelogListView: View {
             }
         }
         .modifier(BeansSheetModifier(detents: [.medium, .large]))
+        .task {
+            remoteLog = await ChangelogStore.fetchRemoteLatest()
+        }
     }
 }
 

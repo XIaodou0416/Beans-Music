@@ -1302,9 +1302,13 @@ struct PlayerView: View {
 
 
     /// 歌词模式：左上小封面 + 歌名信息条 + 居中歌词（自动布局，歌词可滚动到底部透过底栏玻璃）
+    @ViewBuilder
     private func lyricsPanel(geo: GeometryProxy) -> some View {
         ZStack {
             VStack(spacing: 0) {
+                if coverPlayerStyle == .appleMusic {
+                    appleMusicLyricsHeader
+                } else {
                 HStack(spacing: 12) {
                 Button {
                     toggleLyrics()
@@ -1363,6 +1367,7 @@ struct PlayerView: View {
             .padding(.horizontal, 20)
             .padding(.top, 4)
             .padding(.bottom, 3)
+                }
 
             // 歌词视口截止到底栏上方：当前行在可见区居中（26 版风格，无渐隐遮挡）
             Group {
@@ -1374,12 +1379,62 @@ struct PlayerView: View {
                         player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
                     }
                 }
+                if coverPlayerStyle == .appleMusic {
+                    progressBlock
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+                        .modifier(Layoutable(part: .progress, enabled: layoutMode, data: $layoutData))
+                }
             }
             .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .id("lyricsPanel-\(song?.identityKey ?? "none")")
+    }
+
+    private var appleMusicLyricsHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                toggleLyrics()
+            } label: {
+                CoverImage(url: song?.coverURL, size: 54, cornerRadius: 10)
+                    .modifier(CoverSpin(enabled: circularCover && circularCoverSpin, isPlaying: playerVisualsActive))
+                    .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(song?.name ?? "未在播放")
+                    .font(BeansFont.appFont(15, .semibold))
+                    .foregroundStyle(albumTitleForeground)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(subtitle)
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(albumArtistForeground)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openArtistHome() }
+            }
+            Spacer(minLength: 0)
+            Button {
+                toggleLyrics()
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(playerButtonSecondaryText)
+                    .frame(width: 34, height: 34)
+                    .background { playerButtonSurface(size: 34) }
+                    .clipShape(Circle())
+            }
+            .buttonStyle(GlassPressButtonStyle())
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .background(.ultraThinMaterial.opacity(0.28))
     }
 
     // MARK: - 空态兜底（歌曲数据为空时不出现空白页）
