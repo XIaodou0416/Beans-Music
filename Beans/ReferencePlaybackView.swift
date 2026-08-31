@@ -432,7 +432,7 @@ struct ReferencePlaybackView: View {
                         .font(BeansFont.appFont(isFocused ? 27 : 23, isFocused ? .bold : .semibold))
                         .foregroundStyle(primaryColor.opacity(isFocused ? 1 : 0.36))
                         .fixedSize(horizontal: false, vertical: true)
-                    if isFocused {
+                    if isFocused && isDraggingLyrics {
                         Spacer(minLength: 8)
                         Text(beansTimeString(line.time))
                             .font(BeansFont.appFont(11, .semibold, .monospaced))
