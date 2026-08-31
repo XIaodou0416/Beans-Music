@@ -297,10 +297,6 @@ struct DiscoverView: View {
                 }
                 Spacer()
                 HStack(spacing: 10) {
-                    GlassIconButton(systemName: "magnifyingglass") {
-                        BeansHaptics.tap()
-                        showUnifiedSearch = true
-                    }
                     if !homeHeaderHideSort {
                         GlassIconButton(systemName: "arrow.up.arrow.down") {
                             BeansHaptics.tap()
