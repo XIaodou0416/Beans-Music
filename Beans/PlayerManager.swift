@@ -505,10 +505,26 @@ final class PlayerManager: NSObject, ObservableObject {
         return (urlString, resolved)
     }
 
-    /// QQ 歌曲兜底：优先复用网易云可播链路；仍不可播时再尝试 QQ 第三方源。
+    /// QQ 歌曲兜底：官方失败后优先走 QQ 第三方接口，最后才尝试网易云同名兜底。
     private func qqFallback(song: Song, quality: BeansAudioQuality, enableUnblock: Bool, strict: Bool = false, excludedHosts: Set<String> = []) async -> (String?, UnblockService.Resolved?) {
         var urlString: String?
         var resolved: UnblockService.Resolved?
+        if enableUnblock {
+            resolved = await UnblockService.resolve(
+                name: song.name,
+                artists: song.artists,
+                neteaseID: 0,
+                songSource: .qq,
+                qqMid: song.qqMid,
+                qqMediaMid: song.qqMediaMid,
+                strict: strict,
+                excludedHosts: excludedHosts
+            )
+        }
+        if let resolved {
+            BeansLogger.shared.log("QQ兜底：\(song.name) QQ第三方=命中", level: .debug)
+            return (nil, resolved)
+        }
         if let matched = await matchNetEaseSong(name: song.name, artists: song.artists, durationMS: Int(song.duration * 1000), strict: strict) {
             let infos = try? await NetEaseAPI.shared.songURLInfo(ids: [matched.id], level: quality.level)
             var info = infos?[matched.id]
@@ -530,20 +546,8 @@ final class PlayerManager: NSObject, ObservableObject {
             }
         }
         if resolved != nil || urlString != nil {
-            BeansLogger.shared.log("QQ兜底：\(song.name) 网易云链路=命中 官方=\(urlString != nil ? "是" : "否") 第三方=\(resolved != nil ? "命中" : "未命中")", level: .debug)
+            BeansLogger.shared.log("QQ兜底：\(song.name) QQ第三方未命中，网易云链路=命中 官方=\(urlString != nil ? "是" : "否") 第三方=\(resolved != nil ? "命中" : "未命中")", level: .debug)
             return (urlString, resolved)
-        }
-        if enableUnblock {
-            resolved = await UnblockService.resolve(
-                name: song.name,
-                artists: song.artists,
-                neteaseID: 0,
-                songSource: .qq,
-                qqMid: song.qqMid,
-                qqMediaMid: song.qqMediaMid,
-                strict: strict,
-                excludedHosts: excludedHosts
-            )
         }
         BeansLogger.shared.log("QQ兜底：\(song.name) 官方=\(urlString != nil ? "是" : "否") 第三方=\(resolved != nil ? "命中" : "未用/未命中")", level: .debug)
         return (urlString, resolved)
