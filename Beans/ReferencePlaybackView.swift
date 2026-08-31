@@ -677,14 +677,27 @@ private struct ReferenceSystemVolumeView: UIViewRepresentable {
     }
 
     private func styleVolumeSlider(in view: MPVolumeView) {
-        DispatchQueue.main.async {
-            let sliders = view.subviews.compactMap { $0 as? UISlider }
+        let applyStyle = {
+            let sliders = allSubviews(in: view).compactMap { $0 as? UISlider }
             sliders.forEach { slider in
                 slider.minimumTrackTintColor = UIColor(accent.opacity(0.88))
                 slider.maximumTrackTintColor = UIColor(secondary.opacity(0.32))
                 slider.thumbTintColor = UIColor(accent)
             }
         }
+
+        // MPVolumeView creates its internal slider during layout, so apply the tint once more after it settles.
+        applyStyle()
+        DispatchQueue.main.async {
+            applyStyle()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                applyStyle()
+            }
+        }
+    }
+
+    private func allSubviews(in view: UIView) -> [UIView] {
+        view.subviews + view.subviews.flatMap { allSubviews(in: $0) }
     }
 }
 
