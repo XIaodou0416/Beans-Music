@@ -105,7 +105,7 @@ enum UnblockService {
             songIDs = [String(neteaseID)]
         case .qq:
             guard let qqMid, !qqMid.isEmpty else { return nil }
-            songIDs = qqIDCandidates(songMid: qqMid, mediaMid: qqMediaMid)
+            songIDs = qqIDCandidates(songID: neteaseID, songMid: qqMid, mediaMid: qqMediaMid)
         case .kugou:
             guard let kugouID, !kugouID.isEmpty else { return nil }
             songIDs = [kugouID]
@@ -304,9 +304,10 @@ enum UnblockService {
         }
     }
 
-    private static func qqIDCandidates(songMid: String, mediaMid: String?) -> [String] {
+    private static func qqIDCandidates(songID: Int, songMid: String, mediaMid: String?) -> [String] {
         var seen = Set<String>()
-        return [mediaMid, songMid].compactMap { raw in
+        let numericID = songID > 0 ? String(songID) : nil
+        return [numericID, mediaMid, songMid].compactMap { raw in
             guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !value.isEmpty,
                   seen.insert(value).inserted else { return nil }

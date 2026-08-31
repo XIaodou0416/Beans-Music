@@ -514,7 +514,8 @@ final class PlayerManager: NSObject, ObservableObject {
         let resolved = await UnblockService.resolve(
             name: song.name,
             artists: song.artists,
-            neteaseID: 0,
+            // QQ 专属音源要求传数字 songId；mid 仅作为兼容接口的后备参数。
+            neteaseID: song.id,
             songSource: .qq,
             qqMid: song.qqMid,
             qqMediaMid: song.qqMediaMid,
