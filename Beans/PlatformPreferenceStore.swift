@@ -73,6 +73,15 @@ final class PlatformPreferenceStore: ObservableObject {
         save()
     }
 
+    func applyRemoteEnabledProviders(_ providers: [SearchProvider]) {
+        let values = Set(providers.map(\.rawValue))
+        guard !values.isEmpty else { return }
+        selectedRaw = values
+        normalize()
+        save()
+        objectWillChange.send()
+    }
+
     func resetOrder() {
         orderedRaw = SearchProvider.allCases.map(\.rawValue)
         saveOrder()

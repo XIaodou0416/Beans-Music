@@ -3,6 +3,7 @@ import UIKit
 
 @main
 struct BeansApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var auth = AuthStore()
     @StateObject private var player = PlayerManager()
     @StateObject private var theme = ThemeStore.shared
@@ -37,6 +38,11 @@ struct BeansApp: App {
                 player.restorePersistedPlayMode()
                 FontManager.reinstallIfNeeded()
                 theme.restoreWallpapersIfNeeded()
+                await RemoteControlStore.shared.refreshIfNeeded(force: true)
+            }
+            .onChange(of: scenePhase) { phase in
+                guard phase == .active else { return }
+                Task { await RemoteControlStore.shared.refreshIfNeeded() }
             }
         }
     }
