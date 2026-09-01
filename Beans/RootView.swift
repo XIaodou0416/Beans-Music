@@ -66,7 +66,6 @@ struct RootView: View {
     @State private var updateDownloadError = ""
     @State private var showUpdateDownloadError = false
     @State private var showRemoteAnnouncement = false
-    @State private var tabCompact = false
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
     }
@@ -77,7 +76,6 @@ struct RootView: View {
     }
 
     private var miniPlayerBottomPadding: CGFloat {
-        if tabCompact && player.currentSong != nil { return usesSystemFloatingTabBar ? 18 : 24 }
         return usesSystemFloatingTabBar ? 62 : 80
     }
 
@@ -119,7 +117,6 @@ struct RootView: View {
                 legacyFloatingTabBar
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .opacity(tabCompact && player.currentSong != nil ? 0.92 : 1)
                     .zIndex(8)
             }
 
@@ -150,8 +147,6 @@ struct RootView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
         .animation(.easeInOut(duration: 0.22), value: selection)
-        .animation(.spring(response: 0.36, dampingFraction: 0.78, blendDuration: 0.06), value: tabCompact)
-        .simultaneousGesture(tabCompactGesture)
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
@@ -334,7 +329,6 @@ struct RootView: View {
                     }
                 } label: {
                     let selected = selection == tab
-                    let hiddenByCompact = tabCompact && player.currentSong != nil && !selected
                     VStack(spacing: 3) {
                         Image(systemName: tab.icon)
                             .font(.system(size: 17, weight: selected ? .semibold : .medium))
@@ -349,10 +343,6 @@ struct RootView: View {
                     .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel.opacity(0.70))
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .opacity(hiddenByCompact ? 0 : 1)
-                    .scaleEffect(hiddenByCompact ? 0.72 : 1)
-                    .frame(width: hiddenByCompact ? 0 : nil)
-                    .clipped()
                     .background {
                         if selected {
                             RoundedRectangle(cornerRadius: 17, style: .continuous)
@@ -370,7 +360,7 @@ struct RootView: View {
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 5)
-        .frame(width: tabCompact && player.currentSong != nil ? 72 : legacyTabResolvedWidth)
+        .frame(width: legacyTabResolvedWidth)
         .background {
             RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous)
                 .fill(.clear)
@@ -398,25 +388,6 @@ struct RootView: View {
         .padding(.horizontal, 18)
         .padding(.bottom, 12)
         .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
-    }
-
-    private var tabCompactGesture: some Gesture {
-        DragGesture(minimumDistance: 18, coordinateSpace: .global)
-            .onChanged { value in
-                let vertical = value.translation.height
-                guard abs(vertical) > abs(value.translation.width) * 1.2 else { return }
-                let shouldCompact = vertical > 18
-                if shouldCompact != tabCompact {
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.76, blendDuration: 0.04)) {
-                        tabCompact = shouldCompact
-                    }
-                }
-            }
-            .onEnded { _ in
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.82, blendDuration: 0.06)) {
-                    tabCompact = false
-                }
-            }
     }
 }
 

@@ -733,59 +733,77 @@ struct SearchView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         searchTask?.cancel()
+        let selectedProvider = provider
+        let selectedType = resultType
         searchTask = Task {
-            searching = true
-            errorMessage = nil
-            BeansLogger.shared.log("搜索：\(provider.rawValue) [\(resultType.rawValue)] \(trimmed)", level: .info)
-            defer { if !Task.isCancelled { searching = false } }
+            await MainActor.run {
+                searching = true
+                errorMessage = nil
+            }
+            BeansLogger.shared.log("搜索：\(selectedProvider.rawValue) [\(selectedType.rawValue)] \(trimmed)", level: .info)
+            defer {
+                if !Task.isCancelled {
+                    Task { @MainActor in searching = false }
+                }
+            }
             do {
-                switch (provider, resultType) {
+                switch (selectedProvider, selectedType) {
                 case (.netease, .song):
                     let songs = try await NetEaseAPI.shared.search(keyword: trimmed, limit: 40)
                     guard !Task.isCancelled else { return }
-                    songResults = songs
-                    if !songs.isEmpty { BeansHaptics.success() }
+                    await MainActor.run {
+                        songResults = songs
+                        if !songs.isEmpty { BeansHaptics.success() }
+                    }
                 case (.netease, .artist):
                     let artists = try await NetEaseAPI.shared.searchArtists(keyword: trimmed)
                     guard !Task.isCancelled else { return }
-                    artistResults = artists
+                    await MainActor.run { artistResults = artists }
                 case (.netease, .album):
                     let albums = try await NetEaseAPI.shared.searchAlbums(keyword: trimmed)
                     guard !Task.isCancelled else { return }
-                    albumResults = albums
+                    await MainActor.run { albumResults = albums }
                 case (.qq, .song):
                     let songs = try await QQMusicAPI.shared.searchSongs(keyword: trimmed)
                     guard !Task.isCancelled else { return }
-                    songResults = songs
-                    if !songs.isEmpty { BeansHaptics.success() }
+                    await MainActor.run {
+                        songResults = songs
+                        if !songs.isEmpty { BeansHaptics.success() }
+                    }
                 case (.qq, .artist):
                     let artists = try await QQMusicAPI.shared.searchArtists(keyword: trimmed)
                     guard !Task.isCancelled else { return }
-                    artistResults = artists
+                    await MainActor.run { artistResults = artists }
                 case (.qq, .album):
                     let albums = try await QQMusicAPI.shared.searchAlbums(keyword: trimmed)
                     guard !Task.isCancelled else { return }
-                    albumResults = albums
+                    await MainActor.run { albumResults = albums }
                 case (.kugou, .song):
                     let songs = try await KugouMusicAPI.shared.searchSongs(keyword: trimmed, limit: 40)
                     guard !Task.isCancelled else { return }
-                    songResults = songs
-                    if !songs.isEmpty { BeansHaptics.success() }
+                    await MainActor.run {
+                        songResults = songs
+                        if !songs.isEmpty { BeansHaptics.success() }
+                    }
                 case (.kugou, .artist):
                     let artists = try await KugouMusicAPI.shared.searchArtists(keyword: trimmed)
                     guard !Task.isCancelled else { return }
-                    artistResults = artists
+                    await MainActor.run { artistResults = artists }
                 case (.kugou, .album):
                     let albums = try await KugouMusicAPI.shared.searchAlbums(keyword: trimmed)
                     guard !Task.isCancelled else { return }
-                    albumResults = albums
+                    await MainActor.run { albumResults = albums }
                 }
-                let count = resultType == .song ? songResults.count : (resultType == .artist ? artistResults.count : albumResults.count)
-                BeansLogger.shared.log("搜索完成：\(provider.rawValue) [\(resultType.rawValue)] \(trimmed) 结果=\(count)", level: .info)
+                let count = await MainActor.run {
+                    selectedType == .song ? songResults.count : (selectedType == .artist ? artistResults.count : albumResults.count)
+                }
+                BeansLogger.shared.log("搜索完成：\(selectedProvider.rawValue) [\(selectedType.rawValue)] \(trimmed) 结果=\(count)", level: .info)
             } catch {
                 guard !Task.isCancelled else { return }
-                errorMessage = error.localizedDescription
-                BeansLogger.shared.log("搜索失败：\(provider.rawValue) \(trimmed) - \(error.localizedDescription)", level: .error)
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                }
+                BeansLogger.shared.log("搜索失败：\(selectedProvider.rawValue) \(trimmed) - \(error.localizedDescription)", level: .error)
             }
         }
         await searchTask?.value

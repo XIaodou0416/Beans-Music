@@ -45,6 +45,7 @@ struct GlassPressButtonStyle: ButtonStyle {
 struct GlassBackdrop: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     /// 自定义背景色（nil 使用默认氛围渐变）
     var customColor: Color? = nil
     /// 主页模式：即使“同步到全部页面”关闭，也始终显示壁纸/背景色（仅发现页传 true）
@@ -64,12 +65,16 @@ struct GlassBackdrop: View {
             : [.black.opacity(0.08), .black.opacity(0.18)]
     }
 
+    private var uiStyle: BeansUIStyle {
+        uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
+    }
+
     var body: some View {
         let _ = theme.accent
         ZStack {
-            // 上传图片优先：主页永远显示；同步开启时搜索/音乐库/我的也显示。
-            // 固定全屏布局 + 小图柔化，图片再小也不会撑大 UI
-            if let image = theme.customBackgroundImage, showCustomBackground {
+            if uiStyle == .nativeClean, !showCustomBackground {
+                Color(UIColor.systemBackground)
+            } else if let image = theme.customBackgroundImage, showCustomBackground {
                 WallpaperImage(image: image)
                 LinearGradient(colors: wallpaperOverlay, startPoint: .top, endPoint: .bottom)
             } else if showCustomBackground, let customColor {
@@ -80,16 +85,18 @@ struct GlassBackdrop: View {
             } else {
                 LinearGradient.beansBackdrop
             }
-            Circle()
-                .fill(Color.beansAmber.opacity(0.14))
-                .frame(width: 340, height: 340)
-                .blur(radius: 100)
-                .offset(x: 150, y: -300)
-            Circle()
-                .fill(Color.beansSage.opacity(0.12))
-                .frame(width: 300, height: 300)
-                .blur(radius: 110)
-                .offset(x: -160, y: 340)
+            if uiStyle != .nativeClean {
+                Circle()
+                    .fill(Color.beansAmber.opacity(0.14))
+                    .frame(width: 340, height: 340)
+                    .blur(radius: 100)
+                    .offset(x: 150, y: -300)
+                Circle()
+                    .fill(Color.beansSage.opacity(0.12))
+                    .frame(width: 300, height: 300)
+                    .blur(radius: 110)
+                    .offset(x: -160, y: 340)
+            }
         }
         .ignoresSafeArea()
     }
@@ -136,7 +143,10 @@ struct BeansGlass<S: Shape>: View {
     }
 
     var body: some View {
-        if isLiquid {
+        if uiStyle == .nativeClean {
+            shape
+                .fill(Color(UIColor.secondarySystemGroupedBackground).opacity(0.94))
+        } else if isLiquid {
             if #available(iOS 26, *) {
                 GlassEffectContainer {
                     shape
@@ -152,7 +162,7 @@ struct BeansGlass<S: Shape>: View {
             case .clear, .liquid:
                 shape
                     .fill(.ultraThinMaterial)
-            case .compact:
+            case .compact, .nativeClean:
                 shape
                     .fill(Color.beansGlassFill.opacity(0.62))
             }
@@ -176,15 +186,32 @@ struct GlassCard<Content: View>: View {
     }
 
     private var resolvedCornerRadius: CGFloat {
-        uiStyle == .compact ? min(cornerRadius, 16) : cornerRadius
+        if uiStyle == .compact { return min(cornerRadius, 16) }
+        if uiStyle == .nativeClean { return min(cornerRadius, 18) }
+        return cornerRadius
     }
 
     private var resolvedPadding: CGFloat {
-        uiStyle == .compact ? 12 : 16
+        if uiStyle == .compact { return 12 }
+        if uiStyle == .nativeClean { return 13 }
+        return 16
     }
 
     var body: some View {
-        if isLiquid {
+        if uiStyle == .nativeClean {
+            content()
+                .padding(resolvedPadding)
+                .background {
+                    RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
+                        .fill(Color(UIColor.secondarySystemGroupedBackground).opacity(0.95))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.8)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
+                .beansCardShadow(radius: 2, y: 1)
+        } else if isLiquid {
             if #available(iOS 26, *) {
                 GlassEffectContainer {
                     content()

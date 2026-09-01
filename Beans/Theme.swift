@@ -183,12 +183,14 @@ enum BeansUIStyle: String, CaseIterable {
     case liquid = "liquid"
     case clear = "clear"
     case compact = "compact"
+    case nativeClean = "nativeClean"
 
     var title: String {
         switch self {
         case .liquid: return "默认液态"
         case .clear: return "磨砂玻璃"
         case .compact: return "紧凑淡雅"
+        case .nativeClean: return "Apple 简洁"
         }
     }
 }

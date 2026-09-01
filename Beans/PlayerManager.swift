@@ -110,6 +110,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private let playbackStateKey = "beans.player.playbackState.v1"
     private let audioMixKey = "beans.audio.mixothers.v1"
     private let playModeKey = "beans.player.playMode"
+    private let autoSkipOnFailureKey = "beans.playback.autoSkipOnFailure"
     private let thirdPartyVIPNoticeKey = "beans.showThirdPartyVIPNotice"
     private let defaults = UserDefaults.standard
 
@@ -466,6 +467,7 @@ final class PlayerManager: NSObject, ObservableObject {
                         : "播放失败，未获取到可用音源"
                     BeansLogger.shared.log("播放失败：\(song.name) - \(failureMessage)｜音质=\(quality.level)", level: .error)
                     ToastCenter.shared.show(failureMessage, duration: 3)
+                    self.finishUnrecoverablePlaybackFailure(song: song, reason: "解析播放地址失败")
                 }
                 return
             }
@@ -785,9 +787,7 @@ final class PlayerManager: NSObject, ObservableObject {
             if isThirdParty && self.retryThirdPartyIfNeeded(excludingHost: url.host) { return }
             if !isThirdParty && self.fallbackQQToThirdPartyIfNeeded() { return }
             if self.retryKugouAtStandardIfNeeded(error: item.error) { return }
-            self.loadFailed = true
-            self.isBuffering = false
-            self.isPlaying = false
+            self.finishUnrecoverablePlaybackFailure(song: self.currentSong, reason: "AVPlayerItem 加载失败")
         }
         timeControlStatusObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             guard let self, self.player === player else { return }
@@ -872,10 +872,22 @@ final class PlayerManager: NSObject, ObservableObject {
             if !isThirdParty && self?.fallbackQQToThirdPartyIfNeeded() == true { return }
             if isThirdParty && self?.retryThirdPartyIfNeeded(excludingHost: url.host) == true { return }
             if self?.retryKugouAtStandardIfNeeded(error: item.error) == true { return }
-            self?.loadFailed = true
-            self?.isBuffering = false
+            self?.finishUnrecoverablePlaybackFailure(song: self?.currentSong, reason: "播放中断失败")
         }
         updateNowPlaying()
+    }
+
+    private func finishUnrecoverablePlaybackFailure(song: Song?, reason: String) {
+        loadFailed = true
+        isBuffering = false
+        isPlaying = false
+        guard defaults.object(forKey: autoSkipOnFailureKey) as? Bool ?? false,
+              queue.count > 1,
+              let failedSong = song,
+              currentSong?.identityKey == failedSong.identityKey else { return }
+        BeansLogger.shared.log("播放失败自动下一首：\(failedSong.name)｜原因=\(reason)", level: .info)
+        ToastCenter.shared.show("当前歌曲播放失败，已自动切到下一首", duration: 2)
+        next(manual: false)
     }
 
     private func isQQAudioHost(_ host: String?) -> Bool {

@@ -10,6 +10,7 @@ private struct ReferenceLyricCenterKey: PreferenceKey {
 }
 
 struct ReferencePlaybackView: View {
+    @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
@@ -33,6 +34,8 @@ struct ReferencePlaybackView: View {
     @AppStorage("beans.appleMusic.secondaryHex") private var secondaryHex = ""
     @AppStorage("beans.appleMusic.accentHex") private var accentHex = ""
     @AppStorage("beans.appleMusic.volumeHex") private var volumeHex = ""
+    @AppStorage("beans.appleMusic.syncWallpaper") private var syncWallpaper = false
+    @AppStorage("beans.appleMusic.wallpaperBlur") private var wallpaperBlur = 14.0
     @AppStorage("beans.appleMusic.topY") private var topOffsetY = 0.0
     @AppStorage("beans.appleMusic.coverScale") private var coverScale = 1.0
     @AppStorage("beans.appleMusic.titleY") private var titleOffsetY = 0.0
@@ -49,9 +52,7 @@ struct ReferencePlaybackView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                CoverBlurBackground(url: song?.coverURL, scheme: .dark)
-                    .overlay(Color.black.opacity(0.48))
-                    .ignoresSafeArea()
+                playerBackground
 
                 VStack(spacing: 0) {
                     topIndicator
@@ -85,6 +86,29 @@ struct ReferencePlaybackView: View {
                 .allowsHitTesting(false)
         }
         .onDisappear { resumeTask?.cancel() }
+    }
+
+    @ViewBuilder
+    private var playerBackground: some View {
+        if syncWallpaper, let image = theme.customBackgroundImage {
+            WallpaperImage(image: image)
+                .blur(radius: CGFloat(wallpaperBlur))
+                .scaleEffect(wallpaperBlur > 0 ? 1.08 : 1)
+                .overlay(Color.black.opacity(0.44))
+                .ignoresSafeArea()
+        } else if syncWallpaper, let color = theme.customBackground {
+            LinearGradient(
+                colors: [color.opacity(0.92), color.opacity(0.58), .black.opacity(0.88)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .blur(radius: CGFloat(wallpaperBlur * 0.35))
+            .ignoresSafeArea()
+        } else {
+            CoverBlurBackground(url: song?.coverURL, scheme: .dark)
+                .overlay(Color.black.opacity(0.48))
+                .ignoresSafeArea()
+        }
     }
 
     private var topIndicator: some View {

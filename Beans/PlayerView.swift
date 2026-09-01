@@ -2432,6 +2432,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.playerPrimaryButtonColorHex") private var playerPrimaryButtonColorHex = ""
     @AppStorage("beans.progressBarStyle") private var progressBarStyle = 0
     @AppStorage("beans.progressAccentHex") private var progressAccentHex = ""
+    @AppStorage("beans.playback.autoSkipOnFailure") private var autoSkipOnFailure = false
     @AppStorage("beans.lyricFontSize") private var fontSize = 17
     @AppStorage("beans.lyricSpacing") private var lineSpacing = 24
     @AppStorage("beans.lyricGlow") private var glowLevel = 1
@@ -2482,6 +2483,8 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.appleMusic.secondaryHex") private var appleSecondaryHex = ""
     @AppStorage("beans.appleMusic.accentHex") private var appleAccentHex = ""
     @AppStorage("beans.appleMusic.volumeHex") private var appleVolumeHex = ""
+    @AppStorage("beans.appleMusic.syncWallpaper") private var appleSyncWallpaper = false
+    @AppStorage("beans.appleMusic.wallpaperBlur") private var appleWallpaperBlur = 14.0
     @AppStorage("beans.appleMusic.topY") private var appleTopY = 0.0
     @AppStorage("beans.appleMusic.coverScale") private var appleCoverScale = 1.0
     @AppStorage("beans.appleMusic.titleY") private var appleTitleY = 0.0
@@ -2924,6 +2927,9 @@ struct PlayerSettingsSheet: View {
                 settingToggle("左右滑动切歌", isOn: $swipeSwitchSong,
                               caption: "左滑下一首，右滑上一首")
                 Divider().opacity(0.35)
+                settingToggle("播放失败自动下一首", isOn: $autoSkipOnFailure,
+                              caption: "当前歌曲解析失败或播放地址失效时，自动跳到下一首")
+                Divider().opacity(0.35)
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("进度条颜色")
@@ -3066,6 +3072,16 @@ struct PlayerSettingsSheet: View {
                 settingToggle("显示音量控制", isOn: $appleShowVolume,
                               caption: "开启后在播放 / 暂停按钮下方显示系统音量条")
                 Divider().opacity(0.35)
+                settingToggle("同步主页壁纸", isOn: $appleSyncWallpaper,
+                              caption: "封面页和歌词页都使用主页壁纸或自定义背景色")
+                if appleSyncWallpaper {
+                    Divider().opacity(0.35)
+                    settingSlider("壁纸模糊度", valueText: "\(Int(appleWallpaperBlur))") {
+                        Slider(value: $appleWallpaperBlur, in: 0...32, step: 1)
+                            .tint(Color.beansAmber)
+                    }
+                }
+                Divider().opacity(0.35)
                 ColorPicker("主图标与当前歌词颜色", selection: applePrimaryColor, supportsOpacity: false)
                     .font(BeansFont.appFont(13))
                 ColorPicker("次级文字与时间颜色", selection: appleSecondaryColor, supportsOpacity: false)
@@ -3112,6 +3128,8 @@ struct PlayerSettingsSheet: View {
                 appleControlsY = 0
                 appleActionsY = 0
                 appleShowVolume = true
+                appleSyncWallpaper = false
+                appleWallpaperBlur = 14
                 BeansHaptics.select()
             } label: {
                 Text("恢复 Apple Music 默认")
@@ -3527,7 +3545,7 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
             switch uiStyle {
             case .clear, .liquid:
                 shape.fill(.ultraThinMaterial)
-            case .compact:
+            case .compact, .nativeClean:
                 shape.fill(Color.beansGlassFill.opacity(0.62))
             }
         }
