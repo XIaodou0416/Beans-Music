@@ -127,13 +127,6 @@ struct DiscoverView: View {
                                     if !dailySongs.isEmpty {
                                         dailySection
                                             .sectionEntrance(delay: 0)
-                                            .simultaneousGesture(
-                                                LongPressGesture(minimumDuration: 0.55)
-                                                    .onEnded { _ in
-                                                        BeansHaptics.select()
-                                                        showHomePlatformMenu = true
-                                                    }
-                                            )
                                     }
                                 case "排行榜":
                                     if hasRankData { topListsSection.sectionEntrance(delay: 0.08) }
@@ -330,6 +323,14 @@ struct DiscoverView: View {
                                 .offset(y: greetingLineOffsetY(index))
                         }
                     }
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.55)
+                            .onEnded { _ in
+                                BeansHaptics.select()
+                                showHomePlatformMenu = true
+                            }
+                    )
                     if !homeHideUsername {
                         Text(auth.user?.nickname ?? "发现好音乐")
                             .font(BeansFont.appFont(13))
@@ -711,6 +712,9 @@ struct DiscoverView: View {
                                     .lineLimit(1)
                                     .font(BeansFont.appFont(isNativeClean ? 15 : 12, isNativeClean ? .bold : .medium))
                                     .frame(width: isNativeClean ? 156 : 108, alignment: .leading)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
                                 Text(song.artists.isEmpty ? song.album : song.artists)
                                     .font(BeansFont.appFont(10))
                                     .foregroundStyle(Color.beansComment)
@@ -731,7 +735,7 @@ struct DiscoverView: View {
                                 .font(BeansFont.appFont(13, .semibold))
                         }
                         .foregroundStyle(Color.beansLabel)
-                        .frame(width: isNativeClean ? 88 : 82, height: isNativeClean ? 156 : 108)
+                        .frame(width: isNativeClean ? 72 : 68, height: isNativeClean ? 132 : 96)
                         .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
                     }
                     .buttonStyle(GlassPressButtonStyle(scale: 0.94))

@@ -6,6 +6,7 @@ struct SongCell: View {
     @EnvironmentObject private var auth: AuthStore
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
+    @AppStorage("beans.audioQuality") private var audioQualityRaw = BeansAudioQuality.exhigh.rawValue
 
     let song: Song
     var showCover = true
@@ -18,6 +19,7 @@ struct SongCell: View {
     var onTap: (() -> Void)?
 
     @State private var showAddToPlaylist = false
+    @State private var shareFile: ShareFileItem?
     @State private var appeared = false
 
     private var isCurrent: Bool {
@@ -87,6 +89,11 @@ struct SongCell: View {
             } label: {
                 Label("添加到歌单", systemImage: "text.badge.plus")
             }
+            Button {
+                Task { await downloadSong() }
+            } label: {
+                Label("下载歌曲", systemImage: "arrow.down.circle")
+            }
             if !isCurrent {
                 Button {
                     if let playbackIndex, !playbackContext.isEmpty {
@@ -104,6 +111,28 @@ struct SongCell: View {
         .sheet(isPresented: $showAddToPlaylist) {
             AddToLocalPlaylistSheet(song: song)
                 .environmentObject(theme)
+        }
+        .sheet(item: $shareFile) { item in
+            ShareSheet(items: [item.url])
+        }
+    }
+
+    @MainActor
+    private func downloadSong() async {
+        let quality: DownloadQuality
+        switch audioQualityRaw {
+        case BeansAudioQuality.lossless.rawValue: quality = .lossless
+        case BeansAudioQuality.high.rawValue, BeansAudioQuality.exhigh.rawValue: quality = .high
+        default: quality = .low
+        }
+        BeansHaptics.medium()
+        ToastCenter.shared.show("开始下载：\(song.name)")
+        let result = await DownloadManager.shared.download(song: song, quality: quality)
+        switch result {
+        case .success(let downloaded):
+            shareFile = ShareFileItem(url: downloaded.url)
+        case .failure(let error):
+            ToastCenter.shared.show("下载失败：\(error.localizedDescription)", duration: 3)
         }
     }
 
