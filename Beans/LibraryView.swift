@@ -55,6 +55,7 @@ struct LibraryView: View {
     @State private var showDeleteConfirm = false
     @State private var source: LibraryProvider = .netease
     @AppStorage("beans.homeHeaderHideSort") private var hideSortButton = false
+    @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @State private var qqPlaylists: [Playlist] = []
     @State private var qqLoading = false
     @State private var qqSavedAt = Date.distantPast
@@ -78,7 +79,9 @@ struct LibraryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: isNativeClean ? 28 : 24) {
                     header
-                    providerPicker
+                    if !hidePlatformPicker {
+                        providerPicker
+                    }
                     // 板块按用户自定义顺序渲染（可拖拽排序）
                     ForEach(libraryOrder, id: \.self) { key in
                         switch key {

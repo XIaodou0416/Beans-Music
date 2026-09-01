@@ -416,10 +416,13 @@ final class QQMusicAPI {
     }
 
     /// 我喜欢（红心）歌单歌曲列表（dirid=201 解析真实歌单 ID，再拉歌单详情）
-    func favoriteSongs(limit: Int = 100) async throws -> [Song] {
+    /// QQ“我的喜欢”歌曲列表。limit <= 0 表示持续分页直到接口没有更多歌曲。
+    func favoriteSongs(limit: Int = 0) async throws -> [Song] {
         let qqAuth = QQMusicAuth.shared
+        let pageSize = 300
+        let targetLimit = limit > 0 ? limit : Int.max
         let identities = qqAuth.playlistIdentityCandidates.map(Self.maskedIdentity).joined(separator: ",")
-        BeansLogger.shared.log("QQ 我的喜欢加载开始 limit=\(limit) loggedIn=\(qqAuth.isLoggedIn) identities=[\(identities)] playlistUin=\(Self.maskedIdentity(qqAuth.playlistUin)) gtk=已计算", level: .info)
+        BeansLogger.shared.log("QQ 我的喜欢加载开始 limit=\(limit <= 0 ? "无上限" : String(limit)) loggedIn=\(qqAuth.isLoggedIn) identities=[\(identities)] playlistUin=\(Self.maskedIdentity(qqAuth.playlistUin)) gtk=已计算", level: .info)
         guard qqAuth.isLoggedIn else {
             BeansLogger.shared.log("QQ 我的喜欢终止：当前未登录", level: .error)
             return []
@@ -441,9 +444,9 @@ final class QQMusicAPI {
             if let detailJson = try? await get(detailURL, referer: "https://y.qq.com/", cookie: qqAuth.cookieHeader),
                let cdlist = detailJson["cdlist"] as? [[String: Any]],
                let rawSongs = cdlist.first?["songlist"] as? [[String: Any]] {
-                let songs = rawSongs.prefix(limit).compactMap { song(from: Self.unwrapQQSong($0)) }
+                let songs = rawSongs.prefix(targetLimit).compactMap { song(from: Self.unwrapQQSong($0)) }
                 BeansLogger.shared.log("QQ 我的喜欢旧详情 mapid=\(mapid) cdlist=\(cdlist.count) rawSongs=\(rawSongs.count) parsedSongs=\(songs.count)", level: songs.isEmpty ? .warn : .info)
-                if !songs.isEmpty { return songs }
+                if !songs.isEmpty && (limit > 0 || rawSongs.count < pageSize) { return songs }
             } else {
                 BeansLogger.shared.log("QQ 我的喜欢旧详情未匹配 cdlist/songlist mapid=\(mapid)", level: .warn)
             }
@@ -469,7 +472,7 @@ final class QQMusicAPI {
                     "disstid": 201,
                     "dirid": 201,
                     "song_begin": 0,
-                    "song_num": limit,
+                    "song_num": pageSize,
                     "enc_host_uin": qqAuth.playlistUin,
                     "onlysonglist": 0,
                     "userinfo": 1,
@@ -477,12 +480,29 @@ final class QQMusicAPI {
             ],
         ]
         for cookie in cookieCandidates {
-            guard let json = try? await musicu(officialPayload, cookie: cookie, timeout: 20) else { continue }
-            let songs = Self.favoriteSongArray(from: json)
-                .prefix(limit)
-                .compactMap { song(from: Self.unwrapQQSong($0)) }
-            BeansLogger.shared.log("QQ 我的喜欢 CgiGetDiss 解析 raw=\(Self.favoriteSongArray(from: json).count) parsed=\(songs.count)", level: songs.isEmpty ? .warn : .info)
-            if !songs.isEmpty { return songs }
+            var allSongs: [Song] = []
+            var seen = Set<String>()
+            var begin = 0
+            while allSongs.count < targetLimit {
+                var pagePayload = officialPayload
+                if var req = pagePayload["req_1"] as? [String: Any],
+                   var param = req["param"] as? [String: Any] {
+                    param["song_begin"] = begin
+                    req["param"] = param
+                    pagePayload["req_1"] = req
+                }
+                guard let json = try? await musicu(pagePayload, cookie: cookie, timeout: 20) else { break }
+                let rawPage = Self.favoriteSongArray(from: json)
+                let pageSongs = rawPage.compactMap { song(from: Self.unwrapQQSong($0)) }
+                let newSongs = pageSongs.filter { seen.insert($0.identityKey).inserted }
+                allSongs.append(contentsOf: newSongs)
+                BeansLogger.shared.log("QQ 我的喜欢 CgiGetDiss 分页 begin=\(begin) raw=\(rawPage.count) parsed=\(pageSongs.count) new=\(newSongs.count) total=\(allSongs.count)", level: pageSongs.isEmpty ? .warn : .debug)
+                if rawPage.count < pageSize || newSongs.isEmpty { break }
+                begin += rawPage.count
+            }
+            if !allSongs.isEmpty {
+                return limit > 0 ? Array(allSongs.prefix(limit)) : allSongs
+            }
         }
 
         // 201 收藏夹接口在不同登录态下有两种返回形式：
@@ -493,7 +513,7 @@ final class QQMusicAPI {
             for cookie in cookieCandidates {
                 guard let favJson = try? await get(favURL, referer: "https://y.qq.com/n/ryqq_v2/profile/create", cookie: cookie) else { continue }
                 let songs = Self.favoriteSongArray(from: favJson)
-                    .prefix(limit)
+                    .prefix(targetLimit)
                     .compactMap { song(from: ($0["track_info"] as? [String: Any]) ?? $0) }
                 BeansLogger.shared.log("QQ 我的喜欢带身份接口 identity=\(identity) raw=\(Self.favoriteSongArray(from: favJson).count) parsed=\(songs.count)", level: songs.isEmpty ? .warn : .info)
                 if !songs.isEmpty { return songs }
@@ -504,12 +524,13 @@ final class QQMusicAPI {
             BeansLogger.shared.log("QQ 我的喜欢歌单解析失败：未找到真实歌单 ID", level: .error)
             return []
         }
+        let fallbackLimit = limit > 0 ? limit : pageSize
         for cookie in cookieCandidates {
-            let songs = try await playlistSongs(listID: mapid, preferredCookie: cookie, limit: limit)
+            let songs = try await playlistSongs(listID: mapid, preferredCookie: cookie, limit: fallbackLimit)
             BeansLogger.shared.log("QQ 我的喜欢最终详情 mapid=\(mapid) songs=\(songs.count)", level: songs.isEmpty ? .warn : .info)
             if !songs.isEmpty { return songs }
         }
-        let songs = try await playlistSongs(listID: mapid, preferredCookie: nil, limit: limit)
+        let songs = try await playlistSongs(listID: mapid, preferredCookie: nil, limit: fallbackLimit)
         BeansLogger.shared.log("QQ 我的喜欢加载结束 mapid=\(mapid) songs=\(songs.count)", level: songs.isEmpty ? .error : .info)
         return songs
     }
@@ -1418,13 +1439,13 @@ final class QQMusicAPI {
 
     /// QQ 歌单内歌曲（主通道 fcg_ucc_getcdinfo_byids_cp，Mineradio 逆向；兜底 musicu GetPlaylistDetail）
     func playlistSongs(listID: Int) async throws -> [Song] {
-        try await playlistSongs(listID: listID, preferredCookie: nil, limit: 100)
+        try await playlistSongs(listID: listID, preferredCookie: nil, limit: 300)
     }
 
     private func playlistSongs(listID: Int, preferredCookie: String?, limit: Int) async throws -> [Song] {
         BeansLogger.shared.log("QQ 歌单歌曲加载开始 listID=\(listID) limit=\(limit) preferredCookie=\(preferredCookie == nil ? "无" : "有")", level: .info)
         if listID == Self.qqLikedPlaylistID {
-            return try await favoriteSongs(limit: limit)
+            return try await favoriteSongs(limit: 0)
         }
         let qqAuth = QQMusicAuth.shared
         let cookie = preferredCookie ?? (qqAuth.isLoggedIn ? qqAuth.playlistCookieHeader : "")

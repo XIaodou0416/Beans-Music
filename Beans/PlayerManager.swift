@@ -739,7 +739,7 @@ final class PlayerManager: NSObject, ObservableObject {
         // playing，随后以 AVFoundation -11849 失败。
         let item: AVPlayerItem
         var playbackHeaders: [String: String] = [:]
-        if isQQAudioHost(url.host) {
+        if isQQAudioHost(url.host), !isThirdParty {
             playbackHeaders = [
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0",
                 "Referer": "https://y.qq.com/",
@@ -752,6 +752,11 @@ final class PlayerManager: NSObject, ObservableObject {
                 "AVURLAssetHTTPHeaderFieldsKey": playbackHeaders
             ])
             item = AVPlayerItem(asset: asset)
+        } else if isQQAudioHost(url.host), isThirdParty {
+            // 第三方插件返回的 QQ CDN 地址通常已经带有自己的鉴权/来源策略。
+            // 不额外注入 QQ 官方 Cookie/Referer，避免 AVPlayer 把第三方地址判为
+            // 非法重定向或触发 -11849；官方 vkey 链路仍保留原请求头。
+            item = AVPlayerItem(url: url)
         } else if url.host?.contains("kugou.com") == true || url.host?.contains("kgimg.com") == true {
             playbackHeaders = [
                 "User-Agent": "Android15-1070-11440-46-0-DiscoveryDRADProtocol-wifi",

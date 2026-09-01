@@ -1236,6 +1236,7 @@ struct SettingsView: View {
     @AppStorage("beans.homeHideUsername") private var homeHideUsername = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
+    @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
     @AppStorage("beans.thirdPartyAPIKeys") private var thirdPartyAPIKeys = ""
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
@@ -1488,7 +1489,7 @@ struct SettingsView: View {
         }
         .alert("密钥说明", isPresented: $showSourceHelp) {
             Button("前往购买") {
-                if let url = URL(string: "https://xxd.shop.shiqianjiang.cn/") {
+                if let url = URL(string: "https://xxd.shop.shiqianjiang.cn/products/4") {
                     UIApplication.shared.open(url)
                 }
             }
@@ -2085,6 +2086,8 @@ struct SettingsView: View {
                     Toggle("隐藏主页用户名", isOn: $homeHideUsername)
                         .font(BeansFont.appFont(13))
                     Toggle("隐藏所有界面排序按钮", isOn: $homeHeaderHideSort)
+                        .font(BeansFont.appFont(13))
+                    Toggle("隐藏顶部平台列表", isOn: $hidePlatformPicker)
                         .font(BeansFont.appFont(13))
                     Toggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
                         .font(BeansFont.appFont(13))

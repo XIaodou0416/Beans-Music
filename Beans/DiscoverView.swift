@@ -55,6 +55,7 @@ struct DiscoverView: View {
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
+    @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
@@ -105,7 +106,9 @@ struct DiscoverView: View {
                         if remoteAnnouncementEnabled, !remoteAnnouncementText.isEmpty {
                             remoteAnnouncementBanner
                         }
-                        providerPicker
+                        if !hidePlatformPicker {
+                            providerPicker
+                        }
                         if let errorMessage {
                             ErrorStateView(message: errorMessage) {
                                 Task { await load(force: true) }
@@ -382,9 +385,7 @@ struct DiscoverView: View {
         .padding(4)
         .background {
             if isNativeClean {
-                Capsule()
-                    .fill(Color(UIColor.secondarySystemGroupedBackground))
-                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.8))
+                BeansSurface(shape: Capsule())
             } else {
                 BeansGlass(shape: Capsule())
             }

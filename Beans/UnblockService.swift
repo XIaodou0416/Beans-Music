@@ -181,6 +181,10 @@ enum UnblockService {
             request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
         let keyLabel = idLabel + (keyTotal > 1 ? " 密钥=\(keyIndex)/\(keyTotal)" : "") + " 音质=\(quality)"
+        BeansLogger.shared.log(
+            "第三方音源请求开始：\(source.name)\(keyLabel) key=\(apiKey == nil ? "无" : "有") url=\(safeURLSummary(url))",
+            level: .debug
+        )
         let metadataKeys: Set<String> = ["source", "quality", "br", "apiKey", "apiKeys"]
         for (key, value) in source.headers where !metadataKeys.contains(key) {
             request.setValue(value, forHTTPHeaderField: key)
@@ -202,6 +206,18 @@ enum UnblockService {
             BeansLogger.shared.log("第三方音源响应格式错误：\(source.name)\(keyLabel)", level: .debug)
             return nil
         }
+        let responseCodeValue = responseCode(from: obj).map { String($0) } ?? "无"
+        let responseURLHost: String
+        if let raw = valueAtAnyPath(obj, source.urlPath) as? String,
+           let parsed = URL(string: raw) {
+            responseURLHost = parsed.host ?? "无"
+        } else {
+            responseURLHost = "无"
+        }
+        BeansLogger.shared.log(
+            "第三方音源响应：\(source.name)\(keyLabel) code=\(responseCodeValue) hasURL=\(responseURLHost == "无" ? "否" : "是") host=\(responseURLHost)",
+            level: .debug
+        )
         if let code = responseCode(from: obj), code != 0 && code != 200 {
             let message = obj["message"] as? String ?? obj["msg"] as? String ?? "code=\(code)"
             BeansLogger.shared.log("第三方音源返回失败：\(source.name)\(keyLabel) \(message)", level: .debug)
@@ -210,9 +226,40 @@ enum UnblockService {
         guard let value = valueAtAnyPath(obj, source.urlPath),
               let resolvedURL = value as? String, !resolvedURL.isEmpty,
               let rawPlayURL = URL(string: resolvedURL),
-              let playURL = playablePlaybackURL(from: rawPlayURL, source: source, keyLabel: keyLabel, excludedHosts: excludedHosts) else {
+              var playURL = playablePlaybackURL(from: rawPlayURL, source: source, keyLabel: keyLabel, excludedHosts: excludedHosts) else {
             BeansLogger.shared.log("第三方音源响应中没有播放地址：\(source.name)\(keyLabel)", level: .debug)
             return nil
+        }
+        // QQ 接口经常返回“接口成功但 CDN 403”的地址。先用轻量 Range 请求确认，
+        // 若确认被拒绝，就在同一轮尝试其他 QQ 节点，仍失败则让上层继续换音质/密钥。
+        if isQQPlaybackHost(playURL.host?.lowercased() ?? ""),
+           await qqPlaybackURLIsForbidden(playURL) {
+            BeansLogger.shared.log(
+                "第三方音源播放地址被 QQ CDN 拒绝：\(source.name)\(keyLabel) 域名=\(playURL.host ?? "?")",
+                level: .debug
+            )
+            let candidates = qqPlaybackURLCandidates(for: rawPlayURL)
+            var replacement: URL?
+            for candidate in candidates.dropFirst() {
+                guard let host = candidate.host?.lowercased(),
+                      !excludedHosts.contains(host) else { continue }
+                if !(await qqPlaybackURLIsForbidden(candidate)) {
+                    replacement = candidate
+                    break
+                }
+            }
+            guard let replacement else {
+                BeansLogger.shared.log(
+                    "第三方音源所有 QQ CDN 节点均被拒绝：\(source.name)\(keyLabel)",
+                    level: .debug
+                )
+                return nil
+            }
+            BeansLogger.shared.log(
+                "第三方音源改用可访问 QQ CDN 节点：\(playURL.host ?? "?") -> \(replacement.host ?? "?")",
+                level: .debug
+            )
+            playURL = replacement
         }
         if rawPlayURL != playURL {
             BeansLogger.shared.log(
@@ -229,6 +276,23 @@ enum UnblockService {
         }
         BeansLogger.shared.log("第三方音源命中：\(source.name)\(keyLabel)", level: .info)
         return Resolved(url: playURL, source: source.name)
+    }
+
+    /// 只把明确的 HTTP 403 判定为地址被拒绝；超时/网络错误不提前否定，
+    /// 避免把本来可由 AVPlayer 播放的地址误判为失效。
+    private static func qqPlaybackURLIsForbidden(_ url: URL) async -> Bool {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 4
+        request.setValue("bytes=0-1023", forHTTPHeaderField: "Range")
+        request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("https://y.qq.com/", forHTTPHeaderField: "Referer")
+        do {
+            let (_, response) = try await session.data(for: request)
+            return (response as? HTTPURLResponse)?.statusCode == 403
+        } catch {
+            return false
+        }
     }
 
     /// 部分第三方接口会固定返回不稳定的 QQ CDN 节点。
@@ -307,7 +371,9 @@ enum UnblockService {
     private static func qqIDCandidates(songID: Int, songMid: String, mediaMid: String?) -> [String] {
         var seen = Set<String>()
         let numericID = songID > 0 ? String(songID) : nil
-        return [numericID, mediaMid, songMid].compactMap { raw in
+        // LX/CR/QT 插件把 QQ 的 musicInfo.songmid 作为首选 ID；
+        // 先传 songmid 可避免接口把数字歌曲 ID 误判成其他平台或返回不稳定地址。
+        return [songMid, mediaMid, numericID].compactMap { raw in
             guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !value.isEmpty,
                   seen.insert(value).inserted else { return nil }

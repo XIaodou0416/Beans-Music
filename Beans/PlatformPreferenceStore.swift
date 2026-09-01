@@ -11,6 +11,9 @@ final class PlatformPreferenceStore: ObservableObject {
     @Published private(set) var selectedRaw: Set<String>
     @Published var orderedRaw: [String]
 
+    /// 仅隐藏页面顶部的平台切换控件，不影响平台启用状态或后台加载能力。
+    static let hidePickerKey = "beans.hidePlatformPicker"
+
     var changes: AnyPublisher<Set<String>, Never> { $selectedRaw.eraseToAnyPublisher() }
 
     private init() {

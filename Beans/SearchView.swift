@@ -91,6 +91,7 @@ struct SearchView: View {
     @EnvironmentObject private var auth: AuthStore
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
 
     @State private var keyword = ""
     @State private var provider: SearchProvider = .netease
@@ -134,7 +135,9 @@ struct SearchView: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 10)
 
-                providerPicker
+                    if !hidePlatformPicker {
+                        providerPicker
+                    }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 8)
 

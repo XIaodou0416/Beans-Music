@@ -88,7 +88,7 @@ final class FavoritesStore: ObservableObject {
     @MainActor
     func syncQQFromCloud() async {
         guard QQMusicAuth.shared.isLoggedIn else { return }
-        guard let songs = try? await QQMusicAPI.shared.favoriteSongs(limit: 300), !songs.isEmpty else { return }
+        guard let songs = try? await QQMusicAPI.shared.favoriteSongs(), !songs.isEmpty else { return }
         qqFavoriteSongs = songs
         saveSongs(qqFavoriteSongs, key: qqKey)
     }
