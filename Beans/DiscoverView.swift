@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct DiscoverView: View {
     @EnvironmentObject private var theme: ThemeStore
@@ -54,6 +55,7 @@ struct DiscoverView: View {
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
     @AppStorage("beans.remoteAnnouncement.imageURL") private var remoteAnnouncementImageURL = ""
@@ -66,6 +68,7 @@ struct DiscoverView: View {
         }
         return saved
     }
+    private var isNativeClean: Bool { BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean }
 
     @State private var qqTopLists: [QQTopInfo] = []
     @State private var selectedQQTopList: QQTopInfo?
@@ -97,7 +100,7 @@ struct DiscoverView: View {
             ScrollView {
                 if !homeRenderingPaused {
                     ScrollViewReader { proxy in
-                    VStack(alignment: .leading, spacing: 26) {
+                    VStack(alignment: .leading, spacing: isNativeClean ? 34 : 26) {
                         header
                         if remoteAnnouncementEnabled, !remoteAnnouncementText.isEmpty {
                             remoteAnnouncementBanner
@@ -127,8 +130,8 @@ struct DiscoverView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.horizontal, isNativeClean ? 24 : 16)
+                    .padding(.top, isNativeClean ? 32 : 8)
                     .padding(.bottom, 190)
                     .frame(maxWidth: 860)
                     .frame(maxWidth: .infinity)
@@ -277,7 +280,7 @@ struct DiscoverView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(greetingLines.enumerated()), id: \.offset) { index, line in
                             Text(line)
-                                .font(BeansFont.greetingFont(greetingLineSize(index), .bold))
+                                .font(BeansFont.greetingFont(isNativeClean ? max(42, greetingLineSize(index)) : greetingLineSize(index), .bold))
                                 .foregroundStyle(greetingLineStyle(index))
                                 .overlay(alignment: .bottomLeading) {
                                     if homeGreetingUnderline {
@@ -316,6 +319,12 @@ struct DiscoverView: View {
                 }
                 Spacer()
                 HStack(spacing: 10) {
+                    if isNativeClean {
+                        GlassIconButton(systemName: "magnifyingglass", size: 46) {
+                            BeansHaptics.tap()
+                            showUnifiedSearch = true
+                        }
+                    }
                     if !homeHeaderHideSort {
                         GlassIconButton(systemName: "arrow.up.arrow.down") {
                             BeansHaptics.tap()
@@ -331,7 +340,7 @@ struct DiscoverView: View {
                 }
             }
         }
-        .padding(.top, 8)
+        .padding(.top, isNativeClean ? 4 : 8)
         .frame(minHeight: homeGreetingHeight > 0 ? homeGreetingHeight : nil, alignment: .top)
     }
 
@@ -372,10 +381,16 @@ struct DiscoverView: View {
         }
         .padding(4)
         .background {
-                        BeansGlass(shape: Capsule())
+            if isNativeClean {
+                Capsule()
+                    .fill(Color(UIColor.secondarySystemGroupedBackground))
+                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.8))
+            } else {
+                BeansGlass(shape: Capsule())
+            }
         }
         .clipShape(Capsule())
-        .beansCardShadow(radius: 6, y: 2)
+        .beansCardShadow(radius: isNativeClean ? 2 : 6, y: isNativeClean ? 1 : 2)
     }
 
     private var greeting: String {
@@ -445,7 +460,11 @@ struct DiscoverView: View {
 
     // MARK: - 排行榜（竖排行列表）
 
+    @ViewBuilder
     private var topListsSection: some View {
+        if isNativeClean {
+            nativeCleanTopListsSection
+        } else {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: "排行榜")
             VStack(spacing: 0) {
@@ -475,6 +494,85 @@ struct DiscoverView: View {
             .beansCardShadow(radius: 9, y: 3)
             .id("rankTopSection")
         }
+        }
+    }
+
+    private var nativeCleanTopListsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "排行榜")
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 16) {
+                    if source == .netease {
+                        ForEach(Array(neteaseTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, topList in
+                            nativeRankCard(index: index, name: topList.name, subtitle: topList.updateFrequency) {
+                                selectedTopList = topList
+                            }
+                        }
+                    } else if source == .qq {
+                        ForEach(Array(qqTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
+                            nativeRankCard(index: index, name: info.name, subtitle: "QQ 峰尖榜") {
+                                selectedQQTopList = info
+                            }
+                        }
+                    } else {
+                        ForEach(Array(kugouTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
+                            nativeRankCard(index: index, name: info.name, subtitle: info.updateFrequency) {
+                                selectedKugouTopList = info
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .id("rankTopSection")
+    }
+
+    private func nativeRankCard(index: Int, name: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button {
+            BeansHaptics.tap()
+            action()
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(nativeRankGradient(index))
+                    Image(systemName: "waveform")
+                        .font(.system(size: 58, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.18))
+                        .offset(x: 24, y: -16)
+                    Text(name)
+                        .font(BeansFont.appFont(23, .bold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.72)
+                        .padding(18)
+                }
+                .frame(width: 166, height: 136)
+                Text(name)
+                    .font(BeansFont.appFont(15, .bold))
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(Color.secondary)
+                    .lineLimit(1)
+            }
+            .frame(width: 166, alignment: .leading)
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.96))
+    }
+
+    private func nativeRankGradient(_ index: Int) -> LinearGradient {
+        let palettes: [[Color]] = [
+            [Color(red: 0.38, green: 0.33, blue: 0.92), Color(red: 0.25, green: 0.20, blue: 0.55)],
+            [Color(red: 0.13, green: 0.82, blue: 0.48), Color(red: 0.14, green: 0.42, blue: 0.25)],
+            [Color(red: 0.14, green: 0.70, blue: 0.90), Color(red: 0.12, green: 0.40, blue: 0.55)],
+            [Color(red: 0.96, green: 0.56, blue: 0.24), Color(red: 0.66, green: 0.25, blue: 0.16)]
+        ]
+        let colors = palettes[index % palettes.count]
+        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     /// 排行榜行列表（按平台渲染）
@@ -591,7 +689,7 @@ struct DiscoverView: View {
                             player.play(songs: dailySongs, startAt: index)
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
-                                CoverImage(url: song.coverURL, size: 108, cornerRadius: 16)
+                                CoverImage(url: song.coverURL, size: isNativeClean ? 156 : 108, cornerRadius: isNativeClean ? 14 : 16)
                                     .overlay(alignment: .topLeading) {
                                         if song.isVIP {
                                             Text("VIP")
@@ -610,12 +708,13 @@ struct DiscoverView: View {
                                     .font(BeansFont.appFont(12, .medium))
                                     .foregroundStyle(Color.beansLabel)
                                     .lineLimit(1)
-                                    .frame(width: 108, alignment: .leading)
+                                    .font(BeansFont.appFont(isNativeClean ? 15 : 12, isNativeClean ? .bold : .medium))
+                                    .frame(width: isNativeClean ? 156 : 108, alignment: .leading)
                                 Text(song.artists.isEmpty ? song.album : song.artists)
                                     .font(BeansFont.appFont(10))
                                     .foregroundStyle(Color.beansComment)
                                     .lineLimit(1)
-                                    .frame(width: 108, alignment: .leading)
+                                    .frame(width: isNativeClean ? 156 : 108, alignment: .leading)
                             }
                         }
                         .buttonStyle(GlassPressButtonStyle(scale: 0.94))

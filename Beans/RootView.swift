@@ -47,6 +47,7 @@ struct RootView: View {
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
     @AppStorage("beans.remoteAnnouncement.imageURL") private var remoteAnnouncementImageURL = ""
@@ -85,6 +86,10 @@ struct RootView: View {
 
     private var legacyTabResolvedWidth: CGFloat {
         min(CGFloat(legacyTabWidth), max(300, UIScreen.main.bounds.width - 28))
+    }
+
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
 
     var body: some View {
@@ -340,16 +345,16 @@ struct RootView: View {
                                 .minimumScaleFactor(0.78)
                         }
                     }
-                    .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel.opacity(0.70))
+                    .foregroundStyle(selected ? (isNativeClean ? Color.red : Color.beansAmber) : Color.beansLabel.opacity(isNativeClean ? 0.92 : 0.70))
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
                     .background {
                         if selected {
                             RoundedRectangle(cornerRadius: 17, style: .continuous)
-                                .fill(Color.beansAmber.opacity(0.12))
+                                .fill(isNativeClean ? Color.primary.opacity(0.055) : Color.beansAmber.opacity(0.12))
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 17, style: .continuous)
-                                        .strokeBorder(Color.beansAmber.opacity(0.18), lineWidth: 0.7)
+                                        .strokeBorder((isNativeClean ? Color.primary : Color.beansAmber).opacity(0.12), lineWidth: 0.7)
                                 }
                         }
                     }
@@ -363,27 +368,31 @@ struct RootView: View {
         .frame(width: legacyTabResolvedWidth)
         .background {
             RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous)
-                .fill(.clear)
+                .fill(isNativeClean ? Color(UIColor.systemBackground).opacity(0.96) : Color.clear)
                 .background {
-                    VisualEffectBlur(style: .systemUltraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous))
+                    if !isNativeClean {
+                        VisualEffectBlur(style: .systemUltraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous))
+                    }
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous)
-                        .strokeBorder(.white.opacity(0.20), lineWidth: 0.7)
+                        .strokeBorder(isNativeClean ? Color.primary.opacity(0.08) : .white.opacity(0.20), lineWidth: 0.7)
                 }
                 .overlay {
-                    RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [.white.opacity(0.18), .white.opacity(0.04), .black.opacity(0.03)],
-                                startPoint: .top,
-                                endPoint: .bottom
+                    if !isNativeClean {
+                        RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.18), .white.opacity(0.04), .black.opacity(0.03)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
                             )
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous))
+                    }
                 }
-                .shadow(color: .black.opacity(0.16), radius: 18, y: 7)
+                .shadow(color: .black.opacity(isNativeClean ? 0.10 : 0.16), radius: isNativeClean ? 12 : 18, y: isNativeClean ? 4 : 7)
         }
         .padding(.horizontal, 18)
         .padding(.bottom, 12)

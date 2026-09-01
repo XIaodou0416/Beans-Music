@@ -448,20 +448,31 @@ struct VIPBadgeView: View {
 
 struct GlassIconButton: View {
     @EnvironmentObject private var theme: ThemeStore
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     let systemName: String
     var size: CGFloat = 44
     var active = false
     let action: () -> Void
 
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
+
     var body: some View {
         let _ = theme.accent
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: size * 0.38, weight: .semibold))
-                .foregroundStyle(active ? Color.beansAmber : Color.beansLabel)
+                .font(.system(size: size * (isNativeClean ? 0.42 : 0.38), weight: .semibold))
+                .foregroundStyle(active ? Color.beansAmber : (isNativeClean ? Color.primary : Color.beansLabel))
                 .frame(width: size, height: size)
                 .background {
-                    BeansGlass(shape: Circle())
+                    if isNativeClean {
+                        Circle()
+                            .fill(Color(UIColor.secondarySystemGroupedBackground))
+                            .overlay(Circle().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.8))
+                    } else {
+                        BeansGlass(shape: Circle())
+                    }
                 }
                 .clipShape(Circle())
                 .contentShape(Circle())
@@ -506,16 +517,21 @@ struct GlassButton: View {
 // MARK: - 区块标题
 
 struct SectionHeader: View {
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     let title: String
     var trailing: String?
     var titleColor: Color = Color.beansLabel
     var trailingColor: Color = Color.beansComment
     var onTrailingTap: (() -> Void)?
 
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title)
-                .font(BeansFont.appFont(21, .bold))
+                .font(BeansFont.appFont(isNativeClean ? 28 : 21, .bold))
                 .foregroundStyle(titleColor)
             Spacer()
             if let trailing {

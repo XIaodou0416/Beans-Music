@@ -3068,6 +3068,25 @@ struct PlayerSettingsSheet: View {
 
     private var appleMusicCard: some View {
         settingCard("Apple Music 样式", isExpanded: $appleMusicExpanded) {
+            appleMusicLivePreview
+            Button {
+                coverPlayerStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
+                playerButtonStyleRaw = BeansPlayerButtonStyle.appleMusic.rawValue
+                BeansHaptics.select()
+                dismiss()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "play.rectangle.on.rectangle")
+                    Text("切到 Apple Music 页面预览")
+                }
+                .font(BeansFont.appFont(13, .semibold))
+                .foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color.black, in: Capsule())
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+            Divider().opacity(0.45)
             CompactSettingGroup {
                 settingToggle("显示音量控制", isOn: $appleShowVolume,
                               caption: "开启后在播放 / 暂停按钮下方显示系统音量条")
@@ -3140,6 +3159,108 @@ struct PlayerSettingsSheet: View {
                     .background(Color.beansAmber.opacity(0.12), in: Capsule())
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private var appleMusicLivePreview: some View {
+        let primary = applePrimaryColor.wrappedValue
+        let secondary = appleSecondaryColor.wrappedValue
+        let accent = appleAccentColor.wrappedValue
+        let volume = appleVolumeColor.wrappedValue
+        return ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.30, green: 0.40, blue: 0.43),
+                            Color(red: 0.12, green: 0.15, blue: 0.17)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            VStack(spacing: 10) {
+                Capsule()
+                    .fill(secondary.opacity(0.48))
+                    .frame(width: 52, height: 5)
+                    .offset(y: CGFloat(appleTopY) * 0.08)
+                HStack(spacing: 14) {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(LinearGradient(colors: [.white.opacity(0.9), accent.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 64, height: 64)
+                        .scaleEffect(CGFloat(appleCoverScale))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("年轮")
+                            .font(BeansFont.appFont(20, .bold))
+                            .foregroundStyle(primary)
+                        Text("张碧晨")
+                            .font(BeansFont.appFont(13, .medium))
+                            .foregroundStyle(secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "heart")
+                        .font(.system(size: 25, weight: .medium))
+                        .foregroundStyle(primary)
+                }
+                .offset(y: CGFloat(appleTitleY) * 0.08)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("圆圈勾勒成指纹")
+                        .font(BeansFont.appFont(18, .bold))
+                        .foregroundStyle(primary.opacity(0.82))
+                    Text("印在我的嘴唇")
+                        .font(BeansFont.appFont(16, .semibold))
+                        .foregroundStyle(secondary.opacity(0.62))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 6)
+                .offset(y: CGFloat(appleLyricY) * 0.08)
+                Capsule()
+                    .fill(secondary.opacity(0.28))
+                    .frame(height: 4)
+                    .overlay(alignment: .leading) {
+                        Capsule()
+                            .fill(primary)
+                            .frame(width: 86, height: 4)
+                    }
+                HStack(spacing: 34) {
+                    Image(systemName: "backward.fill")
+                    PlayPauseMorphIcon(isPlaying: true, size: 22)
+                    Image(systemName: "forward.fill")
+                }
+                .font(.system(size: 25, weight: .semibold))
+                .foregroundStyle(primary)
+                .offset(y: CGFloat(appleControlsY) * 0.08)
+                if appleShowVolume {
+                    HStack(spacing: 8) {
+                        Image(systemName: "speaker.fill")
+                            .font(.system(size: 10))
+                        Capsule()
+                            .fill(secondary.opacity(0.26))
+                            .frame(height: 5)
+                            .overlay(alignment: .leading) {
+                                Capsule().fill(volume).frame(width: 118, height: 5)
+                            }
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundStyle(volume)
+                }
+                HStack(spacing: 40) {
+                    Image(systemName: "quote.bubble")
+                    Image(systemName: "repeat")
+                    Image(systemName: "list.bullet")
+                }
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(primary.opacity(0.84))
+                .offset(y: CGFloat(appleActionsY) * 0.08)
+            }
+            .padding(18)
+        }
+        .frame(height: 318)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
         }
     }
 
