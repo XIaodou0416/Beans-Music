@@ -135,11 +135,11 @@ struct SearchView: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 10)
 
-                    if !hidePlatformPicker {
-                        providerPicker
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                if !hidePlatformPicker {
+                    providerPicker
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 8)
+                }
 
                 contentArea
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
