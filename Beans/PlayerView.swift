@@ -3663,11 +3663,19 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
     }
 
     var body: some View {
-        switch uiStyle {
-        case .clear, .liquid:
-            shape.fill(.ultraThinMaterial)
-        case .nativeClean:
-            shape.fill(Color.primary.opacity(0.038))
+        if #available(iOS 26, *), uiStyle == .liquid {
+            GlassEffectContainer {
+                shape
+                    .fill(.clear)
+                    .glassEffect(.clear, in: shape)
+            }
+        } else {
+            switch uiStyle {
+            case .clear, .liquid:
+                shape.fill(.ultraThinMaterial)
+            case .nativeClean:
+                shape.fill(Color.primary.opacity(0.038))
+            }
         }
     }
 }
