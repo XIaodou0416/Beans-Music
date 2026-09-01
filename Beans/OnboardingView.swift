@@ -252,8 +252,9 @@ struct OnboardingView: View {
                 Text(LocalizedStringKey(detail))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.78)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
@@ -354,7 +355,6 @@ struct OnboardingView: View {
                 Text(isEnglish ? "· Beans Music is for personal learning and research only. Commercial and illegal use is prohibited." : "· Beans Music 只用作个人学习研究，禁止用于商业及非法用途，如产生法律纠纷与本人无关。")
                 Text(isEnglish ? "· Music APIs come from open-source GitHub projects. This app does not store audio. Please support official music services." : "· 音乐 API 来自于 GitHub 开源项目（非官方版 API），本软件不提供任何音频存储服务，如需下载音频，请支持正版！")
                 Text(isEnglish ? "· Music copyrights belong to their respective platforms. Beans Music assumes no related legal liability." : "· 音乐版权归各网站所有，本站不承担任何法律责任和连带责任。")
-                Text(isEnglish ? "· The Kugou Music name, logo, and related content belong to Kugou Music and its rights holders." : "· “酷狗音乐”、酷狗图形标识及相关音乐内容的著作权、商标权或其他权利归酷狗音乐及其相关权利方所有。")
             }
             .font(BeansFont.appFont(13))
             .foregroundStyle(Color.beansSecondary)

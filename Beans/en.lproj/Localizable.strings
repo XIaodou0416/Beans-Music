@@ -55,7 +55,7 @@
 "120Hz 高刷新" = "Beans Music: 120Hz";
 "3D 倾斜" = "Beans Music: 3D";
 "9 套主题一键换肤，色盘任选颜色，全 App 跟随" = "Beans Music: 9 ，， App";
-"按金额排序" = "Message";
+"按金额排序" = "Sorted by amount";
 "版权声明" = "Copyright";
 "包含" = "Message";
 "薄荷气泡" = "Message";
@@ -211,9 +211,9 @@
 "第三方音源准备 QQ CDN 备用节点：\\(rawURL.host ?? " = "Beans Music: QQ CDN ：\\(rawURL.host ??";
 "点击顶部中间正在播放的标题，可打开更多设置" = "Beans Music: ，";
 "点击封面区域返回歌曲页面" = "CoverBackSongPage";
-"点击收起赞助信息" = "Message";
+"点击收起赞助信息" = "Tap to collapse sponsor info";
 "点击跳转 Telegram" = "Beans Music: Telegram";
-"点击展开赞助信息" = "Message";
+"点击展开赞助信息" = "Tap to view sponsor info";
 "点击左上角封面返回专辑视图" = "CoverBackAlbum";
 "电脑浏览器打开 https://y.qq.com 登录 QQ 后，按 F12 → Network → 刷新页面，点任意请求，复制 Request Headers 里的整段 Cookie 粘贴到下方" = "Beans Music: https://y.qq.com  QQ ， F12 → Network → ，， Request Headers  Cookie";
 "电子" = "Message";
@@ -312,9 +312,9 @@
 "关闭时自动跟随歌曲封面取色调整" = "DisableAutomaticFollowSongCover";
 "关于" = "About";
 "光效强度" = "Intensity";
-"还没有本地歌单，先创建一个吧" = "Beans Music: ，";
-"还没有本地歌单\\n新建一个歌单，把喜欢的歌曲收藏到本机" = "Beans Music: \\n，";
-"还没有壁纸，上传后会显示在这里" = "Beans Music: ，";
+"还没有本地歌单，先创建一个吧" = "No local playlists yet. Create one first.";
+"还没有本地歌单\\n新建一个歌单，把喜欢的歌曲收藏到本机" = "No local playlists yet\\nCreate one and save favorite songs on this device";
+"还没有壁纸，上传后会显示在这里" = "No wallpapers yet. Uploaded wallpapers will appear here.";
 "好" = "OK";
 "红心" = "Favorite";
 "琥珀暖金" = "Message";
@@ -350,6 +350,7 @@
 "检测 GitHub 最新版本" = "Beans Music: GitHub";
 "检测到崩溃/异常：\\(text.components(separatedBy: " = "Beans Music: /：\\(text.components(separatedBy:";
 "检查更新" = "Check for Updates";
+"检查失败，请检查网络后重试" = "Update check failed. Please check your network and try again.";
 "检查失败，请检查网络后重试\\n如果长时间无反应，可能需要特殊网络环境（代理 / VPN）才能访问 GitHub" = "Beans Music: ，\\n，（ / VPN） GitHub";
 "渐变结束" = "GradientEnd";
 "渐变结束色" = "GradientEnd";
@@ -415,7 +416,7 @@
 "酷狗音乐" = "Kugou Music";
 "酷狗音乐 \\(kugouSongs.count) 首" = "Beans Music: \\(kugouSongs.count)";
 "酷狗音乐请求失败" = "Kugou MusicPleaseFailed";
-"酷狗音乐未登录" = "Kugou MusicNotLogin";
+"酷狗音乐未登录" = "Kugou Music is not signed in";
 "酷狗音乐未找到喜欢歌单" = "Kugou MusicNotLikedPlaylist";
 "酷狗音乐已登录：\\(name)" = "Beans Music: ：\\(name)";
 "酷狗音乐用户 \\(userId)" = "Beans Music: \\(userId)";
@@ -483,7 +484,7 @@
 "请使用酷狗音乐 App 扫码" = "Beans Music: App";
 "请使用酷狗音乐 App 扫码。登录成功后会保存移动端 token、设备 mid 和 dfid，用于同步云端歌单。" = "Beans Music: App 。 token、 mid  dfid，。";
 "请使用网易云音乐 App 扫码" = "Beans Music: App";
-"请使用微信扫描上方二维码完成赞助。" = "Beans Music: 。";
+"请使用微信扫描上方二维码完成赞助。" = "Scan the QR code above with WeChat to sponsor.";
 "请输入：\\(confirmText)" = "Beans Music: ：\\(confirmText)";
 "请输入歌单名称" = "PleaseEnterPlaylist";
 "请先登录 QQ 音乐后再创建歌单" = "Beans Music: QQ";
@@ -579,7 +580,7 @@
 "搜索添加歌曲" = "searchAdd songs";
 "搜索完成：\\(selectedProvider.rawValue) [\\(selectedType.rawValue)] \\(trimmed) 结果=\\(count)" = "Beans Music: ：\\(selectedProvider.rawValue) [\\(selectedType.rawValue)] \\(trimmed) =\\(count)";
 "随机播放" = "Shuffle";
-"所选平台的喜欢歌曲会合并到同一个本地歌单。" = "Beans Music: 。";
+"所选平台的喜欢歌曲会合并到同一个本地歌单。" = "Liked songs from the selected platforms will be merged into one local playlist.";
 "锁屏/系统正在播放封面增加缓存，避免播放状态变化时反复下载和刷新同一张封面" = "Beans Music: /，";
 "提高内置音源搜索上限" = "Search";
 "提前 " = "Message";
@@ -622,7 +623,7 @@
 "网易云结果：\\(song.name) 官方=\\(urlString != nil ? " = "Beans Music: ：\\(song.name) =\\(urlString != nil ?";
 "网易云解析：\\(song.name) 音质=\\(quality.level) 官方URL=\\(info?.url == nil ? " = "Beans Music: ：\\(song.name) =\\(quality.level) URL=\\(info?.url == nil ?";
 "网易云请求失败" = "NetEase CloudPleaseFailed";
-"网易云未登录" = "NetEase CloudNotLogin";
+"网易云未登录" = "NetEase Cloud Music is not signed in";
 "网易云未找到喜欢歌单" = "NetEase CloudNotLikedPlaylist";
 "网易云音乐" = "NetEase Cloud Music";
 "网易云音乐 \\(nick)" = "NetEase Cloud Music \\(nick)";
@@ -630,9 +631,9 @@
 "网易云音乐歌单" = "NetEase Cloud Musicplaylist";
 "网易云音乐已登录" = "NetEase Cloud Music Logged In";
 "未播放行颜色" = "NotPlayColor";
-"未登录 · 扫码登录同步歌单" = "Beans Music: ·";
-"未登录 · 网页 / 扫码 / Cookie 登录" = "Beans Music: ·  /  / Cookie";
-"未登录 · App 扫码同步歌单" = "Beans Music: · App";
+"未登录 · 扫码登录同步歌单" = "Not signed in · Scan to sync playlists";
+"未登录 · 网页 / 扫码 / Cookie 登录" = "Not signed in · Web / QR / Cookie login";
+"未登录 · App 扫码同步歌单" = "Not signed in · Scan in the app to sync playlists";
 "未读取到 QQ/微信账号标识，请确认网页登录已经完成" = "Beans Music: QQ/，";
 "未返回" = "NotBack";
 "未检测到有效登录态，请先在网页中完成网易云登录" = "Beans Music: ，";
@@ -714,7 +715,7 @@
 "选择本地歌单" = "SelectPlaylist";
 "选择歌单" = "Select playlist";
 "选择歌手" = "Select artist";
-"选择两个或三个平台，合并同步到一个本地歌单" = "Beans Music: ，";
+"选择两个或三个平台，合并同步到一个本地歌单" = "Choose two or three platforms and merge them into one local playlist";
 "选择主页平台" = "Select homeplatform";
 "选择字体" = "Select font";
 "学习" = "Message";
@@ -794,12 +795,13 @@
 "运动" = "Message";
 "在下方网页右上角点「登录」，完成后手动点击下方「同步登录状态」" = "Beans Music: 「」，「」";
 "在下方网页中完成网易云登录，完成后手动点击下方「同步登录状态」" = "Beans Music: ，「」";
-"暂未同步到酷狗歌单，下拉刷新试试" = "Beans Music: ，";
-"暂未找到相关歌曲" = "NotSong";
-"暂无 QQ 歌单" = "No  QQ playlist";
-"暂无播放记录" = "NoPlay";
-"暂无播放历史" = "NoPlayHistory";
-"暂无播放内容" = "NoPlayContent";
+"暂未同步到酷狗歌单，下拉刷新试试" = "No Kugou playlists synced yet. Pull down to refresh.";
+"暂未找到相关歌曲" = "No matching songs found";
+"暂无 QQ 歌单" = "No QQ Music playlists yet";
+"暂无播放记录" = "No playback records yet";
+"暂未播放记录" = "No playback records yet";
+"暂无播放历史" = "No playback history yet";
+"暂无播放内容" = "Nothing is playing yet";
 "暂无歌词" = "No Lyrics";
 "暂无歌词，点击封面查看完整歌词" = "Beans Music: ，";
 "暂无歌单，请先创建一个" = "Beans Music: ，";
@@ -807,7 +809,7 @@
 "暂无评论" = "No Comments";
 "暂无日志" = "No Logs";
 "暂无专辑" = "No album";
-"赞助人员" = "Message";
+"赞助人员" = "Sponsors";
 "早上好" = "Message";
 "粘贴Cookie" = "Paste Cookie";
 "展开全部（\\(min(visibleRankCount, 10))）" = "Beans Music: （\\(min(visibleRankCount, 10))）";
@@ -840,8 +842,8 @@
 "只能试听" = "Message";
 "只用作个人学习研究，禁止用于商业及非法用途，如产生法律纠纷与本人无关" = "Beans Music: ，，";
 "指示线" = "Message";
-"至少选择两个平台" = "SelectPlatform";
-"至少选择两个平台。" = "Beans Music: 。";
+"至少选择两个平台" = "Select at least two platforms";
+"至少选择两个平台。" = "Select at least two platforms.";
 "治愈" = "Message";
 "中文" = "Chinese";
 "重命名歌单" = "Rename Playlist";
@@ -882,7 +884,7 @@
 "自定义时长" = "Custom";
 "自动" = "Automatic";
 "自动问候" = "Automatic Greeting";
-"自愿赞助" = "Message";
+"自愿赞助" = "Voluntary Sponsorship";
 "最近播放" = "Recently Played";
 "最近播放 \\(player.history.count) 首" = "Beans Music: \\(player.history.count)";
 "最新评论" = "Comments";
@@ -969,7 +971,7 @@
 "QQ音乐热门歌单" = "Beans Music: QQ";
 "QQ音乐热门歌单为空：保留板块并显示空状态" = "Beans Music: QQ：";
 "QQ音乐热门歌单暂未加载成功\\n下拉刷新可重新获取" = "Beans Music: QQ\\n";
-"QQ音乐未登录" = "Beans Music: QQ";
+"QQ音乐未登录" = "QQ Music is not signed in";
 "QQ音乐用户" = "Beans Music: QQ";
 "QQ音乐用户 \\(clean)" = "Beans Music: QQ \\(clean)";
 "X / Y / 大小和 Apple Music 外观会立即同步到当前播放页" = "Beans Music: X / Y /  Apple Music";

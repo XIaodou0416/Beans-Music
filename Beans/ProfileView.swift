@@ -156,7 +156,8 @@ struct ProfileView: View {
             Text(LocalizedStringKey(accountStatusLine))
                 .font(BeansFont.appFont(12, .medium))
                 .foregroundStyle(Color.beansComment)
-                .lineLimit(1)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
                 .truncationMode(.tail)
             Rectangle()
                 .fill(Color.beansLabel.opacity(0.10))
@@ -185,7 +186,7 @@ struct ProfileView: View {
                         case "账号":
                             userCard
                         case "关于":
-                            aboutSection
+                            EmptyView()
                         default:
                             EmptyView()
                         }
@@ -194,6 +195,7 @@ struct ProfileView: View {
                     updateLinkCard
                     communityCard
                     donationCard
+                    profileVersionFooter
                 }
                 .padding(.horizontal, isNativeClean ? 24 : 16)
                 .padding(.top, isNativeClean ? 14 : 8)
@@ -273,7 +275,7 @@ struct ProfileView: View {
             case .upToDate:
                 Text("当前已是最新版本 \(UpdateChecker.currentVersion)")
             case .failed:
-                Text("检查失败，请检查网络后重试\n如果长时间无反应，可能需要特殊网络环境（代理 / VPN）才能访问 GitHub")
+                Text("检查失败，请检查网络后重试")
             }
         }
         .overlay {
@@ -296,7 +298,7 @@ struct ProfileView: View {
             case .success(let fileName):
                 Text("新版 IPA 已下载完成，但未能打开分享面板。\n文件名：\(fileName)")
             case .failure(let message):
-                Text("下载失败：\(message)\n如果长时间无反应，可能需要特殊网络环境（代理 / VPN）才能访问 GitHub")
+                Text("下载失败：\(message)")
             }
         }
     }
@@ -328,10 +330,7 @@ struct ProfileView: View {
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
-                Text("下载完成后将自动打开系统分享面板")
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(Color.beansComment.opacity(0.8))
-                    .multilineTextAlignment(.center)
+                EmptyView()
             }
             .padding(22)
             .frame(maxWidth: 300)
@@ -432,6 +431,7 @@ struct ProfileView: View {
                 .font(BeansFont.appFont(11))
                 .foregroundStyle(Color.beansComment)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
             if let badge {
                 VIPBadgeView(text: badge)
             }
@@ -524,11 +524,14 @@ struct ProfileView: View {
                     Text(LocalizedStringKey(title))
                         .font(BeansFont.appFont(14, .semibold))
                         .foregroundStyle(Color.beansLabel)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
                     Text(subtitle)
                         .font(BeansFont.appFont(11))
                         .foregroundStyle(Color.beansComment)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.78)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
             }
@@ -575,76 +578,6 @@ struct ProfileView: View {
         .beansCardShadow(radius: 9, y: 3)
     }
 
-    private var aboutSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "关于")
-            VStack(spacing: 8) {
-                Label(appVersionText, systemImage: "beats.headphones")
-                    .font(BeansFont.appFont(14, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                Text("网易云 / QQ音乐 / 酷狗音乐 第三方客户端 · 仅供学习研究")
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansComment)
-                    .multilineTextAlignment(.center)
-                Text("只用作个人学习研究，禁止用于商业及非法用途，如产生法律纠纷与本人无关")
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(Color.beansComment.opacity(0.85))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("本软件完全免费，全部功能开源 · GitHub：XIaodou0416/Beans-Music")
-                    .font(BeansFont.appFont(11, .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(16)
-            .background {
-                                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            }
-            .beansCardShadow(radius: 9, y: 3)
-
-            copyrightDisclosure
-
-        }
-    }
-
-    /// 版权声明（默认折叠，可展开查看）
-    private var copyrightDisclosure: some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("“QQ”、“QQ音乐”及企鹅形象等文字、图形和商业标识，其著作权或商标权归腾讯公司所有。QQ音乐享有对其平台授权音乐的版权，请勿随意下载、复制版权内容。具体内容请参考QQ音乐用户协议。")
-                Text("“网易云”、“网易云音乐”等文字、图形和商业标识，其著作权或商标权归网易所有。网易云音乐享有对其平台授权音乐的版权，请勿随意下载、复制版权内容。具体内容请参考网易云音乐用户协议。")
-                Text("“酷狗音乐”及其名称、图形和商业标识归酷狗音乐及相关权利方所有。酷狗音乐享有对其平台授权音乐的版权，请勿随意下载、复制版权内容。具体内容请参考酷狗音乐用户协议。")
-                Text("音乐 API 来自 GitHub 开源项目，非官方版 API；本软件不提供任何音频存储服务，如需下载音频，请支持正版！")
-            }
-            .font(BeansFont.appFont(11))
-            .foregroundStyle(Color.beansComment)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 6)
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(width: 26)
-                Text("版权声明")
-                    .font(BeansFont.appFont(14, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                Spacer()
-            }
-            .padding(.vertical, 2)
-        }
-        .tint(Color.beansAmber)
-        .padding(16)
-        .background {
-                            BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        }
-        .beansCardShadow(radius: 9, y: 3)
-    }
-
-    /// 自动下载新版 IPA（带进度浮层）
     private func startAutoDownload(info: UpdateChecker.ReleaseInfo, assetURL: URL) {
         showDownloadOverlay = true
         Task {
@@ -719,7 +652,6 @@ struct ProfileView: View {
                         checkingUpdate = false
                         updateResult = result
                         if case .update(let info) = result {
-                            // 发现新版：自动下载 IPA（无安装包时回退到更新提示）
                             pendingUpdateInfo = info
                             if let assetURL = info.assetURL {
                                 startAutoDownload(info: info, assetURL: assetURL)
@@ -793,6 +725,15 @@ struct ProfileView: View {
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.98))
         .beansCardShadow(radius: 9, y: 3)
+    }
+
+    private var profileVersionFooter: some View {
+        Text(appVersionText)
+            .font(BeansFont.appFont(11))
+            .foregroundStyle(Color.beansComment.opacity(0.7))
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 2)
     }
 
     /// 我的页底部赞助入口与赞助排行榜
@@ -1134,10 +1075,17 @@ struct AccountHubSheet: View {
                         .font(BeansFont.appFont(15, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     HStack(spacing: 6) {
-                        Text(auth.isLoggedIn ? (auth.user?.nickname ?? "已登录") : "未登录 · 扫码登录同步歌单")
-                            .font(BeansFont.appFont(12))
-                            .foregroundStyle(Color.beansComment)
-                            .lineLimit(1)
+                        Group {
+                            if auth.isLoggedIn {
+                                Text(auth.user?.nickname ?? NSLocalizedString("已登录", comment: ""))
+                            } else {
+                                Text(LocalizedStringKey("未登录 · 扫码登录同步歌单"))
+                            }
+                        }
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
                         if auth.isLoggedIn, let badge = auth.user?.vipBadge {
                             VIPBadgeView(text: badge)
                         }
@@ -1182,10 +1130,17 @@ struct AccountHubSheet: View {
                         .font(BeansFont.appFont(15, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     HStack(spacing: 6) {
-                        Text(qqAuth.isLoggedIn ? (qqAuth.nickname.isEmpty ? "已登录" : qqAuth.nickname) : "未登录 · 网页 / 扫码 / Cookie 登录")
-                            .font(BeansFont.appFont(12))
-                            .foregroundStyle(Color.beansComment)
-                            .lineLimit(1)
+                        Group {
+                            if qqAuth.isLoggedIn {
+                                Text(qqAuth.nickname.isEmpty ? NSLocalizedString("已登录", comment: "") : qqAuth.nickname)
+                            } else {
+                                Text(LocalizedStringKey("未登录 · 网页 / 扫码 / Cookie 登录"))
+                            }
+                        }
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
                         if qqAuth.isLoggedIn, let badge = qqAuth.vipBadge {
                             VIPBadgeView(text: badge)
                         }
@@ -1225,10 +1180,17 @@ struct AccountHubSheet: View {
                         .font(BeansFont.appFont(15, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     HStack(spacing: 6) {
-                        Text(kugouAuth.isLoggedIn ? (kugouAuth.nickname.isEmpty ? "已登录" : kugouAuth.nickname) : "未登录 · App 扫码同步歌单")
-                            .font(BeansFont.appFont(12))
-                            .foregroundStyle(Color.beansComment)
-                            .lineLimit(1)
+                        Group {
+                            if kugouAuth.isLoggedIn {
+                                Text(kugouAuth.nickname.isEmpty ? NSLocalizedString("已登录", comment: "") : kugouAuth.nickname)
+                            } else {
+                                Text(LocalizedStringKey("未登录 · App 扫码同步歌单"))
+                            }
+                        }
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
                         if kugouAuth.isLoggedIn, let badge = kugouAuth.vipBadge {
                             VIPBadgeView(text: badge)
                         }
@@ -1643,7 +1605,8 @@ struct SettingsView: View {
                         Text(LocalizedStringKey(platformPrefs.summaryText))
                             .font(BeansFont.appFont(11))
                             .foregroundStyle(Color.beansComment)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.78)
                     }
                     Spacer()
                     Image(systemName: platformExpanded ? "chevron.up" : "chevron.down")
@@ -2289,7 +2252,8 @@ struct SettingsView: View {
                         Text("\(BeansAudioQuality(rawValue: audioQualityRaw)?.displayName ?? "高品质") · \(enableBuiltInSources ? "第三方音源已开" : "第三方音源已关")")
                             .font(BeansFont.appFont(11))
                             .foregroundStyle(Color.beansComment)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.78)
                     }
                     Spacer()
                     Image(systemName: playbackExpanded ? "chevron.up" : "chevron.down")

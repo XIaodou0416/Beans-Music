@@ -177,7 +177,7 @@ struct LocalMusicSection: View {
                 details.append("网易云请求失败")
             }
         } else if targets.contains(.netease) {
-            details.append("网易云未登录")
+            details.append(NSLocalizedString("网易云未登录", comment: ""))
         }
         if targets.contains(.netease), !favorites.neteaseFavoriteSongs.isEmpty {
             let cachedIDs = Set(songs.filter { $0.source == .netease }.map(\.id))
@@ -195,7 +195,7 @@ struct LocalMusicSection: View {
                 details.append("QQ音乐请求失败")
             }
         } else if targets.contains(.qq) {
-            details.append("QQ音乐未登录")
+            details.append(NSLocalizedString("QQ音乐未登录", comment: ""))
         }
         if targets.contains(.kugou), KugouMusicAuth.shared.isLoggedIn {
             do {
@@ -217,7 +217,7 @@ struct LocalMusicSection: View {
                 details.append("酷狗音乐请求失败")
             }
         } else if targets.contains(.kugou) {
-            details.append("酷狗音乐未登录")
+            details.append(NSLocalizedString("酷狗音乐未登录", comment: ""))
         }
         var unique: [Song] = []
         var seen = Set<String>()
@@ -264,7 +264,7 @@ fileprivate struct SyncPlatformPicker: View {
                 } header: {
                     Text("同步平台")
                 } footer: {
-                    Text(canConfirm ? "所选平台的喜欢歌曲会合并到同一个本地歌单。" : "至少选择两个平台。")
+                    Text(LocalizedStringKey(canConfirm ? "所选平台的喜欢歌曲会合并到同一个本地歌单。" : "至少选择两个平台。"))
                 }
             }
             .navigationTitle("一键同步歌单")

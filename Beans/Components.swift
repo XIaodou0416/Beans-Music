@@ -581,7 +581,7 @@ struct EmptyStateView: View {
             Image(systemName: icon)
                 .font(.system(size: 44, weight: .light))
                 .foregroundStyle(Color.beansComment)
-            Text(text)
+            Text(LocalizedStringKey(text))
                 .font(BeansFont.appFont(14))
                 .foregroundStyle(Color.beansComment)
                 .multilineTextAlignment(.center)

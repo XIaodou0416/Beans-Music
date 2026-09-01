@@ -39,7 +39,6 @@ struct RootView: View {
 
     @State private var selection: RootTab = .discover
     @State private var showPlayer = false
-    /// 免责声明确认状态（门禁在 BeansApp 中，这里用于确认后弹出更新说明）
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
@@ -59,12 +58,9 @@ struct RootView: View {
     @AppStorage("beans.remoteAnnouncement.textColor") private var remoteAnnouncementTextColor = ""
     @AppStorage("beans.remoteAnnouncement.updatedAt") private var remoteAnnouncementUpdatedAt = ""
     @AppStorage("beans.remoteAnnouncement.seenKey") private var remoteAnnouncementSeenKey = ""
-    /// 版本更新说明弹窗
     @State private var showWhatsNew = false
-    /// 自动检测更新结果
     @State private var updateInfo: UpdateChecker.ReleaseInfo?
     @State private var showUpdateAlert = false
-    /// 更新包下载后交给系统分享面板
     @ObservedObject private var ipaDownloader = IPADownloader.shared
     @State private var showUpdateDownloadOverlay = false
     @State private var updateShareFile: ShareFileItem?
@@ -170,7 +166,6 @@ struct RootView: View {
         .onAppear {
             // 启动已完成：标记本次启动正常（供下次启动检测闪退）
             CrashReporter.shared.markLaunchCompleted()
-            // 已确认过免责声明：直接判断是否需要展示更新说明
             if disclaimerAccepted, ChangelogStore.shouldShowWhatsNew {
                 showWhatsNew = true
             }
@@ -184,7 +179,6 @@ struct RootView: View {
             HighRefreshKeeper.shared.configure(enabled: true)
         }
         .onChange(of: disclaimerAccepted) { accepted in
-            // 首次进入：确认免责声明后弹出更新说明
             if accepted, ChangelogStore.shouldShowWhatsNew {
                 showWhatsNew = true
             }
@@ -218,7 +212,6 @@ struct RootView: View {
                         showUpdateAlert = false
                     },
                     onDismiss: {
-                        // 点击弹窗外空白处仅关闭本次提示，不记录“以后再说”。
                         showUpdateAlert = false
                     }
                 )
@@ -241,7 +234,7 @@ struct RootView: View {
                 UIApplication.shared.open(UpdateChecker.releasePageURL)
             }
         } message: {
-            Text("\(updateDownloadError)\n如果长时间无反应，可能需要特殊网络环境才能访问 GitHub。")
+            Text(updateDownloadError)
         }
         .overlay {
             if showRemoteAnnouncement {
@@ -329,9 +322,6 @@ struct RootView: View {
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
-                Text("下载完成后将自动打开系统分享面板")
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(Color.beansComment.opacity(0.8))
             }
             .padding(22)
             .frame(maxWidth: 300)
@@ -521,8 +511,6 @@ private struct VisualEffectBlur: UIViewRepresentable {
     }
 }
 
-/// 支持点击外部空白关闭的更新提示。
-/// 外部关闭和“前往更新”都不会抑制版本提醒，只有明确点击“以后再说”才会停止提醒。
 private struct UpdatePromptOverlay: View {
     let info: UpdateChecker.ReleaseInfo
     let onOpen: () -> Void
