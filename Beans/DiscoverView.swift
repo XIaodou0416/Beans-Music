@@ -56,6 +56,7 @@ struct DiscoverView: View {
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     @AppStorage("beans.homePlatformHintDismissed") private var homePlatformHintDismissed = false
+    @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
@@ -99,7 +100,7 @@ struct DiscoverView: View {
         let _ = theme.accent
         ZStack {
             // 主页背景：壁纸/背景色永远在发现页生效（homeMode），同步开启时其他页面也生效
-            GlassBackdrop(customColor: theme.customBackground, homeMode: true)
+            GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(homeWallpaperBlur))
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
             ScrollView {
@@ -326,6 +327,7 @@ struct DiscoverView: View {
                                 if index == 0 && isNativeClean && !homePlatformHintDismissed {
                                     Button {
                                         homePlatformHintDismissed = true
+                                        UserDefaults.standard.set(true, forKey: "beans.homePlatformHintDismissed")
                                     } label: {
                                         Text("长按这里可切换平台")
                                             .font(BeansFont.appFont(11, .medium))

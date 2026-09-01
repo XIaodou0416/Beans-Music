@@ -13,6 +13,11 @@ targets:
     type: application
     platform: iOS
     sources: [Beans]
+    resources:
+      - Beans/en.lproj
+      - Beans/ja.lproj
+      - Beans/ko.lproj
+      - Beans/zh-Hans.lproj
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app

@@ -10,6 +10,7 @@ struct BeansApp: App {
     @StateObject private var favorites = FavoritesStore.shared
     /// 免责声明确认状态：未确认前主界面在模糊层下方可见，确认后移除门禁
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
+    @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
 
     init() {
         // 闪退检测：优先初始化，检测上次异常退出并安装崩溃捕获
@@ -19,6 +20,14 @@ struct BeansApp: App {
         // 新安装默认开启高刷新率；老用户保留自己手动关闭的选择。
         HighRefreshKeeper.registerDefaults()
         HighRefreshKeeper.shared.configureFromDefaults()
+        UserDefaults.standard.register(defaults: [
+            "beans.uiStyle": BeansUIStyle.nativeClean.rawValue,
+            "beans.homeHideUsername": true,
+            "beans.homeHeaderHideSort": true,
+            "beans.homeHeaderHideRefresh": true,
+            PlatformPreferenceStore.hidePickerKey: true,
+            "beans.homeWallpaperBlur": 0.0
+        ])
     }
 
     var body: some Scene {
@@ -34,6 +43,7 @@ struct BeansApp: App {
                     OnboardingView { disclaimerAccepted = true }
                 }
             }
+            .environment(\.locale, Locale(identifier: languageRaw))
             .task {
                 // 先让系统完成首帧，再恢复仅影响已安装用户的数据与媒体偏好。
                 await Task.yield()

@@ -8,6 +8,7 @@ struct OnboardingView: View {
     let onFinish: () -> Void
     @State private var page = 0
     @State private var typed = ""
+    @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
 
     private let totalPages = 4
     private let confirmText = "我已了解并同意继续使用"
@@ -37,6 +38,17 @@ struct OnboardingView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 6)
                     .padding(.bottom, 24)
+            }
+            .overlay(alignment: .topTrailing) {
+                Picker("语言", selection: $languageRaw) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.title).tag(language.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(Color.beansHighlight)
+                .padding(.top, 14)
+                .padding(.trailing, 18)
             }
         }
     }

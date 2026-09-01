@@ -52,6 +52,8 @@ struct GlassBackdrop: View {
     var homeMode: Bool = false
     /// 详情页使用原生氛围背景，不跟随全局壁纸同步
     var ignoreCustomBackground: Bool = false
+    /// 主页壁纸额外模糊半径
+    var wallpaperBlur: CGFloat = 0
 
     /// 当前页面是否启用自定义背景：同步开启时全部页面生效，关闭时仅主页生效
     private var showCustomBackground: Bool {
@@ -75,7 +77,7 @@ struct GlassBackdrop: View {
             if uiStyle == .nativeClean, !showCustomBackground {
                 Color(UIColor.systemBackground)
             } else if let image = theme.customBackgroundImage, showCustomBackground {
-                WallpaperImage(image: image)
+                WallpaperImage(image: image, blurRadius: wallpaperBlur)
                 LinearGradient(colors: wallpaperOverlay, startPoint: .top, endPoint: .bottom)
             } else if showCustomBackground, let customColor {
                 LinearGradient(
@@ -107,6 +109,7 @@ struct GlassBackdrop: View {
 
 struct WallpaperImage: View {
     let image: UIImage
+    var blurRadius: CGFloat = 0
 
     /// 小于约 700x700 视为小图：放大时轻度模糊柔化，避免满屏马赛克
     private static func isSmall(_ image: UIImage) -> Bool {
@@ -121,7 +124,7 @@ struct WallpaperImage: View {
                 .scaledToFill()
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipped()
-                .blur(radius: Self.isSmall(image) ? 5 : 0)
+                .blur(radius: max(Self.isSmall(image) ? 5 : 0, blurRadius))
         }
         .ignoresSafeArea()
     }

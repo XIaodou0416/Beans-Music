@@ -1230,6 +1230,8 @@ struct SettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
+    @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
+    @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
     /// 音质等级。
     @AppStorage("beans.audioQuality") private var audioQualityRaw = BeansAudioQuality.exhigh.rawValue
     /// 底栏是否显示文字（关闭后只显示图标）
@@ -1680,6 +1682,14 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
 
+                Picker("语言", selection: $languageRaw) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.title).tag(language.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(Color.beansAmber)
+
                 Toggle(isOn: $tabLabelsVisible) {
                     HStack(spacing: 12) {
                         Image(systemName: "rectangle.3.group")
@@ -1997,6 +2007,22 @@ struct SettingsView: View {
                         ), supportsOpacity: false)
                         .labelsHidden()
                     }
+
+                    HStack {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        Text("主页壁纸模糊度")
+                            .font(BeansFont.appFont(15))
+                            .foregroundStyle(Color.beansLabel)
+                        Spacer()
+                        Text("\(Int(homeWallpaperBlur))")
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    Slider(value: $homeWallpaperBlur, in: 0...30, step: 1)
+                        .tint(Color.beansAmber)
                     TextEditor(text: $homeGreetingText)
                         .font(BeansFont.appFont(15))
                         .frame(minHeight: 88, maxHeight: 180)
