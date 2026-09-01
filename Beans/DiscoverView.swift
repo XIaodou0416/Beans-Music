@@ -708,13 +708,10 @@ struct DiscoverView: View {
                                     }
                                 Text(song.name)
                                     .font(BeansFont.appFont(12, .medium))
-                                    .foregroundStyle(Color.beansLabel)
-                                    .lineLimit(1)
-                                    .font(BeansFont.appFont(isNativeClean ? 15 : 12, isNativeClean ? .bold : .medium))
-                                    .frame(width: isNativeClean ? 156 : 108, alignment: .leading)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 5)
-                                    .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
+                                .foregroundStyle(Color.beansLabel)
+                                .lineLimit(1)
+                                .font(BeansFont.appFont(isNativeClean ? 15 : 12, isNativeClean ? .bold : .medium))
+                                .frame(width: isNativeClean ? 156 : 108, alignment: .leading)
                                 Text(song.artists.isEmpty ? song.album : song.artists)
                                     .font(BeansFont.appFont(10))
                                     .foregroundStyle(Color.beansComment)
