@@ -3,6 +3,14 @@ import CoreImage.CIFilterBuiltins
 
 // MARK: - 工具
 
+func beansSongCountText(_ count: Int) -> String {
+    String(format: NSLocalizedString("%d 首", comment: ""), count)
+}
+
+func beansLocalSongCountText(_ count: Int) -> String {
+    String(format: NSLocalizedString("%d 首 · 本机", comment: ""), count)
+}
+
 func beansTimeString(_ seconds: Double) -> String {
     let total = max(0, Int(seconds))
     return String(format: "%d:%02d", total / 60, total % 60)

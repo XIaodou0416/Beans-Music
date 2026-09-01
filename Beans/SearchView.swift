@@ -531,7 +531,7 @@ struct SearchView: View {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         HStack {
-                            Text("找到 \(songResults.count) 首 · \(provider.rawValue)")
+                            Text(String(format: NSLocalizedString("找到 %d 首 · %@", comment: ""), songResults.count, NSLocalizedString(provider.rawValue, comment: "")))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
                             Spacer()

@@ -265,7 +265,7 @@ struct LibraryView: View {
                                         .font(BeansFont.appFont(15, .medium))
                                         .foregroundStyle(Color.beansLabel)
                                         .lineLimit(1)
-                                    Text("\(playlist.trackCount) 首")
+                                    Text(beansSongCountText(playlist.trackCount))
                                         .font(BeansFont.appFont(12))
                                         .foregroundStyle(Color.beansComment)
                                 }
@@ -476,7 +476,7 @@ struct LibraryView: View {
                                         .font(BeansFont.appFont(15, .medium))
                                         .foregroundStyle(Color.beansLabel)
                                         .lineLimit(1)
-                                    Text("\(playlist.trackCount) 首")
+                                    Text(beansSongCountText(playlist.trackCount))
                                         .font(BeansFont.appFont(12))
                                         .foregroundStyle(Color.beansComment)
                                 }
@@ -533,7 +533,7 @@ struct LibraryView: View {
                                         .font(BeansFont.appFont(15, .medium))
                                         .foregroundStyle(Color.beansLabel)
                                         .lineLimit(1)
-                                    Text("\(playlist.trackCount) 首")
+                                    Text(beansSongCountText(playlist.trackCount))
                                         .font(BeansFont.appFont(12))
                                         .foregroundStyle(Color.beansComment)
                                 }

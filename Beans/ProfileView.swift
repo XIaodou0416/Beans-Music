@@ -27,8 +27,6 @@ struct ProfileView: View {
     @State private var showSectionSort = false
     /// 我的界面板块顺序（账号 / 关于，可自定义）
     @State private var profileOrder = SectionOrderStore.load(SectionOrderStore.profileKey, defaults: SectionOrderStore.profileDefaults)
-    /// 软件使用说明
-    @State private var showUsageGuide = false
     /// 手动检查更新
     @State private var checkingUpdate = false
     @State private var updateResult: UpdateChecker.CheckResult?
@@ -251,9 +249,6 @@ struct ProfileView: View {
                 )
             )
                 .onDisappear { SectionOrderStore.save(SectionOrderStore.profileKey, profileOrder) }
-        }
-        .sheet(isPresented: $showUsageGuide) {
-            UsageGuideSheet()
         }
         .sheet(item: $updateShareFile, onDismiss: cleanupUpdateShareFile) { item in
             ShareSheet(items: [item.url])
@@ -498,7 +493,7 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: "我的功能")
             VStack(spacing: 12) {
-                featureCell(icon: "clock.arrow.circlepath", title: "播放历史", subtitle: "最近播放 \(player.history.count) 首") {
+                featureCell(icon: "clock.arrow.circlepath", title: "播放历史", subtitle: String(format: NSLocalizedString("最近播放 %d 首", comment: ""), player.history.count)) {
                     showHistory = true
                 }
                 featureCell(icon: hasVisibleAccountLogin ? "checkmark.seal.fill" : "globe", title: isEnglish ? "Accounts and Sign-in" : "账号与登录", subtitle: hasVisibleAccountLogin ? accountStatusLine : (isEnglish ? "Sign in to \(displayPlatformSummary)" : "登录 \(platformPrefs.summaryText)")) {
@@ -542,40 +537,6 @@ struct ProfileView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-    }
-
-
-    /// 软件使用说明入口
-    private var usageGuideCard: some View {
-        Button {
-            BeansHaptics.tap()
-            showUsageGuide = true
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "questionmark.circle.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(width: 30)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("软件使用说明")
-                        .font(BeansFont.appFont(15, .semibold))
-                        .foregroundStyle(Color.beansLabel)
-                    Text("了解多平台切换、账号、播放与个性化玩法")
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.beansComment.opacity(0.6))
-            }
-            .padding(16)
-            .background {
-                                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            }
-        }
-        .buttonStyle(.plain)
-        .beansCardShadow(radius: 9, y: 3)
     }
 
     private func startAutoDownload(info: UpdateChecker.ReleaseInfo, assetURL: URL) {
@@ -1298,7 +1259,6 @@ struct SettingsView: View {
     @State private var backupMessage: String?
     /// 日志
     @State private var showLogViewer = false
-    @State private var showUsageGuide = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1451,7 +1411,6 @@ struct SettingsView: View {
                         changelogSection
                         backupSection
                         logSection
-                        settingsUsageGuideSection
                         footerNote
                     }
                     .padding(.horizontal, 16)
@@ -1492,10 +1451,6 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showChangelog) {
             ChangelogListView()
-                .environmentObject(theme)
-        }
-        .sheet(isPresented: $showUsageGuide) {
-            UsageGuideSheet()
                 .environmentObject(theme)
         }
         .fileExporter(
@@ -1694,9 +1649,6 @@ struct SettingsView: View {
                             Text("底栏显示文字")
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text("关闭后底栏只保留图标，界面更简洁")
-                                .font(BeansFont.appFont(11))
-                                .foregroundStyle(Color.beansComment)
                         }
                     }
                 }
@@ -1713,9 +1665,6 @@ struct SettingsView: View {
                             Text("显示歌曲 VIP 图标")
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text("控制歌曲列表、推荐卡、迷你播放器和播放页中的 VIP 标记")
-                                .font(BeansFont.appFont(11))
-                                .foregroundStyle(Color.beansComment)
                         }
                     }
                 }
@@ -1874,7 +1823,7 @@ struct SettingsView: View {
                         Image(systemName: "square.grid.2x2.fill")
                             .font(.system(size: 12))
                             .foregroundStyle(Color.beansAmber)
-                        Text("同步到搜索 / 音乐库 / 我的")
+                        Text(LocalizedStringKey("同步到搜索 / 音乐库 / 我的"))
                             .font(BeansFont.appFont(13))
                             .foregroundStyle(Color.beansLabel)
                     }
@@ -1935,7 +1884,7 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                     Spacer()
-                    Text("全 App 说明文字颜色")
+                    Text(LocalizedStringKey("全 App 说明文字颜色"))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -1978,7 +1927,7 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                     Spacer()
-                    Text("全 App 主文字颜色")
+                    Text(LocalizedStringKey("全 App 主文字颜色"))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -2024,7 +1973,7 @@ struct SettingsView: View {
                         .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay {
                             if homeGreetingText.isEmpty {
-                                Text("留空自动显示早上好/下午好/晚上好")
+                                Text(LocalizedStringKey("留空自动显示早上好/下午好/晚上好"))
                                     .font(BeansFont.appFont(13))
                                     .foregroundStyle(Color.beansComment.opacity(0.8))
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -2121,7 +2070,7 @@ struct SettingsView: View {
                         ForEach(Array(homeGreetingLines.prefix(3).enumerated()), id: \.offset) { index, line in
                             VStack(alignment: .leading, spacing: 7) {
                                 HStack {
-                                    Text("第\(index + 1)行")
+                                    Text(String(format: NSLocalizedString("第%d行", comment: ""), index + 1))
                                         .font(BeansFont.appFont(12, .semibold))
                                     Text(line.isEmpty ? "空行" : line)
                                         .font(BeansFont.appFont(11))
@@ -2217,10 +2166,6 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                     Spacer()
                 }
-                Text("支持 ttf / otf 字体，上传后全局生效（含歌词），重启保留")
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansComment)
-
             }
             .padding(16)
             .background {
@@ -2249,11 +2194,6 @@ struct SettingsView: View {
                         Text("播放设置")
                             .font(BeansFont.appFont(15))
                             .foregroundStyle(Color.beansLabel)
-                        Text("\(BeansAudioQuality(rawValue: audioQualityRaw)?.displayName ?? "高品质") · \(enableBuiltInSources ? "第三方音源已开" : "第三方音源已关")")
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.78)
                     }
                     Spacer()
                     Image(systemName: playbackExpanded ? "chevron.up" : "chevron.down")
@@ -2287,9 +2227,6 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    Text("无损与 Hi-Res 需要黑胶 VIP，未开通时自动回落到可用音质")
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
                 }
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
@@ -2304,9 +2241,6 @@ struct SettingsView: View {
                             Text("与其他音频同时播放")
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text("默认关闭以显示锁屏/灵动岛；开启后可与其他 App 声音同时播放")
-                                .font(BeansFont.appFont(11))
-                                .foregroundStyle(Color.beansComment)
                         }
                     }
                 }
@@ -2327,9 +2261,6 @@ struct SettingsView: View {
                         Text("120Hz 高刷新")
                             .font(BeansFont.appFont(15))
                             .foregroundStyle(Color.beansLabel)
-                        Text("已强制开启；用于修复我的、设置和播放器页面最高只有 60Hz 的问题")
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
                     }
                     Spacer()
                     Image(systemName: "checkmark.circle.fill")
@@ -2353,9 +2284,6 @@ struct SettingsView: View {
                             Text("使用第三方音源")
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text("仅在官方地址不可用或为试听片段时回退到用户密钥音源")
-                                .font(BeansFont.appFont(11))
-                                .foregroundStyle(Color.beansComment)
                         }
                     }
                 }
@@ -2496,40 +2424,6 @@ struct SettingsView: View {
             .beansCardShadow(radius: 8, y: 3)
         }
     }
-
-    /// 软件使用说明入口（放在设置页底部）
-    private var settingsUsageGuideSection: some View {
-        Button {
-            BeansHaptics.tap()
-            showUsageGuide = true
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "questionmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(width: 28)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("软件使用说明")
-                        .font(BeansFont.appFont(15))
-                        .foregroundStyle(Color.beansLabel)
-                    Text("多平台切换、账号、播放与个性化说明")
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.beansComment.opacity(0.6))
-            }
-            .padding(16)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            }
-        }
-        .buttonStyle(.plain)
-        .beansCardShadow(radius: 8, y: 3)
-    }
-
     /// 配置备份与恢复：导出全部 beans.* 设置为 JSON 分享；导入后写回 UserDefaults
     private var backupSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2923,10 +2817,6 @@ struct SettingsView: View {
                         ToastCenter.shared.show("日志已清空")
                     }
                 }
-                Text("日志记录搜索、播放、登录、备份等关键事件；遇到问题可在查看日志里导出，方便快速定位 Bug")
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(Color.beansComment)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(14)
             .background {

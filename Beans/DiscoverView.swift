@@ -854,7 +854,7 @@ struct DiscoverView: View {
                                         .multilineTextAlignment(.leading)
                                         .frame(width: 166, alignment: .leading)
                                     if playlist.trackCount > 0 {
-                                        Text("\(playlist.trackCount) 首")
+                                        Text(beansSongCountText(playlist.trackCount))
                                             .font(BeansFont.appFont(12, .medium))
                                             .foregroundStyle(Color.secondary)
                                             .lineLimit(1)
@@ -1456,7 +1456,7 @@ struct TopListDetailView: View {
                 Text(topList.updateFrequency)
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
-                Text("\(tracks.count) 首")
+                Text(beansSongCountText(tracks.count))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
             }
@@ -1576,7 +1576,7 @@ struct KugouTopListDetailView: View {
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
-                Text("\(tracks.count) 首")
+                Text(beansSongCountText(tracks.count))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
             }
@@ -1757,7 +1757,7 @@ private struct HomeUnifiedSearchSheet: View {
             ScrollView {
                 LazyVStack(spacing: 8) {
                     HStack {
-                        Text("找到 \(results.count) 首 · 全平台")
+                        Text(String(format: NSLocalizedString("找到 %d 首 · 全平台", comment: ""), results.count))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                         Spacer()

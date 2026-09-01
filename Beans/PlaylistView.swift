@@ -79,7 +79,7 @@ struct PlaylistView: View {
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                     }
-                    Text("\(tracks.count) 首")
+                    Text(beansSongCountText(tracks.count))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }

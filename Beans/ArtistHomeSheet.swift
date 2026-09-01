@@ -92,8 +92,8 @@ struct ArtistHomeSheet: View {
                     .truncationMode(.tail)
                     .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 Text(artistSource == .netease
-                     ? "热门歌曲 \(hotSongs.count) 首 · 专辑 \(albums.count) 张"
-                     : "热门歌曲 \(hotSongs.count) 首")
+                     ? String(format: NSLocalizedString("热门歌曲 %d 首 · 专辑 %d 张", comment: ""), hotSongs.count, albums.count)
+                     : String(format: NSLocalizedString("热门歌曲 %d 首", comment: ""), hotSongs.count))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
             }
@@ -258,7 +258,7 @@ struct ArtistHomeSheet: View {
                                     .foregroundStyle(Color.beansLabel)
                                     .lineLimit(1)
                                 if let count = album.trackCount {
-                                    Text("\(count) 首")
+                                    Text(beansSongCountText(count))
                                         .font(BeansFont.appFont(10))
                                         .foregroundStyle(Color.beansComment)
                                 }

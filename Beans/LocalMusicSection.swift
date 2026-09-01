@@ -83,7 +83,7 @@ struct LocalMusicSection: View {
                                         .font(BeansFont.appFont(15, .medium))
                                         .foregroundStyle(Color.beansLabel)
                                         .lineLimit(1)
-                                    Text("\(playlist.songs.count) 首 · 本机")
+                                    Text(beansLocalSongCountText(playlist.songs.count))
                                         .font(BeansFont.appFont(12))
                                         .foregroundStyle(Color.beansComment)
                                 }
@@ -688,7 +688,7 @@ struct AddToLocalPlaylistSheet: View {
                                             .font(BeansFont.appFont(15, .medium))
                                             .foregroundStyle(Color.beansLabel)
                                             .lineLimit(1)
-                                        Text("\(playlist.songs.count) 首 · 本机")
+                                        Text(beansLocalSongCountText(playlist.songs.count))
                                             .font(BeansFont.appFont(11))
                                             .foregroundStyle(Color.beansComment)
                                     }
