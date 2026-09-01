@@ -122,7 +122,7 @@ struct SongCell: View {
         let quality: DownloadQuality
         switch audioQualityRaw {
         case BeansAudioQuality.lossless.rawValue: quality = .lossless
-        case BeansAudioQuality.high.rawValue, BeansAudioQuality.exhigh.rawValue: quality = .high
+        case BeansAudioQuality.exhigh.rawValue: quality = .high
         default: quality = .low
         }
         BeansHaptics.medium()
