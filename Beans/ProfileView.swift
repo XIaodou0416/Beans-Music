@@ -1478,6 +1478,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .preferredColorScheme(themeMode.colorScheme)
         .sheet(isPresented: $showWallpaperPicker) {
             WallpaperPhotoPicker { data in
                 theme.addWallpaper(data)
