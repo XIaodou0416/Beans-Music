@@ -774,7 +774,7 @@ struct DiscoverView: View {
             } else if isNativeClean {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        ForEach(displayedPlaylists, id: \.id) { playlist in
+                        ForEach(Array(displayedPlaylists.enumerated()), id: \.element.id) { _, playlist in
                             Button {
                                 BeansHaptics.tap()
                                 if source == .qq {
