@@ -77,8 +77,12 @@ struct LibraryView: View {
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
             ScrollView {
-                VStack(alignment: .leading, spacing: isNativeClean ? 28 : 24) {
-                    header
+                LazyVStack(alignment: .leading, spacing: isNativeClean ? 30 : 24) {
+                    if isNativeClean {
+                        appleHeader
+                    } else {
+                        header
+                    }
                     if !hidePlatformPicker {
                         providerPicker
                     }
@@ -199,6 +203,31 @@ struct LibraryView: View {
             }
         }
         .padding(.top, 8)
+    }
+
+    private var appleHeader: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .center) {
+                Text("音乐库")
+                    .font(BeansFont.appFont(38, .bold))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer(minLength: 12)
+                if !hideSortButton {
+                    GlassIconButton(systemName: "arrow.up.arrow.down") {
+                        BeansHaptics.tap()
+                        showSectionSort = true
+                    }
+                }
+            }
+            Text(librarySubtitle)
+                .font(BeansFont.appFont(12, .medium))
+                .foregroundStyle(Color.beansComment)
+                .lineLimit(1)
+            Rectangle()
+                .fill(Color.beansLabel.opacity(0.10))
+                .frame(height: 1)
+        }
+        .padding(.top, 4)
     }
 
     private var librarySubtitle: String {

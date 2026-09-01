@@ -660,9 +660,30 @@ struct DiscoverView: View {
 
     private var dailySection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: "每日推荐", trailing: "查看全部") {
-                BeansHaptics.tap()
-                showDailyList = true
+            if isNativeClean {
+                HStack(alignment: .center) {
+                    Text("每日推荐")
+                        .font(BeansFont.appFont(20, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                    Spacer(minLength: 8)
+                    Button {
+                        BeansHaptics.tap()
+                        showDailyList = true
+                    } label: {
+                        Text("查看全部")
+                            .font(BeansFont.appFont(12, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background { BeansGlass(shape: Capsule()) }
+                    }
+                    .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+                }
+            } else {
+                SectionHeader(title: "每日推荐", trailing: "查看全部") {
+                    BeansHaptics.tap()
+                    showDailyList = true
+                }
             }
             // 横滑歌曲卡：每日推荐前 8 首
             ScrollView(.horizontal, showsIndicators: false) {
@@ -740,10 +761,9 @@ struct DiscoverView: View {
                                     .padding(.vertical, 6)
                                     .background {
                                         if neteaseCat == cat {
-                                            Capsule().fill(Color.beansAmber)
-                                        } else {
-                                            Capsule().fill(Color.primary.opacity(0.04))
+                                            Capsule().fill(Color.beansAmber.opacity(0.72))
                                         }
+                                        BeansGlass(shape: Capsule())
                                     }
                             }
                             .buttonStyle(.plain)

@@ -376,6 +376,7 @@ struct ReferencePlaybackView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(active ? accentColor : primaryColor.opacity(0.78))
                 .frame(width: 58, height: 58)
+                .background(.ultraThinMaterial, in: Circle())
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

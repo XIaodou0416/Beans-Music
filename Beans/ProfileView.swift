@@ -14,6 +14,7 @@ struct ProfileView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
 
@@ -51,6 +52,10 @@ struct ProfileView: View {
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
+    }
+
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
 
     private var appVersionText: String {
@@ -113,6 +118,37 @@ struct ProfileView: View {
         .padding(.top, 8)
     }
 
+    private var appleHeader: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .center) {
+                Text("我的")
+                    .font(BeansFont.appFont(38, .bold))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer(minLength: 12)
+                if !homeHeaderHideSort {
+                    GlassIconButton(systemName: "arrow.up.arrow.down") {
+                        BeansHaptics.tap()
+                        showSectionSort = true
+                    }
+                }
+                GlassIconButton(systemName: "gearshape") {
+                    BeansHaptics.tap()
+                    homeRenderingPaused = true
+                    showSettings = true
+                }
+            }
+            Text(accountStatusLine)
+                .font(BeansFont.appFont(12, .medium))
+                .foregroundStyle(Color.beansComment)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Rectangle()
+                .fill(Color.beansLabel.opacity(0.10))
+                .frame(height: 1)
+        }
+        .padding(.top, 4)
+    }
+
     var body: some View {
         let _ = theme.accent
         ZStack {
@@ -121,8 +157,12 @@ struct ProfileView: View {
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    header
+                LazyVStack(alignment: .leading, spacing: isNativeClean ? 26 : 22) {
+                    if isNativeClean {
+                        appleHeader
+                    } else {
+                        header
+                    }
                     // 板块按用户自定义顺序渲染（可拖拽排序）
                     ForEach(profileOrder, id: \.self) { key in
                         switch key {
@@ -139,8 +179,8 @@ struct ProfileView: View {
                     communityCard
                     donationCard
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.horizontal, isNativeClean ? 24 : 16)
+                .padding(.top, isNativeClean ? 14 : 8)
                 .padding(.bottom, 190)
                 .frame(maxWidth: 860)
                 .frame(maxWidth: .infinity)
