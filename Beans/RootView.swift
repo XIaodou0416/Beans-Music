@@ -38,10 +38,12 @@ struct RootView: View {
 
     @State private var selection: RootTab = .discover
     @State private var showPlayer = false
+    @State private var showSearchFromShortcut = false
     /// 免责声明确认状态（门禁在 BeansApp 中，这里用于确认后弹出更新说明）
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
+    @AppStorage("beans.hideSearchTab") private var hideSearchTab = false
     @AppStorage("beans.tabPlatformSwitcherEnabled") private var tabPlatformSwitcherEnabled = false
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
     /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
@@ -106,9 +108,11 @@ struct RootView: View {
                 DiscoverView()
                     .tabItem { Label(tabLabelsVisible ? "主页" : "", systemImage: "house.fill") }
                     .tag(RootTab.discover)
-                SearchView()
-                    .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
-                    .tag(RootTab.search)
+                if !hideSearchTab {
+                    SearchView()
+                        .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
+                        .tag(RootTab.search)
+                }
                 LibraryView()
                     .tabItem { Label(tabLabelsVisible ? "音乐库" : "", systemImage: "music.note.list") }
                     .tag(RootTab.library)
@@ -153,6 +157,13 @@ struct RootView: View {
                 .environmentObject(player.clock)
                 .environmentObject(auth)
         }
+        .sheet(isPresented: $showSearchFromShortcut) {
+            SearchView()
+                .environmentObject(favorites)
+                .environmentObject(player)
+                .environmentObject(player.clock)
+                .environmentObject(auth)
+        }
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
         .animation(.easeInOut(duration: 0.22), value: selection)
         .overlay(alignment: .bottom) {
@@ -186,6 +197,11 @@ struct RootView: View {
             // 首次进入：确认免责声明后弹出更新说明
             if accepted, ChangelogStore.shouldShowWhatsNew {
                 showWhatsNew = true
+            }
+        }
+        .onChange(of: hideSearchTab) { hidden in
+            if hidden, selection == .search {
+                selection = .discover
             }
         }
         .sheet(isPresented: $showWhatsNew) {
@@ -336,7 +352,23 @@ struct RootView: View {
 
     private var legacyFloatingTabBar: some View {
         HStack(spacing: 4) {
-            ForEach(RootTab.allCases) { tab in
+            legacyTabItemsBar
+                .frame(maxWidth: .infinity)
+            if tabPlatformSwitcherEnabled {
+                platformSwitcherButton
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .frame(width: legacyTabResolvedWidth)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 12)
+        .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
+    }
+
+    private var legacyTabItemsBar: some View {
+        HStack(spacing: 4) {
+            ForEach(RootTab.allCases.filter { !hideSearchTab || $0 != .search }) { tab in
                 Button {
                     guard selection != tab else { return }
                     BeansHaptics.select()
@@ -373,14 +405,9 @@ struct RootView: View {
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.94))
             }
-            if tabPlatformSwitcherEnabled {
-                platformSwitcherButton
-                    .padding(.leading, 4)
-            }
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 5)
-        .frame(width: legacyTabResolvedWidth)
         .background {
             RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous)
                 .fill(isNativeClean ? Color(UIColor.systemBackground).opacity(0.96) : Color.clear)
@@ -409,9 +436,6 @@ struct RootView: View {
                 }
                 .shadow(color: .black.opacity(isNativeClean ? 0.10 : 0.16), radius: isNativeClean ? 12 : 18, y: isNativeClean ? 4 : 7)
         }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 12)
-        .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
     }
 
     /// 底栏右侧平台快捷入口：长按使用系统原生菜单切换主页平台。
@@ -441,6 +465,15 @@ struct RootView: View {
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.9))
         .contextMenu {
+            Button {
+                BeansHaptics.select()
+                showSearchFromShortcut = true
+            } label: {
+                Label("搜索", systemImage: "magnifyingglass")
+            }
+
+            Divider()
+
             ForEach(platformPrefs.enabledSearchProviders) { provider in
                 Button {
                     BeansHaptics.select()
