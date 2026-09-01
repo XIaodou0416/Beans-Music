@@ -24,19 +24,17 @@ final class HighRefreshKeeper {
 
     func attach(to view: UIView) {
         guard UserDefaults.standard.bool(forKey: Self.defaultsKey) else { return }
-        apply(to: view)
+        apply(to: view.window?.windowScene)
         DispatchQueue.main.async { [weak self, weak view] in
             guard let self, let view else { return }
-            self.apply(to: view)
-            if let rootView = view.window?.rootViewController?.view {
-                self.apply(to: rootView)
-            }
+            self.apply(to: view.window?.windowScene)
         }
     }
 
-    private func apply(to view: UIView) {
+    private func apply(to scene: UIWindowScene?) {
+        guard let scene else { return }
         if #available(iOS 15.0, *) {
-            view.preferredFrameRateRange = CAFrameRateRange(
+            scene.preferredFrameRateRange = CAFrameRateRange(
                 minimum: 120,
                 maximum: 120,
                 preferred: 120
