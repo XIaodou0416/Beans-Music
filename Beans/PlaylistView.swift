@@ -122,7 +122,7 @@ struct PlaylistView: View {
                     Menu {
                         Picker("排序", selection: $sortMode) {
                             ForEach(PlaylistSortMode.allCases) { mode in
-                                Text(mode.rawValue).tag(mode)
+                                Text(LocalizedStringKey(mode.rawValue)).tag(mode)
                             }
                         }
                     } label: {

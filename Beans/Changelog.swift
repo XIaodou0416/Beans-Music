@@ -277,7 +277,7 @@ private struct VersionLogCard: View {
 
     private func logSection(title: String, icon: String, items: [String]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(BeansFont.appFont(14, .bold))
                 .foregroundStyle(Color.beansAmber)
             ForEach(items, id: \.self) { item in

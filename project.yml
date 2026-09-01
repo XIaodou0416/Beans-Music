@@ -15,8 +15,6 @@ targets:
     sources: [Beans]
     resources:
       - Beans/en.lproj
-      - Beans/ja.lproj
-      - Beans/ko.lproj
       - Beans/zh-Hans.lproj
     settings:
       base:

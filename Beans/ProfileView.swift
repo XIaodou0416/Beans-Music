@@ -505,7 +505,7 @@ struct ProfileView: View {
                     .frame(width: 34, height: 34)
                     .background(Color.beansGlassFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(BeansFont.appFont(14, .semibold))
                         .foregroundStyle(Color.beansLabel)
                         .lineLimit(1)
@@ -1677,7 +1677,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Picker("主题模式", selection: $themeModeRaw) {
                     ForEach(BeansThemeMode.allCases) { mode in
-                        Text(mode.title).tag(mode.rawValue)
+                        Text(LocalizedStringKey(mode.title)).tag(mode.rawValue)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -2612,7 +2612,7 @@ struct SettingsView: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                Text(title)
+                Text(LocalizedStringKey(title))
             }
             .font(BeansFont.appFont(14, .semibold))
             .foregroundStyle(Color.beansLabel)
@@ -2834,7 +2834,7 @@ struct SettingsView: View {
     private func settingsSlider<Content: View>(_ title: String, valueText: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 5) {
             HStack {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(BeansFont.appFont(13))
                     .foregroundStyle(Color.beansLabel)
                 Spacer()

@@ -3017,7 +3017,7 @@ struct PlayerSettingsSheet: View {
                     BeansHaptics.select()
                 } label: {
                     HStack(spacing: 10) {
-                        Text(title)
+                        Text(LocalizedStringKey(title))
                             .font(BeansFont.appFont(13, .bold))
                             .foregroundStyle(Color.beansLabel)
                         Spacer()
@@ -3037,7 +3037,7 @@ struct PlayerSettingsSheet: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             } else {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(BeansFont.appFont(14, .bold))
                     .foregroundStyle(Color.beansLabel)
                 content()
@@ -3054,7 +3054,7 @@ struct PlayerSettingsSheet: View {
     /// 开关行（标题 + 可选的短说明）
     private func settingToggle(_ title: String, isOn: Binding<Bool>, caption: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Toggle(title, isOn: isOn)
+            Toggle(LocalizedStringKey(title), isOn: isOn)
                 .tint(Color.beansAmber)
                 .font(BeansFont.appFont(14))
             if let caption {
@@ -3069,7 +3069,7 @@ struct PlayerSettingsSheet: View {
     private func settingSlider<L: View>(_ title: String, valueText: String, @ViewBuilder slider: () -> L) -> some View {
         VStack(spacing: 5) {
             HStack {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(BeansFont.appFont(13))
                     .foregroundStyle(Color.beansLabel)
                 Spacer()

@@ -420,7 +420,7 @@ struct SearchView: View {
                     historyStore.record(word)
                     Task { await startSearch(word) }
                 }
-                SectionHeader(title: "\(provider.rawValue)热搜")
+                SectionHeader(title: provider == .netease ? "网易云音乐热搜" : provider == .qq ? "QQ音乐热搜" : "酷狗音乐热搜")
                 if hotWords.isEmpty {
                     LoadingStateView()
                 } else {
@@ -871,7 +871,7 @@ struct SearchTextField: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UITextField {
         let field = UITextField()
-        field.placeholder = placeholder
+        field.placeholder = NSLocalizedString(placeholder, comment: "")
         field.font = BeansFont.appUIFont(15)
         field.textColor = textColor
         field.autocorrectionType = .no

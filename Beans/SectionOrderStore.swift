@@ -94,7 +94,7 @@ struct SectionOrderSheet: View {
                                 Image(systemName: "line.3.horizontal")
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(Color.beansComment.opacity(0.55))
-                                Text(rawValue)
+                                Text(LocalizedStringKey(rawValue))
                                     .font(BeansFont.appFont(15))
                                     .foregroundStyle(Color.beansLabel)
                             }

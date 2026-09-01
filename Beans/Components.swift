@@ -503,7 +503,7 @@ struct GlassButton: View {
                 if let systemName {
                     Image(systemName: systemName)
                 }
-                Text(title)
+                Text(LocalizedStringKey(title))
             }
             .font(BeansFont.appFont(15, .semibold))
             .foregroundStyle(prominent ? Color.white : Color.beansLabel)
@@ -548,7 +548,7 @@ struct SectionHeader: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(BeansFont.appFont(isNativeClean ? 26 : 21, .bold))
                 .foregroundStyle(titleColor)
             Spacer()
@@ -557,7 +557,7 @@ struct SectionHeader: View {
                     onTrailingTap?()
                 } label: {
                     HStack(spacing: 3) {
-                        Text(trailing)
+                        Text(LocalizedStringKey(trailing))
                             .font(BeansFont.appFont(13, .medium))
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .semibold))
