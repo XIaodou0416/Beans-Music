@@ -1,11 +1,13 @@
+import QuartzCore
 import SwiftUI
 import UIKit
 
-/// 全局高刷新率配置器。通过窗口帧率范围请求设备支持的最高刷新率，
-/// 不创建常驻 CADisplayLink，避免设置页和其他页面持续空转发热。
+/// 全局高刷新率保持器，配合 Info.plist 请求设备支持的最高刷新率。
 final class HighRefreshKeeper {
     static let shared = HighRefreshKeeper()
     static let defaultsKey = "beans.enableHighRefresh"
+
+    private var displayLink: CADisplayLink?
 
     private init() {}
 
@@ -20,27 +22,41 @@ final class HighRefreshKeeper {
 
     func configure(enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: Self.defaultsKey)
+        if enabled {
+            start()
+        } else {
+            stop()
+        }
     }
 
     func attach(to view: UIView) {
-        guard UserDefaults.standard.bool(forKey: Self.defaultsKey) else { return }
-        apply(to: view.window?.windowScene)
-        DispatchQueue.main.async { [weak self, weak view] in
-            guard let self, let view else { return }
-            self.apply(to: view.window?.windowScene)
-        }
+        _ = view
+        start()
     }
 
-    private func apply(to scene: UIWindowScene?) {
-        guard let scene else { return }
+    private func start() {
+        guard displayLink == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(tick))
         if #available(iOS 15.0, *) {
-            scene.preferredFrameRateRange = CAFrameRateRange(
-                minimum: 120,
-                maximum: 120,
-                preferred: 120
+            let maximum = Float(min(120, max(60, UIScreen.main.maximumFramesPerSecond)))
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: maximum >= 120 ? 120 : maximum,
+                maximum: maximum,
+                preferred: maximum
             )
+        } else {
+            link.preferredFramesPerSecond = 120
         }
+        link.add(to: .main, forMode: .common)
+        displayLink = link
     }
+
+    private func stop() {
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    @objc private func tick() {}
 }
 
 struct HighRefreshConfigurator: UIViewRepresentable {
