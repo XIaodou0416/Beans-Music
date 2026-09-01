@@ -549,7 +549,7 @@ struct DiscoverView: View {
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 ZStack {
-                    CoverImage(url: coverURL, size: 166, cornerRadius: 10)
+                    CoverImage(url: coverURL, size: 156, cornerRadius: 10)
                     LinearGradient(
                         colors: [.black.opacity(0.08), .black.opacity(0.68)],
                         startPoint: .top,
@@ -560,7 +560,7 @@ struct DiscoverView: View {
                         .foregroundStyle(.white.opacity(0.18))
                         .offset(x: 24, y: -16)
                 }
-                .frame(width: 166, height: 166)
+                .frame(width: 156, height: 156)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Text(name)
                     .font(BeansFont.appFont(15, .bold))
@@ -574,7 +574,7 @@ struct DiscoverView: View {
                     .foregroundStyle(Color.secondary)
                     .lineLimit(1)
             }
-            .frame(width: 166, alignment: .leading)
+            .frame(width: 156, alignment: .leading)
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.96))
     }
@@ -682,9 +682,6 @@ struct DiscoverView: View {
         VStack(alignment: .leading, spacing: 14) {
             if isNativeClean {
                 HStack(alignment: .center) {
-                    Text("每日推荐")
-                        .font(BeansFont.appFont(20, .bold))
-                        .foregroundStyle(Color.beansLabel)
                     Spacer(minLength: 8)
                     Button {
                         BeansHaptics.tap()
