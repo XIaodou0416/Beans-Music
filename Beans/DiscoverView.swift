@@ -55,6 +55,7 @@ struct DiscoverView: View {
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
+    @AppStorage("beans.homePlatformHintDismissed") private var homePlatformHintDismissed = false
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
@@ -292,35 +293,49 @@ struct DiscoverView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(greetingLines.enumerated()), id: \.offset) { index, line in
-                            Text(line)
-                                .font(BeansFont.greetingFont(isNativeClean ? max(42, greetingLineSize(index)) : greetingLineSize(index), .bold))
-                                .foregroundStyle(greetingLineStyle(index))
-                                .overlay(alignment: .bottomLeading) {
-                                    if homeGreetingUnderline {
-                                        Rectangle()
-                                            .fill(greetingLineColor(index))
-                                            .frame(height: 1.5)
-                                            .offset(y: 2)
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(line)
+                                    .font(BeansFont.greetingFont(isNativeClean ? max(42, greetingLineSize(index)) : greetingLineSize(index), .bold))
+                                    .foregroundStyle(greetingLineStyle(index))
+                                    .overlay(alignment: .bottomLeading) {
+                                        if homeGreetingUnderline {
+                                            Rectangle()
+                                                .fill(greetingLineColor(index))
+                                                .frame(height: 1.5)
+                                                .offset(y: 2)
+                                        }
                                     }
+                                    .shadow(
+                                        color: homeGreetingGlowEnabled
+                                            ? greetingLineColor(index).opacity(min(1, 0.75 * homeGreetingGlowIntensity))
+                                            : .clear,
+                                        radius: homeGreetingGlowEnabled
+                                            ? 8 + 28 * homeGreetingGlowIntensity
+                                            : 0
+                                    )
+                                    .shadow(
+                                        color: homeGreetingGlowEnabled
+                                            ? greetingLineColor(index).opacity(min(1, 0.95 * homeGreetingGlowIntensity))
+                                            : .clear,
+                                        radius: homeGreetingGlowEnabled
+                                            ? 2 + 10 * homeGreetingGlowIntensity
+                                            : 0
+                                    )
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .offset(y: greetingLineOffsetY(index))
+                                if index == 0 && isNativeClean && !homePlatformHintDismissed {
+                                    Button {
+                                        homePlatformHintDismissed = true
+                                    } label: {
+                                        Text("长按这里可切换平台")
+                                            .font(BeansFont.appFont(11, .medium))
+                                            .foregroundStyle(Color.beansComment)
+                                            .fixedSize()
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("关闭平台切换提示")
                                 }
-                                .shadow(
-                                    color: homeGreetingGlowEnabled
-                                        ? greetingLineColor(index).opacity(min(1, 0.75 * homeGreetingGlowIntensity))
-                                        : .clear,
-                                    radius: homeGreetingGlowEnabled
-                                        ? 8 + 28 * homeGreetingGlowIntensity
-                                        : 0
-                                )
-                                .shadow(
-                                    color: homeGreetingGlowEnabled
-                                        ? greetingLineColor(index).opacity(min(1, 0.95 * homeGreetingGlowIntensity))
-                                        : .clear,
-                                    radius: homeGreetingGlowEnabled
-                                        ? 2 + 10 * homeGreetingGlowIntensity
-                                        : 0
-                                )
-                                .fixedSize(horizontal: false, vertical: true)
-                                .offset(y: greetingLineOffsetY(index))
+                            }
                         }
                     }
                     .contentShape(Rectangle())

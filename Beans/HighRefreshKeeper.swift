@@ -1,8 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// 全局高刷新率配置器。由 Info.plist 请求设备支持的最高刷新率，
-/// 不再创建常驻 CADisplayLink，避免设置页和其他页面持续空转发热。
+/// 全局高刷新率配置器。通过窗口帧率范围请求设备支持的最高刷新率，
+/// 不创建常驻 CADisplayLink，避免设置页和其他页面持续空转发热。
 final class HighRefreshKeeper {
     static let shared = HighRefreshKeeper()
     static let defaultsKey = "beans.enableHighRefresh"
@@ -23,7 +23,23 @@ final class HighRefreshKeeper {
     }
 
     func attach(to view: UIView) {
-        _ = view
+        guard UserDefaults.standard.bool(forKey: Self.defaultsKey) else { return }
+        apply(to: view.window)
+        DispatchQueue.main.async { [weak self, weak view] in
+            guard let self, let view else { return }
+            self.apply(to: view.window)
+        }
+    }
+
+    private func apply(to window: UIWindow?) {
+        guard let window else { return }
+        if #available(iOS 15.0, *) {
+            window.preferredFrameRateRange = CAFrameRateRange(
+                minimum: 120,
+                maximum: 120,
+                preferred: 120
+            )
+        }
     }
 }
 
@@ -35,6 +51,6 @@ struct HighRefreshConfigurator: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        _ = uiView
+        HighRefreshKeeper.shared.attach(to: uiView)
     }
 }
