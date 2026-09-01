@@ -791,8 +791,8 @@ struct DiscoverView: View {
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
                                         .frame(width: 166, alignment: .leading)
-                                    if playlist.playCount > 0 {
-                                        Text("\(playlist.playCount) 次播放")
+                                    if playlist.trackCount > 0 {
+                                        Text("\(playlist.trackCount) 首")
                                             .font(BeansFont.appFont(12, .medium))
                                             .foregroundStyle(Color.secondary)
                                             .lineLimit(1)
