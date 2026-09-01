@@ -140,14 +140,11 @@ struct BeansGlass<S: Shape>: View {
     }
 
     private var isLiquid: Bool {
-        forceLiquid || uiStyle == .liquid
+        forceLiquid || uiStyle == .liquid || uiStyle == .nativeClean
     }
 
     var body: some View {
-        if uiStyle == .nativeClean && !forceLiquid {
-            shape
-                .fill(Color.primary.opacity(0.038))
-        } else if isLiquid {
+        if isLiquid {
             if #available(iOS 26, *) {
                 GlassEffectContainer {
                     shape
@@ -183,11 +180,7 @@ struct BeansSurface<S: Shape>: View {
     }
 
     var body: some View {
-        if uiStyle == .nativeClean {
-            shape.fill(Color.primary.opacity(0.038))
-        } else {
-            BeansGlass(shape: shape)
-        }
+        BeansGlass(shape: shape)
     }
 }
 
@@ -203,7 +196,7 @@ struct GlassCard<Content: View>: View {
     }
 
     private var isLiquid: Bool {
-        uiStyle == .liquid
+        uiStyle == .liquid || uiStyle == .nativeClean
     }
 
     private var resolvedCornerRadius: CGFloat {
@@ -219,16 +212,7 @@ struct GlassCard<Content: View>: View {
     }
 
     var body: some View {
-        if uiStyle == .nativeClean {
-            content()
-                .padding(resolvedPadding)
-                .background {
-                    RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
-                        .fill(Color.primary.opacity(0.038))
-                }
-                .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
-                .beansCardShadow(radius: 1, y: 0.5)
-        } else if isLiquid {
+        if isLiquid {
             if #available(iOS 26, *) {
                 GlassEffectContainer {
                     content()

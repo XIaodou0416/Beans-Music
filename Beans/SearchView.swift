@@ -196,44 +196,42 @@ struct SearchView: View {
     // MARK: - 顶部标题
 
     private var headerTitle: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 10) {
-                Text("搜索")
-                    .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
-                    .foregroundStyle(Color.beansLabel)
-                Spacer(minLength: 0)
-                Menu {
-                    ForEach(searchProviders) { candidate in
-                        Button {
-                            BeansHaptics.tap()
-                            provider = candidate
-                        } label: {
-                            Label(candidate.rawValue, systemImage: candidate == provider ? "checkmark" : candidate.icon)
-                        }
+        HStack(alignment: .center, spacing: 10) {
+            Text("搜索")
+                .font(BeansFont.appFont(32, .bold))
+                .foregroundStyle(Color.beansLabel)
+            Spacer(minLength: 0)
+            Menu {
+                ForEach(searchProviders) { candidate in
+                    Button {
+                        BeansHaptics.tap()
+                        provider = candidate
+                    } label: {
+                        Label(candidate.rawValue, systemImage: candidate == provider ? "checkmark" : candidate.icon)
                     }
-                } label: {
-                    HStack(spacing: 6) {
-                        if let imageName = provider.brandImageName {
-                            Image(imageName)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 15, height: 15)
-                        } else {
-                            Image(systemName: provider.icon)
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        Text(provider.rawValue)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
-                    }
-                    .font(BeansFont.appFont(12, .semibold))
-                    .foregroundStyle(Color.beansComment)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background { BeansSurface(shape: Capsule()) }
                 }
-                .disabled(searchProviders.count < 2)
+            } label: {
+                HStack(spacing: 6) {
+                    if let imageName = provider.brandImageName {
+                        Image(imageName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 15, height: 15)
+                    } else {
+                        Image(systemName: provider.icon)
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    Text(provider.rawValue)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .font(BeansFont.appFont(12, .semibold))
+                .foregroundStyle(Color.beansComment)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background { BeansGlass(shape: Capsule()) }
             }
+            .disabled(searchProviders.count < 2)
         }
     }
 
@@ -314,13 +312,13 @@ struct SearchView: View {
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.9))
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 15)
+        .padding(.vertical, 6)
         .background {
-            BeansSurface(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .beansCardShadow(radius: isNativeClean ? 1 : 8, y: isNativeClean ? 0.5 : 3)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .beansCardShadow(radius: 4, y: 2)
     }
 
     // MARK: - 平台选择（等宽分段控件）

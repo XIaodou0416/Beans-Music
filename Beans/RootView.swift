@@ -38,14 +38,10 @@ struct RootView: View {
 
     @State private var selection: RootTab = .discover
     @State private var showPlayer = false
-    @State private var showProfileFromShortcut = false
-    @State private var showSettingsFromShortcut = false
     /// 免责声明确认状态（门禁在 BeansApp 中，这里用于确认后弹出更新说明）
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
-    @AppStorage("beans.hideProfileTab") private var hideProfileTab = false
-    @AppStorage("beans.tabPlatformSwitcherEnabled") private var tabPlatformSwitcherEnabled = false
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
     /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
@@ -115,11 +111,10 @@ struct RootView: View {
                 LibraryView()
                     .tabItem { Label(tabLabelsVisible ? "音乐库" : "", systemImage: "music.note.list") }
                     .tag(RootTab.library)
-                if !hideProfileTab {
-                    ProfileView()
-                        .tabItem { Label(tabLabelsVisible ? "我的" : "", systemImage: "person.crop.circle") }
-                        .tag(RootTab.profile)
-                }
+                ProfileView()
+                    .contextMenu { platformSelectionMenu }
+                    .tabItem { Label(tabLabelsVisible ? "我的" : "", systemImage: "person.crop.circle") }
+                    .tag(RootTab.profile)
             }
             .tint(Color.beansAmber)
             .background {
@@ -158,29 +153,10 @@ struct RootView: View {
                 .environmentObject(player.clock)
                 .environmentObject(auth)
         }
-        .fullScreenCover(isPresented: $showProfileFromShortcut) {
-            ProfileView()
-                .environmentObject(favorites)
-                .environmentObject(player)
-                .environmentObject(player.clock)
-                .environmentObject(auth)
-        }
-        .sheet(isPresented: $showSettingsFromShortcut) {
-            SettingsView()
-                .environmentObject(theme)
-        }
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
         .animation(.easeInOut(duration: 0.22), value: selection)
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
-        }
-        .overlay(alignment: .bottomTrailing) {
-            if usesSystemFloatingTabBar, (tabPlatformSwitcherEnabled || hideProfileTab) {
-                platformSwitcherButton
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 12)
-                    .zIndex(9)
-            }
         }
         .onAppear {
             // 启动已完成：标记本次启动正常（供下次启动检测闪退）
@@ -202,11 +178,6 @@ struct RootView: View {
             // 首次进入：确认免责声明后弹出更新说明
             if accepted, ChangelogStore.shouldShowWhatsNew {
                 showWhatsNew = true
-            }
-        }
-        .onChange(of: hideProfileTab) { hidden in
-            if hidden, selection == .profile {
-                selection = .discover
             }
         }
         .sheet(isPresented: $showWhatsNew) {
@@ -356,24 +327,18 @@ struct RootView: View {
     }
 
     private var legacyFloatingTabBar: some View {
-        HStack(spacing: 4) {
-            legacyTabItemsBar
-                .frame(width: hideProfileTab ? max(0, legacyTabResolvedWidth - 66) : nil)
-            if tabPlatformSwitcherEnabled || hideProfileTab {
-                platformSwitcherButton
-            }
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
-        .frame(width: legacyTabResolvedWidth)
-        .padding(.horizontal, 18)
-        .padding(.bottom, 12)
-        .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
+        legacyTabItemsBar
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
+            .frame(width: legacyTabResolvedWidth)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 12)
+            .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
     }
 
     private var legacyTabItemsBar: some View {
         HStack(spacing: 4) {
-            ForEach(RootTab.allCases.filter { !hideProfileTab || $0 != .profile }) { tab in
+            ForEach(RootTab.allCases) { tab in
                 Button {
                     guard selection != tab else { return }
                     BeansHaptics.select()
@@ -409,6 +374,11 @@ struct RootView: View {
                     .contentShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+                .contextMenu {
+                    if tab == .profile {
+                        platformSelectionMenu
+                    }
+                }
             }
         }
         .padding(.horizontal, 7)
@@ -443,58 +413,18 @@ struct RootView: View {
         }
     }
 
-    /// 底栏右侧平台快捷入口：长按使用系统原生菜单切换主页平台。
-    private var platformSwitcherButton: some View {
+    @ViewBuilder
+    private var platformSelectionMenu: some View {
         let current = SearchProvider(rawValue: homeSourceRaw) ?? platformPrefs.enabledSearchProviders.first ?? .netease
-        return Button {
-            BeansHaptics.tap()
-            if hideProfileTab {
-                showProfileFromShortcut = true
-            }
-        } label: {
-            Group {
-                if hideProfileTab {
-                    Image(systemName: "person.crop.circle")
-                        .font(.system(size: 16, weight: .semibold))
-                } else if let imageName = current.brandImageName {
-                    Image(imageName)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 17, height: 17)
-                } else {
-                    Image(systemName: current.icon)
-                        .font(.system(size: 16, weight: .semibold))
-                }
-            }
-            .foregroundStyle(Color.beansLabel)
-            .frame(width: 40, height: 40)
-            .background {
-                BeansGlass(shape: Circle(), forceLiquid: true)
-            }
-            .clipShape(Circle())
-            .contentShape(Circle())
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.9))
-        .contextMenu {
+        Text("主页平台")
+        ForEach(platformPrefs.enabledSearchProviders) { provider in
             Button {
                 BeansHaptics.select()
-                showSettingsFromShortcut = true
+                homeSourceRaw = provider.rawValue
             } label: {
-                Label("设置", systemImage: "gearshape")
-            }
-
-            Divider()
-
-            ForEach(platformPrefs.enabledSearchProviders) { provider in
-                Button {
-                    BeansHaptics.select()
-                    homeSourceRaw = provider.rawValue
-                } label: {
-                    Label(provider.rawValue, systemImage: provider == current ? "checkmark" : provider.icon)
-                }
+                Label(provider.rawValue, systemImage: provider == current ? "checkmark" : provider.icon)
             }
         }
-        .accessibilityLabel("主页平台：\(current.rawValue)，长按切换")
     }
 }
 
