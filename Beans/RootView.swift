@@ -152,14 +152,8 @@ struct RootView: View {
                 .allowsHitTesting(false)
         }
         .preferredColorScheme(themeMode.colorScheme)
-        .sheet(isPresented: $showHomePlatformMenu) {
-            PlatformPickerSheet(
-                current: SearchProvider(rawValue: homeSourceRaw) ?? platformPrefs.enabledSearchProviders.first ?? .netease,
-                providers: platformPrefs.enabledSearchProviders
-            ) { provider in
-                BeansHaptics.select()
-                homeSourceRaw = provider.rawValue
-            }
+        .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
+            platformSelectionMenu
         }
         .fullScreenCover(isPresented: $showPlayer) {
             PlayerView(isPresented: $showPlayer)

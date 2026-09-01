@@ -681,28 +681,6 @@ struct DiscoverView: View {
 
     private var dailySection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if isNativeClean {
-                HStack(alignment: .center) {
-                    Spacer(minLength: 8)
-                    Button {
-                        BeansHaptics.tap()
-                        showDailyList = true
-                    } label: {
-                        Text("查看全部")
-                            .font(BeansFont.appFont(12, .semibold))
-                            .foregroundStyle(Color.beansLabel)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background { BeansGlass(shape: Capsule()) }
-                    }
-                    .buttonStyle(GlassPressButtonStyle(scale: 0.94))
-                }
-            } else {
-                SectionHeader(title: "每日推荐", trailing: "查看全部") {
-                    BeansHaptics.tap()
-                    showDailyList = true
-                }
-            }
             // 横滑歌曲卡：每日推荐前 8 首
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
@@ -742,19 +720,41 @@ struct DiscoverView: View {
                         }
                         .buttonStyle(GlassPressButtonStyle(scale: 0.94))
                     }
+                    Button {
+                        BeansHaptics.tap()
+                        showDailyList = true
+                    } label: {
+                        VStack(spacing: 8) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text("查看更多")
+                                .font(BeansFont.appFont(13, .semibold))
+                        }
+                        .foregroundStyle(Color.beansLabel)
+                        .frame(width: isNativeClean ? 88 : 82, height: isNativeClean ? 156 : 108)
+                        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+                    }
+                    .buttonStyle(GlassPressButtonStyle(scale: 0.94))
                 }
                 .padding(.vertical, 2)
             }
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
-        .sheet(isPresented: $showHomePlatformMenu) {
-            PlatformPickerSheet(
-                current: source,
-                providers: homeProviders
-            ) { provider in
+        .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
+            homePlatformSelectionMenu
+        }
+    }
+
+    @ViewBuilder
+    private var homePlatformSelectionMenu: some View {
+        let current = SearchProvider(rawValue: homeSourceRaw) ?? homeProviders.first ?? .netease
+        ForEach(homeProviders) { provider in
+            Button {
                 BeansHaptics.select()
                 homeSourceRaw = provider.rawValue
+            } label: {
+                Label(provider.rawValue, systemImage: provider == current ? "checkmark" : provider.icon)
             }
         }
     }
