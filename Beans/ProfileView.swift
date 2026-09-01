@@ -1024,6 +1024,7 @@ struct AccountHubSheet: View {
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+    @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @Environment(\.dismiss) private var dismiss
 
     @State private var showNeteaseLogin = false
@@ -1032,6 +1033,18 @@ struct AccountHubSheet: View {
     @State private var confirmNeteaseLogout = false
     @State private var confirmQQLogout = false
     @State private var confirmKugouLogout = false
+
+    private var isEnglish: Bool { languageRaw == AppLanguage.english.rawValue }
+    private var displayPlatformSummary: String {
+        if !isEnglish { return platformPrefs.summaryText }
+        return platformPrefs.enabledSearchProviders.map { provider in
+            switch provider {
+            case .netease: return "NetEase Cloud Music"
+            case .qq: return "QQ Music"
+            case .kugou: return "Kugou Music"
+            }
+        }.joined(separator: " / ")
+    }
 
     var body: some View {
         BeansNavigationStack {
