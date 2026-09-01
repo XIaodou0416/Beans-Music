@@ -68,6 +68,8 @@ struct PlayerView: View {
     @AppStorage("beans.playerLayoutMode") private var layoutMode = false
     @State private var layoutData: [String: PlayerLayoutEntry] = PlayerLayoutStore.load()
     @State private var layoutPart: PlayerLayoutPart = .progress
+    @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
+    @State private var appleLayoutPart: AppleMusicLayoutPart = .cover
     /// 歌词布局：对齐样式 / 水平偏移 / 垂直重心（底部更多或顶部更多歌词）
     @AppStorage("beans.lyricAlignRaw") private var lyricAlignRaw = "center"
     @AppStorage("beans.lyricOffsetX") private var lyricOffsetX = 0.0
@@ -105,12 +107,13 @@ struct PlayerView: View {
     @AppStorage("beans.albumTextGlow") private var albumTextGlow = false
     @AppStorage("beans.albumTextGlowIntensity") private var albumTextGlowIntensity = 1.0
     @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.classic.rawValue
-    @AppStorage("beans.appleMusic.topY") private var appleTopY = 0.0
-    @AppStorage("beans.appleMusic.coverScale") private var appleCoverScale = 1.0
-    @AppStorage("beans.appleMusic.titleY") private var appleTitleY = 0.0
-    @AppStorage("beans.appleMusic.lyricY") private var appleLyricY = 0.0
-    @AppStorage("beans.appleMusic.controlsY") private var appleControlsY = 0.0
-    @AppStorage("beans.appleMusic.actionsY") private var appleActionsY = 0.0
+    @AppStorage("beans.appleMusic.showVolume") private var appleShowVolume = true
+    @AppStorage("beans.appleMusic.primaryHex") private var applePrimaryHex = ""
+    @AppStorage("beans.appleMusic.secondaryHex") private var appleSecondaryHex = ""
+    @AppStorage("beans.appleMusic.accentHex") private var appleAccentHex = ""
+    @AppStorage("beans.appleMusic.volumeHex") private var appleVolumeHex = ""
+    @AppStorage("beans.appleMusic.syncWallpaper") private var appleSyncWallpaper = false
+    @AppStorage("beans.appleMusic.wallpaperBlur") private var appleWallpaperBlur = 14.0
     /// 侧边滑动手势当前位移（刷视频式切歌过渡）
     @State private var swipeOffset: CGFloat = 0
     @State private var coverDrag: CGSize = .zero
@@ -1545,7 +1548,7 @@ struct PlayerView: View {
                         .foregroundStyle(Color.beansAmber)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 7)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .background { BeansSurface(shape: Capsule()) }
                 }
                 .buttonStyle(.plain)
             }
@@ -1612,35 +1615,52 @@ struct PlayerView: View {
                         .foregroundStyle(Color.beansAmber)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 7)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .background { BeansSurface(shape: Capsule()) }
                 }
                 .buttonStyle(.plain)
             }
-            HStack(spacing: 8) {
-                appleLayoutChip("顶部", isSelected: layoutPart == .topTitle) { layoutPart = .topTitle }
-                appleLayoutChip("封面", isSelected: layoutPart == .cover) { layoutPart = .cover }
-                appleLayoutChip("标题", isSelected: layoutPart == .title) { layoutPart = .title }
-                appleLayoutChip("歌词", isSelected: layoutPart == .previewLyric) { layoutPart = .previewLyric }
-                appleLayoutChip("控制", isSelected: layoutPart == .controls) { layoutPart = .controls }
-                appleLayoutChip("底部", isSelected: layoutPart == .queue) { layoutPart = .queue }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(AppleMusicLayoutPart.allCases) { part in
+                        appleLayoutChip(part.rawValue, isSelected: appleLayoutPart == part) {
+                            appleLayoutPart = part
+                        }
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            appleMusicLayoutSliders
-            HStack(spacing: 10) {
-                Button {
-                    resetAppleMusicCurrentLayoutPart()
-                    BeansHaptics.success()
-                } label: {
-                    Label("恢复当前", systemImage: "arrow.counterclockwise")
-                        .font(BeansFont.appFont(13, .medium))
-                        .foregroundStyle(Color.beansAmber)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 10) {
+                    appleMusicLayoutSliders
+                    appleMusicAppearanceControls
+                    HStack(spacing: 10) {
+                        Button {
+                            resetAppleMusicCurrentLayoutPart()
+                            BeansHaptics.success()
+                        } label: {
+                            Label("恢复当前", systemImage: "arrow.counterclockwise")
+                                .font(BeansFont.appFont(13, .medium))
+                                .foregroundStyle(Color.beansAmber)
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                        Button {
+                            resetAppleMusicSettings()
+                            BeansHaptics.success()
+                        } label: {
+                            Label("恢复全部", systemImage: "arrow.counterclockwise.circle")
+                                .font(BeansFont.appFont(13, .medium))
+                                .foregroundStyle(Color.beansAmber)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Text("X / Y / 大小和 Apple Music 外观会立即同步到当前播放页")
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(palette.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(.plain)
-                Spacer()
-                Text("滑杆会立即同步到当前播放页")
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(palette.secondary)
             }
+            .frame(maxHeight: 430)
         }
         .padding(14)
         .background {
@@ -1668,57 +1688,121 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var appleMusicLayoutSliders: some View {
-        switch layoutPart {
-        case .topTitle:
-            appleMusicLayoutSlider("顶部 Y", value: $appleTopY, range: -40...80)
-        case .cover:
-            appleMusicLayoutSlider("封面大小", value: $appleCoverScale, range: 0.72...1.18, step: 0.01, format: "%.2f")
-        case .title:
-            appleMusicLayoutSlider("标题 Y", value: $appleTitleY, range: -80...120)
-        case .previewLyric:
-            appleMusicLayoutSlider("歌词 Y", value: $appleLyricY, range: -80...120)
-        case .controls:
-            appleMusicLayoutSlider("控制 Y", value: $appleControlsY, range: -80...100)
-        case .queue:
-            appleMusicLayoutSlider("底部 Y", value: $appleActionsY, range: -80...100)
-        default:
-            Text("请选择 Apple Music 组件")
-                .font(BeansFont.appFont(12))
-                .foregroundStyle(palette.secondary)
+        VStack(spacing: 6) {
+            layoutSlider("X", value: appleMusicEntryBinding.x, range: -180...180)
+            layoutSlider("Y", value: appleMusicEntryBinding.y, range: -240...240)
+            layoutSlider("大小", value: appleMusicEntryBinding.scale, range: 0.3...1.5, step: 0.05, format: "%.2f")
         }
     }
 
-    private func appleMusicLayoutSlider(
-        _ title: String,
-        value: Binding<Double>,
-        range: ClosedRange<Double>,
-        step: Double = 1,
-        format: String = "%.0f"
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(title)
-                    .font(BeansFont.appFont(12, .medium))
-                Spacer()
-                Text(String(format: format, value.wrappedValue))
-                    .font(BeansFont.appFont(11, .semibold, .monospaced))
-                    .foregroundStyle(Color.beansAmber)
-            }
-            Slider(value: value, in: range, step: step)
-                .tint(Color.beansAmber)
-        }
+    private var appleMusicEntryBinding: Binding<PlayerLayoutEntry> {
+        Binding(
+            get: { appleLayout.entry(for: appleLayoutPart) },
+            set: { appleLayout.set($0, for: appleLayoutPart) }
+        )
     }
 
     private func resetAppleMusicCurrentLayoutPart() {
-        switch layoutPart {
-        case .topTitle: appleTopY = 0
-        case .cover: appleCoverScale = 1
-        case .title: appleTitleY = 0
-        case .previewLyric: appleLyricY = 0
-        case .controls: appleControlsY = 0
-        case .queue: appleActionsY = 0
-        default: break
+        appleLayout.reset(appleLayoutPart)
+    }
+
+    private var applePrimaryColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if applePrimaryHex.hasPrefix("#"), let color = Color(hex: applePrimaryHex) {
+                    return color
+                }
+                return .white
+            },
+            set: { applePrimaryHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var appleSecondaryColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if appleSecondaryHex.hasPrefix("#"), let color = Color(hex: appleSecondaryHex) {
+                    return color
+                }
+                return Color.beansComment
+            },
+            set: { appleSecondaryHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var appleAccentColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if appleAccentHex.hasPrefix("#"), let color = Color(hex: appleAccentHex) {
+                    return color
+                }
+                return Color(red: 1.0, green: 0.28, blue: 0.36)
+            },
+            set: { appleAccentHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var appleVolumeColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if appleVolumeHex.hasPrefix("#"), let color = Color(hex: appleVolumeHex) {
+                    return color
+                }
+                return applePrimaryColorBinding.wrappedValue
+            },
+            set: { appleVolumeHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var appleMusicAppearanceControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Apple Music 外观")
+                .font(BeansFont.appFont(12, .semibold))
+                .foregroundStyle(Color.beansLabel)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Toggle("显示音量条", isOn: $appleShowVolume)
+                .font(BeansFont.appFont(12))
+                .tint(Color.beansAmber)
+            Toggle("同步主页壁纸", isOn: $appleSyncWallpaper)
+                .font(BeansFont.appFont(12))
+                .tint(Color.beansAmber)
+            if appleSyncWallpaper {
+                HStack(spacing: 8) {
+                    Text("壁纸模糊")
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(palette.secondary)
+                        .frame(width: 58, alignment: .leading)
+                    Slider(value: $appleWallpaperBlur, in: 0...32, step: 1)
+                        .tint(Color.beansAmber)
+                    Text("\(Int(appleWallpaperBlur))")
+                        .font(BeansFont.appFont(11, .semibold, .monospaced))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(width: 28, alignment: .trailing)
+                }
+            }
+            ColorPicker("主图标与当前歌词", selection: applePrimaryColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(12))
+            ColorPicker("次级文字与时间", selection: appleSecondaryColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(12))
+            ColorPicker("高亮颜色", selection: appleAccentColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(12))
+            ColorPicker("音量条颜色", selection: appleVolumeColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(12))
         }
+        .padding(10)
+        .background(Color.black.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func resetAppleMusicSettings() {
+        appleLayout.resetAll()
+        applePrimaryHex = ""
+        appleSecondaryHex = ""
+        appleAccentHex = ""
+        appleVolumeHex = ""
+        appleShowVolume = true
+        appleSyncWallpaper = false
+        appleWallpaperBlur = 14
     }
 
     private func resetCurrentLayoutPart() {
@@ -2618,19 +2702,6 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.playerSettings.layoutExpanded") private var layoutExpanded = false
     @AppStorage("beans.playerSettings.coverExpanded") private var coverExpanded = false
     @AppStorage("beans.playerSettings.appleMusicExpanded") private var appleMusicExpanded = false
-    @AppStorage("beans.appleMusic.showVolume") private var appleShowVolume = true
-    @AppStorage("beans.appleMusic.primaryHex") private var applePrimaryHex = ""
-    @AppStorage("beans.appleMusic.secondaryHex") private var appleSecondaryHex = ""
-    @AppStorage("beans.appleMusic.accentHex") private var appleAccentHex = ""
-    @AppStorage("beans.appleMusic.volumeHex") private var appleVolumeHex = ""
-    @AppStorage("beans.appleMusic.syncWallpaper") private var appleSyncWallpaper = false
-    @AppStorage("beans.appleMusic.wallpaperBlur") private var appleWallpaperBlur = 14.0
-    @AppStorage("beans.appleMusic.topY") private var appleTopY = 0.0
-    @AppStorage("beans.appleMusic.coverScale") private var appleCoverScale = 1.0
-    @AppStorage("beans.appleMusic.titleY") private var appleTitleY = 0.0
-    @AppStorage("beans.appleMusic.lyricY") private var appleLyricY = 0.0
-    @AppStorage("beans.appleMusic.controlsY") private var appleControlsY = 0.0
-    @AppStorage("beans.appleMusic.actionsY") private var appleActionsY = 0.0
     @State private var showLyricBackgroundPicker = false
 
     private var tiltYText: String {
@@ -2663,7 +2734,7 @@ struct PlayerSettingsSheet: View {
             }
             .padding(6)
             .frame(maxWidth: .infinity)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
         }
         .buttonStyle(.plain)
     }
@@ -2789,46 +2860,6 @@ struct PlayerSettingsSheet: View {
                 return Color.beansComment
             },
             set: { albumPreviewDimColorHex = "#" + UIColor($0).hexString }
-        )
-    }
-
-    private var applePrimaryColor: Binding<Color> {
-        Binding(
-            get: {
-                if applePrimaryHex.hasPrefix("#"), let c = Color(hex: applePrimaryHex) { return c }
-                return .white
-            },
-            set: { applePrimaryHex = "#" + UIColor($0).hexString }
-        )
-    }
-
-    private var appleSecondaryColor: Binding<Color> {
-        Binding(
-            get: {
-                if appleSecondaryHex.hasPrefix("#"), let c = Color(hex: appleSecondaryHex) { return c }
-                return Color.beansComment
-            },
-            set: { appleSecondaryHex = "#" + UIColor($0).hexString }
-        )
-    }
-
-    private var appleAccentColor: Binding<Color> {
-        Binding(
-            get: {
-                if appleAccentHex.hasPrefix("#"), let c = Color(hex: appleAccentHex) { return c }
-                return Color(red: 1.0, green: 0.28, blue: 0.36)
-            },
-            set: { appleAccentHex = "#" + UIColor($0).hexString }
-        )
-    }
-
-    private var appleVolumeColor: Binding<Color> {
-        Binding(
-            get: {
-                if appleVolumeHex.hasPrefix("#"), let c = Color(hex: appleVolumeHex) { return c }
-                return applePrimaryColor.wrappedValue
-            },
-            set: { appleVolumeHex = "#" + UIColor($0).hexString }
         )
     }
 
@@ -3226,79 +3257,10 @@ struct PlayerSettingsSheet: View {
                 .background(Color.black, in: Capsule())
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-            Divider().opacity(0.45)
-            CompactSettingGroup {
-                settingToggle("显示音量控制", isOn: $appleShowVolume,
-                              caption: "开启后在播放 / 暂停按钮下方显示系统音量条")
-                Divider().opacity(0.35)
-                settingToggle("同步主页壁纸", isOn: $appleSyncWallpaper,
-                              caption: "封面页和歌词页都使用主页壁纸或自定义背景色")
-                if appleSyncWallpaper {
-                    Divider().opacity(0.35)
-                    settingSlider("壁纸模糊度", valueText: "\(Int(appleWallpaperBlur))") {
-                        Slider(value: $appleWallpaperBlur, in: 0...32, step: 1)
-                            .tint(Color.beansAmber)
-                    }
-                }
-                Divider().opacity(0.35)
-                ColorPicker("主图标与当前歌词颜色", selection: applePrimaryColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-                ColorPicker("次级文字与时间颜色", selection: appleSecondaryColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-                ColorPicker("高亮颜色", selection: appleAccentColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-                ColorPicker("音量条颜色", selection: appleVolumeColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-            }
-            Divider().opacity(0.5)
-            settingSlider("顶部指示线 Y", valueText: "\(Int(appleTopY))") {
-                Slider(value: $appleTopY, in: -40...80, step: 1)
-                    .tint(Color.beansAmber)
-            }
-            settingSlider("封面大小", valueText: String(format: "%.2fx", appleCoverScale)) {
-                Slider(value: $appleCoverScale, in: 0.72...1.18, step: 0.01)
-                    .tint(Color.beansAmber)
-            }
-            settingSlider("歌名歌手 Y", valueText: "\(Int(appleTitleY))") {
-                Slider(value: $appleTitleY, in: -80...120, step: 1)
-                    .tint(Color.beansAmber)
-            }
-            settingSlider("预览歌词 Y", valueText: "\(Int(appleLyricY))") {
-                Slider(value: $appleLyricY, in: -80...120, step: 1)
-                    .tint(Color.beansAmber)
-            }
-            settingSlider("播放控制 Y", valueText: "\(Int(appleControlsY))") {
-                Slider(value: $appleControlsY, in: -80...100, step: 1)
-                    .tint(Color.beansAmber)
-            }
-            settingSlider("底部三按钮 Y", valueText: "\(Int(appleActionsY))") {
-                Slider(value: $appleActionsY, in: -80...100, step: 1)
-                    .tint(Color.beansAmber)
-            }
-            Button {
-                applePrimaryHex = ""
-                appleSecondaryHex = ""
-                appleAccentHex = ""
-                appleVolumeHex = ""
-                appleTopY = 0
-                appleCoverScale = 1
-                appleTitleY = 0
-                appleLyricY = 0
-                appleControlsY = 0
-                appleActionsY = 0
-                appleShowVolume = true
-                appleSyncWallpaper = false
-                appleWallpaperBlur = 14
-                BeansHaptics.select()
-            } label: {
-                Text("恢复 Apple Music 默认")
-                    .font(BeansFont.appFont(12, .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Color.beansAmber.opacity(0.12), in: Capsule())
-            }
-            .buttonStyle(.plain)
+            Text("Apple Music 的显示、颜色、背景和每个组件的 X / Y / 大小，请在播放页顶部的悬浮调试中调整。")
+                .font(BeansFont.appFont(12))
+                .foregroundStyle(Color.beansComment)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -3467,7 +3429,7 @@ struct PlayerSettingsSheet: View {
                         .foregroundStyle(Color.beansAmber)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .background { BeansSurface(shape: Capsule()) }
                 }
                 .buttonStyle(.plain)
                 if !lyricBackgroundImagePath.isEmpty {
@@ -3481,7 +3443,7 @@ struct PlayerSettingsSheet: View {
                             .foregroundStyle(Color.red)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
+                            .background { BeansSurface(shape: Capsule()) }
                     }
                     .buttonStyle(.plain)
                 }
@@ -3665,6 +3627,7 @@ struct PlayerSettingsSheet: View {
 }
 
 private struct CompactSettingGroup<Content: View>: View {
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     let content: Content
 
     init(@ViewBuilder content: () -> Content) {
@@ -3677,10 +3640,9 @@ private struct CompactSettingGroup<Content: View>: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
+        .background {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.beansComment.opacity(0.10), lineWidth: 0.8)
+                .fill(Color.primary.opacity(uiStyleRaw == BeansUIStyle.nativeClean.rawValue ? 0.025 : 0.035))
         }
     }
 }
@@ -3704,8 +3666,10 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
             switch uiStyle {
             case .clear, .liquid:
                 shape.fill(.ultraThinMaterial)
-            case .compact, .nativeClean:
+            case .compact:
                 shape.fill(Color.beansGlassFill.opacity(0.62))
+            case .nativeClean:
+                shape.fill(Color.primary.opacity(0.038))
             }
         }
     }

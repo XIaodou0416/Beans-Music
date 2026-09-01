@@ -67,9 +67,7 @@ struct LogViewerSheet: View {
                                             }
                                         }
                                         .padding(9)
-                                        .background {
-                                            BeansGlass(shape: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                        }
+                                        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
                                     }
                                 }
                                 .padding(.horizontal, 16)

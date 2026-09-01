@@ -382,7 +382,7 @@ struct ProfileView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: Capsule())
+        .background { BeansSurface(shape: Capsule()) }
     }
 
 
@@ -412,7 +412,7 @@ struct ProfileView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 18))
                             .foregroundStyle(Color.beansAmber)
-                            .background(Circle().fill(.ultraThinMaterial))
+                            .background { BeansSurface(shape: Circle()) }
                             .padding(5)
                     }
                 }
@@ -427,7 +427,7 @@ struct ProfileView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.beansComment)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(.ultraThinMaterial))
+                    .background { BeansSurface(shape: Circle()) }
                     .clipShape(Circle())
                     .contentShape(Circle())
                     .padding(6)
@@ -1080,7 +1080,7 @@ struct AccountHubSheet: View {
                     .foregroundStyle(auth.isLoggedIn ? Color.red : Color.beansAmber)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .background { BeansSurface(shape: Capsule()) }
             }
             .padding(14)
             .background {
@@ -1128,7 +1128,7 @@ struct AccountHubSheet: View {
                     .foregroundStyle(qqAuth.isLoggedIn ? Color.red : Color.beansAmber)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .background { BeansSurface(shape: Capsule()) }
             }
             .padding(14)
             .background {
@@ -1171,7 +1171,7 @@ struct AccountHubSheet: View {
                     .foregroundStyle(kugouAuth.isLoggedIn ? Color.red : Color.beansAmber)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .background { BeansSurface(shape: Capsule()) }
             }
             .padding(14)
             .background {
@@ -1714,7 +1714,7 @@ struct SettingsView: View {
                             .foregroundStyle(Color.beansAmber)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
+                            .background { BeansSurface(shape: Capsule()) }
                     }
                     .buttonStyle(.plain)
                     Spacer()
@@ -1790,7 +1790,7 @@ struct SettingsView: View {
                                     .foregroundStyle(.red)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(.ultraThinMaterial, in: Capsule())
+                                    .background { BeansSurface(shape: Capsule()) }
                             }
                             .buttonStyle(.plain)
                         }
@@ -1827,7 +1827,7 @@ struct SettingsView: View {
                             .foregroundStyle(Color.beansAmber)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
+                        .background { BeansSurface(shape: Capsule()) }
                     }
                     .buttonStyle(.plain)
                     Spacer()
@@ -1864,7 +1864,7 @@ struct SettingsView: View {
                             .foregroundStyle(Color.beansAmber)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
+                        .background { BeansSurface(shape: Capsule()) }
                     }
                     .buttonStyle(.plain)
                     Spacer()
@@ -1907,7 +1907,7 @@ struct SettingsView: View {
                             .foregroundStyle(Color.beansAmber)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
+                        .background { BeansSurface(shape: Capsule()) }
                     }
                     .buttonStyle(.plain)
                     Spacer()
@@ -2114,7 +2114,7 @@ struct SettingsView: View {
                             .foregroundStyle(Color.beansAmber)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
+                    .background { BeansSurface(shape: Capsule()) }
                     }
                     .buttonStyle(.plain)
                     Button {
@@ -2127,7 +2127,7 @@ struct SettingsView: View {
                             .foregroundStyle(Color.beansAmber)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
+                    .background { BeansSurface(shape: Capsule()) }
                     }
                     .buttonStyle(.plain)
                     Spacer()
@@ -2326,7 +2326,7 @@ struct SettingsView: View {
                     .autocorrectionDisabled()
                     .padding(.horizontal, 12)
                     .padding(.vertical, 11)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
                 Text("输入后才会启用第三方音源。密钥只保存在本机，不会上传到 Beans 服务器。")
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
@@ -2897,7 +2897,7 @@ struct SettingsView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 18))
                             .foregroundStyle(Color.beansAmber)
-                            .background(Circle().fill(.ultraThinMaterial))
+                            .background { BeansSurface(shape: Circle()) }
                             .padding(5)
                     }
                 }
@@ -2912,7 +2912,7 @@ struct SettingsView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.beansComment)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(.ultraThinMaterial))
+                    .background { BeansSurface(shape: Circle()) }
                     .clipShape(Circle())
                     .contentShape(Circle())
                     .padding(6)

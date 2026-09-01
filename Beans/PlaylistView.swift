@@ -21,6 +21,11 @@ struct PlaylistView: View {
     @State private var searchText = ""
     @State private var sortMode: PlaylistSortMode = .original
     @AppStorage("beans.homeHeaderHideSort") private var hideSortButton = false
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
 
     var body: some View {
         let _ = theme.accent
@@ -62,7 +67,7 @@ struct PlaylistView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 14) {
+            HStack(spacing: isNativeClean ? 18 : 14) {
                 CoverImage(url: playlist.coverURL, size: 96, cornerRadius: 18)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(playlist.name)
@@ -111,7 +116,7 @@ struct PlaylistView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
 
                 if !hideSortButton {
                     Menu {
@@ -125,16 +130,14 @@ struct PlaylistView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Color.beansAmber)
                             .frame(width: 38, height: 38)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .background { BeansSurface(shape: Circle()) }
                     }
                     .buttonStyle(GlassPressButtonStyle())
                 }
             }
         }
         .padding(14)
-        .background {
-                        BeansGlass(shape: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        }
+        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 24, style: .continuous)) }
     }
 
     /// 歌单内搜索 + 排序后的列表

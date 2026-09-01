@@ -136,7 +136,7 @@ struct QQCookieImportPanel: View {
                 .font(BeansFont.appFont(11, .regular, .monospaced))
                 .beansScrollContentBackgroundHidden()
                 .padding(10)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .frame(height: 160)
                 .padding(.horizontal, 20)

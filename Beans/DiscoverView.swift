@@ -759,7 +759,7 @@ struct DiscoverView: View {
                                         if neteaseCat == cat {
                                             Capsule().fill(Color.beansAmber)
                                         } else {
-                                            Capsule().fill(.ultraThinMaterial)
+                                            Capsule().fill(Color.primary.opacity(0.04))
                                         }
                                     }
                             }

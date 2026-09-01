@@ -22,6 +22,22 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Apple Music 播放页实时调试组件。
+enum AppleMusicLayoutPart: String, CaseIterable, Identifiable {
+    case top = "顶部指示线"
+    case cover = "封面"
+    case title = "歌名歌手"
+    case previewLyric = "预览歌词"
+    case progress = "进度条"
+    case previous = "上一首"
+    case play = "播放按钮"
+    case next = "下一首"
+    case volume = "音量条"
+    case actions = "底部按钮"
+
+    var id: String { rawValue }
+}
+
 /// 单个组件的自定义位置（相对默认位置的偏移）与缩放
 struct PlayerLayoutEntry: Codable, Equatable {
     var x: CGFloat = 0
@@ -89,6 +105,102 @@ enum PlayerLayoutStore {
         case .lyric:
             return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
         }
+    }
+}
+
+/// Apple Music 播放页布局存储。
+final class AppleMusicLayoutStore: ObservableObject {
+    static let shared = AppleMusicLayoutStore()
+
+    private static let dataKey = "beans.appleMusic.layoutData"
+    private let defaults = UserDefaults.standard
+
+    @Published var entries: [String: PlayerLayoutEntry] {
+        didSet { save() }
+    }
+
+    private init() {
+        if let raw = defaults.string(forKey: Self.dataKey),
+           let data = raw.data(using: .utf8),
+           let stored = try? JSONDecoder().decode([String: PlayerLayoutEntry].self, from: data) {
+            entries = stored
+        } else {
+            entries = Self.migrateLegacyEntries(from: defaults)
+        }
+    }
+
+    func entry(for part: AppleMusicLayoutPart) -> PlayerLayoutEntry {
+        entries[part.rawValue] ?? Self.defaultEntry(for: part)
+    }
+
+    func set(_ entry: PlayerLayoutEntry, for part: AppleMusicLayoutPart) {
+        entries[part.rawValue] = entry
+    }
+
+    func reset(_ part: AppleMusicLayoutPart) {
+        entries[part.rawValue] = nil
+    }
+
+    func resetAll() {
+        entries = [:]
+    }
+
+    private func save() {
+        guard let data = try? JSONEncoder().encode(entries),
+              let raw = String(data: data, encoding: .utf8) else {
+            return
+        }
+        defaults.set(raw, forKey: Self.dataKey)
+    }
+
+    static func defaultEntry(for part: AppleMusicLayoutPart) -> PlayerLayoutEntry {
+        switch part {
+        case .top, .cover, .title, .previewLyric, .progress, .previous, .play, .next, .volume, .actions:
+            return PlayerLayoutEntry()
+        }
+    }
+
+    private static func migrateLegacyEntries(from defaults: UserDefaults) -> [String: PlayerLayoutEntry] {
+        var migrated: [String: PlayerLayoutEntry] = [:]
+
+        func legacyDouble(_ key: String, defaultValue: Double) -> CGFloat {
+            guard defaults.object(forKey: key) != nil else { return CGFloat(defaultValue) }
+            return CGFloat(defaults.double(forKey: key))
+        }
+
+        migrated[AppleMusicLayoutPart.top.rawValue] = PlayerLayoutEntry(
+            y: legacyDouble("beans.appleMusic.topY", defaultValue: 0)
+        )
+        migrated[AppleMusicLayoutPart.cover.rawValue] = PlayerLayoutEntry(
+            scale: legacyDouble("beans.appleMusic.coverScale", defaultValue: 1)
+        )
+        migrated[AppleMusicLayoutPart.title.rawValue] = PlayerLayoutEntry(
+            y: legacyDouble("beans.appleMusic.titleY", defaultValue: 0)
+        )
+        migrated[AppleMusicLayoutPart.previewLyric.rawValue] = PlayerLayoutEntry(
+            y: legacyDouble("beans.appleMusic.lyricY", defaultValue: 0)
+        )
+        let legacyControls = PlayerLayoutEntry(
+            y: legacyDouble("beans.appleMusic.controlsY", defaultValue: 0)
+        )
+        migrated[AppleMusicLayoutPart.previous.rawValue] = legacyControls
+        migrated[AppleMusicLayoutPart.play.rawValue] = legacyControls
+        migrated[AppleMusicLayoutPart.next.rawValue] = legacyControls
+        migrated[AppleMusicLayoutPart.actions.rawValue] = PlayerLayoutEntry(
+            y: legacyDouble("beans.appleMusic.actionsY", defaultValue: 0)
+        )
+        return migrated
+    }
+}
+
+/// 仅负责应用 Apple Music 组件的实时位置和大小。
+struct AppleMusicLayoutTransform: ViewModifier {
+    let entry: PlayerLayoutEntry
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(entry.scale)
+            .offset(x: entry.x, y: entry.y)
     }
 }
 

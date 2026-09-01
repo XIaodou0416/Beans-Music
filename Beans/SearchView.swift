@@ -90,6 +90,7 @@ struct SearchView: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
 
     @State private var keyword = ""
     @State private var provider: SearchProvider = .netease
@@ -111,6 +112,10 @@ struct SearchView: View {
     @State private var searchTask: Task<Void, Never>?
     /// UIKit 输入框控制器（提交拼音、收起键盘等由它统一处理）
     @State private var searchController = SearchFieldController()
+
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
 
     var body: some View {
         let _ = theme.accent
@@ -191,7 +196,7 @@ struct SearchView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
                 Text("搜索")
-                    .font(BeansFont.appFont(30, .bold))
+                    .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
                     .foregroundStyle(Color.beansLabel)
                 Spacer(minLength: 0)
                 HStack(spacing: 6) {
@@ -210,7 +215,7 @@ struct SearchView: View {
                 .foregroundStyle(Color.beansComment)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background { BeansGlass(shape: Capsule()) }
+                .background { BeansSurface(shape: Capsule()) }
             }
         }
     }
@@ -295,10 +300,10 @@ struct SearchView: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
         .background {
-                        BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            BeansSurface(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .beansCardShadow(radius: 8, y: 3)
+        .beansCardShadow(radius: isNativeClean ? 1 : 8, y: isNativeClean ? 0.5 : 3)
     }
 
     // MARK: - 平台选择（等宽分段控件）
@@ -338,7 +343,7 @@ struct SearchView: View {
             }
         }
         .padding(4)
-        .background { BeansGlass(shape: Capsule()) }
+        .background { BeansSurface(shape: Capsule()) }
         .clipShape(Capsule())
     }
 
@@ -381,7 +386,7 @@ struct SearchView: View {
         }
         .padding(4)
         .background {
-                        BeansGlass(shape: Capsule())
+            BeansSurface(shape: Capsule())
         }
         .clipShape(Capsule())
         .padding(.horizontal, 20)
@@ -524,7 +529,7 @@ struct SearchView: View {
                                     .foregroundStyle(Color.beansAmber)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
-                                    .background { BeansGlass(shape: Capsule()) }
+                            .background { BeansSurface(shape: Capsule()) }
                             }
                             .buttonStyle(.plain)
                         }
@@ -537,7 +542,7 @@ struct SearchView: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background {
-                                                                BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             }
                         }
                     }
@@ -603,7 +608,7 @@ struct SearchView: View {
                                 .padding(.vertical, 8)
                                 .contentShape(Rectangle())
                                 .background {
-                                                                        BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 }
                             }
                             .buttonStyle(GlassPressButtonStyle(scale: 0.97))
@@ -671,7 +676,7 @@ struct SearchView: View {
                                 .padding(.vertical, 8)
                                 .contentShape(Rectangle())
                                 .background {
-                                                                        BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 }
                             }
                             .buttonStyle(GlassPressButtonStyle(scale: 0.97))

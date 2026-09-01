@@ -38,7 +38,7 @@ struct LoginView: View {
                 qrArea
                     .frame(width: 250, height: 250)
                     .padding(18)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 30, style: .continuous)) }
                     .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                     .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
 

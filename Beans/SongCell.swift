@@ -4,6 +4,7 @@ struct SongCell: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
 
     let song: Song
     var showCover = true
@@ -18,6 +19,10 @@ struct SongCell: View {
 
     private var isCurrent: Bool {
         player.currentSong?.identityKey == song.identityKey
+    }
+
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
 
     private var rowContent: some View {
@@ -102,7 +107,7 @@ struct SongCell: View {
     var body: some View {
         let _ = theme.accent
         Group {
-            if glassRow {
+            if glassRow && !isNativeClean {
                 rowContent
                     .padding(.horizontal, 10)
                     .background {

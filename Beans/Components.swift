@@ -145,7 +145,7 @@ struct BeansGlass<S: Shape>: View {
     var body: some View {
         if uiStyle == .nativeClean {
             shape
-                .fill(Color(UIColor.secondarySystemGroupedBackground).opacity(0.94))
+                .fill(Color.primary.opacity(0.038))
         } else if isLiquid {
             if #available(iOS 26, *) {
                 GlassEffectContainer {
@@ -166,6 +166,26 @@ struct BeansGlass<S: Shape>: View {
                 shape
                     .fill(Color.beansGlassFill.opacity(0.62))
             }
+        }
+    }
+}
+
+/// 统一表面容器：Apple 简洁样式使用低存在感的平面底色，
+/// 其他样式继续沿用原有的玻璃材质，避免页面局部出现不同质感。
+struct BeansSurface<S: Shape>: View {
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+
+    let shape: S
+
+    private var uiStyle: BeansUIStyle {
+        uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
+    }
+
+    var body: some View {
+        if uiStyle == .nativeClean {
+            shape.fill(Color.primary.opacity(0.038))
+        } else {
+            BeansGlass(shape: shape)
         }
     }
 }
@@ -203,14 +223,10 @@ struct GlassCard<Content: View>: View {
                 .padding(resolvedPadding)
                 .background {
                     RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
-                        .fill(Color(UIColor.secondarySystemGroupedBackground).opacity(0.95))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.8)
+                        .fill(Color.primary.opacity(0.038))
                 }
                 .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
-                .beansCardShadow(radius: 2, y: 1)
+                .beansCardShadow(radius: 1, y: 0.5)
         } else if isLiquid {
             if #available(iOS 26, *) {
                 GlassEffectContainer {
@@ -467,9 +483,7 @@ struct GlassIconButton: View {
                 .frame(width: size, height: size)
                 .background {
                     if isNativeClean {
-                        Circle()
-                            .fill(Color(UIColor.secondarySystemGroupedBackground))
-                            .overlay(Circle().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.8))
+                        Circle().fill(active ? Color.beansAmber.opacity(0.12) : .clear)
                     } else {
                         BeansGlass(shape: Circle())
                     }
@@ -485,10 +499,15 @@ struct GlassIconButton: View {
 
 struct GlassButton: View {
     @EnvironmentObject private var theme: ThemeStore
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     let title: String
     var systemName: String?
     var prominent = false
     let action: () -> Void
+
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
 
     var body: some View {
         let _ = theme.accent
@@ -500,14 +519,23 @@ struct GlassButton: View {
                 Text(title)
             }
             .font(BeansFont.appFont(15, .semibold))
-            .foregroundStyle(prominent ? Color.black : Color.beansLabel)
+            .foregroundStyle(prominent ? Color.white : Color.beansLabel)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background(
-                prominent
-                    ? AnyShapeStyle(LinearGradient.beansAccent)
-                    : AnyShapeStyle(.thinMaterial)
-            )
+            .background {
+                if prominent {
+                    Capsule().fill(Color.beansAmber)
+                } else if isNativeClean {
+                    Capsule().fill(Color.primary.opacity(0.055))
+                } else {
+                    Capsule().fill(.thinMaterial)
+                }
+            }
+            .overlay {
+                if isNativeClean && !prominent {
+                    Capsule().strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.7)
+                }
+            }
             .clipShape(Capsule())
         }
         .buttonStyle(GlassPressButtonStyle())
@@ -531,7 +559,7 @@ struct SectionHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title)
-                .font(BeansFont.appFont(isNativeClean ? 28 : 21, .bold))
+                .font(BeansFont.appFont(isNativeClean ? 26 : 21, .bold))
                 .foregroundStyle(titleColor)
             Spacer()
             if let trailing {

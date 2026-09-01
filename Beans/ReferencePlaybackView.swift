@@ -14,6 +14,7 @@ struct ReferencePlaybackView: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
+    @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
 
     let song: Song?
     let lyrics: [LyricLine]
@@ -36,18 +37,16 @@ struct ReferencePlaybackView: View {
     @AppStorage("beans.appleMusic.volumeHex") private var volumeHex = ""
     @AppStorage("beans.appleMusic.syncWallpaper") private var syncWallpaper = false
     @AppStorage("beans.appleMusic.wallpaperBlur") private var wallpaperBlur = 14.0
-    @AppStorage("beans.appleMusic.topY") private var topOffsetY = 0.0
-    @AppStorage("beans.appleMusic.coverScale") private var coverScale = 1.0
-    @AppStorage("beans.appleMusic.titleY") private var titleOffsetY = 0.0
-    @AppStorage("beans.appleMusic.lyricY") private var lyricOffsetY = 0.0
-    @AppStorage("beans.appleMusic.controlsY") private var controlsOffsetY = 0.0
-    @AppStorage("beans.appleMusic.actionsY") private var actionsOffsetY = 0.0
     @State private var lyricCenters: [UUID: CGFloat] = [:]
     @State private var focusedLyricID: UUID?
     @State private var lyricsViewportHeight: CGFloat = 0
     @State private var isDraggingLyrics = false
     @State private var dismissDragOffset: CGFloat = 0
     @State private var resumeTask: Task<Void, Never>?
+
+    private func layoutEntry(_ part: AppleMusicLayoutPart) -> PlayerLayoutEntry {
+        appleLayout.entry(for: part)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -85,6 +84,9 @@ struct ReferencePlaybackView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
+        .onAppear {
+            dismissDragOffset = 0
+        }
         .onDisappear { resumeTask?.cancel() }
     }
 
@@ -116,7 +118,7 @@ struct ReferencePlaybackView: View {
             .fill(.white.opacity(0.7))
             .frame(width: 42, height: 5)
             .frame(width: 64, height: 29)
-            .offset(y: CGFloat(topOffsetY))
+            .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.top)))
             .contentShape(Rectangle())
             .gesture(closeGesture)
             .accessibilityLabel("收起播放器")
@@ -139,7 +141,7 @@ struct ReferencePlaybackView: View {
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .shadow(color: .black.opacity(0.46), radius: 36, y: 18)
             .scaleEffect(player.isPlaying ? 1 : 0.965)
-            .scaleEffect(CGFloat(coverScale))
+            .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.cover)))
             .animation(.spring(response: 0.36, dampingFraction: 0.84), value: player.isPlaying)
 
             VStack(spacing: 5) {
@@ -166,7 +168,7 @@ struct ReferencePlaybackView: View {
             }
             .frame(maxWidth: 420)
             .padding(.top, 22)
-            .offset(y: CGFloat(titleOffsetY))
+            .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.title)))
 
             MiniLyricsPreview(lines: previewLyrics, primary: primaryColor, secondary: secondaryColor) {
                 guard !lyrics.isEmpty else { return }
@@ -174,7 +176,7 @@ struct ReferencePlaybackView: View {
                 showLyrics = true
             }
             .padding(.top, 18)
-            .offset(y: CGFloat(lyricOffsetY))
+            .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.previewLyric)))
 
             Spacer(minLength: 0)
         }
@@ -304,6 +306,7 @@ struct ReferencePlaybackView: View {
     private var playbackControls: some View {
         VStack(spacing: 15) {
             ReferenceScrubber()
+                .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.progress)))
             HStack(spacing: 28) {
                 Button {
                     BeansHaptics.tap()
@@ -313,6 +316,7 @@ struct ReferencePlaybackView: View {
                         .font(.system(size: 25, weight: .semibold))
                 }
                 .buttonStyle(.plain)
+                .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.previous)))
 
                 Button {
                     BeansHaptics.tap()
@@ -323,6 +327,7 @@ struct ReferencePlaybackView: View {
                         .foregroundStyle(primaryColor)
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+                .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.play)))
 
                 Button {
                     BeansHaptics.tap()
@@ -332,14 +337,15 @@ struct ReferencePlaybackView: View {
                         .font(.system(size: 25, weight: .semibold))
                 }
                 .buttonStyle(.plain)
+                .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.next)))
             }
             .foregroundStyle(primaryColor)
             .frame(maxWidth: 320)
-            .offset(y: CGFloat(controlsOffsetY))
 
             if showVolumeControl {
                 ReferenceVolumeControl(accent: volumeColor, secondary: secondaryColor)
                     .frame(maxWidth: 420)
+                    .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.volume)))
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
@@ -356,7 +362,7 @@ struct ReferencePlaybackView: View {
                 }
             }
             .frame(maxWidth: 420)
-            .offset(y: CGFloat(actionsOffsetY))
+            .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.actions)))
         }
         .gesture(commentsGesture)
     }

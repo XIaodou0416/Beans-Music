@@ -161,7 +161,7 @@ struct ArtistHomeSheet: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 2)
             }
@@ -265,9 +265,7 @@ struct ArtistHomeSheet: View {
                             }
                             .padding(6)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background {
-                                                                BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            }
+                            .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
                         }
                         .buttonStyle(.plain)
                     }

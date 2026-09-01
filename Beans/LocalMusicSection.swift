@@ -110,9 +110,7 @@ struct LocalMusicSection: View {
                     }
                 }
                 .padding(.vertical, 6)
-                .background {
-                    BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                }
+                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)) }
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .beansCardShadow(radius: 8, y: 3)
             }

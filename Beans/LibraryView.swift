@@ -61,7 +61,12 @@ struct LibraryView: View {
     @State private var kugouPlaylists: [Playlist] = []
     @State private var kugouLoading = false
     @State private var kugouSavedAt = Date.distantPast
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     private var libraryProviders: [LibraryProvider] { platformPrefs.enabledLibraryProviders }
+
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
 
     var body: some View {
         let _ = theme.accent
@@ -71,7 +76,7 @@ struct LibraryView: View {
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: isNativeClean ? 28 : 24) {
                     header
                     providerPicker
                     // 板块按用户自定义顺序渲染（可拖拽排序）
@@ -92,8 +97,8 @@ struct LibraryView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.horizontal, isNativeClean ? 24 : 16)
+                .padding(.top, isNativeClean ? 20 : 8)
                 .padding(.bottom, 190)
                 .frame(maxWidth: 860)
                 .frame(maxWidth: .infinity)
@@ -173,7 +178,7 @@ struct LibraryView: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("音乐库")
-                        .font(BeansFont.appFont(30, .bold))
+                        .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
                         .foregroundStyle(Color.beansLabel)
                     Text(librarySubtitle)
                         .font(BeansFont.appFont(13))
@@ -380,11 +385,9 @@ struct LibraryView: View {
             }
         }
         .padding(4)
-        .background {
-                        BeansGlass(shape: Capsule())
-        }
-        .clipShape(Capsule())
-        .beansCardShadow(radius: 6, y: 2)
+                .background { BeansSurface(shape: Capsule()) }
+                .clipShape(Capsule())
+        .beansCardShadow(radius: isNativeClean ? 1 : 6, y: isNativeClean ? 0.5 : 2)
     }
 
     private func refreshCurrentSource(force: Bool) async {
