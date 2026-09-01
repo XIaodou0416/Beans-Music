@@ -103,6 +103,7 @@ struct RootView: View {
             // 因为系统 TabView 的内容层会盖住 RootView 底层的 ZStack 背景。
             TabView(selection: $selection) {
                 DiscoverView()
+                    .contextMenu { platformSelectionMenu }
                     .tabItem { Label(tabLabelsVisible ? "主页" : "", systemImage: "house.fill") }
                     .tag(RootTab.discover)
                 SearchView()
@@ -112,7 +113,6 @@ struct RootView: View {
                     .tabItem { Label(tabLabelsVisible ? "音乐库" : "", systemImage: "music.note.list") }
                     .tag(RootTab.library)
                 ProfileView()
-                    .contextMenu { platformSelectionMenu }
                     .tabItem { Label(tabLabelsVisible ? "我的" : "", systemImage: "person.crop.circle") }
                     .tag(RootTab.profile)
             }
@@ -375,7 +375,7 @@ struct RootView: View {
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.94))
                 .contextMenu {
-                    if tab == .profile {
+                    if tab == .discover {
                         platformSelectionMenu
                     }
                 }

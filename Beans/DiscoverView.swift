@@ -549,18 +549,15 @@ struct DiscoverView: View {
                     .font(BeansFont.appFont(15, .bold))
                     .foregroundStyle(Color.primary)
                     .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background { BeansGlass(shape: Capsule()) }
                 Text(subtitle)
                     .font(BeansFont.appFont(12, .medium))
                     .foregroundStyle(Color.secondary)
                     .lineLimit(1)
             }
-            .padding(10)
-            .frame(width: 186, alignment: .leading)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .beansCardShadow(radius: 6, y: 2)
+            .frame(width: 166, alignment: .leading)
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.96))
     }
