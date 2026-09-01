@@ -127,7 +127,13 @@ struct DiscoverView: View {
                                     if !dailySongs.isEmpty {
                                         dailySection
                                             .sectionEntrance(delay: 0)
-                                            .contextMenu { homePlatformSelectionMenu }
+                                            .simultaneousGesture(
+                                                LongPressGesture(minimumDuration: 0.55)
+                                                    .onEnded { _ in
+                                                        BeansHaptics.select()
+                                                        showHomePlatformMenu = true
+                                                    }
+                                            )
                                     }
                                 case "排行榜":
                                     if hasRankData { topListsSection.sectionEntrance(delay: 0.08) }
@@ -530,8 +536,8 @@ struct DiscoverView: View {
                     }
                 }
                 .padding(.vertical, 2)
-                .padding(.horizontal, isNativeClean ? -24 : 0)
             }
+            .padding(.horizontal, isNativeClean ? -24 : 0)
         }
         .id("rankTopSection")
     }
@@ -553,13 +559,6 @@ struct DiscoverView: View {
                         .font(.system(size: 58, weight: .bold))
                         .foregroundStyle(.white.opacity(0.18))
                         .offset(x: 24, y: -16)
-                    Text(name)
-                        .font(BeansFont.appFont(23, .bold))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.72)
-                        .padding(18)
                 }
                 .frame(width: 166, height: 166)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -747,24 +746,16 @@ struct DiscoverView: View {
                     }
                 }
                 .padding(.vertical, 2)
-                .padding(.horizontal, isNativeClean ? -24 : 0)
             }
+            .padding(.horizontal, isNativeClean ? -24 : 0)
         }
-        .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
-            homePlatformSelectionMenu
-        }
-    }
-
-    @ViewBuilder
-    private var homePlatformSelectionMenu: some View {
-        let current = SearchProvider(rawValue: homeSourceRaw) ?? homeProviders.first ?? .netease
-        Text("选择主页平台")
-        ForEach(homeProviders) { provider in
-            Button {
+        .sheet(isPresented: $showHomePlatformMenu) {
+            PlatformPickerSheet(
+                current: source,
+                providers: homeProviders
+            ) { provider in
                 BeansHaptics.select()
                 homeSourceRaw = provider.rawValue
-            } label: {
-                Label(provider.rawValue, systemImage: provider == current ? "checkmark" : provider.icon)
             }
         }
     }

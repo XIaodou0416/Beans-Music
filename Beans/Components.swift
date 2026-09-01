@@ -451,6 +451,7 @@ struct GlassIconButton: View {
     let systemName: String
     var size: CGFloat = 44
     var active = false
+    var forceLiquid = false
     let action: () -> Void
 
     private var isNativeClean: Bool {
@@ -465,7 +466,7 @@ struct GlassIconButton: View {
                 .foregroundStyle(active ? Color.beansAmber : (isNativeClean ? Color.primary : Color.beansLabel))
                 .frame(width: size, height: size)
                 .background {
-                    if isNativeClean {
+                    if isNativeClean && !forceLiquid {
                         Circle().fill(active ? Color.beansAmber.opacity(0.12) : .clear)
                     } else {
                         BeansGlass(shape: Circle())
@@ -507,7 +508,10 @@ struct GlassButton: View {
             .padding(.vertical, 12)
             .background {
                 if prominent {
-                    Capsule().fill(Color.beansAmber)
+                    ZStack {
+                        BeansGlass(shape: Capsule(), forceLiquid: true)
+                        Capsule().fill(Color.beansAmber.opacity(0.78))
+                    }
                 } else if isNativeClean {
                     Capsule().fill(Color.primary.opacity(0.055))
                 } else {

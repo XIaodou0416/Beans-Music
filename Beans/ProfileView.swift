@@ -108,7 +108,7 @@ struct ProfileView: View {
                         showSectionSort = true
                     }
                 }
-                GlassIconButton(systemName: "gearshape.fill") {
+                GlassIconButton(systemName: "gearshape.fill", forceLiquid: true) {
                     BeansHaptics.tap()
                     homeRenderingPaused = true
                     showSettings = true
@@ -131,7 +131,7 @@ struct ProfileView: View {
                         showSectionSort = true
                     }
                 }
-                GlassIconButton(systemName: "gearshape") {
+                GlassIconButton(systemName: "gearshape", forceLiquid: true) {
                     BeansHaptics.tap()
                     homeRenderingPaused = true
                     showSettings = true
@@ -1699,6 +1699,25 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 .tint(Color.beansAmber)
 
+                Toggle(isOn: $showSongVIPBadge) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("显示歌曲 VIP 图标")
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text("控制歌曲列表、推荐卡、迷你播放器和播放页中的 VIP 标记")
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color.beansAmber)
+
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
@@ -2333,25 +2352,6 @@ struct SettingsView: View {
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
                                 Text("未识别到对应会员且会员歌曲通过第三方音源播放成功时提示")
-                                .font(BeansFont.appFont(11))
-                                .foregroundStyle(Color.beansComment)
-                        }
-                    }
-                }
-                .toggleStyle(.switch)
-                .tint(Color.beansAmber)
-
-                Toggle(isOn: $showSongVIPBadge) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "crown.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("显示歌曲 VIP 图标")
-                                .font(BeansFont.appFont(15))
-                                .foregroundStyle(Color.beansLabel)
-                            Text("控制歌曲列表、迷你播放器和播放页中的 VIP 标记")
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }

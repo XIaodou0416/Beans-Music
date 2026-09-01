@@ -107,7 +107,6 @@ struct RootView: View {
             // 因为系统 TabView 的内容层会盖住 RootView 底层的 ZStack 背景。
             TabView(selection: $selection) {
                 DiscoverView()
-                    .contextMenu { platformSelectionMenu }
                     .tabItem { Label(tabLabelsVisible ? "主页" : "", systemImage: "house.fill") }
                     .tag(RootTab.discover)
                 SearchView()
@@ -153,8 +152,14 @@ struct RootView: View {
                 .allowsHitTesting(false)
         }
         .preferredColorScheme(themeMode.colorScheme)
-        .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
-            platformSelectionMenu
+        .sheet(isPresented: $showHomePlatformMenu) {
+            PlatformPickerSheet(
+                current: SearchProvider(rawValue: homeSourceRaw) ?? platformPrefs.enabledSearchProviders.first ?? .netease,
+                providers: platformPrefs.enabledSearchProviders
+            ) { provider in
+                BeansHaptics.select()
+                homeSourceRaw = provider.rawValue
+            }
         }
         .fullScreenCover(isPresented: $showPlayer) {
             PlayerView(isPresented: $showPlayer)
@@ -442,6 +447,56 @@ struct RootView: View {
             } label: {
                 Label(provider.rawValue, systemImage: provider == current ? "checkmark" : provider.icon)
             }
+        }
+    }
+}
+
+struct PlatformPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let current: SearchProvider
+    let providers: [SearchProvider]
+    let onSelect: (SearchProvider) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("选择主页平台")
+                .font(BeansFont.appFont(19, .bold))
+                .foregroundStyle(Color.beansLabel)
+            ForEach(providers) { provider in
+                Button {
+                    onSelect(provider)
+                    dismiss()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: provider == current ? "checkmark.circle.fill" : provider.icon)
+                            .foregroundStyle(provider == current ? Color.beansAmber : Color.beansComment)
+                        Text(provider.rawValue)
+                            .font(BeansFont.appFont(15, .medium))
+                            .foregroundStyle(Color.beansLabel)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(20)
+        .background(Color.clear)
+        .modifier(ClearSheetBackground())
+        .presentationDetents([.height(CGFloat(116 + providers.count * 60))])
+        .presentationDragIndicator(.visible)
+    }
+}
+
+private struct ClearSheetBackground: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.presentationBackground(.clear)
+        } else {
+            content
         }
     }
 }

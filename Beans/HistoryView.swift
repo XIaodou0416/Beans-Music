@@ -13,7 +13,7 @@ struct HistoryView: View {
                 } else {
                     List {
                         ForEach(Array(player.history.enumerated()), id: \.element.identityKey) { index, song in
-                            SongCell(song: song, glassRow: true) {
+                            SongCell(song: song) {
                                 player.play(songs: player.history, startAt: index)
                             }
                             .listRowBackground(Color.clear)

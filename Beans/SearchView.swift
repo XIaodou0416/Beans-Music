@@ -550,7 +550,7 @@ struct SearchView: View {
                         }
                         .padding(.vertical, 8)
                         ForEach(Array(songResults.enumerated()), id: \.element.identityKey) { index, song in
-                            SongCell(song: song) {
+                            SongCell(song: song, suppressNativeCleanRowGlass: isNativeClean) {
                                 BeansHaptics.tap()
                                 player.play(songs: songResults, startAt: index)
                             }
