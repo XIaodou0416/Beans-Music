@@ -349,14 +349,16 @@ struct DiscoverView: View {
                             }
                     )
                     if !homeHideUsername {
-                        if let nickname = auth.user?.nickname, !nickname.isEmpty {
-                            Text(nickname)
-                        } else {
-                            Text(LocalizedStringKey("发现好音乐"))
+                        Group {
+                            if let nickname = auth.user?.nickname, !nickname.isEmpty {
+                                Text(nickname)
+                            } else {
+                                Text(LocalizedStringKey("发现好音乐"))
+                            }
                         }
-                            .font(BeansFont.appFont(13))
-                            .foregroundStyle(Color.beansComment)
-                            .fixedSize(horizontal: false, vertical: true)
+                        .font(BeansFont.appFont(13))
+                        .foregroundStyle(Color.beansComment)
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer()
