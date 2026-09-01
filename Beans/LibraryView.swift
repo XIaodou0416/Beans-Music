@@ -399,7 +399,7 @@ struct LibraryView: View {
                             Image(systemName: p.icon)
                                 .font(.system(size: 11, weight: .semibold))
                         }
-                        Text(p.rawValue)
+                        Text(LocalizedStringKey(p.rawValue))
                             .font(BeansFont.appFont(13, .semibold))
                     }
                     .foregroundStyle(source == p ? Color.white : Color.beansComment)

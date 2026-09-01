@@ -11,7 +11,9 @@ struct OnboardingView: View {
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
 
     private let totalPages = 4
-    private let confirmText = "我已了解并同意继续使用"
+    private var confirmText: String {
+        languageRaw == AppLanguage.english.rawValue ? "I understand and agree to continue" : "我已了解并同意继续使用"
+    }
 
     var body: some View {
         ZStack {
@@ -94,7 +96,7 @@ struct OnboardingView: View {
             } else {
                 // 免责确认输入框（上方固定提示，输入时不会消失）
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("请输入：\(confirmText)")
+                    Text(LocalizedStringKey("请输入："))
                         .font(BeansFont.appFont(13))
                         .foregroundStyle(Color.beansHighlight)
                         .lineLimit(1)
@@ -239,10 +241,10 @@ struct OnboardingView: View {
                         .foregroundStyle(tint)
                 )
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(BeansFont.appFont(15, .bold))
                     .foregroundStyle(Color.beansLabel)
-                Text(detail)
+                Text(LocalizedStringKey(detail))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansSecondary)
                     .lineLimit(1)
@@ -309,10 +311,10 @@ struct OnboardingView: View {
                         .frame(width: 30, height: 30)
                 )
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(BeansFont.appFont(15, .bold))
                     .foregroundStyle(Color.beansLabel)
-                Text(detail)
+                Text(LocalizedStringKey(detail))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansSecondary)
             }

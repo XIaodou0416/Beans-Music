@@ -207,7 +207,7 @@ struct SearchView: View {
                         BeansHaptics.tap()
                         provider = candidate
                     } label: {
-                        Label(candidate.rawValue, systemImage: candidate == provider ? "checkmark" : candidate.icon)
+                        Label(LocalizedStringKey(candidate.rawValue), systemImage: candidate == provider ? "checkmark" : candidate.icon)
                     }
                 }
             } label: {
@@ -221,7 +221,7 @@ struct SearchView: View {
                         Image(systemName: provider.icon)
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    Text(provider.rawValue)
+                    Text(LocalizedStringKey(provider.rawValue))
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .bold))
                 }
@@ -340,7 +340,7 @@ struct SearchView: View {
                             Image(systemName: p.icon)
                                 .font(.system(size: 11, weight: .semibold))
                         }
-                        Text(p.rawValue)
+                        Text(LocalizedStringKey(p.rawValue))
                             .font(BeansFont.appFont(13, .semibold))
                     }
                     .foregroundStyle(provider == p ? Color.white : Color.beansComment)
@@ -385,7 +385,7 @@ struct SearchView: View {
                     searching = true
                     Task { await startSearch(trimmed) }
                 } label: {
-                    Text(type.rawValue)
+                        Text(LocalizedStringKey(type.rawValue))
                         .font(BeansFont.appFont(13, .semibold))
                         .foregroundStyle(resultType == type ? Color.beansLabel : Color.beansComment)
                         .frame(maxWidth: .infinity)

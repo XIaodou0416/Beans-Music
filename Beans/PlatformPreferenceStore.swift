@@ -164,10 +164,10 @@ struct PlatformPreferencePicker: View {
                                 .frame(width: 28, height: 28)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(provider.rawValue)
+                            Text(LocalizedStringKey(provider.rawValue))
                                 .font(BeansFont.appFont(14, .semibold))
                                 .foregroundStyle(Color.beansLabel)
-                            Text(store.isEnabled(provider) ? "已显示" : "已隐藏")
+                                Text(LocalizedStringKey(store.isEnabled(provider) ? "已显示" : "已隐藏"))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }

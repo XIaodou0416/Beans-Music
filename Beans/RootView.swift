@@ -439,7 +439,7 @@ struct RootView: View {
                 BeansHaptics.select()
                 homeSourceRaw = provider.rawValue
             } label: {
-                Label(provider.rawValue, systemImage: provider == current ? "checkmark" : provider.icon)
+                Label(LocalizedStringKey(provider.rawValue), systemImage: provider == current ? "checkmark" : provider.icon)
             }
         }
     }
@@ -464,7 +464,7 @@ struct PlatformPickerSheet: View {
                     HStack(spacing: 10) {
                         Image(systemName: provider == current ? "checkmark.circle.fill" : provider.icon)
                             .foregroundStyle(provider == current ? Color.beansAmber : Color.beansComment)
-                        Text(provider.rawValue)
+                        Text(LocalizedStringKey(provider.rawValue))
                             .font(BeansFont.appFont(15, .medium))
                             .foregroundStyle(Color.beansLabel)
                         Spacer()

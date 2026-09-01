@@ -286,7 +286,7 @@ private struct VersionLogCard: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Color.beansAmber)
                         .padding(.top, 2)
-                    Text(item)
+                    Text(LocalizedStringKey(item))
                         .font(BeansFont.appFont(13))
                         .foregroundStyle(textColor)
                         .fixedSize(horizontal: false, vertical: true)

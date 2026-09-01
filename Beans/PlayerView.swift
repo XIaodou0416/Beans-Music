@@ -699,7 +699,7 @@ struct PlayerView: View {
                 }
             } label: {
                 VStack(spacing: 2) {
-                    Text(player.isBuffering ? "加载中…" : (player.isPlaying ? "正在播放" : "已暂停"))
+                    Text(LocalizedStringKey(player.isBuffering ? "加载中…" : (player.isPlaying ? "正在播放" : "已暂停")))
                         .font(BeansFont.appFont(12, .semibold))
                         .foregroundStyle(palette.secondary)
                         .lineLimit(1)
@@ -811,7 +811,7 @@ struct PlayerView: View {
                 Image(systemName: systemName)
                     .font(.system(size: 13, weight: .semibold))
                     .frame(width: 20)
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(BeansFont.appFont(13, .semibold))
                 Spacer()
             }
@@ -1688,7 +1688,7 @@ struct PlayerView: View {
             BeansHaptics.select()
             action()
         } label: {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(BeansFont.appFont(12, .semibold))
                 .foregroundStyle(isSelected ? Color.white : palette.secondary)
                 .padding(.horizontal, 10)
@@ -1834,7 +1834,7 @@ struct PlayerView: View {
 
     private func layoutSlider(_ title: String, value: Binding<CGFloat>, range: ClosedRange<CGFloat>, step: CGFloat = 1, format: String = "%.0f") -> some View {
         HStack(spacing: 10) {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(BeansFont.appFont(12, .medium))
                 .foregroundStyle(palette.secondary)
                 .frame(width: 56, alignment: .leading)
@@ -2897,10 +2897,10 @@ struct PlayerSettingsSheet: View {
                             .frame(width: 32, height: 32)
                             .background(selected ? Color.beansAmber : Color.beansAmber.opacity(0.12), in: Circle())
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(style.title)
+                            Text(LocalizedStringKey(style.title))
                                 .font(BeansFont.appFont(13, .semibold))
                                 .foregroundStyle(Color.beansLabel)
-                            Text(style.subtitle)
+                            Text(LocalizedStringKey(style.subtitle))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                                 .lineLimit(1)
@@ -3058,7 +3058,7 @@ struct PlayerSettingsSheet: View {
                 .tint(Color.beansAmber)
                 .font(BeansFont.appFont(14))
             if let caption {
-                Text(caption)
+                Text(LocalizedStringKey(caption))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
             }
@@ -3122,7 +3122,7 @@ struct PlayerSettingsSheet: View {
                         Text("进度条颜色")
                             .font(BeansFont.appFont(13))
                             .foregroundStyle(Color.beansLabel)
-                        Text(progressAccentHex.isEmpty ? "跟随播放控件" : "自定义")
+                        Text(LocalizedStringKey(progressAccentHex.isEmpty ? "跟随播放控件" : "自定义"))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                     }
@@ -3221,10 +3221,10 @@ struct PlayerSettingsSheet: View {
                                 .foregroundStyle(selected ? Color.white : Color.beansLabel)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(style.title)
+                            Text(LocalizedStringKey(style.title))
                                 .font(BeansFont.appFont(13, .semibold))
                                 .foregroundStyle(Color.beansLabel)
-                            Text(style.subtitle)
+                            Text(LocalizedStringKey(style.subtitle))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                                 .lineLimit(1)
@@ -3434,7 +3434,7 @@ struct PlayerSettingsSheet: View {
                     Text("歌词界面背景")
                         .font(BeansFont.appFont(13))
                         .foregroundStyle(Color.beansLabel)
-                    Text(lyricBackgroundImagePath.isEmpty ? "未设置" : "已使用自定义图片")
+                    Text(LocalizedStringKey(lyricBackgroundImagePath.isEmpty ? "未设置" : "已使用自定义图片"))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -3614,7 +3614,7 @@ struct PlayerSettingsSheet: View {
                         VStack(spacing: 5) {
                             Image(systemName: mode.icon)
                                 .font(.system(size: 14, weight: .semibold))
-                            Text(mode.title)
+                            Text(LocalizedStringKey(mode.title))
                                 .font(BeansFont.appFont(11, .semibold))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.78)

@@ -295,7 +295,7 @@ struct DiscoverView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(greetingLines.enumerated()), id: \.offset) { index, line in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(line)
+                                Text(verbatim: homeGreetingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSLocalizedString(line, comment: "") : line)
                                     .font(BeansFont.greetingFont(isNativeClean ? max(42, greetingLineSize(index)) : greetingLineSize(index), .bold))
                                     .foregroundStyle(greetingLineStyle(index))
                                     .overlay(alignment: .bottomLeading) {
@@ -349,7 +349,11 @@ struct DiscoverView: View {
                             }
                     )
                     if !homeHideUsername {
-                        Text(auth.user?.nickname ?? "发现好音乐")
+                        if let nickname = auth.user?.nickname, !nickname.isEmpty {
+                            Text(nickname)
+                        } else {
+                            Text(LocalizedStringKey("发现好音乐"))
+                        }
                             .font(BeansFont.appFont(13))
                             .foregroundStyle(Color.beansComment)
                             .fixedSize(horizontal: false, vertical: true)
@@ -772,7 +776,7 @@ struct DiscoverView: View {
                 BeansHaptics.select()
                 homeSourceRaw = provider.rawValue
             } label: {
-                Label(provider.rawValue, systemImage: provider == current ? "checkmark" : provider.icon)
+                Label(LocalizedStringKey(provider.rawValue), systemImage: provider == current ? "checkmark" : provider.icon)
             }
         }
     }
@@ -801,7 +805,7 @@ struct DiscoverView: View {
                                 neteaseCat = cat
                                 Task { await loadPlaylists(cat: cat) }
                             } label: {
-                                Text(cat)
+                                Text(LocalizedStringKey(cat))
                                     .font(BeansFont.appFont(12, .medium))
                                     .foregroundStyle(neteaseCat == cat ? Color.white : Color.beansComment)
                                     .padding(.horizontal, 12)

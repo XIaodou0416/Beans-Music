@@ -137,7 +137,7 @@ struct ProfileView: View {
                     showSettings = true
                 }
             }
-            Text(accountStatusLine)
+            Text(LocalizedStringKey(accountStatusLine))
                 .font(BeansFont.appFont(12, .medium))
                 .foregroundStyle(Color.beansComment)
                 .lineLimit(1)
@@ -1609,7 +1609,7 @@ struct SettingsView: View {
                         Text("平台显示")
                             .font(BeansFont.appFont(15))
                             .foregroundStyle(Color.beansLabel)
-                        Text(platformPrefs.summaryText)
+                        Text(LocalizedStringKey(platformPrefs.summaryText))
                             .font(BeansFont.appFont(11))
                             .foregroundStyle(Color.beansComment)
                             .lineLimit(1)
@@ -1754,7 +1754,7 @@ struct SettingsView: View {
                         set: { theme.setUIStyle($0) }
                     )) {
                         ForEach(BeansUIStyle.allCases, id: \.self) { style in
-                            Text(style.title).tag(style)
+                            Text(LocalizedStringKey(style.title)).tag(style)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -1791,7 +1791,7 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                     Spacer()
-                    Text(theme.customAccentHex == nil ? "使用预设主题" : "已自定义")
+                            Text(LocalizedStringKey(theme.customAccentHex == nil ? "使用预设主题" : "已自定义"))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -1868,7 +1868,7 @@ struct SettingsView: View {
                             .buttonStyle(.plain)
                         }
                         Spacer()
-                        Text(theme.customBackgroundImage == nil ? "当前：默认背景" : "当前：已应用壁纸")
+                            Text(LocalizedStringKey(theme.customBackgroundImage == nil ? "当前：默认背景" : "当前：已应用壁纸"))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                     }
@@ -2077,7 +2077,7 @@ struct SettingsView: View {
                                 .foregroundStyle(Color.beansAmber)
                             Text("问候语专属字体")
                             Spacer()
-                            Text(homeGreetingFontName.isEmpty ? "跟随全局" : "已设置")
+                            Text(LocalizedStringKey(homeGreetingFontName.isEmpty ? "跟随全局" : "已设置"))
                                 .foregroundStyle(Color.beansComment)
                         }
                         HStack(spacing: 10) {
@@ -2288,7 +2288,7 @@ struct SettingsView: View {
                     }
                     Picker("音质", selection: $audioQualityRaw) {
                         ForEach(BeansAudioQuality.allCases) { q in
-                            Text(q.displayName).tag(q.rawValue)
+                            Text(LocalizedStringKey(q.displayName)).tag(q.rawValue)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -2937,7 +2937,7 @@ struct SettingsView: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                Text(title)
+                Text(LocalizedStringKey(title))
             }
             .font(BeansFont.appFont(13, .semibold))
             .foregroundStyle(Color.beansLabel)
