@@ -158,7 +158,7 @@ struct RootView: View {
                 .environmentObject(player.clock)
                 .environmentObject(auth)
         }
-        .sheet(isPresented: $showProfileFromShortcut) {
+        .fullScreenCover(isPresented: $showProfileFromShortcut) {
             ProfileView()
                 .environmentObject(favorites)
                 .environmentObject(player)
@@ -358,7 +358,7 @@ struct RootView: View {
     private var legacyFloatingTabBar: some View {
         HStack(spacing: 4) {
             legacyTabItemsBar
-                .frame(maxWidth: .infinity)
+                .frame(width: hideProfileTab ? max(0, legacyTabResolvedWidth - 66) : nil)
             if tabPlatformSwitcherEnabled || hideProfileTab {
                 platformSwitcherButton
             }
