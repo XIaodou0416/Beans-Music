@@ -114,6 +114,8 @@ struct PlayerView: View {
     @AppStorage("beans.appleMusic.volumeHex") private var appleVolumeHex = ""
     @AppStorage("beans.appleMusic.syncWallpaper") private var appleSyncWallpaper = false
     @AppStorage("beans.appleMusic.wallpaperBlur") private var appleWallpaperBlur = 14.0
+    @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
+    @AppStorage("beans.appleMusic.showLyricPreview") private var appleShowLyricPreview = true
     /// 侧边滑动手势当前位移（刷视频式切歌过渡）
     @State private var swipeOffset: CGFloat = 0
     @State private var coverDrag: CGSize = .zero
@@ -951,7 +953,7 @@ struct PlayerView: View {
                         .minimumScaleFactor(0.55)
                         .multilineTextAlignment(.center)
                         .shadow(color: albumGlow(albumTitleColor, strong: true), radius: albumTextGlow ? 10 : 0, y: 2)
-                    if song?.isVIP == true {
+                    if showSongVIPBadge, song?.isVIP == true {
                         Text("VIP")
                             .font(BeansFont.appFont(9, .bold))
                             .foregroundStyle(.white)
@@ -1105,7 +1107,7 @@ struct PlayerView: View {
                             .foregroundStyle(palette.text)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                        if song?.isVIP == true {
+                        if showSongVIPBadge, song?.isVIP == true {
                             Text("VIP")
                                 .font(BeansFont.appFont(8, .bold))
                                 .foregroundStyle(.white)
@@ -1801,6 +1803,7 @@ struct PlayerView: View {
         appleAccentHex = ""
         appleVolumeHex = ""
         appleShowVolume = true
+        appleShowLyricPreview = true
         appleSyncWallpaper = false
         appleWallpaperBlur = 14
     }
@@ -3239,6 +3242,9 @@ struct PlayerSettingsSheet: View {
 
     private var appleMusicCard: some View {
         settingCard("Apple Music 样式", isExpanded: $appleMusicExpanded) {
+            Toggle("显示封面页歌词预览", isOn: $appleShowLyricPreview)
+                .font(BeansFont.appFont(13, .medium))
+                .tint(Color.beansAmber)
             Button {
                 coverPlayerStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
                 playerButtonStyleRaw = BeansPlayerButtonStyle.appleMusic.rawValue
@@ -3666,8 +3672,6 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
             switch uiStyle {
             case .clear, .liquid:
                 shape.fill(.ultraThinMaterial)
-            case .compact:
-                shape.fill(Color.beansGlassFill.opacity(0.62))
             case .nativeClean:
                 shape.fill(Color.primary.opacity(0.038))
             }

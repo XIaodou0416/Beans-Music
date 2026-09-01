@@ -5,11 +5,14 @@ struct SongCell: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
 
     let song: Song
     var showCover = true
     /// 玻璃行模式：为行添加清透液态玻璃底（二级列表页统一风格用）
     var glassRow = false
+    /// 需要整体玻璃容器时，单行保持纯净背景
+    var suppressNativeCleanRowGlass = false
     var playbackContext: [Song] = []
     var playbackIndex: Int?
     var onTap: (() -> Void)?
@@ -38,7 +41,7 @@ struct SongCell: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                    if song.isVIP {
+                    if showSongVIPBadge, song.isVIP {
                         Text("VIP")
                             .font(BeansFont.appFont(9, .bold))
                             .foregroundStyle(.white)
@@ -107,7 +110,7 @@ struct SongCell: View {
     var body: some View {
         let _ = theme.accent
         Group {
-            if glassRow || isNativeClean {
+        if glassRow || (isNativeClean && !suppressNativeCleanRowGlass) {
                 rowContent
                     .padding(.horizontal, 10)
                     .background {

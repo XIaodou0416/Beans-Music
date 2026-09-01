@@ -365,7 +365,7 @@ struct LibraryView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(player.history.prefix(5), id: \.identityKey) { song in
-                        SongCell(song: song) {
+                        SongCell(song: song, suppressNativeCleanRowGlass: isNativeClean) {
                             playFromHistory(song)
                         }
                         Divider().overlay(Color.beansComment.opacity(0.15))

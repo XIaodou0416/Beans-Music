@@ -8,6 +8,7 @@ struct MiniPlayerView: View {
     @State private var miniLyrics: [LyricLine] = []
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
 
     private var coverSize: CGFloat { 36 }
     private var controlSize: CGFloat { 32 }
@@ -53,7 +54,7 @@ struct MiniPlayerView: View {
                             .font(BeansFont.appFont(12, .semibold))
                             .foregroundStyle(Color.beansLabel)
                             .lineLimit(1)
-                        if player.currentSong?.isVIP == true {
+                        if showSongVIPBadge, player.currentSong?.isVIP == true {
                             Text("VIP")
                                 .font(BeansFont.appFont(8, .bold))
                                 .foregroundStyle(.white)

@@ -37,6 +37,8 @@ struct ReferencePlaybackView: View {
     @AppStorage("beans.appleMusic.volumeHex") private var volumeHex = ""
     @AppStorage("beans.appleMusic.syncWallpaper") private var syncWallpaper = false
     @AppStorage("beans.appleMusic.wallpaperBlur") private var wallpaperBlur = 14.0
+    @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
+    @AppStorage("beans.appleMusic.showLyricPreview") private var showLyricPreview = true
     @State private var lyricCenters: [UUID: CGFloat] = [:]
     @State private var focusedLyricID: UUID?
     @State private var lyricsViewportHeight: CGFloat = 0
@@ -59,10 +61,16 @@ struct ReferencePlaybackView: View {
                     ZStack {
                         if showLyrics {
                             lyricsPage
-                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                                    removal: .move(edge: .top).combined(with: .opacity)
+                                ))
                         } else {
                             coverPage(size: geometry.size)
-                                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .top).combined(with: .opacity),
+                                    removal: .move(edge: .top).combined(with: .opacity)
+                                ))
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -144,6 +152,7 @@ struct ReferencePlaybackView: View {
             .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.cover)))
             .animation(.spring(response: 0.36, dampingFraction: 0.84), value: player.isPlaying)
 
+            if showLyricPreview {
             VStack(spacing: 5) {
                 HStack(spacing: 9) {
                     Text(song?.name ?? "未在播放")
@@ -151,7 +160,7 @@ struct ReferencePlaybackView: View {
                         .foregroundStyle(primaryColor)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
-                    if song?.isVIP == true {
+                    if showSongVIPBadge, song?.isVIP == true {
                         Text("VIP")
                             .font(BeansFont.appFont(9, .bold))
                             .foregroundStyle(.white)
@@ -177,11 +186,49 @@ struct ReferencePlaybackView: View {
             }
             .padding(.top, 18)
             .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.previewLyric)))
+            } else {
+                compactTrackHeader
+                    .padding(.top, 22)
+            }
 
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 32)
         .simultaneousGesture(closeGesture)
+    }
+
+    private var compactTrackHeader: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(song?.name ?? "未在播放")
+                    .font(BeansFont.appFont(16, .semibold))
+                    .foregroundStyle(primaryColor)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(secondaryColor)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            compactActionButton(
+                icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
+                active: localLibrary.containsSong(song)
+            ) { onFavorite() }
+            Menu {
+                Button("评论", action: onComments)
+                Button("定时关闭", action: onSleepTimer)
+                Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                Button("下载歌曲", action: onDownload)
+                Button("分享歌曲", action: onShare)
+                Button("播放器设置", action: onPlayerSettings)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(primaryColor.opacity(0.78))
+                    .frame(width: 38, height: 38)
+            }
+        }
+        .frame(maxWidth: 420)
     }
 
     private var lyricsPage: some View {
@@ -376,7 +423,7 @@ struct ReferencePlaybackView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(active ? accentColor : primaryColor.opacity(0.78))
                 .frame(width: 58, height: 58)
-                .background(.ultraThinMaterial, in: Circle())
+                .background { BeansGlass(shape: Circle()) }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

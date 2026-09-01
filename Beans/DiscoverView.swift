@@ -16,6 +16,7 @@ struct DiscoverView: View {
     @State private var selectedTopList: TopList?
     @State private var selectedPlaylist: Playlist?
     @State private var showDailyList = false
+    @State private var showHomePlatformMenu = false
     @State private var showSectionSort = false
     /// 主页板块顺序（每日推荐 / 排行榜 / 歌单广场，可自定义）
     @State private var homeOrder = SectionOrderStore.load(SectionOrderStore.homeKey, defaults: SectionOrderStore.homeDefaults)
@@ -62,6 +63,7 @@ struct DiscoverView: View {
     @AppStorage("beans.remoteAnnouncement.mediaURL") private var remoteAnnouncementMediaURL = ""
     @AppStorage("beans.remoteAnnouncement.mediaType") private var remoteAnnouncementMediaType = ""
     @AppStorage("beans.remoteAnnouncement.textColor") private var remoteAnnouncementTextColor = ""
+    @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
     private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
     /// 首页数据源：网易云 / QQ音乐（与搜索页同一控件样式）
     private var source: SearchProvider {
@@ -122,7 +124,11 @@ struct DiscoverView: View {
                             ForEach(homeOrder.filter { availableSections.contains($0) }, id: \.self) { key in
                                 switch key {
                                 case "每日推荐":
-                                    if !dailySongs.isEmpty { dailySection.sectionEntrance(delay: 0) }
+                                    if !dailySongs.isEmpty {
+                                        dailySection
+                                            .sectionEntrance(delay: 0)
+                                            .contextMenu { homePlatformSelectionMenu }
+                                    }
                                 case "排行榜":
                                     if hasRankData { topListsSection.sectionEntrance(delay: 0.08) }
                                 case "歌单广场":
@@ -524,6 +530,7 @@ struct DiscoverView: View {
                     }
                 }
                 .padding(.vertical, 2)
+                .padding(.horizontal, isNativeClean ? -24 : 0)
             }
         }
         .id("rankTopSection")
@@ -710,7 +717,7 @@ struct DiscoverView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 CoverImage(url: song.coverURL, size: isNativeClean ? 156 : 108, cornerRadius: isNativeClean ? 14 : 16)
                                     .overlay(alignment: .topLeading) {
-                                        if song.isVIP {
+                                    if showSongVIPBadge, song.isVIP {
                                             Text("VIP")
                                                 .font(BeansFont.appFont(9, .bold))
                                                 .foregroundStyle(.white)
@@ -740,6 +747,24 @@ struct DiscoverView: View {
                     }
                 }
                 .padding(.vertical, 2)
+                .padding(.horizontal, isNativeClean ? -24 : 0)
+            }
+        }
+        .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
+            homePlatformSelectionMenu
+        }
+    }
+
+    @ViewBuilder
+    private var homePlatformSelectionMenu: some View {
+        let current = SearchProvider(rawValue: homeSourceRaw) ?? homeProviders.first ?? .netease
+        Text("选择主页平台")
+        ForEach(homeProviders) { provider in
+            Button {
+                BeansHaptics.select()
+                homeSourceRaw = provider.rawValue
+            } label: {
+                Label(provider.rawValue, systemImage: provider == current ? "checkmark" : provider.icon)
             }
         }
     }

@@ -160,7 +160,7 @@ struct BeansGlass<S: Shape>: View {
             case .clear, .liquid:
                 shape
                     .fill(.ultraThinMaterial)
-            case .compact, .nativeClean:
+            case .nativeClean:
                 shape
                     .fill(Color.beansGlassFill.opacity(0.62))
             }
@@ -200,13 +200,11 @@ struct GlassCard<Content: View>: View {
     }
 
     private var resolvedCornerRadius: CGFloat {
-        if uiStyle == .compact { return min(cornerRadius, 16) }
         if uiStyle == .nativeClean { return min(cornerRadius, 18) }
         return cornerRadius
     }
 
     private var resolvedPadding: CGFloat {
-        if uiStyle == .compact { return 12 }
         if uiStyle == .nativeClean { return 13 }
         return 16
     }
@@ -232,11 +230,11 @@ struct GlassCard<Content: View>: View {
                 .padding(resolvedPadding)
                 .background {
                     RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
-                        .fill(uiStyle == .compact ? Color.beansGlassFill.opacity(0.62) : Color.clear)
+                        .fill(Color.clear)
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
                 }
                 .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
-                .beansCardShadow(radius: uiStyle == .compact ? 4 : 9, y: uiStyle == .compact ? 1 : 3)
+                .beansCardShadow(radius: 9, y: 3)
         }
     }
 }
