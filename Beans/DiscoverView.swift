@@ -537,7 +537,8 @@ struct DiscoverView: View {
                 }
                 .padding(.vertical, 2)
             }
-            .padding(.horizontal, isNativeClean ? -24 : 0)
+            // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
+            .padding(.trailing, isNativeClean ? -24 : 0)
         }
         .id("rankTopSection")
     }
@@ -549,7 +550,7 @@ struct DiscoverView: View {
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 ZStack {
-                    CoverImage(url: coverURL, size: 156, cornerRadius: 10)
+                    CoverImage(url: coverURL, size: 148, cornerRadius: 10)
                     LinearGradient(
                         colors: [.black.opacity(0.08), .black.opacity(0.68)],
                         startPoint: .top,
@@ -560,7 +561,7 @@ struct DiscoverView: View {
                         .foregroundStyle(.white.opacity(0.18))
                         .offset(x: 24, y: -16)
                 }
-                .frame(width: 156, height: 156)
+                .frame(width: 148, height: 148)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Text(name)
                     .font(BeansFont.appFont(15, .bold))
@@ -574,7 +575,7 @@ struct DiscoverView: View {
                     .foregroundStyle(Color.secondary)
                     .lineLimit(1)
             }
-            .frame(width: 156, alignment: .leading)
+            .frame(width: 148, alignment: .leading)
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.96))
     }
@@ -744,7 +745,8 @@ struct DiscoverView: View {
                 }
                 .padding(.vertical, 2)
             }
-            .padding(.horizontal, isNativeClean ? -24 : 0)
+            // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
+            .padding(.trailing, isNativeClean ? -24 : 0)
         }
         .sheet(isPresented: $showHomePlatformMenu) {
             PlatformPickerSheet(
