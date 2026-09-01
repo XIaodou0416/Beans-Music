@@ -728,14 +728,14 @@ struct DiscoverView: View {
                         BeansHaptics.tap()
                         showDailyList = true
                     } label: {
-                        VStack(spacing: 8) {
+                        VStack(spacing: 5) {
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.system(size: 15, weight: .semibold))
                             Text("查看更多")
-                                .font(BeansFont.appFont(13, .semibold))
+                                .font(BeansFont.appFont(11, .semibold))
                         }
                         .foregroundStyle(Color.beansLabel)
-                        .frame(width: isNativeClean ? 72 : 68, height: isNativeClean ? 132 : 96)
+                        .frame(width: isNativeClean ? 58 : 56, height: isNativeClean ? 96 : 84)
                         .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
                     }
                     .buttonStyle(GlassPressButtonStyle(scale: 0.94))

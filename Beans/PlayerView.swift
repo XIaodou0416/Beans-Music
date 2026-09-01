@@ -1365,7 +1365,7 @@ struct PlayerView: View {
     }
 
     @ViewBuilder
-    private func playerButtonSurface(size: CGFloat, active: Bool = false, primary: Bool = false) -> some View {
+    private func playerButtonSurface(size: CGFloat, active: Bool = false, primary: Bool = false, appleLiquid: Bool = false) -> some View {
         switch playerButtonStyle {
         case .glass:
             ZStack {
@@ -1395,10 +1395,22 @@ struct PlayerView: View {
                 }
                 .frame(width: size, height: size)
         case .appleMusic:
-            if primary {
-                Circle()
-                    .fill(Color.white.opacity(0.98))
+            if appleLiquid {
+                if #available(iOS 26, *) {
+                    GlassEffectContainer {
+                        Circle()
+                            .fill(.clear)
+                            .glassEffect(
+                                primary ? .regular.tint(.white.opacity(0.96)) : .regular,
+                                in: Circle()
+                            )
+                    }
                     .frame(width: size, height: size)
+                } else {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: size, height: size)
+                }
             } else {
                 Color.clear
                     .frame(width: size, height: size)
@@ -1454,7 +1466,7 @@ struct PlayerView: View {
                 .foregroundStyle(accent ? controlAccent : playerButtonText)
                 .frame(width: deckPlayerButtonSize, height: deckPlayerButtonSize)
                 .background {
-                    playerButtonSurface(size: deckPlayerButtonSize, active: accent)
+                    playerButtonSurface(size: deckPlayerButtonSize, active: accent, appleLiquid: true)
                 }
                 .clipShape(Circle())
         }
@@ -1472,7 +1484,7 @@ struct PlayerView: View {
                 .foregroundStyle(playerButtonStyle == .appleMusic ? Color.black : Color.white)
                 .frame(width: primaryPlayerButtonSize, height: primaryPlayerButtonSize)
                 .background {
-                    playerButtonSurface(size: primaryPlayerButtonSize, primary: true)
+                    playerButtonSurface(size: primaryPlayerButtonSize, primary: true, appleLiquid: true)
                 }
                 .clipShape(Circle())
         }
