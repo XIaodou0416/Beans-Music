@@ -886,7 +886,9 @@ final class PlayerManager: NSObject, ObservableObject {
               let failedSong = song,
               currentSong?.identityKey == failedSong.identityKey else { return }
         BeansLogger.shared.log("播放失败自动下一首：\(failedSong.name)｜原因=\(reason)", level: .info)
-        ToastCenter.shared.show("当前歌曲播放失败，已自动切到下一首", duration: 2)
+        Task { @MainActor in
+            ToastCenter.shared.show("当前歌曲播放失败，已自动切到下一首", duration: 2)
+        }
         next(manual: false)
     }
 
