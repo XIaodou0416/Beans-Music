@@ -33,6 +33,7 @@ struct RootView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var favorites: FavoritesStore
+    @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var selection: RootTab = .discover
@@ -41,6 +42,8 @@ struct RootView: View {
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
+    @AppStorage("beans.tabPlatformSwitcherEnabled") private var tabPlatformSwitcherEnabled = false
+    @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
     /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.legacyTabCornerRadius") private var legacyTabCornerRadius = 32.0
@@ -154,6 +157,14 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.22), value: selection)
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if usesSystemFloatingTabBar, tabPlatformSwitcherEnabled {
+                platformSwitcherButton
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 12)
+                    .zIndex(9)
+            }
         }
         .onAppear {
             // 启动已完成：标记本次启动正常（供下次启动检测闪退）
@@ -362,6 +373,10 @@ struct RootView: View {
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.94))
             }
+            if tabPlatformSwitcherEnabled {
+                platformSwitcherButton
+                    .padding(.leading, 4)
+            }
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 5)
@@ -397,6 +412,45 @@ struct RootView: View {
         .padding(.horizontal, 18)
         .padding(.bottom, 12)
         .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
+    }
+
+    /// 底栏右侧平台快捷入口：长按使用系统原生菜单切换主页平台。
+    private var platformSwitcherButton: some View {
+        let current = SearchProvider(rawValue: homeSourceRaw) ?? platformPrefs.enabledSearchProviders.first ?? .netease
+        return Button {
+            BeansHaptics.tap()
+        } label: {
+            Group {
+                if let imageName = current.brandImageName {
+                    Image(imageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 17, height: 17)
+                } else {
+                    Image(systemName: current.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                }
+            }
+            .foregroundStyle(Color.beansLabel)
+            .frame(width: 40, height: 40)
+            .background {
+                BeansGlass(shape: Circle(), forceLiquid: true)
+            }
+            .clipShape(Circle())
+            .contentShape(Circle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+        .contextMenu {
+            ForEach(platformPrefs.enabledSearchProviders) { provider in
+                Button {
+                    BeansHaptics.select()
+                    homeSourceRaw = provider.rawValue
+                } label: {
+                    Label(provider.rawValue, systemImage: provider == current ? "checkmark" : provider.icon)
+                }
+            }
+        }
+        .accessibilityLabel("主页平台：\(current.rawValue)，长按切换")
     }
 }
 

@@ -133,17 +133,18 @@ struct BeansGlass<S: Shape>: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
 
     let shape: S
+    var forceLiquid = false
 
     private var uiStyle: BeansUIStyle {
         uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
     }
 
     private var isLiquid: Bool {
-        uiStyle == .liquid || uiStyle == .nativeLiquid
+        forceLiquid || uiStyle == .liquid || uiStyle == .nativeLiquid
     }
 
     var body: some View {
-        if uiStyle == .nativeClean {
+        if uiStyle == .nativeClean && !forceLiquid {
             shape
                 .fill(Color.primary.opacity(0.038))
         } else if isLiquid {

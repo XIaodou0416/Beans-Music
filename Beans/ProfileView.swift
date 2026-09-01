@@ -1194,6 +1194,7 @@ struct SettingsView: View {
     @AppStorage("beans.audioQuality") private var audioQualityRaw = BeansAudioQuality.exhigh.rawValue
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
+    @AppStorage("beans.tabPlatformSwitcherEnabled") private var tabPlatformSwitcherEnabled = false
     @AppStorage("beans.legacyTabCornerRadius") private var legacyTabCornerRadius = 32.0
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
@@ -1650,6 +1651,27 @@ struct SettingsView: View {
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
                             Text("关闭后底栏只保留图标，界面更简洁")
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color.beansAmber)
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
+                Toggle(isOn: $tabPlatformSwitcherEnabled) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "circle.lefthalf.filled")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("底栏平台快捷入口")
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text("开启后，底栏右侧显示圆形平台按钮，长按可切换主页平台")
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
