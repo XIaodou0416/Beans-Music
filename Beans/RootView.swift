@@ -69,6 +69,7 @@ struct RootView: View {
     @State private var updateDownloadError = ""
     @State private var showUpdateDownloadError = false
     @State private var showRemoteAnnouncement = false
+    @State private var showHomePlatformMenu = false
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
     }
@@ -118,7 +119,10 @@ struct RootView: View {
             }
             .tint(Color.beansAmber)
             .background {
-                TabBarAppearanceConfigurator(hidesSystemTabBarOnLegacy: !usesSystemFloatingTabBar)
+                TabBarAppearanceConfigurator(
+                    hidesSystemTabBarOnLegacy: !usesSystemFloatingTabBar,
+                    onHomeLongPress: { showHomePlatformMenu = true }
+                )
             }
 
             if !usesSystemFloatingTabBar {
@@ -146,6 +150,9 @@ struct RootView: View {
                 .allowsHitTesting(false)
         }
         .preferredColorScheme(themeMode.colorScheme)
+        .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
+            platformSelectionMenu
+        }
         .fullScreenCover(isPresented: $showPlayer) {
             PlayerView(isPresented: $showPlayer)
                 .environmentObject(favorites)
@@ -538,24 +545,47 @@ private struct UpdatePromptOverlay: View {
 
 struct TabBarAppearanceConfigurator: UIViewControllerRepresentable {
     var hidesSystemTabBarOnLegacy = true
+    var onHomeLongPress: (() -> Void)?
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onHomeLongPress: onHomeLongPress)
+    }
 
     func makeUIViewController(context: Context) -> UIViewController {
         let controller = UIViewController()
         controller.view.backgroundColor = .clear
         // 纯外观配置视图：禁止拦截触摸，避免透明全屏视图吃掉页面按钮点击
         controller.view.isUserInteractionEnabled = false
-        DispatchQueue.main.async { Self.apply(from: controller, hidesSystemTabBarOnLegacy: hidesSystemTabBarOnLegacy) }
+        DispatchQueue.main.async {
+            Self.apply(
+                from: controller,
+                hidesSystemTabBarOnLegacy: hidesSystemTabBarOnLegacy,
+                coordinator: context.coordinator
+            )
+        }
         return controller
     }
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
-        DispatchQueue.main.async { Self.apply(from: uiViewController, hidesSystemTabBarOnLegacy: hidesSystemTabBarOnLegacy) }
+        context.coordinator.onHomeLongPress = onHomeLongPress
+        DispatchQueue.main.async {
+            Self.apply(
+                from: uiViewController,
+                hidesSystemTabBarOnLegacy: hidesSystemTabBarOnLegacy,
+                coordinator: context.coordinator
+            )
+        }
     }
 
     /// 固定清透风格：全透明背景、无阴影；选中态用主题色，
     /// 材质与模糊完全交给系统对底层页面内容的渲染，不再支持手动调节透明度
-    private static func apply(from controller: UIViewController, hidesSystemTabBarOnLegacy: Bool) {
+    private static func apply(
+        from controller: UIViewController,
+        hidesSystemTabBarOnLegacy: Bool,
+        coordinator: Coordinator
+    ) {
         guard let tabBar = controller.tabBarController?.tabBar else { return }
+        installHomeLongPress(on: tabBar, coordinator: coordinator)
         if #available(iOS 26, *) {
             tabBar.isHidden = false
         } else if hidesSystemTabBarOnLegacy {
@@ -575,5 +605,40 @@ struct TabBarAppearanceConfigurator: UIViewControllerRepresentable {
         tabBar.scrollEdgeAppearance = appearance
         tabBar.tintColor = UIColor.beansAmber
         tabBar.isTranslucent = true
+    }
+
+    private static func installHomeLongPress(on tabBar: UITabBar, coordinator: Coordinator) {
+        let controls = tabBar.subviews
+            .flatMap { descendants(of: $0) }
+            .compactMap { $0 as? UIControl }
+            .filter { !$0.isHidden && $0.alpha > 0 && $0.bounds.width > 0 }
+            .sorted { $0.frame.minX < $1.frame.minX }
+        guard let homeButton = controls.first else { return }
+        guard homeButton.gestureRecognizers?.contains(where: { $0.name == Coordinator.gestureName }) != true else { return }
+
+        let gesture = UILongPressGestureRecognizer(target: coordinator, action: #selector(Coordinator.handleHomeLongPress(_:)))
+        gesture.name = Coordinator.gestureName
+        gesture.minimumPressDuration = 0.45
+        gesture.cancelsTouchesInView = true
+        homeButton.addGestureRecognizer(gesture)
+    }
+
+    private static func descendants(of view: UIView) -> [UIView] {
+        view.subviews + view.subviews.flatMap { descendants(of: $0) }
+    }
+
+    final class Coordinator: NSObject {
+        static let gestureName = "beans.homePlatformLongPress"
+        var onHomeLongPress: (() -> Void)?
+
+        init(onHomeLongPress: (() -> Void)?) {
+            self.onHomeLongPress = onHomeLongPress
+        }
+
+        @objc func handleHomeLongPress(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began else { return }
+            BeansHaptics.select()
+            onHomeLongPress?()
+        }
     }
 }
