@@ -202,23 +202,37 @@ struct SearchView: View {
                     .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
                     .foregroundStyle(Color.beansLabel)
                 Spacer(minLength: 0)
-                HStack(spacing: 6) {
-                    if let imageName = provider.brandImageName {
-                        Image(imageName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 15, height: 15)
-                    } else {
-                        Image(systemName: provider.icon)
-                            .font(.system(size: 12, weight: .semibold))
+                Menu {
+                    ForEach(searchProviders) { candidate in
+                        Button {
+                            BeansHaptics.tap()
+                            provider = candidate
+                        } label: {
+                            Label(candidate.rawValue, systemImage: candidate == provider ? "checkmark" : candidate.icon)
+                        }
                     }
-                    Text(provider.rawValue)
+                } label: {
+                    HStack(spacing: 6) {
+                        if let imageName = provider.brandImageName {
+                            Image(imageName)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 15, height: 15)
+                        } else {
+                            Image(systemName: provider.icon)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        Text(provider.rawValue)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .font(BeansFont.appFont(12, .semibold))
+                    .foregroundStyle(Color.beansComment)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background { BeansSurface(shape: Capsule()) }
                 }
-                .font(BeansFont.appFont(12, .semibold))
-                .foregroundStyle(Color.beansComment)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background { BeansSurface(shape: Capsule()) }
+                .disabled(searchProviders.count < 2)
             }
         }
     }

@@ -187,7 +187,7 @@ struct LocalMusicSection: View {
         }
         if targets.contains(.qq), QQMusicAuth.shared.isLoggedIn {
             do {
-                let qqSongs = try await QQMusicAPI.shared.favoriteSongs(limit: 300)
+                let qqSongs = try await QQMusicAPI.shared.favoriteSongs(limit: 0)
                 songs.append(contentsOf: qqSongs)
                 details.append("QQ音乐 \(qqSongs.count) 首")
             } catch {

@@ -17,7 +17,6 @@ struct DiscoverView: View {
     @State private var selectedPlaylist: Playlist?
     @State private var showDailyList = false
     @State private var showSectionSort = false
-    @State private var showUnifiedSearch = false
     /// 主页板块顺序（每日推荐 / 排行榜 / 歌单广场，可自定义）
     @State private var homeOrder = SectionOrderStore.load(SectionOrderStore.homeKey, defaults: SectionOrderStore.homeDefaults)
 
@@ -219,11 +218,6 @@ struct DiscoverView: View {
                     .environmentObject(player)
                     .environmentObject(auth)
             }
-            .sheet(isPresented: $showUnifiedSearch) {
-                HomeUnifiedSearchSheet()
-                    .environmentObject(theme)
-                    .environmentObject(player)
-            }
             .sheet(isPresented: $showSectionSort) {
                 SectionOrderSheet(
                     title: "主页板块排序",
@@ -322,12 +316,6 @@ struct DiscoverView: View {
                 }
                 Spacer()
                 HStack(spacing: 10) {
-                    if isNativeClean {
-                        GlassIconButton(systemName: "magnifyingglass", size: 46) {
-                            BeansHaptics.tap()
-                            showUnifiedSearch = true
-                        }
-                    }
                     if !homeHeaderHideSort {
                         GlassIconButton(systemName: "arrow.up.arrow.down") {
                             BeansHaptics.tap()
@@ -506,19 +494,19 @@ struct DiscoverView: View {
                 LazyHStack(spacing: 16) {
                     if source == .netease {
                         ForEach(Array(neteaseTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, topList in
-                            nativeRankCard(index: index, name: topList.name, subtitle: topList.updateFrequency) {
+                            nativeRankCard(index: index, name: topList.name, subtitle: topList.updateFrequency, coverURL: topList.coverURL) {
                                 selectedTopList = topList
                             }
                         }
                     } else if source == .qq {
                         ForEach(Array(qqTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
-                            nativeRankCard(index: index, name: info.name, subtitle: "QQ 峰尖榜") {
+                            nativeRankCard(index: index, name: info.name, subtitle: "QQ 峰尖榜", coverURL: info.coverURL) {
                                 selectedQQTopList = info
                             }
                         }
                     } else {
                         ForEach(Array(kugouTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
-                            nativeRankCard(index: index, name: info.name, subtitle: info.updateFrequency) {
+                            nativeRankCard(index: index, name: info.name, subtitle: info.updateFrequency, coverURL: info.coverURL) {
                                 selectedKugouTopList = info
                             }
                         }
@@ -530,15 +518,19 @@ struct DiscoverView: View {
         .id("rankTopSection")
     }
 
-    private func nativeRankCard(index: Int, name: String, subtitle: String, action: @escaping () -> Void) -> some View {
+    private func nativeRankCard(index: Int, name: String, subtitle: String, coverURL: URL?, action: @escaping () -> Void) -> some View {
         Button {
             BeansHaptics.tap()
             action()
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(nativeRankGradient(index))
+                    CoverImage(url: coverURL, size: 166, cornerRadius: 10)
+                    LinearGradient(
+                        colors: [.black.opacity(0.08), .black.opacity(0.68)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                     Image(systemName: "waveform")
                         .font(.system(size: 58, weight: .bold))
                         .foregroundStyle(.white.opacity(0.18))
@@ -551,7 +543,8 @@ struct DiscoverView: View {
                         .minimumScaleFactor(0.72)
                         .padding(18)
                 }
-                .frame(width: 166, height: 136)
+                .frame(width: 166, height: 166)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Text(name)
                     .font(BeansFont.appFont(15, .bold))
                     .foregroundStyle(Color.primary)
@@ -564,17 +557,6 @@ struct DiscoverView: View {
             .frame(width: 166, alignment: .leading)
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.96))
-    }
-
-    private func nativeRankGradient(_ index: Int) -> LinearGradient {
-        let palettes: [[Color]] = [
-            [Color(red: 0.38, green: 0.33, blue: 0.92), Color(red: 0.25, green: 0.20, blue: 0.55)],
-            [Color(red: 0.13, green: 0.82, blue: 0.48), Color(red: 0.14, green: 0.42, blue: 0.25)],
-            [Color(red: 0.14, green: 0.70, blue: 0.90), Color(red: 0.12, green: 0.40, blue: 0.55)],
-            [Color(red: 0.96, green: 0.56, blue: 0.24), Color(red: 0.66, green: 0.25, blue: 0.16)]
-        ]
-        let colors = palettes[index % palettes.count]
-        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     /// 排行榜行列表（按平台渲染）
@@ -1387,7 +1369,7 @@ struct TopListDetailView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 16)
+            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 8)
             VStack(alignment: .leading, spacing: 6) {
                 Text(topList.name)
                     .font(BeansFont.appFont(18, .bold))
@@ -1504,7 +1486,7 @@ struct KugouTopListDetailView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 16)
+            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 8)
             VStack(alignment: .leading, spacing: 6) {
                 Text(topList.name)
                     .font(BeansFont.appFont(18, .bold))
