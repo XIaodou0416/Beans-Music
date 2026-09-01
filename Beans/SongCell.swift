@@ -107,7 +107,7 @@ struct SongCell: View {
     var body: some View {
         let _ = theme.accent
         Group {
-            if glassRow && !isNativeClean {
+            if glassRow || isNativeClean {
                 rowContent
                     .padding(.horizontal, 10)
                     .background {
