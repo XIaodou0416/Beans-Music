@@ -1114,10 +1114,9 @@ final class PlayerManager: NSObject, ObservableObject {
             // 中断结束后系统可能停用了音频会话，重新激活避免无声
             sessionConfigured = false
             configureAudioSession()
-            if wasPlayingBeforeInterruption {
-                player?.playImmediately(atRate: Float(rate))
-                isPlaying = true
-            }
+            wasPlayingBeforeInterruption = false
+            isPlaying = false
+            updateNowPlaying()
         @unknown default:
             break
         }

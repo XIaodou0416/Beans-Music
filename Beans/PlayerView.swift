@@ -105,6 +105,12 @@ struct PlayerView: View {
     @AppStorage("beans.albumTextGlow") private var albumTextGlow = false
     @AppStorage("beans.albumTextGlowIntensity") private var albumTextGlowIntensity = 1.0
     @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.classic.rawValue
+    @AppStorage("beans.appleMusic.topY") private var appleTopY = 0.0
+    @AppStorage("beans.appleMusic.coverScale") private var appleCoverScale = 1.0
+    @AppStorage("beans.appleMusic.titleY") private var appleTitleY = 0.0
+    @AppStorage("beans.appleMusic.lyricY") private var appleLyricY = 0.0
+    @AppStorage("beans.appleMusic.controlsY") private var appleControlsY = 0.0
+    @AppStorage("beans.appleMusic.actionsY") private var appleActionsY = 0.0
     /// 侧边滑动手势当前位移（刷视频式切歌过渡）
     @State private var swipeOffset: CGFloat = 0
     @State private var coverDrag: CGSize = .zero
@@ -362,6 +368,16 @@ struct PlayerView: View {
                             showPlayerSettings = true
                         }
                     )
+
+                    if layoutMode {
+                        appleMusicLayoutToolbar
+                            .contentShape(Rectangle())
+                            .frame(maxWidth: .infinity)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                            .padding(.top, 54)
+                            .transition(.opacity)
+                            .zIndex(60)
+                    }
 
                     if showMoreActions {
                         Color.black.opacity(0.001)
@@ -1579,6 +1595,130 @@ struct PlayerView: View {
             BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .padding(.horizontal, 12)
+    }
+
+    private var appleMusicLayoutToolbar: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("Apple Music 实时布局")
+                    .font(BeansFont.appFont(15, .bold))
+                Spacer()
+                Button {
+                    BeansHaptics.select()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { layoutMode = false }
+                } label: {
+                    Text("完成")
+                        .font(BeansFont.appFont(13, .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 7)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            HStack(spacing: 8) {
+                appleLayoutChip("顶部", isSelected: layoutPart == .topTitle) { layoutPart = .topTitle }
+                appleLayoutChip("封面", isSelected: layoutPart == .cover) { layoutPart = .cover }
+                appleLayoutChip("标题", isSelected: layoutPart == .title) { layoutPart = .title }
+                appleLayoutChip("歌词", isSelected: layoutPart == .previewLyric) { layoutPart = .previewLyric }
+                appleLayoutChip("控制", isSelected: layoutPart == .controls) { layoutPart = .controls }
+                appleLayoutChip("底部", isSelected: layoutPart == .queue) { layoutPart = .queue }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            appleMusicLayoutSliders
+            HStack(spacing: 10) {
+                Button {
+                    resetAppleMusicCurrentLayoutPart()
+                    BeansHaptics.success()
+                } label: {
+                    Label("恢复当前", systemImage: "arrow.counterclockwise")
+                        .font(BeansFont.appFont(13, .medium))
+                        .foregroundStyle(Color.beansAmber)
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Text("滑杆会立即同步到当前播放页")
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(palette.secondary)
+            }
+        }
+        .padding(14)
+        .background {
+            BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private func appleLayoutChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            BeansHaptics.select()
+            action()
+        } label: {
+            Text(title)
+                .font(BeansFont.appFont(12, .semibold))
+                .foregroundStyle(isSelected ? Color.white : palette.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background {
+                    Capsule().fill(isSelected ? Color.beansAmber : Color.beansGlassFill)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var appleMusicLayoutSliders: some View {
+        switch layoutPart {
+        case .topTitle:
+            appleMusicLayoutSlider("顶部 Y", value: $appleTopY, range: -40...80)
+        case .cover:
+            appleMusicLayoutSlider("封面大小", value: $appleCoverScale, range: 0.72...1.18, step: 0.01, format: "%.2f")
+        case .title:
+            appleMusicLayoutSlider("标题 Y", value: $appleTitleY, range: -80...120)
+        case .previewLyric:
+            appleMusicLayoutSlider("歌词 Y", value: $appleLyricY, range: -80...120)
+        case .controls:
+            appleMusicLayoutSlider("控制 Y", value: $appleControlsY, range: -80...100)
+        case .queue:
+            appleMusicLayoutSlider("底部 Y", value: $appleActionsY, range: -80...100)
+        default:
+            Text("请选择 Apple Music 组件")
+                .font(BeansFont.appFont(12))
+                .foregroundStyle(palette.secondary)
+        }
+    }
+
+    private func appleMusicLayoutSlider(
+        _ title: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        step: Double = 1,
+        format: String = "%.0f"
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(title)
+                    .font(BeansFont.appFont(12, .medium))
+                Spacer()
+                Text(String(format: format, value.wrappedValue))
+                    .font(BeansFont.appFont(11, .semibold, .monospaced))
+                    .foregroundStyle(Color.beansAmber)
+            }
+            Slider(value: value, in: range, step: step)
+                .tint(Color.beansAmber)
+        }
+    }
+
+    private func resetAppleMusicCurrentLayoutPart() {
+        switch layoutPart {
+        case .topTitle: appleTopY = 0
+        case .cover: appleCoverScale = 1
+        case .title: appleTitleY = 0
+        case .previewLyric: appleLyricY = 0
+        case .controls: appleControlsY = 0
+        case .queue: appleActionsY = 0
+        default: break
+        }
     }
 
     private func resetCurrentLayoutPart() {
@@ -3068,16 +3208,16 @@ struct PlayerSettingsSheet: View {
 
     private var appleMusicCard: some View {
         settingCard("Apple Music 样式", isExpanded: $appleMusicExpanded) {
-            appleMusicLivePreview
             Button {
                 coverPlayerStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
                 playerButtonStyleRaw = BeansPlayerButtonStyle.appleMusic.rawValue
+                layoutMode = true
                 BeansHaptics.select()
                 dismiss()
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "play.rectangle.on.rectangle")
-                    Text("切到 Apple Music 页面预览")
+                    Text("进入 Apple Music 悬浮调试")
                 }
                 .font(BeansFont.appFont(13, .semibold))
                 .foregroundStyle(Color.white)
@@ -3159,108 +3299,6 @@ struct PlayerSettingsSheet: View {
                     .background(Color.beansAmber.opacity(0.12), in: Capsule())
             }
             .buttonStyle(.plain)
-        }
-    }
-
-    private var appleMusicLivePreview: some View {
-        let primary = applePrimaryColor.wrappedValue
-        let secondary = appleSecondaryColor.wrappedValue
-        let accent = appleAccentColor.wrappedValue
-        let volume = appleVolumeColor.wrappedValue
-        return ZStack {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.30, green: 0.40, blue: 0.43),
-                            Color(red: 0.12, green: 0.15, blue: 0.17)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            VStack(spacing: 10) {
-                Capsule()
-                    .fill(secondary.opacity(0.48))
-                    .frame(width: 52, height: 5)
-                    .offset(y: CGFloat(appleTopY) * 0.08)
-                HStack(spacing: 14) {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(LinearGradient(colors: [.white.opacity(0.9), accent.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 64, height: 64)
-                        .scaleEffect(CGFloat(appleCoverScale))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("年轮")
-                            .font(BeansFont.appFont(20, .bold))
-                            .foregroundStyle(primary)
-                        Text("张碧晨")
-                            .font(BeansFont.appFont(13, .medium))
-                            .foregroundStyle(secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "heart")
-                        .font(.system(size: 25, weight: .medium))
-                        .foregroundStyle(primary)
-                }
-                .offset(y: CGFloat(appleTitleY) * 0.08)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("圆圈勾勒成指纹")
-                        .font(BeansFont.appFont(18, .bold))
-                        .foregroundStyle(primary.opacity(0.82))
-                    Text("印在我的嘴唇")
-                        .font(BeansFont.appFont(16, .semibold))
-                        .foregroundStyle(secondary.opacity(0.62))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 6)
-                .offset(y: CGFloat(appleLyricY) * 0.08)
-                Capsule()
-                    .fill(secondary.opacity(0.28))
-                    .frame(height: 4)
-                    .overlay(alignment: .leading) {
-                        Capsule()
-                            .fill(primary)
-                            .frame(width: 86, height: 4)
-                    }
-                HStack(spacing: 34) {
-                    Image(systemName: "backward.fill")
-                    PlayPauseMorphIcon(isPlaying: true, size: 22)
-                    Image(systemName: "forward.fill")
-                }
-                .font(.system(size: 25, weight: .semibold))
-                .foregroundStyle(primary)
-                .offset(y: CGFloat(appleControlsY) * 0.08)
-                if appleShowVolume {
-                    HStack(spacing: 8) {
-                        Image(systemName: "speaker.fill")
-                            .font(.system(size: 10))
-                        Capsule()
-                            .fill(secondary.opacity(0.26))
-                            .frame(height: 5)
-                            .overlay(alignment: .leading) {
-                                Capsule().fill(volume).frame(width: 118, height: 5)
-                            }
-                        Image(systemName: "speaker.wave.2.fill")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundStyle(volume)
-                }
-                HStack(spacing: 40) {
-                    Image(systemName: "quote.bubble")
-                    Image(systemName: "repeat")
-                    Image(systemName: "list.bullet")
-                }
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(primary.opacity(0.84))
-                .offset(y: CGFloat(appleActionsY) * 0.08)
-            }
-            .padding(18)
-        }
-        .frame(height: 318)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
         }
     }
 

@@ -397,6 +397,7 @@ struct DiscoverView: View {
         let custom = homeGreetingText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !custom.isEmpty { return custom }
         let hour = Calendar.current.component(.hour, from: Date())
+        if isNativeClean { return "推荐" }
         switch hour {
         case 5..<12: return "早上好"
         case 12..<18: return "下午好"
@@ -770,6 +771,40 @@ struct DiscoverView: View {
             }
             if displayedPlaylists.isEmpty {
                 EmptyStateView(icon: "music.note.list", text: source == .qq ? "QQ音乐热门歌单暂未加载成功\n下拉刷新可重新获取" : "歌单广场暂时没有内容")
+            } else if isNativeClean {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        ForEach(displayedPlaylists) { playlist in
+                            Button {
+                                BeansHaptics.tap()
+                                if source == .qq {
+                                    selectedQQPlaylist = playlist
+                                } else {
+                                    selectedPlaylist = playlist
+                                }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    CoverImage(url: playlist.coverURL, size: 166, cornerRadius: 16)
+                                    Text(playlist.name)
+                                        .font(BeansFont.appFont(15, .bold))
+                                        .foregroundStyle(Color.primary)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                        .frame(width: 166, alignment: .leading)
+                                    if playlist.playCount > 0 {
+                                        Text("\(playlist.playCount) 次播放")
+                                            .font(BeansFont.appFont(12, .medium))
+                                            .foregroundStyle(Color.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                .frame(width: 166, alignment: .leading)
+                            }
+                            .buttonStyle(GlassPressButtonStyle(scale: 0.96))
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     ForEach(displayedPlaylists) { playlist in
