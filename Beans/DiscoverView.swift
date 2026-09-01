@@ -769,13 +769,13 @@ struct DiscoverView: View {
                     .padding(.vertical, 2)
                 }
             }
-            if displayedPlaylists.isEmpty {
+            if visiblePersonalizedPlaylists.isEmpty {
                 EmptyStateView(icon: "music.note.list", text: source == .qq ? "QQ音乐热门歌单暂未加载成功\n下拉刷新可重新获取" : "歌单广场暂时没有内容")
             } else if isNativeClean {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        ForEach(displayedPlaylists.indices, id: \.self) { index in
-                            let playlist = displayedPlaylists[index]
+                        ForEach(visiblePersonalizedPlaylists.indices, id: \.self) { index in
+                            let playlist = visiblePersonalizedPlaylists[index]
                             Button {
                                 BeansHaptics.tap()
                                 if source == .qq {
@@ -808,7 +808,7 @@ struct DiscoverView: View {
                 }
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    ForEach(displayedPlaylists) { playlist in
+                    ForEach(visiblePersonalizedPlaylists) { playlist in
                         Button {
                             if source == .qq {
                                 selectedQQPlaylist = playlist
@@ -861,7 +861,7 @@ struct DiscoverView: View {
 
     private var collapsedPlaylistCount: Int { 6 }
 
-    private var displayedPlaylists: [Playlist] {
+    private var visiblePersonalizedPlaylists: [Playlist] {
         playlistsExpanded ? personalized : Array(personalized.prefix(collapsedPlaylistCount))
     }
 
