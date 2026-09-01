@@ -484,9 +484,7 @@ struct PlatformPickerSheet: View {
         }
         .padding(20)
         .background(Color.clear)
-        .modifier(ClearSheetBackground())
-        .presentationDetents([.height(CGFloat(116 + providers.count * 60))])
-        .presentationDragIndicator(.visible)
+        .modifier(PlatformPickerPresentation(providersCount: providers.count))
     }
 }
 
@@ -495,6 +493,22 @@ private struct ClearSheetBackground: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 16.4, *) {
             content.presentationBackground(.clear)
+        } else {
+            content
+        }
+    }
+}
+
+private struct PlatformPickerPresentation: ViewModifier {
+    let providersCount: Int
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content
+                .modifier(ClearSheetBackground())
+                .presentationDetents([.height(CGFloat(116 + providersCount * 60))])
+                .presentationDragIndicator(.visible)
         } else {
             content
         }

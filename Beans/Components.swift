@@ -145,16 +145,8 @@ struct BeansGlass<S: Shape>: View {
 
     var body: some View {
         if isLiquid {
-            if #available(iOS 26, *) {
-                GlassEffectContainer {
-                    shape
-                        .fill(.clear)
-                        .glassEffect(.clear, in: shape)
-                }
-            } else {
-                shape
-                    .fill(.ultraThinMaterial)
-            }
+            shape
+                .fill(.ultraThinMaterial)
         } else {
             switch uiStyle {
             case .clear, .liquid:
@@ -211,20 +203,11 @@ struct GlassCard<Content: View>: View {
 
     var body: some View {
         if isLiquid {
-            if #available(iOS 26, *) {
-                GlassEffectContainer {
-                    content()
-                        .padding(resolvedPadding)
-                        .glassEffect(.clear, in: .rect(cornerRadius: resolvedCornerRadius))
-                }
+            content()
+                .padding(resolvedPadding)
+                .background(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous).fill(.ultraThinMaterial))
+                .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
                 .beansCardShadow(radius: 9, y: 3)
-            } else {
-                content()
-                    .padding(resolvedPadding)
-                    .background(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous).fill(.ultraThinMaterial))
-                    .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
-                    .beansCardShadow(radius: 9, y: 3)
-            }
         } else {
             content()
                 .padding(resolvedPadding)

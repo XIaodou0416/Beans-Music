@@ -988,7 +988,7 @@ struct PlayerView: View {
         // 左右滑动切歌：左滑下一首、右滑上一首，仅响应横向手势。
         // 使用 .gesture 与封面点击互斥：拖动时不会误触点击封面。
         .offset(x: swipeOffset)
-        .opacity(1 - min(abs(swipeOffset) / 260, 0.35))
+        .opacity(CGFloat(1) - min(abs(swipeOffset) / CGFloat(260), CGFloat(0.35)))
         .gesture(
             DragGesture(minimumDistance: 15)
                 .onChanged { value in
@@ -2698,6 +2698,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.albumTextGlow") private var albumTextGlow = false
     @AppStorage("beans.albumTextGlowIntensity") private var albumTextGlowIntensity = 1.0
     @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.classic.rawValue
+    @AppStorage("beans.appleMusic.showLyricPreview") private var appleShowLyricPreview = true
     @Environment(\.dismiss) private var dismiss
     @AppStorage("beans.playerSettings.playbackExpanded") private var playbackExpanded = false
     @AppStorage("beans.playerSettings.lyricDisplayExpanded") private var lyricDisplayExpanded = false
@@ -3662,19 +3663,11 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
     }
 
     var body: some View {
-        if #available(iOS 26, *), uiStyle == .liquid {
-            GlassEffectContainer {
-                shape
-                    .fill(.clear)
-                    .glassEffect(.clear, in: shape)
-            }
-        } else {
-            switch uiStyle {
-            case .clear, .liquid:
-                shape.fill(.ultraThinMaterial)
-            case .nativeClean:
-                shape.fill(Color.primary.opacity(0.038))
-            }
+        switch uiStyle {
+        case .clear, .liquid:
+            shape.fill(.ultraThinMaterial)
+        case .nativeClean:
+            shape.fill(Color.primary.opacity(0.038))
         }
     }
 }
