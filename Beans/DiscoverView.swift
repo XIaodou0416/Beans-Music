@@ -554,7 +554,13 @@ struct DiscoverView: View {
                     .foregroundStyle(Color.secondary)
                     .lineLimit(1)
             }
-            .frame(width: 166, alignment: .leading)
+            .padding(10)
+            .frame(width: 186, alignment: .leading)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .beansCardShadow(radius: 6, y: 2)
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.96))
     }
