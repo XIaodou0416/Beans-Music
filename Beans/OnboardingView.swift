@@ -15,6 +15,11 @@ struct OnboardingView: View {
         languageRaw == AppLanguage.english.rawValue ? "I understand and agree to continue" : "我已了解并同意继续使用"
     }
 
+    private var isEnglish: Bool { languageRaw == AppLanguage.english.rawValue }
+    private var nextText: String { isEnglish ? "Next" : "下一步" }
+    private var skipText: String { isEnglish ? "Skip Intro" : "跳过介绍" }
+    private var enterText: String { isEnglish ? "Enter Beans Music" : "进入软件" }
+
     var body: some View {
         ZStack {
             Color.beansBackground.ignoresSafeArea()
@@ -74,7 +79,7 @@ struct OnboardingView: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.3)) { page += 1 }
                 } label: {
-                    Text("下一步")
+                    Text(nextText)
                         .font(BeansFont.appFont(16, .bold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -89,7 +94,7 @@ struct OnboardingView: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.3)) { page = totalPages - 1 }
                 } label: {
-                    Text("跳过介绍")
+                    Text(skipText)
                         .font(BeansFont.appFont(13))
                         .foregroundStyle(Color.beansSecondary)
                 }
@@ -116,7 +121,7 @@ struct OnboardingView: View {
                             Button {
                                 withAnimation(.easeOut(duration: 0.2)) { typed = confirmText }
                             } label: {
-                                Text("一键填入")
+                                Text(isEnglish ? "Fill" : "一键填入")
                                     .font(BeansFont.appFont(12, .semibold))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 12)
@@ -146,7 +151,7 @@ struct OnboardingView: View {
                 Button {
                     onFinish()
                 } label: {
-                    Text("进入软件")
+                    Text(enterText)
                         .font(BeansFont.appFont(16, .bold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -177,11 +182,11 @@ struct OnboardingView: View {
                 .shadow(color: Color.beansHighlight.opacity(0.45), radius: 24, y: 12)
                 .padding(.bottom, 6)
 
-            Text("欢迎使用 Beans Music")
+            Text(isEnglish ? "Welcome to Beans Music" : "欢迎使用 Beans Music")
                 .font(BeansFont.appFont(30, .bold))
                 .foregroundStyle(Color.beansLabel)
 
-            Text("iOS 26 原生液态玻璃 · 聚合网易云 / QQ / 酷狗\n纯 SwiftUI · 完全开源")
+            Text(isEnglish ? "Native Liquid Glass on iOS 26 · NetEase Cloud Music / QQ Music / Kugou\nPure SwiftUI · Fully open source" : "iOS 26 原生液态玻璃 · 聚合网易云 / QQ / 酷狗\n纯 SwiftUI · 完全开源")
                 .font(BeansFont.appFont(15))
                 .foregroundStyle(Color.beansSecondary)
                 .multilineTextAlignment(.center)
@@ -201,27 +206,27 @@ struct OnboardingView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(LinearGradient.beansAccent)
 
-            Text("你的播放器，你做主")
+            Text(isEnglish ? "Your player, your rules" : "你的播放器，你做主")
                 .font(BeansFont.appFont(26, .bold))
                 .foregroundStyle(Color.beansLabel)
 
-            Text("从全局主题到播放器每个组件，全部可以自定义")
+            Text(isEnglish ? "Customize everything from the global theme to each player component" : "从全局主题到播放器每个组件，全部可以自定义")
                 .font(BeansFont.appFont(14))
                 .foregroundStyle(Color.beansSecondary)
 
             VStack(spacing: 12) {
                 diyRow(icon: "circle.hexagongrid.fill", tint: Color.beansHighlight,
-                       title: "全局主题色盘",
-                       detail: "9 套主题一键换肤，色盘任选颜色，全 App 跟随")
+                       title: isEnglish ? "Global Theme Colors" : "全局主题色盘",
+                       detail: isEnglish ? "Nine themes and custom colors across the app" : "9 套主题一键换肤，色盘任选颜色，全 App 跟随")
                 diyRow(icon: "photo.on.rectangle.angled", tint: .beansSage,
-                       title: "自定义壁纸库",
-                       detail: "多张壁纸随时切换，深浅两套背景，全局同步")
+                       title: isEnglish ? "Custom Wallpaper Library" : "自定义壁纸库",
+                       detail: isEnglish ? "Switch wallpapers anytime with synchronized backgrounds" : "多张壁纸随时切换，深浅两套背景，全局同步")
                 diyRow(icon: "slider.horizontal.3", tint: Color(red: 0.39, green: 0.71, blue: 0.96),
-                       title: "底部布局自由拖动",
-                       detail: "进度条 / 按钮 / 指示线任意摆放缩放")
+                       title: isEnglish ? "Flexible Player Layout" : "底部布局自由拖动",
+                       detail: isEnglish ? "Position and scale the progress bar, buttons, and indicator" : "进度条 / 按钮 / 指示线任意摆放缩放")
                 diyRow(icon: "text.quote", tint: Color(red: 0.96, green: 0.56, blue: 0.70),
-                       title: "歌词全套定制",
-                       detail: "颜色 / 渐变 / 发光 / 模糊")
+                       title: isEnglish ? "Fully Customizable Lyrics" : "歌词全套定制",
+                       detail: isEnglish ? "Colors / gradients / glow / blur" : "颜色 / 渐变 / 发光 / 模糊")
             }
             .padding(.horizontal, 28)
 
@@ -273,24 +278,24 @@ struct OnboardingView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(LinearGradient.beansAccent)
 
-            Text("三平台聚合，一个 App 全听遍")
+            Text(isEnglish ? "Three platforms, one app for all your music" : "三平台聚合，一个 App 全听遍")
                 .font(BeansFont.appFont(26, .bold))
                 .foregroundStyle(Color.beansLabel)
 
-            Text("网易云 + QQ 音乐 + 酷狗歌单同步")
+            Text(isEnglish ? "Sync playlists from NetEase Cloud Music, QQ Music, and Kugou" : "网易云 + QQ 音乐 + 酷狗歌单同步")
                 .font(BeansFont.appFont(14))
                 .foregroundStyle(Color.beansSecondary)
 
             VStack(spacing: 12) {
                 platformRow(imageName: "BrandNetease", tint: Color(red: 0.87, green: 0.23, blue: 0.23),
-                            title: "网易云音乐",
-                            detail: "扫码 / 网页登录，同步歌单、收藏、听歌排行、VIP")
+                            title: isEnglish ? "NetEase Cloud Music" : "网易云音乐",
+                            detail: isEnglish ? "Scan or sign in on the web to sync playlists, favorites, charts, and VIP status" : "扫码 / 网页登录，同步歌单、收藏、听歌排行、VIP")
                 platformRow(imageName: "BrandQQ", tint: Color(red: 0.13, green: 0.51, blue: 0.95),
-                            title: "QQ 音乐",
-                            detail: "扫码 / 网页 / Cookie 登录，同步歌单与 VIP")
+                            title: isEnglish ? "QQ Music" : "QQ 音乐",
+                            detail: isEnglish ? "Scan, sign in on the web, or use a Cookie to sync playlists and VIP status" : "扫码 / 网页 / Cookie 登录，同步歌单与 VIP")
                 platformRow(imageName: "BrandKugou", tint: Color(red: 0.12, green: 0.55, blue: 1.0),
-                            title: "酷狗音乐",
-                            detail: "登录同步云端歌单，并支持酷狗歌曲搜索")
+                            title: isEnglish ? "Kugou Music" : "酷狗音乐",
+                            detail: isEnglish ? "Sign in to sync cloud playlists and search Kugou songs" : "登录同步云端歌单，并支持酷狗歌曲搜索")
             }
             .padding(.horizontal, 28)
 
@@ -341,15 +346,15 @@ struct OnboardingView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(LinearGradient.beansAccent)
 
-            Text("免责声明")
+            Text(isEnglish ? "Disclaimer" : "免责声明")
                 .font(BeansFont.appFont(24, .bold))
                 .foregroundStyle(Color.beansLabel)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("· Beans Music 只用作个人学习研究，禁止用于商业及非法用途，如产生法律纠纷与本人无关。")
-                Text("· 音乐 API 来自于 GitHub 开源项目（非官方版 API），本软件不提供任何音频存储服务，如需下载音频，请支持正版！")
-                Text("· 音乐版权归各网站所有，本站不承担任何法律责任和连带责任。")
-                Text("· “酷狗音乐”、酷狗图形标识及相关音乐内容的著作权、商标权或其他权利归酷狗音乐及其相关权利方所有。")
+                Text(isEnglish ? "· Beans Music is for personal learning and research only. Commercial and illegal use is prohibited." : "· Beans Music 只用作个人学习研究，禁止用于商业及非法用途，如产生法律纠纷与本人无关。")
+                Text(isEnglish ? "· Music APIs come from open-source GitHub projects. This app does not store audio. Please support official music services." : "· 音乐 API 来自于 GitHub 开源项目（非官方版 API），本软件不提供任何音频存储服务，如需下载音频，请支持正版！")
+                Text(isEnglish ? "· Music copyrights belong to their respective platforms. Beans Music assumes no related legal liability." : "· 音乐版权归各网站所有，本站不承担任何法律责任和连带责任。")
+                Text(isEnglish ? "· The Kugou Music name, logo, and related content belong to Kugou Music and its rights holders." : "· “酷狗音乐”、酷狗图形标识及相关音乐内容的著作权、商标权或其他权利归酷狗音乐及其相关权利方所有。")
             }
             .font(BeansFont.appFont(13))
             .foregroundStyle(Color.beansSecondary)
@@ -365,7 +370,7 @@ struct OnboardingView: View {
             )
             .padding(.horizontal, 28)
 
-            Text("请按输入框上方的提示，完整输入指定文字后进入软件")
+            Text(isEnglish ? "Enter the exact text shown above to continue" : "请按输入框上方的提示，完整输入指定文字后进入软件")
                 .font(BeansFont.appFont(12))
                 .foregroundStyle(Color.beansSecondary.opacity(0.8))
 

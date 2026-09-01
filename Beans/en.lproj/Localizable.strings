@@ -5,7 +5,7 @@
 "；合计 \\(unique.count) 首" = "Beans Music: ； \\(unique.count)";
 "· “酷狗音乐”、酷狗图形标识及相关音乐内容的著作权、商标权或其他权利归酷狗音乐及其相关权利方所有。" = "Beans Music: · “”、、。";
 "· 音乐 API 来自于 GitHub 开源项目（非官方版 API），本软件不提供任何音频存储服务，如需下载音频，请支持正版！" = "Beans Music: ·  API  GitHub （ API），，，！";
-"· 音乐版权归各网站所有，本站不承担任何法律责任和连带责任。" = "Beans Music: · ，。";
+"· 音乐版权归各网站所有，本站不承担任何法律责任和连带责任。" = "· Music copyrights belong to their respective platforms. Beans Music assumes no related legal liability.";
 "· Beans Music 只用作个人学习研究，禁止用于商业及非法用途，如产生法律纠纷与本人无关。" = "Beans Music: · Beans Music ，，。";
 "“酷狗音乐”及其名称、图形和商业标识归酷狗音乐及相关权利方所有。酷狗音乐享有对其平台授权音乐的版权，请勿随意下载、复制版权内容。具体内容请参考酷狗音乐用户协议。" = "Beans Music: “”、。，、。。";
 "“网易云”、“网易云音乐”等文字、图形和商业标识，其著作权或商标权归网易所有。网易云音乐享有对其平台授权音乐的版权，请勿随意下载、复制版权内容。具体内容请参考网易云音乐用户协议。" = "Beans Music: “”、“”、，。，、。。";
@@ -56,7 +56,7 @@
 "3D 倾斜" = "Beans Music: 3D";
 "9 套主题一键换肤，色盘任选颜色，全 App 跟随" = "Beans Music: 9 ，， App";
 "按金额排序" = "Message";
-"版权声明" = "Message";
+"版权声明" = "Copyright";
 "包含" = "Message";
 "薄荷气泡" = "Message";
 "保持自定义配色" = "Custom";
@@ -75,7 +75,7 @@
 "背景模糊" = "Background Blur";
 "背景音乐" = "Background";
 "倍速播放" = "Playback Speed";
-"本次更新暂无详细说明。" = "Beans Music: 。";
+"本次更新暂无详细说明。" = "No detailed release notes are available for this update.";
 "本地壁纸、歌词背景、设置页缩略图改为复用解码缓存，减少滚动和切换设置时的重复图片解码" = "Beans Music: 、、，";
 "本地歌单" = "Local Playlists";
 "本地歌单保存在设备上，覆盖安装不会丢失，不依赖平台账号" = "Beans Music: ，，";
@@ -449,7 +449,7 @@
 "模糊强度" = "BlurIntensity";
 "磨砂玻璃" = "Frosted Glass";
 "默认" = "Default";
-"默认不带账号登录信息；关闭壁纸后只备份普通设置，不写入壁纸图片数据" = "Beans Music: ；，";
+"默认不带账号登录信息；关闭壁纸后只备份普通设置，不写入壁纸图片数据" = "Login information is excluded by default. When wallpaper backup is off, only regular settings are included.";
 "默认关闭以显示锁屏/灵动岛" = "Beans Music: /";
 "默认关闭以显示锁屏/灵动岛；开启后可与其他 App 声音同时播放" = "Beans Music: /； App";
 "默认液态" = "Default";
@@ -897,11 +897,11 @@
 "Apple Music 样式" = "Apple Music Style";
 "AVPlayer 准备播放：\\(currentSong?.name ?? " = "Beans Music: AVPlayer ：\\(currentSong?.name ??";
 "AVPlayerItem 加载失败" = "Beans Music: AVPlayerItem";
-"Beans Music · 仅供学习交流 · 音乐版权归各平台所有 · 酷狗音乐名称及图标归酷狗音乐 / 腾讯音乐娱乐相关权利方所有" = "Beans Music: Beans Music ·  ·  ·  /";
-"Beans Music · 仅供学习交流，纯 AI 实现此应用" = "Beans Music: Beans Music · ， AI";
-"Beans Music 公告" = "Beans Music: Beans Music";
-"Beans Music 启动（版本 \\(Self.appVersion)）" = "Beans Music: Beans Music （ \\(Self.appVersion)）";
-"Beans Music 是一款聚合网易云音乐、QQ 音乐与酷狗音乐歌单同步能力的第三方音乐播放器客户端，仅供个人学习研究使用。" = "Beans Music: Beans Music 、QQ ，。";
+"Beans Music · 仅供学习交流 · 音乐版权归各平台所有 · 酷狗音乐名称及图标归酷狗音乐 / 腾讯音乐娱乐相关权利方所有" = "Beans Music - for learning and communication only. Music copyrights belong to their respective platforms.";
+"Beans Music · 仅供学习交流，纯 AI 实现此应用" = "Beans Music - for learning and communication only. Built with AI.";
+"Beans Music 公告" = "Beans Music Announcement";
+"Beans Music 启动（版本 \\(Self.appVersion)）" = "Beans Music started (version \\(Self.appVersion))";
+"Beans Music 是一款聚合网易云音乐、QQ 音乐与酷狗音乐歌单同步能力的第三方音乐播放器客户端，仅供个人学习研究使用。" = "Beans Music is a third-party music player for syncing NetEase Cloud Music, QQ Music, and Kugou playlists. For personal learning only.";
 "Beans设置备份-\\(Self.backupDateString())" = "Beans Music: Beans-\\(Self.backupDateString())";
 "Cookie 格式或登录态无效，请确认已完整复制" = "Beans Music: Cookie ，";
 "DJ 节奏脉冲光效" = "Beans Music: DJ";
@@ -983,3 +983,4 @@
 "网易云音乐 / QQ音乐" = "NetEase Cloud Music / QQ Music";
 "网易云音乐 / 酷狗音乐" = "NetEase Cloud Music / Kugou Music";
 "QQ音乐 / 酷狗音乐" = "QQ Music / Kugou Music";
+

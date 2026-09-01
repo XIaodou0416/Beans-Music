@@ -295,9 +295,15 @@ struct DiscoverView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(greetingLines.enumerated()), id: \.offset) { index, line in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(verbatim: homeGreetingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSLocalizedString(line, comment: "") : line)
-                                    .font(BeansFont.greetingFont(isNativeClean ? max(42, greetingLineSize(index)) : greetingLineSize(index), .bold))
-                                    .foregroundStyle(greetingLineStyle(index))
+                            Group {
+                                if homeGreetingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text(LocalizedStringKey(line))
+                                } else {
+                                    Text(verbatim: line)
+                                }
+                            }
+                            .font(BeansFont.greetingFont(isNativeClean ? max(42, greetingLineSize(index)) : greetingLineSize(index), .bold))
+                            .foregroundStyle(greetingLineStyle(index))
                                     .overlay(alignment: .bottomLeading) {
                                         if homeGreetingUnderline {
                                             Rectangle()

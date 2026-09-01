@@ -49,6 +49,7 @@ struct ProfileView: View {
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+    @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -56,6 +57,19 @@ struct ProfileView: View {
 
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
+
+    private var isEnglish: Bool { languageRaw == AppLanguage.english.rawValue }
+
+    private var displayPlatformSummary: String {
+        if !isEnglish { return platformPrefs.summaryText }
+        return platformPrefs.enabledSearchProviders.map { provider in
+            switch provider {
+            case .netease: return "NetEase Cloud Music"
+            case .qq: return "QQ Music"
+            case .kugou: return "Kugou Music"
+            }
+        }.joined(separator: " / ")
     }
 
     private var appVersionText: String {
@@ -74,12 +88,14 @@ struct ProfileView: View {
             }
         }
         if platformPrefs.isEnabled(SearchProvider.qq), qqAuth.isLoggedIn {
-            parts.append(qqAuth.nickname.isEmpty ? "QQ 已登录" : qqAuth.nickname)
+                parts.append(qqAuth.nickname.isEmpty ? (isEnglish ? "QQ Music Logged In" : "QQ 已登录") : qqAuth.nickname)
         }
         if platformPrefs.isEnabled(SearchProvider.kugou), kugouAuth.isLoggedIn {
-            parts.append(kugouAuth.nickname.isEmpty ? "酷狗已登录" : kugouAuth.nickname)
+                parts.append(kugouAuth.nickname.isEmpty ? (isEnglish ? "Kugou Music Logged In" : "酷狗已登录") : kugouAuth.nickname)
         }
-        if parts.isEmpty { return "登录后可同步 \(platformPrefs.summaryText) 歌单" }
+        if parts.isEmpty {
+            return isEnglish ? "Sign in to sync \(displayPlatformSummary) playlists" : "登录后可同步 \(platformPrefs.summaryText) 歌单"
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -96,7 +112,7 @@ struct ProfileView: View {
                 Text("我的")
                     .font(BeansFont.appFont(30, .bold))
                     .foregroundStyle(Color.beansLabel)
-                Text("\(platformPrefs.summaryText) 账号与外观设置")
+            Text(isEnglish ? "\(displayPlatformSummary) account and appearance settings" : "\(platformPrefs.summaryText) 账号与外观设置")
                     .font(BeansFont.appFont(13))
                     .foregroundStyle(Color.beansComment)
             }
@@ -352,7 +368,7 @@ struct ProfileView: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
-                            Text(auth.user?.nickname ?? (auth.isLoggedIn ? "网易云音乐已登录" : "免登录 · 点击登录"))
+                            Text(auth.user?.nickname ?? (auth.isLoggedIn ? (isEnglish ? "NetEase Cloud Music Logged In" : "网易云音乐已登录") : (isEnglish ? "Guest · Tap to Sign In" : "免登录 · 点击登录")))
                                 .font(BeansFont.appFont(20, .bold))
                                 .foregroundStyle(Color.beansLabel)
                                 .lineLimit(1)
@@ -485,7 +501,7 @@ struct ProfileView: View {
                 featureCell(icon: "clock.arrow.circlepath", title: "播放历史", subtitle: "最近播放 \(player.history.count) 首") {
                     showHistory = true
                 }
-                featureCell(icon: hasVisibleAccountLogin ? "checkmark.seal.fill" : "globe", title: "账号与登录", subtitle: hasVisibleAccountLogin ? accountStatusLine : "登录 \(platformPrefs.summaryText)") {
+                featureCell(icon: hasVisibleAccountLogin ? "checkmark.seal.fill" : "globe", title: isEnglish ? "Accounts and Sign-in" : "账号与登录", subtitle: hasVisibleAccountLogin ? accountStatusLine : (isEnglish ? "Sign in to \(displayPlatformSummary)" : "登录 \(platformPrefs.summaryText)")) {
                     BeansHaptics.tap()
                     showAccountHub = true
                 }
@@ -1027,7 +1043,7 @@ struct AccountHubSheet: View {
                         if platformPrefs.isEnabled(SearchProvider.netease) { neteaseCard }
                         if platformPrefs.isEnabled(SearchProvider.qq) { qqCard }
                         if platformPrefs.isEnabled(SearchProvider.kugou) { kugouCard }
-                        Text("\(platformPrefs.summaryText) 登录后可同步歌单并提升可播成功率")
+                        Text(isEnglish ? "Sign in to \(displayPlatformSummary) to sync playlists and improve playback availability" : "\(platformPrefs.summaryText) 登录后可同步歌单并提升可播成功率")
                             .font(BeansFont.appFont(11))
                             .foregroundStyle(Color.beansComment)
                             .padding(.horizontal, 4)
@@ -1302,7 +1318,8 @@ struct SettingsView: View {
     @State private var showSourceHelp = false
     @State private var backupExpanded = false
     @State private var backupIncludeAccounts = false
-    @State private var backupIncludeWallpapers = true
+    @State private var backupIncludeWallpapers = false
+    @State private var backupIncludeKeys = false
     @State private var backupMessage: String?
     /// 日志
     @State private var showLogViewer = false
@@ -2576,6 +2593,10 @@ struct SettingsView: View {
                 Toggle("备份壁纸图片", isOn: $backupIncludeWallpapers)
                     .tint(Color.beansAmber)
                     .font(BeansFont.appFont(13))
+                Divider().opacity(0.35)
+                Toggle("备份音源密钥", isOn: $backupIncludeKeys)
+                    .tint(Color.beansAmber)
+                    .font(BeansFont.appFont(13))
                 Text("默认不带账号登录信息；关闭壁纸后只备份普通设置，不写入壁纸图片数据")
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
@@ -2588,7 +2609,7 @@ struct SettingsView: View {
             HStack(spacing: 10) {
                 backupActionButton(icon: "square.and.arrow.up", title: "导出备份") {
                     BeansHaptics.tap()
-                    exportBackup(includeAccounts: backupIncludeAccounts, includeWallpapers: backupIncludeWallpapers)
+                    exportBackup(includeAccounts: backupIncludeAccounts, includeWallpapers: backupIncludeWallpapers, includeKeys: backupIncludeKeys)
                 }
                 backupActionButton(icon: "square.and.arrow.down", title: "导入恢复") {
                     BeansHaptics.tap()
@@ -2661,16 +2682,17 @@ struct SettingsView: View {
         key.hasPrefix("beans.") && !isSystemBackupKey(key)
     }
 
-    private static func isExcludedBackupKey(_ key: String, includeAccounts: Bool = false, includeWallpapers: Bool = true) -> Bool {
+    private static func isExcludedBackupKey(_ key: String, includeAccounts: Bool = false, includeWallpapers: Bool = true, includeKeys: Bool = false) -> Bool {
         (!includeAccounts && isAccountBackupKey(key))
             || (!includeWallpapers && isWallpaperBackupKey(key))
-            || isPrivacyBackupKey(key)
+            || (isPrivacyBackupKey(key) && key != UnblockSourceStore.userAPIKeysKey)
+            || (!includeKeys && key == UnblockSourceStore.userAPIKeysKey)
             || key == "beans.backup.meta"
             || key == "beans.font.restore"
     }
 
     /// 导出：收集本 App 设置，排除账号、搜索记录和日志，交给系统原生导出面板
-    private func exportBackup(includeAccounts: Bool, includeWallpapers: Bool) {
+    private func exportBackup(includeAccounts: Bool, includeWallpapers: Bool, includeKeys: Bool) {
         let defaults = UserDefaults.standard
         var payload: [String: Any] = [:]
         if includeWallpapers {
@@ -2679,7 +2701,7 @@ struct SettingsView: View {
         }
         for (key, value) in defaults.dictionaryRepresentation() {
             guard Self.isBackupCandidateKey(key) else { continue }
-            guard !Self.isExcludedBackupKey(key, includeAccounts: includeAccounts, includeWallpapers: includeWallpapers) else { continue }
+            guard !Self.isExcludedBackupKey(key, includeAccounts: includeAccounts, includeWallpapers: includeWallpapers, includeKeys: includeKeys) else { continue }
             // 超大原始 Data 直接跳过（壁纸 base64 已以字符串形式存于 beans.wallpapers.data，不受影响）
             if let data = value as? Data, data.count > 2 * 1024 * 1024 { continue }
             let safe = backupJSONSafe(value)
@@ -2701,9 +2723,11 @@ struct SettingsView: View {
             "version": version,
             "includedAccounts": includeAccounts,
             "includedWallpapers": includeWallpapers,
+            "includedKeys": includeKeys,
             "excluded": [
                 includeAccounts ? nil : "account",
                 includeWallpapers ? nil : "wallpapers",
+                includeKeys ? nil : "audio keys",
                 "search history",
                 "logs",
             ].compactMap { $0 }.joined(separator: ", "),
