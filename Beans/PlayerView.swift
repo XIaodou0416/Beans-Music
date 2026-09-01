@@ -3656,7 +3656,7 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
     }
 
     var body: some View {
-        if #available(iOS 26, *), (uiStyle == .liquid || uiStyle == .nativeLiquid) {
+        if #available(iOS 26, *), uiStyle == .liquid {
             GlassEffectContainer {
                 shape
                     .fill(.clear)
@@ -3664,7 +3664,7 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
             }
         } else {
             switch uiStyle {
-            case .clear, .liquid, .nativeLiquid:
+            case .clear, .liquid:
                 shape.fill(.ultraThinMaterial)
             case .compact:
                 shape.fill(Color.beansGlassFill.opacity(0.62))

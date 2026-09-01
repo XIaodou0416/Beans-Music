@@ -9,14 +9,10 @@ struct MiniPlayerView: View {
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
 
-    private var isNativeClean: Bool {
-        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
-    }
-
-    private var coverSize: CGFloat { isNativeClean ? 36 : 40 }
-    private var controlSize: CGFloat { isNativeClean ? 32 : 38 }
-    private var containerRadius: CGFloat { isNativeClean ? 18 : 22 }
-    private var verticalPadding: CGFloat { isNativeClean ? 4 : 8 }
+    private var coverSize: CGFloat { 36 }
+    private var controlSize: CGFloat { 32 }
+    private var containerRadius: CGFloat { 18 }
+    private var verticalPadding: CGFloat { 4 }
 
     /// 二分查找当前播放到的歌词行（歌词按时间升序）
     private var currentLyricLine: LyricLine? {
@@ -46,15 +42,15 @@ struct MiniPlayerView: View {
                 ZStack {
                     Circle()
                         .fill(theme.accent.highlight.opacity(0.32))
-                        .frame(width: isNativeClean ? 42 : 48, height: isNativeClean ? 42 : 48)
+                        .frame(width: 42, height: 42)
                         .blur(radius: 9)
                     CoverImage(url: player.currentSong?.coverURL, size: coverSize, cornerRadius: 7)
                 }
-                .frame(width: isNativeClean ? 42 : 48, height: isNativeClean ? 42 : 48)
+                .frame(width: 42, height: 42)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
                         Text(player.currentSong?.name ?? "")
-                            .font(BeansFont.appFont(isNativeClean ? 12 : 14, .semibold))
+                            .font(BeansFont.appFont(12, .semibold))
                             .foregroundStyle(Color.beansLabel)
                             .lineLimit(1)
                         if player.currentSong?.isVIP == true {
@@ -67,7 +63,7 @@ struct MiniPlayerView: View {
                         }
                     }
                     Text(currentLyricLine?.text ?? player.currentSong?.artists ?? "")
-                        .font(BeansFont.appFont(isNativeClean ? 10 : 12))
+                        .font(BeansFont.appFont(10))
                         .foregroundStyle(Color.beansComment)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -103,7 +99,7 @@ struct MiniPlayerView: View {
                 // Apple 简洁样式也强制使用液态播放器底板，低系统自动回退为材质模拟。
                 BeansGlass(
                     shape: RoundedRectangle(cornerRadius: containerRadius, style: .continuous),
-                    forceLiquid: isNativeClean
+                    forceLiquid: false
                 )
                 .overlay {
                     LinearGradient(

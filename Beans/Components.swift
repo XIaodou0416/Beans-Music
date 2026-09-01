@@ -140,7 +140,7 @@ struct BeansGlass<S: Shape>: View {
     }
 
     private var isLiquid: Bool {
-        forceLiquid || uiStyle == .liquid || uiStyle == .nativeLiquid
+        forceLiquid || uiStyle == .liquid
     }
 
     var body: some View {
@@ -160,7 +160,7 @@ struct BeansGlass<S: Shape>: View {
             }
         } else {
             switch uiStyle {
-            case .clear, .liquid, .nativeLiquid:
+            case .clear, .liquid:
                 shape
                     .fill(.ultraThinMaterial)
             case .compact, .nativeClean:
@@ -203,7 +203,7 @@ struct GlassCard<Content: View>: View {
     }
 
     private var isLiquid: Bool {
-        uiStyle == .liquid || uiStyle == .nativeLiquid
+        uiStyle == .liquid
     }
 
     private var resolvedCornerRadius: CGFloat {
