@@ -45,9 +45,13 @@ final class RemoteControlStore: ObservableObject {
         }
         let defaults = UserDefaults.standard
 
-        defaults.set(config.announcementEnabled && !config.announcement.isEmpty, forKey: "beans.remoteAnnouncement.enabled")
+        let hasAnnouncementContent = !config.announcement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !(config.announcementMediaURL ?? config.announcementImageURL ?? "").isEmpty
+        defaults.set(config.announcementEnabled && hasAnnouncementContent, forKey: "beans.remoteAnnouncement.enabled")
         defaults.set(config.announcement, forKey: "beans.remoteAnnouncement.text")
         defaults.set(config.announcementImageURL ?? "", forKey: "beans.remoteAnnouncement.imageURL")
+        defaults.set(config.announcementMediaURL ?? config.announcementImageURL ?? "", forKey: "beans.remoteAnnouncement.mediaURL")
+        defaults.set(config.announcementMediaType ?? "image", forKey: "beans.remoteAnnouncement.mediaType")
         defaults.set(config.announcementTextColor ?? "", forKey: "beans.remoteAnnouncement.textColor")
         defaults.set(config.updatedAt ?? "", forKey: "beans.remoteAnnouncement.updatedAt")
 
@@ -124,6 +128,8 @@ private struct RemoteConfig: Decodable {
     let announcement: String
     let announcementEnabled: Bool
     let announcementImageURL: String?
+    let announcementMediaURL: String?
+    let announcementMediaType: String?
     let announcementTextColor: String?
     let updatedAt: String?
     let platforms: RemotePlatforms?

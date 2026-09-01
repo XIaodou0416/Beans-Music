@@ -59,6 +59,8 @@ struct DiscoverView: View {
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
     @AppStorage("beans.remoteAnnouncement.imageURL") private var remoteAnnouncementImageURL = ""
+    @AppStorage("beans.remoteAnnouncement.mediaURL") private var remoteAnnouncementMediaURL = ""
+    @AppStorage("beans.remoteAnnouncement.mediaType") private var remoteAnnouncementMediaType = ""
     @AppStorage("beans.remoteAnnouncement.textColor") private var remoteAnnouncementTextColor = ""
     private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
     /// 首页数据源：网易云 / QQ音乐（与搜索页同一控件样式）
@@ -102,7 +104,8 @@ struct DiscoverView: View {
                     ScrollViewReader { proxy in
                     VStack(alignment: .leading, spacing: isNativeClean ? 34 : 26) {
                         header
-                        if remoteAnnouncementEnabled, !remoteAnnouncementText.isEmpty {
+                        if remoteAnnouncementEnabled,
+                           !remoteAnnouncementText.isEmpty || !remoteAnnouncementMediaURL.isEmpty || !remoteAnnouncementImageURL.isEmpty {
                             remoteAnnouncementBanner
                         }
                         if !hidePlatformPicker {
@@ -240,16 +243,24 @@ struct DiscoverView: View {
                 .foregroundStyle(Color.beansAmber)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 8) {
-                if let url = URL(string: remoteAnnouncementImageURL), !remoteAnnouncementImageURL.isEmpty {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image.resizable().scaledToFit()
-                        } else if phase.error == nil {
-                            ProgressView().frame(maxWidth: .infinity, minHeight: 60)
+                let mediaURL = remoteAnnouncementMediaURL.isEmpty ? remoteAnnouncementImageURL : remoteAnnouncementMediaURL
+                if let url = URL(string: mediaURL), !mediaURL.isEmpty {
+                    if remoteAnnouncementMediaType.lowercased() == "video" {
+                        AnnouncementVideoView(url: url)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 160)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    } else {
+                        AsyncImage(url: url) { phase in
+                            if let image = phase.image {
+                                image.resizable().scaledToFit()
+                            } else if phase.error == nil {
+                                ProgressView().frame(maxWidth: .infinity, minHeight: 60)
+                            }
                         }
+                        .frame(maxWidth: .infinity, maxHeight: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
-                    .frame(maxWidth: .infinity, maxHeight: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 Text(remoteAnnouncementText)
                     .foregroundStyle(remoteAnnouncementColor)
