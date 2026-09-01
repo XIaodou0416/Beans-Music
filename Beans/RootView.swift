@@ -38,12 +38,13 @@ struct RootView: View {
 
     @State private var selection: RootTab = .discover
     @State private var showPlayer = false
-    @State private var showSearchFromShortcut = false
+    @State private var showProfileFromShortcut = false
+    @State private var showSettingsFromShortcut = false
     /// 免责声明确认状态（门禁在 BeansApp 中，这里用于确认后弹出更新说明）
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
-    @AppStorage("beans.hideSearchTab") private var hideSearchTab = false
+    @AppStorage("beans.hideProfileTab") private var hideProfileTab = false
     @AppStorage("beans.tabPlatformSwitcherEnabled") private var tabPlatformSwitcherEnabled = false
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
     /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
@@ -108,17 +109,17 @@ struct RootView: View {
                 DiscoverView()
                     .tabItem { Label(tabLabelsVisible ? "主页" : "", systemImage: "house.fill") }
                     .tag(RootTab.discover)
-                if !hideSearchTab {
-                    SearchView()
-                        .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
-                        .tag(RootTab.search)
-                }
+                SearchView()
+                    .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
+                    .tag(RootTab.search)
                 LibraryView()
                     .tabItem { Label(tabLabelsVisible ? "音乐库" : "", systemImage: "music.note.list") }
                     .tag(RootTab.library)
-                ProfileView()
-                    .tabItem { Label(tabLabelsVisible ? "我的" : "", systemImage: "person.crop.circle") }
-                    .tag(RootTab.profile)
+                if !hideProfileTab {
+                    ProfileView()
+                        .tabItem { Label(tabLabelsVisible ? "我的" : "", systemImage: "person.crop.circle") }
+                        .tag(RootTab.profile)
+                }
             }
             .tint(Color.beansAmber)
             .background {
@@ -157,12 +158,16 @@ struct RootView: View {
                 .environmentObject(player.clock)
                 .environmentObject(auth)
         }
-        .sheet(isPresented: $showSearchFromShortcut) {
-            SearchView()
+        .sheet(isPresented: $showProfileFromShortcut) {
+            ProfileView()
                 .environmentObject(favorites)
                 .environmentObject(player)
                 .environmentObject(player.clock)
                 .environmentObject(auth)
+        }
+        .sheet(isPresented: $showSettingsFromShortcut) {
+            SettingsView()
+                .environmentObject(theme)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
         .animation(.easeInOut(duration: 0.22), value: selection)
@@ -170,7 +175,7 @@ struct RootView: View {
             ToastView(center: ToastCenter.shared)
         }
         .overlay(alignment: .bottomTrailing) {
-            if usesSystemFloatingTabBar, tabPlatformSwitcherEnabled {
+            if usesSystemFloatingTabBar, (tabPlatformSwitcherEnabled || hideProfileTab) {
                 platformSwitcherButton
                     .padding(.trailing, 16)
                     .padding(.bottom, 12)
@@ -199,8 +204,8 @@ struct RootView: View {
                 showWhatsNew = true
             }
         }
-        .onChange(of: hideSearchTab) { hidden in
-            if hidden, selection == .search {
+        .onChange(of: hideProfileTab) { hidden in
+            if hidden, selection == .profile {
                 selection = .discover
             }
         }
@@ -354,7 +359,7 @@ struct RootView: View {
         HStack(spacing: 4) {
             legacyTabItemsBar
                 .frame(maxWidth: .infinity)
-            if tabPlatformSwitcherEnabled {
+            if tabPlatformSwitcherEnabled || hideProfileTab {
                 platformSwitcherButton
             }
         }
@@ -368,7 +373,7 @@ struct RootView: View {
 
     private var legacyTabItemsBar: some View {
         HStack(spacing: 4) {
-            ForEach(RootTab.allCases.filter { !hideSearchTab || $0 != .search }) { tab in
+            ForEach(RootTab.allCases.filter { !hideProfileTab || $0 != .profile }) { tab in
                 Button {
                     guard selection != tab else { return }
                     BeansHaptics.select()
@@ -443,9 +448,15 @@ struct RootView: View {
         let current = SearchProvider(rawValue: homeSourceRaw) ?? platformPrefs.enabledSearchProviders.first ?? .netease
         return Button {
             BeansHaptics.tap()
+            if hideProfileTab {
+                showProfileFromShortcut = true
+            }
         } label: {
             Group {
-                if let imageName = current.brandImageName {
+                if hideProfileTab {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 16, weight: .semibold))
+                } else if let imageName = current.brandImageName {
                     Image(imageName)
                         .resizable()
                         .scaledToFit()
@@ -467,9 +478,9 @@ struct RootView: View {
         .contextMenu {
             Button {
                 BeansHaptics.select()
-                showSearchFromShortcut = true
+                showSettingsFromShortcut = true
             } label: {
-                Label("搜索", systemImage: "magnifyingglass")
+                Label("设置", systemImage: "gearshape")
             }
 
             Divider()
