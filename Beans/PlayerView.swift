@@ -904,8 +904,6 @@ struct PlayerView: View {
         let size = min(304, min(geo.size.width * 0.72, geo.size.height * 0.48))
         let showPreview = !lyrics.isEmpty
         return VStack(spacing: 12) {
-            vinylTopIndicator
-
             vinylCompactHeader
                 .padding(.horizontal, 18)
                 .padding(.top, 0)
@@ -1042,8 +1040,6 @@ struct PlayerView: View {
 
     private func vinylLyricsPanel(geo: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            vinylTopIndicator
-
             vinylLyricsHeader
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
@@ -1869,23 +1865,6 @@ struct PlayerView: View {
         .id("lyricsPanel-\(song?.identityKey ?? "none")")
     }
 
-    private var vinylTopIndicator: some View {
-        ZStack(alignment: .top) {
-            Color.clear
-            Capsule()
-                .fill(.white.opacity(0.88))
-                .frame(width: 44, height: 5)
-                .shadow(color: .black.opacity(0.24), radius: 2, y: 1)
-                .padding(.top, 8)
-        }
-        .frame(width: 180, height: 92)
-        .padding(.bottom, 2)
-        .zIndex(3)
-        .contentShape(Rectangle())
-        .gesture(vinylCloseGesture)
-        .accessibilityLabel("收起播放器")
-    }
-
     // MARK: - 空态兜底（歌曲数据为空时不出现空白页）
 
     private var placeholderView: some View {
@@ -2092,13 +2071,13 @@ struct PlayerView: View {
                 Spacer(minLength: 0)
                 queueButton
             }
-            HStack(spacing: 28) {
+            HStack(spacing: 26) {
                 Button {
                     BeansHaptics.tap()
                     player.previous()
                 } label: {
                     Image(systemName: "backward.fill")
-                        .font(.system(size: 25, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(playerButtonText)
                         .frame(width: 34, height: 34)
                         .contentShape(Rectangle())
@@ -2110,12 +2089,12 @@ struct PlayerView: View {
                     BeansHaptics.tap()
                     player.togglePlayPause()
                 } label: {
-                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24)
+                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 20)
                         .foregroundStyle(playerButtonStyle == .appleMusic ? Color.white : Color.black)
-                        .frame(width: 66, height: 66)
+                        .frame(width: 34, height: 34)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+                .buttonStyle(.plain)
                 .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
 
                 Button {
@@ -2123,7 +2102,7 @@ struct PlayerView: View {
                     player.next()
                 } label: {
                     Image(systemName: "forward.fill")
-                        .font(.system(size: 25, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(playerButtonText)
                         .frame(width: 34, height: 34)
                         .contentShape(Rectangle())
