@@ -534,6 +534,10 @@ struct SearchView: View {
                             Text(beansLocalized("找到 \(songResults.count) 首 · \(provider.rawValue)", "Found \(songResults.count) songs · \(beansPlatformName(provider))"))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                                .truncationMode(.tail)
+                                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                             Spacer()
                             Button {
                                 BeansHaptics.tap()
@@ -594,6 +598,10 @@ struct SearchView: View {
                             Text(beansLocalized("找到 \(artistResults.count) 位 · \(provider.rawValue)", "Found \(artistResults.count) artists · \(beansPlatformName(provider))"))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                                .truncationMode(.tail)
+                                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                             Spacer()
                         }
                         .padding(.vertical, 8)
@@ -662,6 +670,10 @@ struct SearchView: View {
                             Text(beansLocalized("找到 \(albumResults.count) 张 · \(provider.rawValue)", "Found \(albumResults.count) albums · \(beansPlatformName(provider))"))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                                .truncationMode(.tail)
+                                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                             Spacer()
                         }
                         .padding(.vertical, 8)

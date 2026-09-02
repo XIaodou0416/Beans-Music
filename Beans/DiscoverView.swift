@@ -1760,6 +1760,10 @@ private struct HomeUnifiedSearchSheet: View {
                         Text(beansLocalized("找到 \(results.count) 首 · 全平台", "Found \(results.count) songs · All Platforms"))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                            .truncationMode(.tail)
+                            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                         Spacer()
                         Button {
                             BeansHaptics.tap()

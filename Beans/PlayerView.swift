@@ -3623,22 +3623,6 @@ struct PlayerSettingsSheet: View {
                 .tint(Color.beansAmber)
             }
             Divider().opacity(0.5)
-            Text("渐变预设")
-                .font(BeansFont.appFont(13))
-                .foregroundStyle(Color.beansLabel)
-            VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    ForEach(Array(LyricPreset.all.prefix(3).enumerated()), id: \.element.name) { _, preset in
-                        presetButton(preset)
-                    }
-                }
-                HStack(spacing: 8) {
-                    ForEach(Array(LyricPreset.all.dropFirst(3).enumerated()), id: \.element.name) { _, preset in
-                        presetButton(preset)
-                    }
-                }
-            }
-            Divider().opacity(0.5)
             settingToggle("保持自定义配色", isOn: Binding(get: { gradMode == 1 }, set: { gradMode = $0 ? 1 : 0 }),
                           caption: "关闭时自动跟随歌曲封面取色调整")
             ColorPicker("当前行颜色", selection: currentColor, supportsOpacity: false)
