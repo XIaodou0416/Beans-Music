@@ -974,10 +974,10 @@ struct PlayerView: View {
             }
 
             Menu {
-                Button("定时关闭", action: onSleepTimer)
-                Button("添加到本地歌单", action: onAddToLocalPlaylist)
-                Button("下载歌曲", action: onDownload)
-                Button("播放器设置", action: onPlayerSettings)
+                Button("定时关闭") { showSleepTimer = true }
+                Button("添加到本地歌单") { showAddToLocalPlaylist = true }
+                Button("下载歌曲") { showDownloadPicker = true }
+                Button("播放器设置") { showPlayerSettings = true }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
@@ -1190,7 +1190,7 @@ struct PlayerView: View {
             }
         }
         vinylLyricsResumeTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
             vinylIsDraggingLyrics = false
             vinylFocusedLyricIndex = nil
