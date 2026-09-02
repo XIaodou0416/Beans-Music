@@ -774,6 +774,10 @@ final class PlayerManager: NSObject, ObservableObject {
             level: .debug
         )
         let player = AVPlayer(playerItem: item)
+        // Prefer starting as soon as bytes are available. The source resolver
+        // already performs quality/host fallback, so waiting for a large buffer
+        // makes some QQ CDN streams appear to hang, especially in the background.
+        player.automaticallyWaitsToMinimizeStalling = false
         player.rate = Float(rate)
         self.player = player
         playbackConfirmed = false
