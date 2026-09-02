@@ -32,6 +32,10 @@ struct PlayerView: View {
     @State private var showArtistHome = false
     @State private var pickedArtistName = ""
     @State private var showArtistPicker = false
+    @State private var vinylFocusedLyricIndex: Int?
+    @State private var vinylLyricsViewportHeight: CGFloat = 0
+    @State private var vinylIsDraggingLyrics = false
+    @State private var vinylLyricsResumeTask: Task<Void, Never>?
     @AppStorage("beans.djVisual") private var djVisualEnabled = false
     @AppStorage("beans.djVisualIntensity") private var djVisualIntensity = 0.8
     @State private var dominantColor: RGBColor?
@@ -404,11 +408,7 @@ struct PlayerView: View {
                         background
                             .ignoresSafeArea()
 
-                        VStack(spacing: 0) {
-                            headerBar
-                            content(geo: geo)
-                        }
-                        .foregroundStyle(palette.text)
+                        content(geo: geo)
 
                         controlDeck(bottomInset: geo.safeAreaInsets.bottom)
                             .frame(maxWidth: .infinity)
@@ -512,6 +512,11 @@ struct PlayerView: View {
             dominantColor = nil
             await MainActor.run {
                 coverDrag = .zero
+                vinylFocusedLyricIndex = nil
+                vinylIsDraggingLyrics = false
+                vinylLyricsViewportHeight = 0
+                vinylLyricsResumeTask?.cancel()
+                vinylLyricsResumeTask = nil
                 let shouldPulse = !animatedSongKey.isEmpty && animatedSongKey != songKey
                 animatedSongKey = songKey
                 coverSwitchPulse = shouldPulse
@@ -854,6 +859,15 @@ struct PlayerView: View {
         ZStack {
             if song == nil {
                 placeholderView
+            } else if coverPlayerStyle == .vinyl {
+                // 黑胶布局参考 kumone 的 Now Playing / Vinyl 页面结构，保留 Beans 自己的控制逻辑。
+                if showLyrics {
+                    vinylLyricsPanel(geo: geo)
+                        .transition(.opacity)
+                } else {
+                    vinylAlbumPanel(geo: geo)
+                        .transition(.opacity)
+                }
             } else if showLyrics {
                 lyricsPanel(geo: geo)
                     .transition(.opacity)
@@ -884,7 +898,12 @@ struct PlayerView: View {
 
     private func vinylAlbumPanel(geo: GeometryProxy) -> some View {
         let size = min(304, min(geo.size.width * 0.72, geo.size.height * 0.50))
+        let showPreview = !lyrics.isEmpty
         return VStack(spacing: 14) {
+            vinylCompactHeader
+                .padding(.horizontal, 20)
+                .padding(.top, 4)
+
             Spacer(minLength: 2)
 
             VinylTurntableView(
@@ -898,45 +917,310 @@ struct PlayerView: View {
             )
             .modifier(Layoutable(part: .cover, enabled: layoutMode, data: $layoutData))
 
-            VStack(spacing: 6) {
-                HStack(spacing: 8) {
-                    Text(song?.name ?? "未在播放")
-                        .font(BeansFont.appFont(22, .bold))
-                        .foregroundStyle(albumTitleForeground)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.55)
-                        .multilineTextAlignment(.center)
-                        .shadow(color: albumGlow(albumTitleColor, strong: true), radius: albumTextGlow ? 10 : 0, y: 2)
-                    if showSongVIPBadge, song?.isVIP == true {
-                        Text("VIP")
-                            .font(BeansFont.appFont(9, .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
-                            .shadow(color: palette.accent.opacity(0.45), radius: 6)
-                    }
-                }
-                .shadow(color: albumTextGlow ? palette.accent.opacity(0.30) : .clear, radius: albumTextGlow ? 10 : 0)
-                Text(subtitle)
-                    .font(BeansFont.appFont(14, .medium))
-                    .foregroundStyle(albumArtistForeground)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .shadow(color: albumGlow(albumArtistColor), radius: albumTextGlow ? 7 : 0, y: 1)
-                    .contentShape(Rectangle())
-                    .onTapGesture { openArtistHome() }
+            if showPreview {
+                vinylMiniLyricsPreview
+                    .padding(.top, 2)
             }
-            .padding(.horizontal, 36)
-            .modifier(Layoutable(part: .title, enabled: layoutMode, data: $layoutData))
-
-            lyricPreviewBox
-                .modifier(Layoutable(part: .previewLyric, enabled: layoutMode, data: $layoutData))
 
             Spacer(minLength: 2)
         }
         .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var vinylCompactHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                toggleLyrics()
+            } label: {
+                CoverImage(url: song?.coverURL, size: 48, cornerRadius: 12)
+                    .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 7) {
+                    Text(song?.name ?? "未在播放")
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(albumTitleForeground)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if showSongVIPBadge, song?.isVIP == true {
+                        Text("VIP")
+                            .font(BeansFont.appFont(8, .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1.5)
+                            .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
+                    }
+                }
+                Text(subtitle)
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(albumArtistForeground)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openArtistHome() }
+            }
+
+            Spacer(minLength: 0)
+
+            compactActionButton(
+                icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
+                active: localLibrary.containsSong(song)
+            ) {
+                guard let song else { return }
+                toggleLocalFavorite(song)
+            }
+
+            Menu {
+                Button("定时关闭", action: onSleepTimer)
+                Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                Button("下载歌曲", action: onDownload)
+                Button("播放器设置", action: onPlayerSettings)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(albumTitleForeground.opacity(0.82))
+                    .frame(width: 38, height: 38)
+                    .contentShape(Rectangle())
+            }
+        }
+        .frame(maxWidth: 420)
+    }
+
+    private var vinylMiniLyricsPreview: some View {
+        let rows = lyricPreviewRows
+        return VStack(spacing: 5) {
+            if rows.isEmpty {
+                Text("暂无歌词，点击唱盘查看完整歌词")
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(albumPreviewDimForeground)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            } else {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, item in
+                    HStack(spacing: 6) {
+                        Text(item.isCurrent ? "●" : "·")
+                            .font(BeansFont.appFont(8))
+                            .foregroundStyle(item.isCurrent ? albumPreviewLyricColor : albumPreviewDimColor.opacity(0.5))
+                        Text(item.text)
+                            .font(BeansFont.appFont(12, item.isCurrent ? .semibold : .regular))
+                            .foregroundStyle(item.isCurrent ? albumPreviewForeground : albumPreviewDimForeground)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .frame(height: 5 * 18 + 4 * 3)
+        .padding(.horizontal, 40)
+        .contentShape(Rectangle())
+        .onTapGesture { toggleLyrics() }
+    }
+
+    private func vinylLyricsPanel(geo: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            vinylCompactHeader
+                .padding(.horizontal, 20)
+                .padding(.top, 4)
+                .padding(.bottom, 10)
+
+            if lyrics.isEmpty {
+                emptyLyricsView
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 22) {
+                            Color.clear.frame(height: max(88, vinylLyricsViewportHeight * 0.30))
+                            ForEach(lyrics.indices, id: \.self) { index in
+                                vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
+                                    .id(index)
+                                    .background {
+                                        GeometryReader { rowGeometry in
+                                            Color.clear.preference(
+                                                key: LyricCenterPreferenceKey.self,
+                                                value: [index: rowGeometry.frame(in: .named("vinylLyricsViewport")).midY]
+                                            )
+                                        }
+                                    }
+                            }
+                            Color.clear.frame(height: max(100, vinylLyricsViewportHeight * 0.34))
+                        }
+                        .padding(.horizontal, 28)
+                    }
+                    .coordinateSpace(name: "vinylLyricsViewport")
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0.0),
+                                .init(color: .black, location: 0.12),
+                                .init(color: .black, location: 0.84),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .background {
+                        GeometryReader { viewport in
+                            Color.clear
+                                .onAppear { vinylLyricsViewportHeight = viewport.size.height }
+                                .onChange(of: viewport.size.height) { vinylLyricsViewportHeight = $0 }
+                        }
+                    }
+                    .onPreferenceChange(LyricCenterPreferenceKey.self) { centers in
+                        vinylUpdateFocusedLyric(from: centers)
+                    }
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 4)
+                            .onChanged { _ in
+                                vinylIsDraggingLyrics = true
+                                vinylLyricsResumeTask?.cancel()
+                            }
+                            .onEnded { _ in
+                                vinylScheduleLyricsResume(proxy: proxy)
+                            }
+                    )
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                            vinylScrollToCurrentLyric(proxy: proxy, animated: false)
+                        }
+                    }
+                    .onChange(of: vinylCurrentLyricIndex) { _ in
+                        guard !vinylIsDraggingLyrics else { return }
+                        vinylScrollToCurrentLyric(proxy: proxy, animated: true)
+                    }
+                    .overlay(alignment: .top) {
+                        if vinylIsDraggingLyrics {
+                            vinylSelectionGuide
+                                .padding(.top, 4)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onDisappear {
+            vinylLyricsResumeTask?.cancel()
+        }
+    }
+
+    private func vinylLyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
+        Button {
+            BeansHaptics.tap()
+            player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(line.text.isEmpty ? " " : line.text)
+                        .font(BeansFont.appFont(isFocused ? 27 : 23, isFocused ? .bold : .semibold))
+                        .foregroundStyle(albumTitleForeground.opacity(isFocused ? 1 : 0.38))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if isFocused, vinylIsDraggingLyrics {
+                        Spacer(minLength: 8)
+                        Text(beansTimeString(line.time))
+                            .font(BeansFont.appFont(11, .semibold, .monospaced))
+                            .foregroundStyle(albumArtistForeground.opacity(0.82))
+                    }
+                }
+                if isFocused, let translation = line.translation, !translation.isEmpty {
+                    Text(translation)
+                        .font(BeansFont.appFont(15, .medium))
+                        .foregroundStyle(albumArtistForeground.opacity(0.68))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .blur(radius: isFocused ? 0 : 0.6)
+            .scaleEffect(isFocused ? 1.02 : 1, anchor: .leading)
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isFocused)
+    }
+
+    private var vinylCurrentLyricIndex: Int? {
+        guard !lyrics.isEmpty else { return nil }
+        let progress = LyricTiming.effectiveProgress(clock.progress, userOffset: lyricOffset)
+        var low = 0
+        var high = lyrics.count - 1
+        var answer: Int?
+        while low <= high {
+            let mid = (low + high) / 2
+            if lyrics[mid].time <= progress {
+                answer = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return answer
+    }
+
+    private var vinylCurrentVisualIndex: Int? {
+        vinylIsDraggingLyrics ? vinylFocusedLyricIndex : (vinylFocusedLyricIndex ?? vinylCurrentLyricIndex)
+    }
+
+    private func vinylUpdateFocusedLyric(from centers: [Int: CGFloat]) {
+        guard vinylIsDraggingLyrics, vinylLyricsViewportHeight > 0, !centers.isEmpty else { return }
+        let center = vinylLyricsViewportHeight / 2
+        vinylFocusedLyricIndex = centers.min { abs($0.value - center) < abs($1.value - center) }?.key
+    }
+
+    private func vinylScrollToCurrentLyric(proxy: ScrollViewProxy, animated: Bool) {
+        guard let index = vinylCurrentLyricIndex else { return }
+        let action = { proxy.scrollTo(index, anchor: .center) }
+        if animated {
+            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.38)) { action() }
+        } else {
+            action()
+        }
+    }
+
+    private func vinylScheduleLyricsResume(proxy: ScrollViewProxy) {
+        vinylLyricsResumeTask?.cancel()
+        let target = vinylFocusedLyricIndex ?? vinylCurrentLyricIndex
+        if let target {
+            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.34)) {
+                proxy.scrollTo(target, anchor: .center)
+            }
+        }
+        vinylLyricsResumeTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            vinylIsDraggingLyrics = false
+            vinylFocusedLyricIndex = nil
+            vinylLyricsResumeTask = nil
+        }
+    }
+
+    private var vinylSelectionGuide: some View {
+        HStack(spacing: 8) {
+            Canvas { context, size in
+                var path = Path()
+                path.move(to: CGPoint(x: 0, y: size.height / 2))
+                path.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+                context.stroke(
+                    path,
+                    with: .color(.white.opacity(0.45)),
+                    style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+                )
+            }
+            .frame(height: 1)
+
+            if let index = vinylCurrentVisualIndex, lyrics.indices.contains(index) {
+                Text(beansTimeString(lyrics[index].time))
+                    .font(BeansFont.appFont(11, .semibold, .monospaced))
+                    .foregroundStyle(albumArtistForeground.opacity(0.8))
+                    .offset(x: 25)
+            }
+        }
+        .padding(.horizontal, 2)
+        .allowsHitTesting(false)
     }
 
     private func classicAlbumPanel(geo: GeometryProxy) -> some View {
