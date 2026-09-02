@@ -381,13 +381,13 @@ struct DiscoverView: View {
                 Spacer()
                 HStack(spacing: 10) {
                     if !homeHeaderHideSort {
-                        GlassIconButton(systemName: "arrow.up.arrow.down") {
+                        GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
                             BeansHaptics.tap()
                             showSectionSort = true
                         }
                     }
                     if !homeHeaderHideRefresh {
-                        GlassIconButton(systemName: "arrow.clockwise") {
+                        GlassIconButton(systemName: "arrow.clockwise", forceLiquid: isNativeClean) {
                             BeansHaptics.tap()
                             Task { await load(force: true) }
                         }

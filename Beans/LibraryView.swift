@@ -192,7 +192,7 @@ struct LibraryView: View {
                 Spacer()
                 HStack(spacing: 10) {
                 if !hideSortButton {
-                    GlassIconButton(systemName: "arrow.up.arrow.down") {
+                    GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
                         BeansHaptics.tap()
                         showSectionSort = true
                     }
@@ -209,7 +209,7 @@ struct LibraryView: View {
                 libraryTitleButton
                 Spacer(minLength: 12)
                 if !hideSortButton {
-                    GlassIconButton(systemName: "arrow.up.arrow.down") {
+                    GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
                         BeansHaptics.tap()
                         showSectionSort = true
                     }

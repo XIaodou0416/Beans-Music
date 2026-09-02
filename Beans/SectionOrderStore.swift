@@ -79,6 +79,7 @@ struct SectionOrderSheet: View {
                                 .foregroundStyle(Color.beansLabel)
                         }
                         .padding(.vertical, 4)
+                        .listRowBackground(Color.clear)
                     }
                     .onMove { from, to in
                         withAnimation(.default) {
@@ -88,7 +89,7 @@ struct SectionOrderSheet: View {
                 }
 
                 if let platformOrder {
-                    Section("平台顺序（所有界面同步）") {
+                    Section("平台同步歌单顺序（所有界面同步）") {
                         ForEach(platformOrder.wrappedValue, id: \.self) { rawValue in
                             HStack(spacing: 12) {
                                 Image(systemName: "line.3.horizontal")
@@ -99,6 +100,7 @@ struct SectionOrderSheet: View {
                                     .foregroundStyle(Color.beansLabel)
                             }
                             .padding(.vertical, 4)
+                            .listRowBackground(Color.clear)
                         }
                         .onMove { from, to in
                             PlatformPreferenceStore.shared.moveProviders(from: from, to: to)
@@ -107,6 +109,7 @@ struct SectionOrderSheet: View {
                 }
             }
             .environment(\.editMode, .constant(.active))
+            .listStyle(.plain)
             .beansScrollContentBackgroundHidden()
             .background {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
