@@ -201,7 +201,10 @@ struct DiscoverView: View {
                 reloadAfterLoginUpdate(.kugou)
             }
             .sheet(item: $selectedTopList) { topList in
-                TopListDetailView(topList: topList)
+                TopListDetailView(
+                    topList: topList,
+                    customCover: chartCovers.image(for: .netease, index: neteaseTopLists.firstIndex(where: { $0.id == topList.id }) ?? 0)
+                )
                     .environmentObject(player)
                     .environmentObject(auth)
             }
@@ -211,12 +214,19 @@ struct DiscoverView: View {
                     .environmentObject(auth)
             }
             .sheet(item: $selectedQQTopList) { info in
-                QQTopListDetailView(topID: info.id, name: info.name)
+                QQTopListDetailView(
+                    topID: info.id,
+                    name: info.name,
+                    customCover: chartCovers.image(for: .qq, index: qqTopLists.firstIndex(where: { $0.id == info.id }) ?? 0)
+                )
                     .environmentObject(player)
                     .environmentObject(auth)
             }
             .sheet(item: $selectedKugouTopList) { info in
-                KugouTopListDetailView(topList: info)
+                KugouTopListDetailView(
+                    topList: info,
+                    customCover: chartCovers.image(for: .kugou, index: kugouTopLists.firstIndex(where: { $0.id == info.id }) ?? 0)
+                )
                     .environmentObject(player)
             }
             .sheet(item: $selectedQQPlaylist) { playlist in
@@ -548,19 +558,19 @@ struct DiscoverView: View {
                 LazyHStack(spacing: 16) {
                     if source == .netease {
                         ForEach(Array(neteaseTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, topList in
-                            nativeRankCard(index: index, name: beansChartName(topList.name), subtitle: topList.updateFrequency, coverURL: topList.coverURL, customCover: chartCovers.image(for: .netease)) {
+                            nativeRankCard(index: index, name: beansChartName(topList.name), subtitle: beansChartSubtitle(topList.updateFrequency), coverURL: topList.coverURL, customCover: chartCovers.image(for: .netease, index: index)) {
                                 selectedTopList = topList
                             }
                         }
                     } else if source == .qq {
                         ForEach(Array(qqTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
-                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansLocalized("QQ 峰尖榜", "QQ Music Peak Chart"), coverURL: info.coverURL, customCover: chartCovers.image(for: .qq)) {
+                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.subTitle), coverURL: info.coverURL, customCover: chartCovers.image(for: .qq, index: index)) {
                                 selectedQQTopList = info
                             }
                         }
                     } else {
                         ForEach(Array(kugouTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
-                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: info.updateFrequency, coverURL: info.coverURL, customCover: chartCovers.image(for: .kugou)) {
+                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.updateFrequency), coverURL: info.coverURL, customCover: chartCovers.image(for: .kugou, index: index)) {
                                 selectedKugouTopList = info
                             }
                         }
@@ -622,7 +632,7 @@ struct DiscoverView: View {
     private var rankRowsContent: some View {
         if source == .netease {
             ForEach(Array(neteaseTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, topList in
-                rankRow(index: index, name: beansChartName(topList.name), subtitle: topList.updateFrequency, coverURL: topList.coverURL, customCover: chartCovers.image(for: .netease)) {
+                rankRow(index: index, name: beansChartName(topList.name), subtitle: beansChartSubtitle(topList.updateFrequency), coverURL: topList.coverURL, customCover: chartCovers.image(for: .netease, index: index)) {
                     BeansHaptics.tap()
                     selectedTopList = topList
                 }
@@ -630,7 +640,7 @@ struct DiscoverView: View {
             }
         } else if source == .qq {
             ForEach(Array(qqTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
-                rankRow(index: index, name: beansChartName(info.name), subtitle: beansLocalized("QQ 峰尖榜", "QQ Music Peak Chart"), coverURL: info.coverURL, customCover: chartCovers.image(for: .qq)) {
+                rankRow(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.subTitle), coverURL: info.coverURL, customCover: chartCovers.image(for: .qq, index: index)) {
                     BeansHaptics.tap()
                     selectedQQTopList = info
                 }
@@ -638,7 +648,7 @@ struct DiscoverView: View {
             }
         } else if source == .kugou {
             ForEach(Array(kugouTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
-                rankRow(index: index, name: beansChartName(info.name), subtitle: info.updateFrequency, coverURL: info.coverURL, customCover: chartCovers.image(for: .kugou)) {
+                rankRow(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.updateFrequency), coverURL: info.coverURL, customCover: chartCovers.image(for: .kugou, index: index)) {
                     BeansHaptics.tap()
                     selectedKugouTopList = info
                 }
@@ -1161,6 +1171,7 @@ struct QQTopListDetailView: View {
 
     let topID: Int
     let name: String
+    let customCover: UIImage? = nil
     @State private var tracks: [Song] = []
     @State private var loading = true
     @State private var errorMessage: String?
@@ -1213,7 +1224,7 @@ struct QQTopListDetailView: View {
             }
             .navigationTitle(beansChartName(name))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "搜索榜单歌曲")
+            .searchable(text: $searchText, prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         }
         .task { await load() }
     }
@@ -1301,7 +1312,7 @@ struct QQPlaylistSongsSheet: View {
             }
             .navigationTitle(playlist.name)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "搜索歌单内歌曲")
+            .searchable(text: $searchText, prompt: beansLocalized("搜索歌单内歌曲", "Search playlist songs"))
         }
         .task { await load() }
     }
@@ -1383,7 +1394,7 @@ struct DailySongsSheet: View {
             }
             .navigationTitle("今日推荐")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "搜索每日推荐")
+            .searchable(text: $searchText, prompt: beansLocalized("搜索每日推荐", "Search daily recommendations"))
         }
     }
 
@@ -1405,6 +1416,7 @@ struct TopListDetailView: View {
     @EnvironmentObject private var auth: AuthStore
 
     let topList: TopList
+    let customCover: UIImage? = nil
     @State private var tracks: [Song] = []
     @State private var loading = true
     @State private var errorMessage: String?
@@ -1458,19 +1470,27 @@ struct TopListDetailView: View {
             }
             .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "搜索榜单歌曲")
+            .searchable(text: $searchText, prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         }
         .task { await load() }
     }
 
     private var header: some View {
         HStack(spacing: 14) {
-            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 8)
+            if let customCover {
+                Image(uiImage: customCover)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 88, height: 88)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                CoverImage(url: topList.coverURL, size: 88, cornerRadius: 8)
+            }
             VStack(alignment: .leading, spacing: 6) {
                 Text(beansChartName(topList.name))
                     .font(BeansFont.appFont(18, .bold))
                     .foregroundStyle(Color.beansLabel)
-                Text(topList.updateFrequency)
+                Text(beansChartSubtitle(topList.updateFrequency))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
                 Text(beansSongCountText(tracks.count))
@@ -1520,6 +1540,7 @@ struct KugouTopListDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let topList: KugouTopInfo
+    let customCover: UIImage? = nil
     @State private var tracks: [Song] = []
     @State private var loading = true
     @State private var errorMessage: String?
@@ -1538,7 +1559,7 @@ struct KugouTopListDetailView: View {
                         Task { await load() }
                     }
                 } else if tracks.isEmpty {
-                    EmptyStateView(icon: "music.note.list", text: "该排行榜暂无歌曲")
+                    EmptyStateView(icon: "music.note.list", text: beansLocalized("该排行榜暂无歌曲", "This chart has no songs yet"))
                 } else {
                     List {
                         header
@@ -1575,21 +1596,29 @@ struct KugouTopListDetailView: View {
             }
             .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "搜索榜单歌曲")
+            .searchable(text: $searchText, prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         }
         .task { await load() }
     }
 
     private var header: some View {
         HStack(spacing: 14) {
-            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 8)
+            if let customCover {
+                Image(uiImage: customCover)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 88, height: 88)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                CoverImage(url: topList.coverURL, size: 88, cornerRadius: 8)
+            }
             VStack(alignment: .leading, spacing: 6) {
-                Text(topList.name)
+                Text(beansChartName(topList.name))
                     .font(BeansFont.appFont(18, .bold))
                     .foregroundStyle(Color.beansLabel)
                     .lineLimit(2)
                 if !topList.updateFrequency.isEmpty {
-                    Text(topList.updateFrequency)
+                    Text(beansChartSubtitle(topList.updateFrequency))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -1655,12 +1684,14 @@ private struct HomeUnifiedSearchSheet: View {
         BeansNavigationStack {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
-                VStack(spacing: 12) {
-                    searchField
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                    content
-                }
+            VStack(spacing: 12) {
+                searchField
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .navigationTitle("全平台搜索")
             .navigationBarTitleDisplayMode(.inline)
@@ -1710,13 +1741,16 @@ private struct HomeUnifiedSearchSheet: View {
             .frame(height: 34)
             .frame(maxWidth: .infinity)
 
-            if searching {
+            ZStack {
                 ProgressView()
                     .controlSize(.small)
                     .tint(Color.beansAmber)
+                    .opacity(searching ? 1 : 0)
             }
+            .frame(width: 20, height: 22)
+            .animation(nil, value: searching)
 
-            if !keyword.isEmpty {
+            ZStack {
                 Button {
                     keyword = ""
                     results = []
@@ -1729,7 +1763,10 @@ private struct HomeUnifiedSearchSheet: View {
                         .foregroundStyle(Color.beansComment.opacity(0.85))
                 }
                 .buttonStyle(.plain)
+                .opacity(keyword.isEmpty ? 0 : 1)
+                .disabled(keyword.isEmpty)
             }
+            .frame(width: 20, height: 22)
 
             Button {
                 let text = searchController.commit()
@@ -1746,6 +1783,7 @@ private struct HomeUnifiedSearchSheet: View {
                     .background { BeansGlass(shape: Capsule()) }
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+            .frame(width: 54, height: 30)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 9)
@@ -1753,6 +1791,7 @@ private struct HomeUnifiedSearchSheet: View {
             BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .beansCardShadow(radius: 8, y: 3)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -1774,7 +1813,7 @@ private struct HomeUnifiedSearchSheet: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    HStack {
+                    HStack(spacing: 8) {
                         Text(beansLocalized("找到 \(results.count) 首 · 全平台", "Found \(results.count) songs · All Platforms"))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
@@ -1782,7 +1821,7 @@ private struct HomeUnifiedSearchSheet: View {
                             .minimumScaleFactor(0.72)
                             .truncationMode(.tail)
                             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                        Spacer()
+                            .layoutPriority(1)
                         Button {
                             BeansHaptics.tap()
                             player.play(songs: results, startAt: 0)
@@ -1795,7 +1834,9 @@ private struct HomeUnifiedSearchSheet: View {
                                 .background { BeansGlass(shape: Capsule()) }
                         }
                         .buttonStyle(.plain)
+                        .fixedSize(horizontal: true, vertical: false)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 8)
 
                     ForEach(Array(results.enumerated()), id: \.element.identityKey) { index, song in
@@ -1816,6 +1857,7 @@ private struct HomeUnifiedSearchSheet: View {
             }
             .beansScrollIndicatorsHidden()
             .beansScrollDismissesKeyboard()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

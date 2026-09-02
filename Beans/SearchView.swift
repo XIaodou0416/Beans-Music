@@ -38,7 +38,7 @@ struct FlowLayout: Layout {
     }
 }
 
-enum SearchProvider: String, CaseIterable, Identifiable {
+enum SearchProvider: String, CaseIterable, Identifiable, Hashable {
     case netease = "网易云音乐"
     case qq = "QQ音乐"
     case kugou = "酷狗音乐"
@@ -144,6 +144,7 @@ struct SearchView: View {
                 contentArea
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .task(id: provider) {
             guard hotLoadedProvider != provider else { return }
@@ -274,12 +275,15 @@ struct SearchView: View {
             )
             .frame(height: 32)
             .frame(maxWidth: .infinity)
-            if searching {
+            ZStack {
                 ProgressView()
                     .controlSize(.small)
                     .tint(Color.beansAmber)
+                    .opacity(searching ? 1 : 0)
             }
-            if !keyword.isEmpty {
+            .frame(width: 20, height: 22)
+            .animation(nil, value: searching)
+            ZStack {
                 Button {
                     keyword = ""
                     songResults = []
@@ -293,7 +297,10 @@ struct SearchView: View {
                         .foregroundStyle(Color.beansComment.opacity(0.85))
                 }
                 .buttonStyle(.plain)
+                .opacity(keyword.isEmpty ? 0 : 1)
+                .disabled(keyword.isEmpty)
             }
+            .frame(width: 20, height: 22)
             Button {
                 // 先提交拼音再读取，避免组字中读到旧值或输入被清空
                 let text = searchController.commit()
@@ -311,6 +318,7 @@ struct SearchView: View {
                     .background { BeansGlass(shape: Capsule()) }
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+            .frame(width: 54, height: 30)
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 6)
@@ -319,6 +327,7 @@ struct SearchView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .beansCardShadow(radius: 4, y: 2)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - 平台选择（等宽分段控件）
@@ -530,7 +539,7 @@ struct SearchView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
-                        HStack {
+                        HStack(spacing: 8) {
                             Text(beansLocalized("找到 \(songResults.count) 首 · \(provider.rawValue)", "Found \(songResults.count) songs · \(beansPlatformName(provider))"))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
@@ -538,7 +547,7 @@ struct SearchView: View {
                                 .minimumScaleFactor(0.72)
                                 .truncationMode(.tail)
                                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                            Spacer()
+                                .layoutPriority(1)
                             Button {
                                 BeansHaptics.tap()
                                 player.play(songs: songResults, startAt: 0)
@@ -551,7 +560,9 @@ struct SearchView: View {
                             .background { BeansSurface(shape: Capsule()) }
                             }
                             .buttonStyle(.plain)
+                            .fixedSize(horizontal: true, vertical: false)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 8)
                         ForEach(Array(songResults.enumerated()), id: \.element.identityKey) { index, song in
                             SongCell(song: song, suppressNativeCleanRowGlass: isNativeClean) {
@@ -571,13 +582,13 @@ struct SearchView: View {
                 }
                 .beansScrollIndicatorsHidden()
                 .beansScrollDismissesKeyboard()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .top) {
-                    if searching {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(Color.beansAmber)
-                            .padding(.top, 10)
-                    }
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color.beansAmber)
+                        .padding(.top, 10)
+                        .opacity(searching ? 1 : 0)
                 }
             }
         }
@@ -602,8 +613,9 @@ struct SearchView: View {
                                 .minimumScaleFactor(0.72)
                                 .truncationMode(.tail)
                                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                            Spacer()
+                                .layoutPriority(1)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 8)
                         ForEach(artistResults) { artist in
                             Button {
@@ -643,13 +655,13 @@ struct SearchView: View {
                 }
                 .beansScrollIndicatorsHidden()
                 .beansScrollDismissesKeyboard()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .top) {
-                    if searching {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(Color.beansAmber)
-                            .padding(.top, 10)
-                    }
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color.beansAmber)
+                        .padding(.top, 10)
+                        .opacity(searching ? 1 : 0)
                 }
             }
         }
@@ -674,8 +686,10 @@ struct SearchView: View {
                                 .minimumScaleFactor(0.72)
                                 .truncationMode(.tail)
                                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                                .layoutPriority(1)
                             Spacer()
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 8)
                         ForEach(albumResults) { album in
                             Button {
@@ -715,13 +729,13 @@ struct SearchView: View {
                 }
                 .beansScrollIndicatorsHidden()
                 .beansScrollDismissesKeyboard()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .top) {
-                    if searching {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(Color.beansAmber)
-                            .padding(.top, 10)
-                    }
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color.beansAmber)
+                        .padding(.top, 10)
+                        .opacity(searching ? 1 : 0)
                 }
             }
         }
@@ -891,6 +905,8 @@ struct SearchTextField: UIViewRepresentable {
         field.spellCheckingType = .no
         field.returnKeyType = .search
         field.clearButtonMode = .never
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         field.delegate = context.coordinator
         field.text = text
         field.addTarget(context.coordinator, action: #selector(Coordinator.textChanged(_:)), for: .editingChanged)
@@ -906,6 +922,8 @@ struct SearchTextField: UIViewRepresentable {
         }
         uiView.font = BeansFont.appUIFont(15)
         uiView.textColor = textColor
+        uiView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        uiView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     }
 
     final class Coordinator: NSObject, UITextFieldDelegate {

@@ -1238,7 +1238,7 @@ struct SettingsView: View {
     @State private var platformExpanded = false
     @State private var playbackExpanded = false
     @State private var showWallpaperPicker = false
-    @State private var chartCoverTarget: SearchProvider?
+    @State private var chartCoverTarget: ChartCoverTarget?
     @State private var showFontImporter = false
     @State private var showGreetingFontImporter = false
     /// 更新日志
@@ -1444,9 +1444,9 @@ struct SettingsView: View {
             }
             .ignoresSafeArea()
         }
-        .sheet(item: $chartCoverTarget) { provider in
+        .sheet(item: $chartCoverTarget) { target in
             WallpaperPhotoPicker { data in
-                chartCovers.set(data, for: provider)
+                chartCovers.set(data, for: target.provider, index: target.index)
                 chartCoverTarget = nil
                 BeansHaptics.success()
             }
@@ -2424,11 +2424,29 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionHeader(title: "排行榜封面")
             VStack(spacing: 0) {
-                chartCoverRow(.netease, title: "网易云音乐")
-                Divider().opacity(0.25)
-                chartCoverRow(.qq, title: "QQ音乐")
-                Divider().opacity(0.25)
-                chartCoverRow(.kugou, title: "酷狗音乐")
+                ForEach(SearchProvider.allCases) { provider in
+                    DisclosureGroup {
+                        VStack(spacing: 0) {
+                            ForEach(0..<10, id: \.self) { index in
+                                chartCoverRow(provider, index: index)
+                                if index < 9 { Divider().opacity(0.2) }
+                            }
+                        }
+                        .padding(.top, 2)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: provider.icon)
+                                .foregroundStyle(Color.beansAmber)
+                                .frame(width: 24)
+                            Text(beansPlatformName(provider))
+                                .font(BeansFont.appFont(14, .medium))
+                                .foregroundStyle(Color.beansLabel)
+                        }
+                    }
+                    .tint(Color.beansComment)
+                    .padding(.vertical, 9)
+                    if provider != .kugou { Divider().opacity(0.25) }
+                }
             }
             .padding(.horizontal, 14)
             .background {
@@ -2437,9 +2455,9 @@ struct SettingsView: View {
         }
     }
 
-    private func chartCoverRow(_ provider: SearchProvider, title: LocalizedStringKey) -> some View {
+    private func chartCoverRow(_ provider: SearchProvider, index: Int) -> some View {
         HStack(spacing: 10) {
-            if let image = chartCovers.image(for: provider) {
+            if let image = chartCovers.image(for: provider, index: index) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -2452,13 +2470,13 @@ struct SettingsView: View {
                     .frame(width: 42, height: 42)
                     .background(Color.beansAmber.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
-            Text(title)
+            Text(beansLocalized("排行榜 " + String(index + 1), "Chart " + String(index + 1)))
                 .font(BeansFont.appFont(14, .medium))
                 .foregroundStyle(Color.beansLabel)
             Spacer()
-            if chartCovers.image(for: provider) != nil {
+            if chartCovers.hasCover(for: provider, index: index) {
                 Button {
-                    chartCovers.remove(for: provider)
+                    chartCovers.remove(for: provider, index: index)
                     BeansHaptics.select()
                 } label: {
                     Image(systemName: "trash")
@@ -2468,7 +2486,7 @@ struct SettingsView: View {
                 .accessibilityLabel("删除排行榜封面")
             }
             Button {
-                chartCoverTarget = provider
+                chartCoverTarget = ChartCoverTarget(provider: provider, index: index)
             } label: {
                 Image(systemName: "photo.badge.plus")
             }
