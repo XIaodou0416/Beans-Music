@@ -182,12 +182,14 @@ enum BeansAccent: String, CaseIterable, Identifiable {
 enum BeansUIStyle: String, CaseIterable {
     case liquid = "liquid"
     case clear = "clear"
+    case compact = "compact"
     case nativeClean = "nativeClean"
 
     var title: String {
         switch self {
         case .liquid: return "默认液态"
         case .clear: return "磨砂玻璃"
+        case .compact: return "紧凑淡雅"
         case .nativeClean: return "Apple 简洁"
         }
     }
@@ -254,6 +256,7 @@ enum BeansPlayerDustMode: String, CaseIterable, Identifiable {
 
 enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
     case classic
+    case controlPanel
     case appleMusic
 
     var id: String { rawValue }
@@ -261,6 +264,7 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .classic: return "经典封面"
+        case .controlPanel: return "控制面板"
         case .appleMusic: return "Apple Music"
         }
     }
@@ -268,6 +272,7 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .classic: return "封面、歌名和预览歌词分层显示"
+        case .controlPanel: return "封面、歌词和快捷操作聚合成高级面板"
         case .appleMusic: return "大封面、细进度条和简洁播放控制"
         }
     }
@@ -275,6 +280,7 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .classic: return "square.stack"
+        case .controlPanel: return "slider.horizontal.3"
         case .appleMusic: return "music.note.list"
         }
     }

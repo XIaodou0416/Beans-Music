@@ -18,6 +18,11 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
     case queue = "播放列表"
     case lyric = "歌词"
     case grabber = "指示线"
+    case controlCenter = "控制中心"
+    case controlCenterCover = "控制中心封面"
+    case controlCenterTitle = "控制中心标题"
+    case controlCenterLyric = "控制中心歌词"
+    case controlCenterActions = "控制中心按钮"
 
     var id: String { rawValue }
 }
@@ -89,6 +94,8 @@ enum PlayerLayoutStore {
     static func defaultEntry(for part: PlayerLayoutPart) -> PlayerLayoutEntry {
         switch part {
         case .topBack, .topTitle, .topFavorite, .cover, .title, .previewLyric:
+            return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
+        case .controlCenter, .controlCenterCover, .controlCenterTitle, .controlCenterLyric, .controlCenterActions:
             return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
         case .progress:
             return PlayerLayoutEntry(x: 0, y: 17, scale: 1)

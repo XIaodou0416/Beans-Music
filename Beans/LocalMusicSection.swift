@@ -62,7 +62,10 @@ struct LocalMusicSection: View {
                     .foregroundStyle(Color.beansSage)
             }
             if store.playlists.isEmpty {
-                EmptyStateView(icon: "internaldrive", text: "还没有本地歌单\n新建一个歌单，把喜欢的歌曲收藏到本机")
+                EmptyStateView(
+                    icon: "internaldrive",
+                    text: NSLocalizedString("还没有本地歌单\n新建一个歌单，把喜欢的歌曲收藏到本机", comment: "")
+                )
             } else {
                 VStack(spacing: 0) {
                     ForEach(store.playlists) { playlist in

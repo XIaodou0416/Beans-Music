@@ -901,6 +901,10 @@
 "Apple Music 实时布局" = "Apple Music 实时布局";
 "Apple Music 外观" = "Apple Music 外观";
 "Apple Music 样式" = "Apple Music 样式";
+"紧凑淡雅" = "紧凑淡雅";
+"控制面板" = "控制面板";
+"控制中心" = "控制中心";
+"封面、歌词和快捷操作聚合成高级面板" = "封面、歌词和快捷操作聚合成高级面板";
 "AVPlayer 准备播放：\\(currentSong?.name ?? " = "AVPlayer 准备播放：\\(currentSong?.name ?? ";
 "AVPlayerItem 加载失败" = "AVPlayerItem 加载失败";
 "Beans Music · 仅供学习交流 · 音乐版权归各平台所有 · 酷狗音乐名称及图标归酷狗音乐 / 腾讯音乐娱乐相关权利方所有" = "Beans Music · 仅供学习交流 · 音乐版权归各平台所有 · 酷狗音乐名称及图标归酷狗音乐 / 腾讯音乐娱乐相关权利方所有";

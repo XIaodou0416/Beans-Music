@@ -636,9 +636,6 @@ struct ProfileView: View {
                         Text(checkingUpdate ? "正在检查…" : "检查更新")
                             .font(BeansFont.appFont(14, .semibold))
                             .foregroundStyle(Color.beansLabel)
-                        Text("检测 GitHub 最新版本")
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
                     }
                     Spacer()
                 }
@@ -1252,6 +1249,7 @@ struct SettingsView: View {
     @State private var showRestoreConfirm = false
     @State private var showResetSettingsConfirm = false
     @State private var showSourceHelp = false
+    @State private var showThirdPartyKeys = true
     @State private var backupExpanded = false
     @State private var backupIncludeAccounts = false
     @State private var backupIncludeWallpapers = false
@@ -2334,13 +2332,32 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                SecureField("填写你购买的专属密钥", text: $thirdPartyAPIKeys)
+                HStack(spacing: 8) {
+                    Group {
+                        if showThirdPartyKeys {
+                            TextField("填写你购买的专属密钥", text: $thirdPartyAPIKeys)
+                        } else {
+                            SecureField("填写你购买的专属密钥", text: $thirdPartyAPIKeys)
+                        }
+                    }
                     .font(BeansFont.appFont(13))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 11)
-                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
+
+                    Button {
+                        showThirdPartyKeys.toggle()
+                        BeansHaptics.tap()
+                    } label: {
+                        Image(systemName: showThirdPartyKeys ? "eye" : "eye.slash")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
                 Text("输入后才会启用第三方音源。密钥只保存在本机，不会上传到 Beans 服务器。")
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
@@ -2465,7 +2482,9 @@ struct SettingsView: View {
                     .tint(Color.beansAmber)
                     .font(BeansFont.appFont(13))
                 Divider().opacity(0.35)
-                Toggle("备份音源密钥", isOn: $backupIncludeKeys)
+                Toggle(isOn: $backupIncludeKeys) {
+                    Text("备份音源密钥")
+                }
                     .tint(Color.beansAmber)
                     .font(BeansFont.appFont(13))
                 Text("默认不带账号登录信息；关闭壁纸后只备份普通设置，不写入壁纸图片数据")

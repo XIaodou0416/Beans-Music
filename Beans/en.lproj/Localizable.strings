@@ -598,7 +598,7 @@
 "同步到封面页背景" = "Sync to Cover Page Background";
 "同步到搜索 / 音乐库 / 我的" = "Sync to Search / Music Library / Profile";
 "同步登录状态" = "Sync Login Status";
-"同步平台" = "syncplatform";
+"同步平台" = "Sync Platforms";
 "同步账号失败：\\(error.localizedDescription)" = "Log message \(error.localizedDescription)";
 "同步中" = "Sync";
 "同步主页壁纸" = "Sync Home Wallpaper";
@@ -615,7 +615,7 @@
 "网络连接失败，请检查网络" = "Network connection failed. Please check your network.";
 "网页登录" = "Web Login";
 "网易云" = "NetEase Cloud";
-"网易云 / QQ音乐 / 酷狗音乐 第三方客户端 · 仅供学习研究" = "/ QQ /  ·";
+"网易云 / QQ音乐 / 酷狗音乐 第三方客户端 · 仅供学习研究" = "Third-party client for NetEase Cloud Music, QQ Music, and Kugou Music · For study and research only";
 "网易云 \\(neteaseSongs.count) 首" = "\\(neteaseSongs.count)";
 "网易云 + QQ 音乐 + 酷狗歌单同步" = "Sync playlists from NetEase Cloud, QQ Music, and Kugou";
 "网易云登录成功" = "NetEase CloudSign insuccess";
@@ -853,7 +853,7 @@
 "重置设置" = "Reset Settings";
 "重置所有设置：移除 \\(removed) 项，保留登录信息" = "Log message \(removed)";
 "重置所有设置？" = "Reset all settings?";
-"重置所有设置（保留登录）" = "（）";
+"重置所有设置（保留登录）" = "Reset All Settings (Keep Login)";
 "周杰伦" = "Jay Chou";
 "逐行调节" = "Per-line Adjustment";
 "主题模式" = "Theme Mode";
@@ -898,6 +898,11 @@
 "Apple Music 实时布局" = "Apple Music Live Layout";
 "Apple Music 外观" = "Apple Music Appearance";
 "Apple Music 样式" = "Apple Music Style";
+"紧凑淡雅" = "Compact Soft";
+"控制面板" = "Control Panel";
+"控制中心" = "Control Center";
+"封面、歌词和快捷操作聚合成高级面板" = "Cover art, lyrics, and quick actions in an advanced panel";
+"备份音源密钥" = "Back Up Source Keys";
 "AVPlayer 准备播放：\\(currentSong?.name ?? " = "Log message";
 "AVPlayerItem 加载失败" = "AVPlayerItem failed to load";
 "Beans Music · 仅供学习交流 · 音乐版权归各平台所有 · 酷狗音乐名称及图标归酷狗音乐 / 腾讯音乐娱乐相关权利方所有" = "Beans Music - for learning and communication only. Music copyrights belong to their respective platforms.";
@@ -971,7 +976,7 @@
 "QQ音乐请求失败" = "QQ Music request failed";
 "QQ音乐热门歌单" = "QQ Music Hot Playlists";
 "QQ音乐热门歌单为空：保留板块并显示空状态" = "QQ Music hot playlists are empty. Keeping the section and showing the empty state.";
-"QQ音乐热门歌单暂未加载成功\\n下拉刷新可重新获取" = "QQ\\n";
+"QQ音乐热门歌单暂未加载成功\\n下拉刷新可重新获取" = "QQ Music hot playlists have not loaded yet\\nPull down to refresh";
 "QQ音乐未登录" = "QQ Music is not signed in";
 "QQ音乐用户" = "QQ Music User";
 "QQ音乐用户 \\(clean)" = "QQ \\(clean)";

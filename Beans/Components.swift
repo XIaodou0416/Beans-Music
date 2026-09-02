@@ -44,7 +44,8 @@ struct GlassPressButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+            .brightness(configuration.isPressed ? 0.025 : 0)
+            .animation(.spring(response: 0.24, dampingFraction: 0.82), value: configuration.isPressed)
     }
 }
 
@@ -171,6 +172,9 @@ struct BeansGlass<S: Shape>: View {
             case .clear, .liquid:
                 shape
                     .fill(.ultraThinMaterial)
+            case .compact:
+                shape
+                    .fill(Color.beansGlassFill.opacity(0.74))
             case .nativeClean:
                 shape
                     .fill(Color.beansGlassFill.opacity(0.62))
@@ -211,11 +215,13 @@ struct GlassCard<Content: View>: View {
     }
 
     private var resolvedCornerRadius: CGFloat {
+        if uiStyle == .compact { return min(cornerRadius, 16) }
         if uiStyle == .nativeClean { return min(cornerRadius, 18) }
         return cornerRadius
     }
 
     private var resolvedPadding: CGFloat {
+        if uiStyle == .compact { return 12 }
         if uiStyle == .nativeClean { return 13 }
         return 16
     }
@@ -241,7 +247,7 @@ struct GlassCard<Content: View>: View {
                 .padding(resolvedPadding)
                 .background {
                     RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
-                        .fill(Color.clear)
+                        .fill(uiStyle == .compact ? Color.beansGlassFill.opacity(0.72) : Color.clear)
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
                 }
                 .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
