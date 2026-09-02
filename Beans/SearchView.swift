@@ -95,12 +95,9 @@ struct SearchView: View {
 
     @State private var keyword = ""
     @AppStorage("beans.search.provider") private var providerRaw = SearchProvider.netease.rawValue
+    @State private var provider: SearchProvider = .netease
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     private var searchProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
-    private var provider: SearchProvider {
-        get { SearchProvider(rawValue: providerRaw) ?? .netease }
-        set { providerRaw = newValue.rawValue }
-    }
     /// 已加载热门搜索的 provider（避免切 tab 反复加载）
     @State private var hotLoadedProvider: SearchProvider?
     @State private var resultType: SearchResultType = .song
@@ -174,13 +171,14 @@ struct SearchView: View {
             }
         }
         .onChange(of: provider) { _ in
+            providerRaw = provider.rawValue
             let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
             debounceTask?.cancel()
             Task { await startSearch(trimmed) }
         }
         .onAppear {
-            provider = platformPrefs.ensureVisible(provider)
+            provider = platformPrefs.ensureVisible(SearchProvider(rawValue: providerRaw) ?? .netease)
         }
         .onReceive(platformPrefs.changes) { _ in
             let next = platformPrefs.ensureVisible(provider)
