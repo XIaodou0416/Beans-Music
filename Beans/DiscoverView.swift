@@ -1171,7 +1171,7 @@ struct QQTopListDetailView: View {
 
     let topID: Int
     let name: String
-    let customCover: UIImage? = nil
+    let customCover: UIImage?
     @State private var tracks: [Song] = []
     @State private var loading = true
     @State private var errorMessage: String?
@@ -1422,7 +1422,7 @@ struct TopListDetailView: View {
     @EnvironmentObject private var auth: AuthStore
 
     let topList: TopList
-    let customCover: UIImage? = nil
+    let customCover: UIImage?
     @State private var tracks: [Song] = []
     @State private var loading = true
     @State private var errorMessage: String?
@@ -1551,7 +1551,7 @@ struct KugouTopListDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let topList: KugouTopInfo
-    let customCover: UIImage? = nil
+    let customCover: UIImage?
     @State private var tracks: [Song] = []
     @State private var loading = true
     @State private var errorMessage: String?
