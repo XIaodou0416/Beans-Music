@@ -76,7 +76,7 @@ final class BeansLXScriptDoneBridge: NSObject, BeansLXScriptDoneExports {
 final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
     private let runtimeQueue: DispatchQueue
     private let session: URLSession
-    private weak var runtime: BeansLXScriptRuntime?
+    weak var runtime: BeansLXScriptRuntime?
 
     let EVENT_NAMES: NSDictionary = [
         "request": "request",
@@ -92,9 +92,8 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
 
     let utils = BeansLXScriptUtilsBridge()
 
-    init(runtimeQueue: DispatchQueue, runtime: BeansLXScriptRuntime) {
+    init(runtimeQueue: DispatchQueue) {
         self.runtimeQueue = runtimeQueue
-        self.runtime = runtime
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 8
         config.timeoutIntervalForResource = 12
@@ -211,7 +210,8 @@ final class BeansLXScriptRuntime {
         sourceID = source.id
         guard let context = JSContext() else { return nil }
         self.context = context
-        self.bridge = BeansLXScriptBridge(runtimeQueue: queue, runtime: self)
+        self.bridge = BeansLXScriptBridge(runtimeQueue: queue)
+        self.bridge.runtime = self
 
         context.exceptionHandler = { _, exception in
             if let exception {
