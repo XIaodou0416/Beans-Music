@@ -174,8 +174,16 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         let insertAt = currentIndex + 1
         queue.insert(song, at: min(insertAt, queue.count))
-        buildPlayOrder()
+        switch playMode {
+        case .shuffle:
+            playOrder = playOrder.map { $0 >= insertAt ? $0 + 1 : $0 }
+            let nextOrderPosition = min(orderPosition + 1, playOrder.count)
+            playOrder.insert(min(insertAt, queue.count - 1), at: nextOrderPosition)
+        default:
+            buildPlayOrder()
+        }
         savePersistedPlaybackState()
+        ToastCenter.shared.show("已加入下一首播放")
     }
 
     func togglePlayPause() {

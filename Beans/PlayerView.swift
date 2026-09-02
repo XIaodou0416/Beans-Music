@@ -36,6 +36,7 @@ struct PlayerView: View {
     @State private var vinylLyricsViewportHeight: CGFloat = 0
     @State private var vinylIsDraggingLyrics = false
     @State private var vinylLyricsResumeTask: Task<Void, Never>?
+    @State private var vinylDismissDragOffset: CGFloat = 0
     @AppStorage("beans.djVisual") private var djVisualEnabled = false
     @AppStorage("beans.djVisualIntensity") private var djVisualIntensity = 0.8
     @State private var dominantColor: RGBColor?
@@ -442,6 +443,10 @@ struct PlayerView: View {
                         }
                     }
                 }
+                .offset(y: vinylDismissDragOffset)
+                .scaleEffect(1 - min(vinylDismissDragOffset / 900, 0.035))
+                .opacity(1 - min(vinylDismissDragOffset / 520, 0.22))
+                .simultaneousGesture(vinylCloseGesture)
             } else {
                 GeometryReader { geo in
                     ZStack {
@@ -512,6 +517,7 @@ struct PlayerView: View {
             dominantColor = nil
             await MainActor.run {
                 coverDrag = .zero
+                vinylDismissDragOffset = 0
                 vinylFocusedLyricIndex = nil
                 vinylIsDraggingLyrics = false
                 vinylLyricsViewportHeight = 0
@@ -535,6 +541,7 @@ struct PlayerView: View {
             PlayerLayoutStore.save(newValue)
         }
         .onAppear {
+            vinylDismissDragOffset = 0
             showLyrics = lastLyricsPage
             if let path = LyricBackgroundStore.restoreFromBackup(), lyricBackgroundImagePath != path {
                 lyricBackgroundImagePath = path
@@ -900,6 +907,8 @@ struct PlayerView: View {
         let size = min(304, min(geo.size.width * 0.72, geo.size.height * 0.50))
         let showPreview = !lyrics.isEmpty
         return VStack(spacing: 14) {
+            vinylTopIndicator
+
             vinylCompactHeader
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
@@ -1035,6 +1044,8 @@ struct PlayerView: View {
 
     private func vinylLyricsPanel(geo: GeometryProxy) -> some View {
         VStack(spacing: 0) {
+            vinylTopIndicator
+
             vinylCompactHeader
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
@@ -1776,6 +1787,16 @@ struct PlayerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .id("lyricsPanel-\(song?.identityKey ?? "none")")
+    }
+
+    private var vinylTopIndicator: some View {
+        Capsule()
+            .fill(.white.opacity(0.7))
+            .frame(width: 42, height: 5)
+            .frame(width: 64, height: 29)
+            .contentShape(Rectangle())
+            .gesture(vinylCloseGesture)
+            .accessibilityLabel("收起播放器")
     }
 
     // MARK: - 空态兜底（歌曲数据为空时不出现空白页）
@@ -2537,6 +2558,33 @@ struct PlayerView: View {
 
     private func closePlayer() {
         isPresented = false
+    }
+
+    private var vinylCloseGesture: some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .global)
+            .onChanged { value in
+                guard value.translation.height > 0,
+                      value.translation.height > abs(value.translation.width) * 1.15 else { return }
+                let raw = value.translation.height
+                vinylDismissDragOffset = raw < 120 ? raw : 120 + (raw - 120) * 0.45
+            }
+            .onEnded { value in
+                let translation = max(value.translation.height, 0)
+                let prediction = max(value.predictedEndTranslation.height, 0)
+                if translation > 110 || prediction > 190 {
+                    BeansHaptics.medium()
+                    withAnimation(.interactiveSpring(response: 0.48, dampingFraction: 0.86, blendDuration: 0.08)) {
+                        vinylDismissDragOffset = max(translation, 180)
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
+                        closePlayer()
+                    }
+                } else {
+                    withAnimation(.interactiveSpring(response: 0.30, dampingFraction: 0.72, blendDuration: 0.04)) {
+                        vinylDismissDragOffset = 0
+                    }
+                }
+            }
     }
 
     /// 左右切歌：松手后旧封面沿手势方向飞出，新封面从对侧滑入（左滑下一首，右滑上一首）。
