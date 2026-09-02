@@ -1043,17 +1043,16 @@ struct PlayerView: View {
         VStack(spacing: 0) {
             vinylTopIndicator
 
-            vinylCompactHeader
-                .padding(.horizontal, 20)
-                .padding(.top, 4)
+            vinylLyricsHeader
+                .padding(.horizontal, 24)
                 .padding(.bottom, 10)
 
             if lyrics.isEmpty {
-                emptyLyricsView
+                vinylEmptyLyricsView
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 22) {
+                        LazyVStack(alignment: .leading, spacing: 26) {
                             Color.clear.frame(height: max(88, vinylLyricsViewportHeight * 0.30))
                             ForEach(lyrics.indices, id: \.self) { index in
                                 vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
@@ -1067,7 +1066,7 @@ struct PlayerView: View {
                                         }
                                     }
                             }
-                            Color.clear.frame(height: max(100, vinylLyricsViewportHeight * 0.34))
+                            Color.clear.frame(height: max(110, vinylLyricsViewportHeight * 0.34))
                         }
                         .padding(.horizontal, 28)
                     }
@@ -1113,13 +1112,6 @@ struct PlayerView: View {
                         guard !vinylIsDraggingLyrics else { return }
                         vinylScrollToCurrentLyric(proxy: proxy, animated: true)
                     }
-                    .overlay(alignment: .top) {
-                        if vinylIsDraggingLyrics {
-                            vinylSelectionGuide
-                                .padding(.top, 4)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-                    }
                 }
             }
         }
@@ -1129,16 +1121,105 @@ struct PlayerView: View {
         }
     }
 
+    private var vinylLyricsHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                BeansHaptics.tap()
+                toggleLyrics()
+            } label: {
+                CoverImage(url: song?.coverURL, size: 48, cornerRadius: 10)
+                    .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 7) {
+                    Text(song?.name ?? "未在播放")
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(albumTitleForeground)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if showSongVIPBadge, song?.isVIP == true {
+                        Text("VIP")
+                            .font(BeansFont.appFont(8, .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1.5)
+                            .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
+                    }
+                }
+                Text(subtitle)
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(albumArtistForeground)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openArtistHome() }
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                BeansHaptics.tap()
+                guard let song else { return }
+                toggleLocalFavorite(song)
+            } label: {
+                Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(localLibrary.containsSong(song) ? albumTitleForeground : albumTitleForeground.opacity(0.78))
+                    .frame(width: 38, height: 38)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Menu {
+                Button("定时关闭") { showSleepTimer = true }
+                Button("添加到本地歌单") { showAddToLocalPlaylist = true }
+                Button("下载歌曲") { showDownloadPicker = true }
+                Button("播放器设置") { showPlayerSettings = true }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(albumTitleForeground.opacity(0.82))
+                    .frame(width: 38, height: 38)
+                    .contentShape(Rectangle())
+            }
+        }
+        .frame(maxWidth: 420)
+    }
+
+    private var vinylEmptyLyricsView: some View {
+        VStack(spacing: 10) {
+            Spacer()
+            Image(systemName: "quote.bubble")
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(albumArtistForeground.opacity(0.5))
+            Text("暂无歌词")
+                .font(BeansFont.appFont(15, .semibold))
+                .foregroundStyle(albumTitleForeground.opacity(0.9))
+            Text("点击封面区域返回歌曲页面")
+                .font(BeansFont.appFont(12))
+                .foregroundStyle(albumArtistForeground.opacity(0.56))
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            BeansHaptics.tap()
+            toggleLyrics()
+        }
+    }
+
     private func vinylLyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
         Button {
             BeansHaptics.tap()
             player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
         } label: {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(line.text.isEmpty ? " " : line.text)
                         .font(BeansFont.appFont(isFocused ? 27 : 23, isFocused ? .bold : .semibold))
-                        .foregroundStyle(albumTitleForeground.opacity(isFocused ? 1 : 0.38))
+                        .foregroundStyle(albumTitleForeground.opacity(isFocused ? 1 : 0.36))
                         .fixedSize(horizontal: false, vertical: true)
                     if isFocused, vinylIsDraggingLyrics {
                         Spacer(minLength: 8)
@@ -1157,11 +1238,11 @@ struct PlayerView: View {
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .blur(radius: isFocused ? 0 : 0.6)
-            .scaleEffect(isFocused ? 1.02 : 1, anchor: .leading)
+            .scaleEffect(isFocused ? 1.06 : 0.84, anchor: .leading)
+            .blur(radius: isFocused ? 0 : 0.7)
         }
         .buttonStyle(.plain)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isFocused)
+        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: isFocused)
     }
 
     private var vinylCurrentLyricIndex: Int? {
