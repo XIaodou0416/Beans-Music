@@ -547,19 +547,19 @@ struct DiscoverView: View {
                 LazyHStack(spacing: 16) {
                     if source == .netease {
                         ForEach(Array(neteaseTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, topList in
-                            nativeRankCard(index: index, name: topList.name, subtitle: topList.updateFrequency, coverURL: topList.coverURL) {
+                            nativeRankCard(index: index, name: beansChartName(topList.name), subtitle: topList.updateFrequency, coverURL: topList.coverURL) {
                                 selectedTopList = topList
                             }
                         }
                     } else if source == .qq {
                         ForEach(Array(qqTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
-                            nativeRankCard(index: index, name: info.name, subtitle: "QQ 峰尖榜", coverURL: info.coverURL) {
+                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: "QQ 峰尖榜", coverURL: info.coverURL) {
                                 selectedQQTopList = info
                             }
                         }
                     } else {
                         ForEach(Array(kugouTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
-                            nativeRankCard(index: index, name: info.name, subtitle: info.updateFrequency, coverURL: info.coverURL) {
+                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: info.updateFrequency, coverURL: info.coverURL) {
                                 selectedKugouTopList = info
                             }
                         }
@@ -615,7 +615,7 @@ struct DiscoverView: View {
     private var rankRowsContent: some View {
         if source == .netease {
             ForEach(Array(neteaseTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, topList in
-                rankRow(index: index, name: topList.name, subtitle: topList.updateFrequency, coverURL: topList.coverURL) {
+                rankRow(index: index, name: beansChartName(topList.name), subtitle: topList.updateFrequency, coverURL: topList.coverURL) {
                     BeansHaptics.tap()
                     selectedTopList = topList
                 }
@@ -623,7 +623,7 @@ struct DiscoverView: View {
             }
         } else if source == .qq {
             ForEach(Array(qqTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
-                rankRow(index: index, name: info.name, subtitle: "QQ 峰尖榜", coverURL: info.coverURL) {
+                rankRow(index: index, name: beansChartName(info.name), subtitle: "QQ 峰尖榜", coverURL: info.coverURL) {
                     BeansHaptics.tap()
                     selectedQQTopList = info
                 }
@@ -631,7 +631,7 @@ struct DiscoverView: View {
             }
         } else if source == .kugou {
             ForEach(Array(kugouTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
-                rankRow(index: index, name: info.name, subtitle: info.updateFrequency, coverURL: info.coverURL) {
+                rankRow(index: index, name: beansChartName(info.name), subtitle: info.updateFrequency, coverURL: info.coverURL) {
                     BeansHaptics.tap()
                     selectedKugouTopList = info
                 }
@@ -833,7 +833,7 @@ struct DiscoverView: View {
             }
             if visiblePersonalizedPlaylists.isEmpty {
                 EmptyStateView(icon: "music.note.list", text: source == .qq ? "QQ音乐热门歌单暂未加载成功\n下拉刷新可重新获取" : "歌单广场暂时没有内容")
-            } else if isNativeClean {
+            } else if isNativeClean && !playlistsExpanded {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
                         ForEach(visiblePersonalizedPlaylists, id: \.id) { (playlist: Playlist) in
@@ -904,7 +904,9 @@ struct DiscoverView: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Text(playlistsExpanded ? "收起歌单广场" : "展开全部（\(personalized.count)）")
+                        Text(playlistsExpanded
+                             ? beansLocalized("收起歌单广场", "Collapse Playlist Square")
+                             : beansLocalized("展开全部（\(personalized.count)）", "Show all (\(personalized.count))"))
                             .font(BeansFont.appFont(13, .semibold))
                         Image(systemName: playlistsExpanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 11, weight: .semibold))
@@ -1439,7 +1441,7 @@ struct TopListDetailView: View {
                 }
             }
             }
-            .navigationTitle(topList.name)
+            .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "搜索榜单歌曲")
         }
@@ -1556,7 +1558,7 @@ struct KugouTopListDetailView: View {
                 }
             }
             }
-            .navigationTitle(topList.name)
+            .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "搜索榜单歌曲")
         }

@@ -28,6 +28,17 @@ func beansPlatformName(_ provider: SearchProvider) -> String {
     }
 }
 
+func beansChartName(_ name: String) -> String {
+    guard UserDefaults.standard.string(forKey: "beans.language") == AppLanguage.english.rawValue else { return name }
+    let names: [String: String] = [
+        "热歌榜": "Hot Songs", "新歌榜": "New Songs", "飙升榜": "Rising Songs",
+        "原创榜": "Original Songs", "欧美榜": "Western Music", "华语榜": "Chinese Music",
+        "ACG音乐榜": "ACG Music", "QQ音乐巅峰榜": "QQ Music Peak Chart",
+        "QQ音乐流行指数榜": "QQ Music Popularity Chart", "酷狗飙升榜": "Kugou Rising Chart"
+    ]
+    return names[name] ?? name
+}
+
 func beansLocalizedSettingValue(_ value: String) -> String {
     guard UserDefaults.standard.string(forKey: "beans.language") == AppLanguage.english.rawValue else { return value }
     switch value {

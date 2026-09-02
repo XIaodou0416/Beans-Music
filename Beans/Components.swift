@@ -4,7 +4,7 @@ import CoreImage.CIFilterBuiltins
 // MARK: - 工具
 
 func beansSongCountText(_ count: Int) -> String {
-    String(format: NSLocalizedString("%d 首", comment: ""), count)
+    beansLocalized("\(count) 首", "\(count) songs")
 }
 
 func beansLocalSongCountText(_ count: Int) -> String {
