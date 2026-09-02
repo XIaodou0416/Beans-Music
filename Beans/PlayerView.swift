@@ -193,18 +193,18 @@ struct PlayerView: View {
     }
 
     private var playerButtonText: Color {
+        if playerButtonStyle == .appleMusic { return .white }
         if playerMainIconColorHex.hasPrefix("#"), let color = Color(hex: playerMainIconColorHex) {
             return color
         }
-        if playerButtonStyle == .appleMusic { return .white }
         return palette.text
     }
 
     private var playerButtonSecondaryText: Color {
+        if playerButtonStyle == .appleMusic { return .white.opacity(0.88) }
         if playerSecondaryIconColorHex.hasPrefix("#"), let color = Color(hex: playerSecondaryIconColorHex) {
             return color
         }
-        if playerButtonStyle == .appleMusic { return .white.opacity(0.88) }
         return palette.secondary
     }
 
@@ -1873,11 +1873,14 @@ struct PlayerView: View {
         ZStack(alignment: .top) {
             Color.clear
             Capsule()
-                .fill(.white.opacity(0.7))
+                .fill(.white.opacity(0.88))
                 .frame(width: 44, height: 5)
-                .padding(.top, 1)
+                .shadow(color: .black.opacity(0.24), radius: 2, y: 1)
+                .padding(.top, 8)
         }
-        .frame(width: 180, height: 82)
+        .frame(width: 180, height: 92)
+        .padding(.bottom, 2)
+        .zIndex(3)
         .contentShape(Rectangle())
         .gesture(vinylCloseGesture)
         .accessibilityLabel("收起播放器")
@@ -1944,7 +1947,10 @@ struct PlayerView: View {
     @ViewBuilder
     private func controlDeck(bottomInset: CGFloat) -> some View {
         VStack(spacing: 0) {
-            progressBlock()
+            progressBlock(
+                styleOverride: playerButtonStyle == .appleMusic ? 0 : nil,
+                accentOverride: playerButtonStyle == .appleMusic ? .white.opacity(0.92) : nil
+            )
                 .modifier(Layoutable(part: .progress, enabled: layoutMode, data: $layoutData))
             deckRow
                 .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
@@ -2002,20 +2008,27 @@ struct PlayerView: View {
     // MARK: - 进度区块（可点按 / 拖动的进度条 + 当前时间 / 总时长 + ±15 秒）
 
     private func progressBlock(styleOverride: Int? = nil, accentOverride: Color? = nil) -> some View {
+        let isAppleMusicStyle = playerButtonStyle == .appleMusic
+        let trackColor: Color = isAppleMusicStyle ? .white.opacity(0.18) : palette.secondary.opacity(0.26)
+        let timeColor: Color = isAppleMusicStyle ? .white.opacity(0.58) : palette.secondary
         VStack(spacing: 1) {
-            SeekBar(accent: accentOverride ?? progressAccent, track: palette.secondary.opacity(0.26), style: styleOverride ?? progressBarStyle)
+            SeekBar(accent: accentOverride ?? progressAccent, track: trackColor, style: styleOverride ?? progressBarStyle)
             HStack(spacing: 6) {
-                seekPillButton("gobackward.15") { player.seekBy(-15) }
+                if !isAppleMusicStyle {
+                    seekPillButton("gobackward.15") { player.seekBy(-15) }
+                }
                 Text(beansTimeString(clock.progress))
                     .font(BeansFont.appFont(10, .regular, .monospaced))
-                    .foregroundStyle(palette.secondary)
+                    .foregroundStyle(timeColor)
                     .frame(minWidth: 34, alignment: .leading)
                 Spacer(minLength: 0)
                 Text(beansTimeString(clock.duration))
                     .font(BeansFont.appFont(10, .regular, .monospaced))
-                    .foregroundStyle(palette.secondary)
+                    .foregroundStyle(timeColor)
                     .frame(minWidth: 34, alignment: .trailing)
-                seekPillButton("goforward.15") { player.seekBy(15) }
+                if !isAppleMusicStyle {
+                    seekPillButton("goforward.15") { player.seekBy(15) }
+                }
             }
         }
     }
@@ -2037,6 +2050,18 @@ struct PlayerView: View {
     // MARK: - 合并控制行（循环 / 上一曲 / 播放暂停 / 下一曲 / 播放列表 平行排列，播放键居中）
 
     private var deckRow: some View {
+        Group {
+            if playerButtonStyle == .appleMusic {
+                appleMusicDeckRow
+            } else {
+                legacyDeckRow
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 6)
+    }
+
+    private var legacyDeckRow: some View {
         ZStack {
             // 两侧对称：循环模式 / 播放列表
             HStack {
@@ -2057,8 +2082,55 @@ struct PlayerView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 6)
+    }
+
+    private var appleMusicDeckRow: some View {
+        ZStack {
+            HStack {
+                modeButton
+                Spacer(minLength: 0)
+                queueButton
+            }
+            HStack(spacing: 28) {
+                Button {
+                    BeansHaptics.tap()
+                    player.previous()
+                } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(playerButtonText)
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .modifier(Layoutable(part: .previous, enabled: layoutMode, data: $layoutData))
+
+                Button {
+                    BeansHaptics.tap()
+                    player.togglePlayPause()
+                } label: {
+                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24)
+                        .foregroundStyle(playerButtonStyle == .appleMusic ? Color.white : Color.black)
+                        .frame(width: 66, height: 66)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+                .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
+
+                Button {
+                    BeansHaptics.tap()
+                    player.next()
+                } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(playerButtonText)
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .modifier(Layoutable(part: .next, enabled: layoutMode, data: $layoutData))
+            }
+        }
     }
 
     private var secondaryPlayerButtonSize: CGFloat {
@@ -2168,7 +2240,9 @@ struct PlayerView: View {
                 .foregroundStyle(accent ? controlAccent : playerButtonText)
                 .frame(width: deckPlayerButtonSize, height: deckPlayerButtonSize)
                 .background {
-                    playerButtonSurface(size: deckPlayerButtonSize, active: accent, appleLiquid: true)
+                    if playerButtonStyle != .appleMusic {
+                        playerButtonSurface(size: deckPlayerButtonSize, active: accent, appleLiquid: true)
+                    }
                 }
                 .clipShape(Circle())
         }
@@ -2186,7 +2260,9 @@ struct PlayerView: View {
                 .foregroundStyle(playerButtonStyle == .appleMusic ? Color.black : Color.white)
                 .frame(width: primaryPlayerButtonSize, height: primaryPlayerButtonSize)
                 .background {
-                    playerButtonSurface(size: primaryPlayerButtonSize, primary: true, appleLiquid: true)
+                    if playerButtonStyle != .appleMusic {
+                        playerButtonSurface(size: primaryPlayerButtonSize, primary: true, appleLiquid: true)
+                    }
                 }
                 .clipShape(Circle())
         }
