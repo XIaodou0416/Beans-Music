@@ -1,10 +1,18 @@
 import SwiftUI
 
 struct MiniPlayerView: View {
+    enum Presentation {
+        case dock
+        case accessory
+
+        var showsCardSurface: Bool { self == .dock }
+    }
+
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
     @Binding var showPlayer: Bool
+    var presentation: Presentation = .dock
     @State private var miniLyrics: [LyricLine] = []
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
@@ -97,26 +105,32 @@ struct MiniPlayerView: View {
             .padding(.trailing, 6)
             .padding(.vertical, verticalPadding)
             .background {
-                // Apple 简洁样式也强制使用液态播放器底板，低系统自动回退为材质模拟。
-                BeansGlass(
-                    shape: RoundedRectangle(cornerRadius: containerRadius, style: .continuous),
-                    forceLiquid: false
-                )
-                .overlay {
-                    LinearGradient(
-                        colors: [.white.opacity(0.25), .clear, .white.opacity(0.05)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
+                if presentation.showsCardSurface {
+                    // 普通底部浮层：保留卡片质感与阴影。
+                    BeansGlass(
+                        shape: RoundedRectangle(cornerRadius: containerRadius, style: .continuous),
+                        forceLiquid: false
                     )
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: containerRadius, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [.white.opacity(0.45), .white.opacity(0.08)],
-                                startPoint: .top, endPoint: .bottom
-                            ),
-                            lineWidth: 0.8
+                    .overlay {
+                        LinearGradient(
+                            colors: [.white.opacity(0.25), .clear, .white.opacity(0.05)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
                         )
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: containerRadius, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.45), .white.opacity(0.08)],
+                                    startPoint: .top, endPoint: .bottom
+                                ),
+                                lineWidth: 0.8
+                            )
+                    }
+                } else {
+                    // 进入底栏 accessory 时不再叠一层卡片，交给系统/底栏容器去承载。
+                    RoundedRectangle(cornerRadius: containerRadius, style: .continuous)
+                        .fill(.clear)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -125,12 +139,12 @@ struct MiniPlayerView: View {
                     .padding(.horizontal, 12)
             }
             .clipShape(RoundedRectangle(cornerRadius: containerRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+            .shadow(color: presentation.showsCardSurface ? .black.opacity(0.16) : .clear, radius: 12, y: 6)
             .scaleEffect(showPlayer ? 0.985 : 1)
             .animation(.spring(response: 0.34, dampingFraction: 0.86), value: showPlayer)
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-        .padding(.horizontal, 12)
+        .padding(.horizontal, presentation.showsCardSurface ? 12 : 0)
         .task(id: player.currentSong?.identityKey) {
             await loadMiniLyrics()
         }

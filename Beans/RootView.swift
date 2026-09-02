@@ -34,6 +34,7 @@ struct RootView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var favorites: FavoritesStore
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
@@ -78,14 +79,6 @@ struct RootView: View {
         return false
     }
 
-    private var miniPlayerBottomPadding: CGFloat {
-        return usesSystemFloatingTabBar ? 62 : 80
-    }
-
-    private var legacyTabResolvedCornerRadius: CGFloat {
-        CGFloat(legacyTabCornerRadius)
-    }
-
     private var legacyTabResolvedWidth: CGFloat {
         min(CGFloat(legacyTabWidth), max(300, UIScreen.main.bounds.width - 28))
     }
@@ -96,31 +89,41 @@ struct RootView: View {
 
     var body: some View {
         let _ = theme.accent
+        let rootTabs = TabView(selection: $selection) {
+            DiscoverView()
+                .tabItem { Label(tabLabelsVisible ? "主页" : "", systemImage: "house.fill") }
+                .tag(RootTab.discover)
+            SearchView()
+                .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
+                .tag(RootTab.search)
+            LibraryView()
+                .tabItem { Label(tabLabelsVisible ? "音乐库" : "", systemImage: "music.note.list") }
+                .tag(RootTab.library)
+            ProfileView()
+                .tabItem { Label(tabLabelsVisible ? "我的" : "", systemImage: "person.crop.circle") }
+                .tag(RootTab.profile)
+        }
+        .tint(Color.beansAmber)
+        .background {
+            TabBarAppearanceConfigurator(
+                hidesSystemTabBarOnLegacy: !usesSystemFloatingTabBar,
+                onHomeLongPress: { showHomePlatformMenu = true }
+            )
+        }
+
         ZStack {
-            // 系统原生 TabView：iOS 26 上 UITabBar 自动使用原生液态玻璃，
-            // 按压折射反馈、拖动效果、高光均由系统渲染（与应用商店等系统 App 一致）。
-            // 背景（壁纸/背景色）由每个 tab 页面内部的 GlassBackdrop 渲染，
-            // 因为系统 TabView 的内容层会盖住 RootView 底层的 ZStack 背景。
-            TabView(selection: $selection) {
-                DiscoverView()
-                    .tabItem { Label(tabLabelsVisible ? "主页" : "", systemImage: "house.fill") }
-                    .tag(RootTab.discover)
-                SearchView()
-                    .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
-                    .tag(RootTab.search)
-                LibraryView()
-                    .tabItem { Label(tabLabelsVisible ? "音乐库" : "", systemImage: "music.note.list") }
-                    .tag(RootTab.library)
-                ProfileView()
-                    .tabItem { Label(tabLabelsVisible ? "我的" : "", systemImage: "person.crop.circle") }
-                    .tag(RootTab.profile)
-            }
-            .tint(Color.beansAmber)
-            .background {
-                TabBarAppearanceConfigurator(
-                    hidesSystemTabBarOnLegacy: !usesSystemFloatingTabBar,
-                    onHomeLongPress: { showHomePlatformMenu = true }
-                )
+            // iOS 26 用系统 tab accessory，把迷你播放器缩进底栏槽位；旧系统走自绘胶囊底栏。
+            if #available(iOS 26.0, *) {
+                rootTabs
+                    .modifier(
+                        MiniPlayerAccessoryModifier(
+                            isActive: player.currentSong != nil,
+                            showPlayer: $showPlayer,
+                            colorScheme: colorScheme
+                        )
+                    )
+            } else {
+                rootTabs
             }
 
             if !usesSystemFloatingTabBar {
@@ -128,18 +131,6 @@ struct RootView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(8)
-            }
-
-            // 迷你播放器：悬浮在系统 TabBar 上方
-            VStack(spacing: 0) {
-                Spacer()
-                if player.currentSong != nil {
-                    MiniPlayerView(showPlayer: $showPlayer)
-                        .environmentObject(player.clock)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, miniPlayerBottomPadding)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
             }
         }
         .background {
@@ -334,90 +325,34 @@ struct RootView: View {
     }
 
     private var legacyFloatingTabBar: some View {
-        legacyTabItemsBar
-            .padding(.horizontal, 7)
-            .padding(.vertical, 5)
-            .frame(width: legacyTabResolvedWidth)
-            .padding(.horizontal, 18)
-            .padding(.bottom, 12)
-            .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
-    }
+        VStack(spacing: 8) {
+            if player.currentSong != nil {
+                MiniPlayerView(showPlayer: $showPlayer, presentation: .dock)
+                    .environmentObject(player.clock)
+                    .padding(.horizontal, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
-    private var legacyTabItemsBar: some View {
-        HStack(spacing: 4) {
-            ForEach(RootTab.allCases) { tab in
-                Button {
-                    guard selection != tab else { return }
-                    BeansHaptics.select()
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        selection = tab
-                    }
-                } label: {
-                    let selected = selection == tab
-                    VStack(spacing: 3) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 17, weight: selected ? .semibold : .medium))
-                            .symbolRenderingMode(.hierarchical)
-                        if tabLabelsVisible {
-                            Text(tab.title)
-                                .font(BeansFont.appFont(10, selected ? .semibold : .medium))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.78)
-                        }
-                    }
-                    .foregroundStyle(selected ? (isNativeClean ? Color.red : Color.beansAmber) : Color.beansLabel.opacity(isNativeClean ? 0.92 : 0.70))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background {
-                        if selected {
-                            RoundedRectangle(cornerRadius: 17, style: .continuous)
-                                .fill(isNativeClean ? Color.primary.opacity(0.055) : Color.beansAmber.opacity(0.12))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 17, style: .continuous)
-                                        .strokeBorder((isNativeClean ? Color.primary : Color.beansAmber).opacity(0.12), lineWidth: 0.7)
-                                }
-                        }
-                    }
-                    .contentShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
-                }
-                .buttonStyle(GlassPressButtonStyle(scale: 0.94))
-                .contextMenu {
-                    if tab == .discover {
-                        platformSelectionMenu
-                    }
+            KumoneGlassTabBar(
+                items: RootTab.allCases.map {
+                    KumoneGlassTabBar.Item(tab: $0, title: $0.title, icon: $0.icon)
+                },
+                selection: $selection,
+                labelsVisible: tabLabelsVisible,
+                accentIsNativeClean: isNativeClean,
+                onHomeLongPress: { showHomePlatformMenu = true }
+            ) { tab in
+                guard selection != tab else { return }
+                BeansHaptics.select()
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                    selection = tab
                 }
             }
+            .frame(width: legacyTabResolvedWidth)
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
-        .background {
-            RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous)
-                .fill(isNativeClean ? Color(UIColor.systemBackground).opacity(0.96) : Color.clear)
-                .background {
-                    if !isNativeClean {
-                        VisualEffectBlur(style: .systemUltraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous))
-                    }
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous)
-                        .strokeBorder(isNativeClean ? Color.primary.opacity(0.08) : .white.opacity(0.20), lineWidth: 0.7)
-                }
-                .overlay {
-                    if !isNativeClean {
-                        RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.18), .white.opacity(0.04), .black.opacity(0.03)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: legacyTabResolvedCornerRadius, style: .continuous))
-                    }
-                }
-                .shadow(color: .black.opacity(isNativeClean ? 0.10 : 0.16), radius: isNativeClean ? 12 : 18, y: isNativeClean ? 4 : 7)
-        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 12)
+        .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
     }
 
     @ViewBuilder
@@ -480,6 +415,145 @@ private struct ClearSheetBackground: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+@available(iOS 26.0, *)
+private struct MiniPlayerAccessoryModifier: ViewModifier {
+    let isActive: Bool
+    @Binding var showPlayer: Bool
+    let colorScheme: ColorScheme
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isActive {
+            content.tabViewBottomAccessory {
+                MiniPlayerView(showPlayer: $showPlayer, presentation: .accessory)
+                    .padding(.horizontal, 12)
+                    .environment(\.colorScheme, colorScheme)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+private struct KumoneGlassTabBar: View {
+    struct Item: Identifiable {
+        let tab: RootTab
+        let title: String
+        let icon: String
+        var id: RootTab { tab }
+    }
+
+    let items: [Item]
+    @Binding var selection: RootTab
+    var labelsVisible: Bool
+    var accentIsNativeClean: Bool
+    var onHomeLongPress: (() -> Void)?
+    var onSelect: (RootTab) -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var dragX: CGFloat?
+    @State private var isDragging = false
+
+    private let innerInset: CGFloat = 4
+    private let contentHeight: CGFloat = 56
+    private let settle = Animation.spring(response: 0.35, dampingFraction: 0.82)
+
+    var body: some View {
+        GeometryReader { geo in
+            let count = max(items.count, 1)
+            let cellW = geo.size.width / CGFloat(count)
+            let selectedIndex = items.firstIndex(where: { $0.tab == selection }) ?? 0
+            let restX = cellW * (CGFloat(selectedIndex) + 0.5)
+            let pillX = isDragging
+                ? min(max(dragX ?? restX, cellW / 2), geo.size.width - cellW / 2)
+                : restX
+
+            ZStack(alignment: .leading) {
+                selectionPill
+                    .frame(width: cellW - 8, height: contentHeight)
+                    .position(x: pillX, y: geo.size.height / 2)
+
+                HStack(spacing: 0) {
+                    ForEach(items) { item in
+                        itemLabel(item)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(dragGesture(cellW: cellW, count: count))
+        }
+        .frame(height: contentHeight)
+        .padding(innerInset)
+        .background { Capsule().fill(.regularMaterial) }
+        .overlay {
+            Capsule()
+                .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.20), lineWidth: 0.5)
+        }
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.26 : 0.12), radius: 12, y: 4)
+        .padding(.horizontal, 12)
+    }
+
+    private func itemLabel(_ item: Item) -> some View {
+        let isSelected = selection == item.tab
+        return VStack(spacing: 3) {
+            Image(systemName: item.icon)
+                .font(.system(size: 23, weight: .semibold))
+                .symbolVariant(.fill)
+            if labelsVisible {
+                Text(item.title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .lineLimit(1)
+            }
+        }
+        .foregroundStyle(isSelected
+                         ? AnyShapeStyle(accentIsNativeClean ? Color.red : Color.beansAmber)
+                         : AnyShapeStyle(Color.primary.opacity(0.8)))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+            guard item.tab == .discover else { return }
+            BeansHaptics.select()
+            onHomeLongPress?()
+        })
+    }
+
+    private var selectionPill: some View {
+        Capsule(style: .continuous)
+            .fill(colorScheme == .dark
+                  ? Color.white.opacity(0.10)
+                  : Color.black.opacity(0.075))
+    }
+
+    private func index(for x: CGFloat, cellW: CGFloat, count: Int) -> Int {
+        min(max(Int(x / cellW), 0), count - 1)
+    }
+
+    private func dragGesture(cellW: CGFloat, count: Int) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if !isDragging && abs(value.translation.width) < 8 { return }
+                isDragging = true
+                dragX = value.location.x
+                let tab = items[index(for: value.location.x, cellW: cellW, count: count)].tab
+                if tab != selection {
+                    selection = tab
+                    onSelect(tab)
+                }
+            }
+            .onEnded { value in
+                let tab = items[index(for: value.location.x, cellW: cellW, count: count)].tab
+                withAnimation(settle) {
+                    selection = tab
+                    onSelect(tab)
+                    dragX = nil
+                }
+                isDragging = false
+            }
     }
 }
 
