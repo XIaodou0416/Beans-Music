@@ -1,7 +1,5 @@
 import Foundation
 
-/// 灰色歌曲 / VIP 试听解锁：使用用户填写密钥的第三方音源。
-/// 由 PlayerManager 在网易云 / QQ 无完整 URL 时自动调用。
 enum UnblockService {
     struct Resolved {
         let url: URL
@@ -34,7 +32,12 @@ enum UnblockService {
             || !artists.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasSongIdentity else { return nil }
         let sources = UnblockSourceStore.shared.sources
-            .filter { $0.enabled && canUse(source: $0, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID) }
+            .filter { source in
+                source.enabled && (
+                    isScriptSource(source) ||
+                    canUse(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
+                )
+            }
         guard !sources.isEmpty else { return nil }
 
         // LX、CR、QT 三个预设最终访问同一个接口，只保留每个请求指纹的第一个，
@@ -46,6 +49,19 @@ enum UnblockService {
         return await withTaskGroup(of: Resolved?.self) { group in
             for source in uniqueSources {
                 group.addTask {
+                    if isScriptSource(source) {
+                        return await scriptSourceRequest(
+                            source: source,
+                            name: name,
+                            artists: artists,
+                            neteaseID: neteaseID,
+                            songSource: songSource,
+                            qqMid: qqMid,
+                            qqMediaMid: qqMediaMid,
+                            kugouID: kugouID,
+                            excludedHosts: excludedHosts
+                        )
+                    }
                     return await presetSourceRequest(
                         source: source,
                         name: name,
@@ -81,6 +97,11 @@ enum UnblockService {
             return kugouID?.isEmpty == false
         }
         return neteaseID > 0
+    }
+
+    private static func isScriptSource(_ source: ThirdPartySource) -> Bool {
+        let kind = source.kind.lowercased()
+        return kind.contains("script") || source.script?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     private static func presetSourceRequest(
@@ -159,6 +180,53 @@ enum UnblockService {
 
         if !apiKeys.isEmpty {
             BeansLogger.shared.log("第三方音源全部密钥未命中：\(source.name) 共 \(apiKeys.count) 个", level: .debug)
+        }
+        return nil
+    }
+
+    private static func scriptSourceRequest(
+        source: ThirdPartySource,
+        name: String,
+        artists: String,
+        neteaseID: Int,
+        songSource: SongSource,
+        qqMid: String?,
+        qqMediaMid: String?,
+        kugouID: String?,
+        excludedHosts: Set<String>
+    ) async -> Resolved? {
+        guard let script = source.script?.trimmingCharacters(in: .whitespacesAndNewlines), !script.isEmpty else { return nil }
+        let songIDs: [String]
+        switch songSource {
+        case .netease where neteaseID > 0:
+            songIDs = [String(neteaseID)]
+        case .qq:
+            guard let qqMid, !qqMid.isEmpty else { return nil }
+            songIDs = qqIDCandidates(songID: neteaseID, songMid: qqMid, mediaMid: qqMediaMid)
+        case .kugou:
+            guard let kugouID, !kugouID.isEmpty else { return nil }
+            songIDs = [kugouID]
+        default:
+            return nil
+        }
+
+        let qualities = qualityCandidates(for: source, songSource: songSource)
+        for songID in songIDs {
+            for quality in qualities {
+                if let resolved = await LXScriptSourceRunner.shared.resolve(
+                    source: source,
+                    script: script,
+                    songSource: songSource,
+                    songID: songID,
+                    name: name,
+                    artists: artists,
+                    quality: quality,
+                    excludedHosts: excludedHosts
+                ) {
+                    BeansLogger.shared.log("脚本音源命中：\(source.name) 音质=\(quality)", level: .info)
+                    return resolved
+                }
+            }
         }
         return nil
     }
@@ -287,7 +355,7 @@ enum UnblockService {
     }
 
     private static func qualityCandidates(for source: ThirdPartySource, songSource: SongSource) -> [String] {
-        let configured = source.headers["quality"] ?? "320k"
+        let configured = source.quality.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "320k" : source.quality
         let fallback: [String]
         switch songSource {
         case .qq:
@@ -328,7 +396,8 @@ enum UnblockService {
             .sorted { $0.key < $1.key }
             .map { "\($0.key)=\($0.value)" }
             .joined(separator: "&")
-        return "\(source.template)|\(source.urlPath)|\(headers)"
+        let scriptFingerprint = source.script?.hashValue.description ?? ""
+        return "\(source.template)|\(source.urlPath)|\(headers)|\(source.quality)|\(scriptFingerprint)"
     }
 
     private static func userAPIKeys() -> [String] {
@@ -339,6 +408,7 @@ enum UnblockService {
     }
 
     private static func sourceAPIKeys(for source: ThirdPartySource) -> [String] {
+        if isScriptSource(source) { return userAPIKeys() }
         var keys: [String] = []
         if let raw = source.headers["apiKeys"], !raw.isEmpty {
             keys.append(contentsOf: raw

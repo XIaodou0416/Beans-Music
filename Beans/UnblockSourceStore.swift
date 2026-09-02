@@ -4,6 +4,8 @@ import Foundation
 /// kind：paid-lx、paid-cr、paid-qt 分别对应三种插件运行时格式。
 /// template：请求 URL 模板，支持 {id}、{source}、{quality} 占位符。
 /// headers：可选的请求头与内置元数据。
+/// quality：默认音质选择。
+/// script：LX / Baka 风格 JS 脚本内容。
 struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
     var id = UUID().uuidString
     var name: String
@@ -11,11 +13,13 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
     var template: String
     var urlPath: String = "url"
     var headers: [String: String] = [:]
+    var quality: String = "320k"
+    var script: String?
     var enabled: Bool = true
     var isPreset: Bool = false
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, template, urlPath, headers, enabled, isPreset
+        case id, name, kind, template, urlPath, headers, quality, script, enabled, isPreset
     }
 
     init(
@@ -25,6 +29,8 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         template: String,
         urlPath: String = "url",
         headers: [String: String] = [:],
+        quality: String = "320k",
+        script: String? = nil,
         enabled: Bool = true,
         isPreset: Bool = false
     ) {
@@ -34,6 +40,8 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         self.template = template
         self.urlPath = urlPath
         self.headers = headers
+        self.quality = quality
+        self.script = script
         self.enabled = enabled
         self.isPreset = isPreset
     }
@@ -46,6 +54,8 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         template = try container.decodeIfPresent(String.self, forKey: .template) ?? ""
         urlPath = try container.decodeIfPresent(String.self, forKey: .urlPath) ?? "url"
         headers = try container.decodeIfPresent([String: String].self, forKey: .headers) ?? [:]
+        quality = try container.decodeIfPresent(String.self, forKey: .quality) ?? headers["quality"] ?? "320k"
+        script = try container.decodeIfPresent(String.self, forKey: .script)
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         isPreset = try container.decodeIfPresent(Bool.self, forKey: .isPreset) ?? false
     }
@@ -71,6 +81,7 @@ final class UnblockSourceStore: ObservableObject {
             kind: "paid-lx",
             template: paidURLTemplate,
             headers: paidHeaders,
+            quality: "320k",
             isPreset: true
         ),
         ThirdPartySource(
@@ -79,6 +90,7 @@ final class UnblockSourceStore: ObservableObject {
             kind: "paid-cr",
             template: paidURLTemplate,
             headers: paidHeaders,
+            quality: "320k",
             isPreset: true
         ),
         ThirdPartySource(
@@ -87,6 +99,7 @@ final class UnblockSourceStore: ObservableObject {
             kind: "paid-qt",
             template: paidURLTemplate,
             headers: paidHeaders,
+            quality: "320k",
             isPreset: true
         ),
     ]

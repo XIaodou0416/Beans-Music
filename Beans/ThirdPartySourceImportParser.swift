@@ -32,6 +32,9 @@ enum ThirdPartySourceImportParser {
         if let headerSources = parseHeaderStyle(trimmed, fallbackName: fallbackName), !headerSources.isEmpty {
             return unique(headerSources)
         }
+        if let scriptSources = parseLooseScript(trimmed, fallbackName: fallbackName), !scriptSources.isEmpty {
+            return unique(scriptSources)
+        }
         throw ThirdPartySourceImportError.unsupported
     }
 
@@ -95,6 +98,7 @@ enum ThirdPartySourceImportParser {
         let urlPath = string(in: dict, keys: ["urlPath", "path"]) ?? "url"
         let template = templateString(from: dict)
         guard !template.isEmpty else { return nil }
+        let quality = string(in: dict, keys: ["quality", "br"]) ?? "320k"
 
         var headers = dictionary(in: dict, key: "headers")
         for key in ["source", "quality", "br", "apiKey", "apiKeys", "signSalt", "fingerprint", "cookie", "tx_cookie", "wy_cookie"] {
@@ -115,6 +119,7 @@ enum ThirdPartySourceImportParser {
             template: template,
             urlPath: urlPath,
             headers: headers,
+            quality: quality,
             enabled: enabled,
             isPreset: isPreset
         )
@@ -173,6 +178,7 @@ enum ThirdPartySourceImportParser {
         guard !values.isEmpty else { return nil }
         let name = values["name"]?.isEmpty == false ? values["name"]! : (fallbackName ?? beansLocalized("未命名音源", "Untitled source"))
         let kind = values["kind"].flatMap { $0.isEmpty ? nil : $0 } ?? "keyword"
+        let quality = values["quality"].flatMap { $0.isEmpty ? nil : $0 } ?? values["br"].flatMap { $0.isEmpty ? nil : $0 } ?? "320k"
         let template = values["template"].flatMap { $0.isEmpty ? nil : $0 }
             ?? values["apiurl"].flatMap { $0.isEmpty ? nil : $0 }
             ?? values["url"].flatMap { $0.isEmpty ? nil : $0 }
@@ -208,9 +214,77 @@ enum ThirdPartySourceImportParser {
             template: template,
             urlPath: urlPath,
             headers: headers,
+            quality: quality,
             enabled: enabled,
             isPreset: isPreset
         )]
+    }
+
+    private static func parseLooseScript(_ text: String, fallbackName: String?) -> [ThirdPartySource]? {
+        guard looksLikeScript(text) else { return nil }
+        let name = extractHeaderName(text) ?? fallbackName ?? beansLocalized("未命名脚本音源", "Untitled script source")
+        let headers = extractLooseHeaders(from: text)
+        let quality = headers["quality"] ?? headers["br"] ?? "320k"
+        let source = ThirdPartySource(
+            name: name,
+            kind: "script",
+            template: "",
+            urlPath: "url",
+            headers: headers,
+            quality: quality,
+            script: text,
+            enabled: true,
+            isPreset: false
+        )
+        return [source]
+    }
+
+    private static func looksLikeScript(_ text: String) -> Bool {
+        let markers = [
+            "globalThis.lx",
+            "EVENT_NAMES",
+            "request(",
+            "on(EVENT_NAMES.request",
+            "module.exports",
+            "export default",
+            "function",
+            "const ",
+            "let ",
+            "var ",
+            "=>"
+        ]
+        return markers.contains { text.contains($0) }
+    }
+
+    private static func extractHeaderName(_ text: String) -> String? {
+        guard let block = extractCommentBlock(text) else { return nil }
+        for line in block.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleaned = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "* "))
+            guard cleaned.hasPrefix("@name") else { continue }
+            let value = cleaned.dropFirst("@name".count).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty { return value }
+        }
+        return nil
+    }
+
+    private static func extractLooseHeaders(from text: String) -> [String: String] {
+        var headers: [String: String] = [:]
+        guard let block = extractCommentBlock(text) else { return headers }
+        for line in block.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleaned = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "* "))
+            guard cleaned.hasPrefix("@") else { continue }
+            let content = cleaned.dropFirst()
+            let pieces = content.split(maxSplits: 1, omittingEmptySubsequences: false) { $0 == " " || $0 == "\t" || $0 == "=" }
+            guard let keyPart = pieces.first else { continue }
+            let valuePart = pieces.count > 1 ? String(pieces[1]).trimmingCharacters(in: .whitespaces) : ""
+            let key = String(keyPart).lowercased()
+            if !valuePart.isEmpty {
+                headers[key] = valuePart
+            }
+        }
+        return headers
     }
 
     private static func extractCommentBlock(_ text: String) -> String? {
@@ -239,7 +313,8 @@ enum ThirdPartySourceImportParser {
     private static func unique(_ sources: [ThirdPartySource]) -> [ThirdPartySource] {
         var seen = Set<String>()
         return sources.filter { source in
-            let fingerprint = "\(source.name)|\(source.kind)|\(source.template)|\(source.urlPath)|\(source.headers.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&"))"
+            let scriptFingerprint = source.script?.hashValue.description ?? ""
+            let fingerprint = "\(source.name)|\(source.kind)|\(source.template)|\(source.urlPath)|\(source.quality)|\(scriptFingerprint)|\(source.headers.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&"))"
             return seen.insert(fingerprint).inserted
         }
     }

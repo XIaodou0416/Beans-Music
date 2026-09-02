@@ -1567,11 +1567,6 @@ struct SettingsView: View {
                         Text("平台显示")
                             .font(BeansFont.appFont(15))
                             .foregroundStyle(Color.beansLabel)
-                        Text(LocalizedStringKey(platformPrefs.summaryText))
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.78)
                     }
                     Spacer()
                     Image(systemName: platformExpanded ? "chevron.up" : "chevron.down")
@@ -2505,7 +2500,6 @@ struct SettingsView: View {
             .beansCardShadow(radius: 8, y: 3)
         }
     }
-    /// 配置备份与恢复：导出全部 beans.* 设置为 JSON 分享；导入后写回 UserDefaults
     private var backupSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button {
@@ -2521,9 +2515,6 @@ struct SettingsView: View {
                         Text("备份与恢复")
                             .font(BeansFont.appFont(15))
                             .foregroundStyle(Color.beansLabel)
-                        Text("导出或恢复应用配置")
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
                     }
                     Spacer()
                     Image(systemName: backupExpanded ? "chevron.up" : "chevron.down")

@@ -79,6 +79,9 @@ struct ThirdPartySourceManagerSheet: View {
                     Text(beansLocalized("支持本地文件、远程 URL 和粘贴文本。", "Supports local files, remote URLs, and pasted text."))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
+                    Text(beansLocalized("也支持 LX Music / BakaMusic 风格的 JS 音源脚本。", "Also supports LX Music / BakaMusic style JS source scripts."))
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
                 }
                 Spacer()
                 Button {
@@ -356,10 +359,15 @@ private struct SourceRow: View {
 
     private var subtitle: String {
         let platform = source.headers["source"].map { ThirdPartySourcePlatform(code: $0).title } ?? ""
+        let kind = source.script?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? beansLocalized("脚本", "Script")
+            : source.kind.uppercased()
+        let path = source.script?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? "" : source.urlPath
         let parts = [
-            source.kind.uppercased(),
+            kind,
+            source.quality,
             platform,
-            source.urlPath
+            path
         ].filter { !$0.isEmpty }
         return parts.joined(separator: " · ")
     }
@@ -452,6 +460,8 @@ private struct ThirdPartySourceDraft: Identifiable {
     var template: String = ""
     var urlPath: String = "url"
     var headersText: String = ""
+    var quality: String = "320k"
+    var scriptText: String = ""
     var enabled: Bool = true
     var isPreset: Bool = false
     var platform: ThirdPartySourcePlatform = .all
@@ -464,13 +474,15 @@ private struct ThirdPartySourceDraft: Identifiable {
         kind = source.kind
         template = source.template
         urlPath = source.urlPath
+        quality = source.quality.isEmpty ? "320k" : source.quality
+        scriptText = source.script ?? ""
         enabled = source.enabled
         isPreset = source.isPreset
         if let code = source.headers["source"] {
             platform = ThirdPartySourcePlatform(code: code)
         }
         headersText = source.headers
-            .filter { $0.key != "source" }
+            .filter { $0.key != "source" && $0.key != "quality" && $0.key != "br" }
             .sorted { $0.key < $1.key }
             .map { "\($0.key): \($0.value)" }
             .joined(separator: "\n")
@@ -481,6 +493,7 @@ private struct ThirdPartySourceDraft: Identifiable {
         if let code = platform.code {
             headers["source"] = code
         }
+        headers["quality"] = quality.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "320k" : quality
         return ThirdPartySource(
             id: id,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? beansLocalized("未命名音源", "Untitled source") : name,
@@ -488,6 +501,8 @@ private struct ThirdPartySourceDraft: Identifiable {
             template: template.trimmingCharacters(in: .whitespacesAndNewlines),
             urlPath: urlPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "url" : urlPath,
             headers: headers,
+            quality: quality.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "320k" : quality,
+            script: scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : scriptText,
             enabled: enabled,
             isPreset: isPreset
         )
@@ -613,21 +628,59 @@ private struct SourceEditorSheet: View {
             }
             .pickerStyle(.segmented)
 
-            TextField(beansLocalized("URL 模板", "URL Template"), text: $draft.template)
-                .font(BeansFont.appFont(14))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+            Picker(beansLocalized("音质", "Quality"), selection: $draft.quality) {
+                Text("128k").tag("128k")
+                Text("192k").tag("192k")
+                Text("320k").tag("320k")
+                Text("FLAC").tag("flac")
+                Text("Hi-Res").tag("hires")
+                Text("Master").tag("master")
+            }
+            .pickerStyle(.menu)
+            .tint(Color.beansAmber)
 
-            TextField(beansLocalized("字段路径", "Value Path"), text: $draft.urlPath)
-                .font(BeansFont.appFont(14))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+            if !draft.kind.lowercased().contains("script") {
+                TextField(beansLocalized("URL 模板", "URL Template"), text: $draft.template)
+                    .font(BeansFont.appFont(14))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+            }
+
+            if draft.kind.lowercased().contains("script") || !draft.scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(beansLocalized("脚本内容", "Script Content"))
+                        .font(BeansFont.appFont(13, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    ZStack(alignment: .topLeading) {
+                        TextEditor(text: $draft.scriptText)
+                            .frame(minHeight: 180)
+                            .padding(8)
+                            .background(Color.clear)
+                            .modifier(ScrollContentBackgroundHidden())
+                        if draft.scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text(beansLocalized("粘贴 LX / Baka 风格 JS 音源脚本", "Paste LX / Baka style JS source script"))
+                                .font(BeansFont.appFont(12))
+                                .foregroundStyle(Color.beansComment.opacity(0.85))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 16)
+                        }
+                    }
+                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+                }
+            }
+
+            if !draft.kind.lowercased().contains("script") {
+                TextField(beansLocalized("字段路径", "Value Path"), text: $draft.urlPath)
+                    .font(BeansFont.appFont(14))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(beansLocalized("请求头", "Headers"))
