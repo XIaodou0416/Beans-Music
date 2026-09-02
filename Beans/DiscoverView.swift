@@ -1177,6 +1177,12 @@ struct QQTopListDetailView: View {
     @State private var errorMessage: String?
     @State private var searchText = ""
 
+    init(topID: Int, name: String, customCover: UIImage? = nil) {
+        self.topID = topID
+        self.name = name
+        self.customCover = customCover
+    }
+
     var body: some View {
         let _ = theme.accent
         BeansNavigationStack {
@@ -1422,6 +1428,11 @@ struct TopListDetailView: View {
     @State private var errorMessage: String?
     @State private var searchText = ""
 
+    init(topList: TopList, customCover: UIImage? = nil) {
+        self.topList = topList
+        self.customCover = customCover
+    }
+
     var body: some View {
         let _ = theme.accent
         BeansNavigationStack {
@@ -1545,6 +1556,11 @@ struct KugouTopListDetailView: View {
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var searchText = ""
+
+    init(topList: KugouTopInfo, customCover: UIImage? = nil) {
+        self.topList = topList
+        self.customCover = customCover
+    }
 
     var body: some View {
         let _ = theme.accent
