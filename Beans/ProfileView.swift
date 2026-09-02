@@ -1181,8 +1181,6 @@ struct SettingsView: View {
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
-    /// 音质等级。
-    @AppStorage("beans.audioQuality") private var audioQualityRaw = BeansAudioQuality.exhigh.rawValue
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
     @AppStorage("beans.legacyTabCornerRadius") private var legacyTabCornerRadius = 32.0
@@ -1194,7 +1192,7 @@ struct SettingsView: View {
     /// 第三方音源播放会员歌成功时提醒，默认开启
     @AppStorage("beans.showThirdPartyVIPNotice") private var showThirdPartyVIPNotice = true
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
-    /// 可选高刷新率动效，默认开启；可手动关闭以降低发热
+    /// 高刷新率请求，默认开启
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
     @AppStorage("beans.labelColorHex") private var labelColorHex = ""
@@ -1405,9 +1403,7 @@ struct SettingsView: View {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 16) {
-                        appearanceSection
-                        chartCoverSection
-                        platformSection
+                        themeSection
                         playbackSection
                         changelogSection
                         backupSection
@@ -1519,6 +1515,15 @@ struct SettingsView: View {
         }
     }
 
+    /// 主题相关设置统一归组，避免平台和排行榜外观选项散落在设置页。
+    private var themeSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            appearanceSection
+            chartCoverSection
+            platformSection
+        }
+    }
+
     /// 校验扩展名并安装字体（asCopy 返回的 URL 已在沙盒内，可直接读取）
     private func installFont(from url: URL) {
         let ext = url.pathExtension.lowercased()
@@ -1600,7 +1605,7 @@ struct SettingsView: View {
     /// 外观设置（原「我的」页外观折叠内容）
     private var appearanceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "外观")
+            SectionHeader(title: "主题功能")
             // 外观设置行：点击展开 / 收起全部外观设置
             Button {
                 BeansHaptics.select()
@@ -1613,7 +1618,7 @@ struct SettingsView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(Color.beansAmber)
                         .frame(width: 28)
-                    Text("主题模式")
+                    Text("主题功能")
                         .font(BeansFont.appFont(15))
                         .foregroundStyle(Color.beansLabel)
                     Spacer()
@@ -1943,6 +1948,8 @@ struct SettingsView: View {
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
+                // Greeting customization was removed; retain only wallpaper controls below.
+                if false {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Image(systemName: "text.badge.star")
@@ -2123,17 +2130,32 @@ struct SettingsView: View {
                     }
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansLabel)
-                    Toggle("隐藏主页用户名", isOn: $homeHideUsername)
-                        .font(BeansFont.appFont(13))
-                    Toggle("隐藏所有界面排序按钮", isOn: $homeHeaderHideSort)
-                        .font(BeansFont.appFont(13))
-                    Toggle("隐藏顶部平台列表", isOn: $hidePlatformPicker)
-                        .font(BeansFont.appFont(13))
-                    Toggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
-                        .font(BeansFont.appFont(13))
+                }
+
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("主页壁纸模糊度")
+                        Spacer()
+                        Text("\(Int(homeWallpaperBlur))")
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    .font(BeansFont.appFont(12))
+                    Slider(value: $homeWallpaperBlur, in: 0...30, step: 1)
+                        .tint(Color.beansAmber)
                 }
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
+
+                Toggle("隐藏主页用户名", isOn: $homeHideUsername)
+                    .font(BeansFont.appFont(13))
+                Toggle("隐藏所有界面排序按钮", isOn: $homeHeaderHideSort)
+                    .font(BeansFont.appFont(13))
+                Toggle("隐藏顶部平台列表", isOn: $hidePlatformPicker)
+                    .font(BeansFont.appFont(13))
+                Toggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
+                    .font(BeansFont.appFont(13))
 
                 HStack {
                     Image(systemName: "textformat")
@@ -2220,26 +2242,6 @@ struct SettingsView: View {
 
             if playbackExpanded {
             VStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "waveform.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(width: 28)
-                        Text("音质")
-                            .font(BeansFont.appFont(15))
-                            .foregroundStyle(Color.beansLabel)
-                    }
-                    Picker("音质", selection: $audioQualityRaw) {
-                        ForEach(BeansAudioQuality.allCases) { q in
-                            Text(LocalizedStringKey(q.displayName)).tag(q.rawValue)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                Divider().overlay(Color.beansComment.opacity(0.15))
-
                 Toggle(isOn: $mixesWithOthers) {
                     HStack(spacing: 12) {
                         Image(systemName: "speaker.wave.2.fill")
@@ -2856,6 +2858,7 @@ struct SettingsView: View {
                     .foregroundStyle(Color.beansAmber)
             }
             content()
+                .transaction { transaction in transaction.animation = nil }
         }
     }
 

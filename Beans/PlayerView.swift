@@ -20,7 +20,6 @@ struct PlayerView: View {
     @State private var showAddToPlaylist = false
     @State private var showComments = false
     @State private var showDownloadPicker = false
-    @State private var showShare = false
     @State private var showMoreActions = false
     @State private var showNativeMoreActions = false
     @State private var showMoreSettingsHint = false
@@ -366,9 +365,6 @@ struct PlayerView: View {
                         onDownload: {
                             showDownloadPicker = true
                         },
-                        onShare: {
-                            showShare = true
-                        },
                         onPlayerSettings: {
                             showPlayerSettings = true
                         }
@@ -531,11 +527,6 @@ struct PlayerView: View {
                 .environmentObject(theme)
                 .environmentObject(player)
         }
-        .sheet(isPresented: $showShare) {
-            if let song {
-                ShareSheet(items: shareItems(for: song))
-            }
-        }
         .sheet(item: $shareFile, onDismiss: cleanupSharedFile) { item in
             ShareSheet(items: [item.url])
         }
@@ -580,9 +571,6 @@ struct PlayerView: View {
             }
             Button("下载歌曲") {
                 showDownloadPicker = true
-            }
-            Button("分享歌曲") {
-                showShare = true
             }
             Button("播放器设置") {
                 showPlayerSettings = true
@@ -694,9 +682,7 @@ struct PlayerView: View {
 
             Button {
                 BeansHaptics.tap()
-                withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
-                    showMoreActions.toggle()
-                }
+                showNativeMoreActions = true
             } label: {
                 VStack(spacing: 2) {
                     Text(LocalizedStringKey(player.isBuffering ? "加载中…" : (player.isPlaying ? "正在播放" : "已暂停")))
@@ -782,10 +768,6 @@ struct PlayerView: View {
                 showMoreActions = false
                 showDownloadPicker = true
             }
-            moreActionRow("分享歌曲", systemName: "square.and.arrow.up") {
-                showMoreActions = false
-                showShare = true
-            }
             moreActionRow("播放器设置", systemName: "slider.horizontal.3") {
                 showMoreActions = false
                 showPlayerSettings = true
@@ -854,8 +836,6 @@ struct PlayerView: View {
         switch coverPlayerStyle {
         case .classic, .appleMusic:
             classicAlbumPanel(geo: geo)
-        case .controlPanel:
-            controlPanelAlbumPanel(geo: geo)
         }
     }
 
@@ -1007,6 +987,7 @@ struct PlayerView: View {
         )
     }
 
+    #if false
     private func controlPanelAlbumPanel(geo: GeometryProxy) -> some View {
         let panelWidth = min(geo.size.width - 54, 392)
         let panelHeight = min(max(398, geo.size.height * 0.54), 486)
@@ -1117,7 +1098,7 @@ struct PlayerView: View {
                         showDownloadPicker = true
                     }
                     controlPanelAction(icon: "ellipsis", title: "更多") {
-                        showMoreActions = true
+                        showNativeMoreActions = true
                     }
                 }
                 .padding(.horizontal, 14)
@@ -1228,6 +1209,8 @@ struct PlayerView: View {
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.92))
     }
+
+    #endif
 
     /// 封面下歌词阅览：最多 5 行，跟随当前播放行自动滚动预览
     private var lyricPreviewBox: some View {
@@ -1611,13 +1594,6 @@ struct PlayerView: View {
                     )
             }
             .frame(width: size, height: size)
-        case .outline:
-            Circle()
-                .fill(Color.white.opacity(primary ? 0.10 : 0.001))
-                .overlay {
-                    Circle().strokeBorder((active || primary) ? controlAccent.opacity(0.72) : palette.secondary.opacity(0.38), lineWidth: primary ? 1.4 : 1.0)
-                }
-                .frame(width: size, height: size)
         case .appleMusic:
             if appleLiquid {
                 if #available(iOS 26, *) {
@@ -2064,6 +2040,7 @@ struct PlayerView: View {
                 .frame(width: 56, alignment: .leading)
             Slider(value: value, in: range, step: step)
                 .tint(Color.beansAmber)
+                .transaction { transaction in transaction.animation = nil }
             Text(String(format: format, value.wrappedValue))
                 .font(BeansFont.appFont(11, .regular, .monospaced))
                 .foregroundStyle(palette.secondary)

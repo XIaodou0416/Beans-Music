@@ -18,11 +18,6 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
     case queue = "播放列表"
     case lyric = "歌词"
     case grabber = "指示线"
-    case controlCenter = "控制中心"
-    case controlCenterCover = "控制中心封面"
-    case controlCenterTitle = "控制中心标题"
-    case controlCenterLyric = "控制中心歌词"
-    case controlCenterActions = "控制中心按钮"
 
     var id: String { rawValue }
 }
@@ -69,6 +64,7 @@ struct PlayerLayoutEntry: Codable, Equatable {
 enum PlayerLayoutStore {
     static let modeKey = "beans.playerLayoutMode"
     static let dataKey = "beans.playerLayoutData"
+    private static var pendingSave: DispatchWorkItem?
 
     static func load() -> [String: PlayerLayoutEntry] {
         guard let raw = UserDefaults.standard.string(forKey: dataKey),
@@ -80,6 +76,19 @@ enum PlayerLayoutStore {
     }
 
     static func save(_ dict: [String: PlayerLayoutEntry]) {
+        pendingSave?.cancel()
+        let snapshot = dict
+        let work = DispatchWorkItem {
+            guard let data = try? JSONEncoder().encode(snapshot),
+                  let raw = String(data: data, encoding: .utf8) else { return }
+            UserDefaults.standard.set(raw, forKey: dataKey)
+        }
+        pendingSave = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+
+    static func saveImmediately(_ dict: [String: PlayerLayoutEntry]) {
+        pendingSave?.cancel()
         if let data = try? JSONEncoder().encode(dict),
            let raw = String(data: data, encoding: .utf8) {
             UserDefaults.standard.set(raw, forKey: dataKey)
@@ -94,8 +103,6 @@ enum PlayerLayoutStore {
     static func defaultEntry(for part: PlayerLayoutPart) -> PlayerLayoutEntry {
         switch part {
         case .topBack, .topTitle, .topFavorite, .cover, .title, .previewLyric:
-            return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
-        case .controlCenter, .controlCenterCover, .controlCenterTitle, .controlCenterLyric, .controlCenterActions:
             return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
         case .progress:
             return PlayerLayoutEntry(x: 0, y: 17, scale: 1)
@@ -123,7 +130,7 @@ final class AppleMusicLayoutStore: ObservableObject {
     private let defaults = UserDefaults.standard
 
     @Published var entries: [String: PlayerLayoutEntry] {
-        didSet { save() }
+            didSet { scheduleSave() }
     }
 
     private init() {
@@ -152,8 +159,20 @@ final class AppleMusicLayoutStore: ObservableObject {
         entries = [:]
     }
 
-    private func save() {
-        guard let data = try? JSONEncoder().encode(entries),
+    private var pendingSave: DispatchWorkItem?
+
+    private func scheduleSave() {
+        pendingSave?.cancel()
+        let snapshot = entries
+        let work = DispatchWorkItem { [weak self] in
+            self?.save(snapshot)
+        }
+        pendingSave = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+
+    private func save(_ snapshot: [String: PlayerLayoutEntry]) {
+        guard let data = try? JSONEncoder().encode(snapshot),
               let raw = String(data: data, encoding: .utf8) else {
             return
         }

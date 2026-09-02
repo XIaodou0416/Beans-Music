@@ -26,7 +26,6 @@ struct ReferencePlaybackView: View {
     let onSleepTimer: () -> Void
     let onAddToLocalPlaylist: () -> Void
     let onDownload: () -> Void
-    let onShare: () -> Void
     let onPlayerSettings: () -> Void
 
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
@@ -219,7 +218,6 @@ struct ReferencePlaybackView: View {
                 Button("定时关闭", action: onSleepTimer)
                 Button("添加到本地歌单", action: onAddToLocalPlaylist)
                 Button("下载歌曲", action: onDownload)
-                Button("分享歌曲", action: onShare)
                 Button("播放器设置", action: onPlayerSettings)
             } label: {
                 Image(systemName: "ellipsis")
@@ -337,7 +335,6 @@ struct ReferencePlaybackView: View {
                     Button("定时关闭", action: onSleepTimer)
                     Button("添加到本地歌单", action: onAddToLocalPlaylist)
                     Button("下载歌曲", action: onDownload)
-                    Button("分享歌曲", action: onShare)
                     Button("播放器设置", action: onPlayerSettings)
                 } label: {
                     Image(systemName: "ellipsis")

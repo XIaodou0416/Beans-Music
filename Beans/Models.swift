@@ -25,8 +25,9 @@ enum BeansAudioQuality: String, CaseIterable, Identifiable {
 
     /// 当前设置（默认极高 320kbps；高音质拿不到时自动回落到标准音质）
     static var current: BeansAudioQuality {
-        let raw = UserDefaults.standard.string(forKey: "beans.audioQuality")
-        return BeansAudioQuality(rawValue: raw ?? "") ?? .exhigh
+        // Playback always starts at the highest available level. The player retries
+        // lower levels when the provider rejects the requested stream.
+        return .hires
     }
 }
 
