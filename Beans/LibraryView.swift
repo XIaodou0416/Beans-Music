@@ -183,10 +183,8 @@ struct LibraryView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("音乐库")
-                        .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
-                        .foregroundStyle(Color.beansLabel)
+                    VStack(alignment: .leading, spacing: 4) {
+                    libraryTitleButton
                     Text(librarySubtitle)
                         .font(BeansFont.appFont(13))
                         .foregroundStyle(Color.beansComment)
@@ -208,9 +206,7 @@ struct LibraryView: View {
     private var appleHeader: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .center) {
-                Text("音乐库")
-                    .font(BeansFont.appFont(38, .bold))
-                    .foregroundStyle(Color.beansLabel)
+                libraryTitleButton
                 Spacer(minLength: 12)
                 if !hideSortButton {
                     GlassIconButton(systemName: "arrow.up.arrow.down") {
@@ -236,6 +232,39 @@ struct LibraryView: View {
         case .qq: return "QQ 音乐收藏与歌单"
         case .kugou: return "酷狗云端歌单"
         }
+    }
+
+    private var libraryTitleButton: some View {
+        Menu {
+            ForEach(libraryProviders) { candidate in
+                Button {
+                    BeansHaptics.tap()
+                    source = candidate
+                } label: {
+                    Label(LocalizedStringKey(candidate.rawValue), systemImage: candidate == source ? "checkmark" : candidate.icon)
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                if let imageName = source.brandImageName {
+                    Image(imageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: isNativeClean ? 28 : 24, height: isNativeClean ? 28 : 24)
+                } else {
+                    Image(systemName: source.icon)
+                        .font(.system(size: isNativeClean ? 25 : 21, weight: .semibold))
+                }
+                Text("音乐库")
+                    .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
+                    .foregroundStyle(Color.beansLabel)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.beansComment.opacity(0.7))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
 

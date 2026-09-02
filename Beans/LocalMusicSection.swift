@@ -15,9 +15,11 @@ struct LocalMusicSection: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
+    @EnvironmentObject private var theme: ThemeStore
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
 
     @State private var showCreate = false
+    @State private var showPlaylistOrder = false
     @State private var newName = ""
     @State private var selected: LocalPlaylist?
     @State private var syncing = false
@@ -50,6 +52,16 @@ struct LocalMusicSection: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("新建本地歌单")
                 .help("新建本地歌单")
+                Button {
+                    showPlaylistOrder = true
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("排序本地歌单")
+                .help("排序本地歌单")
             }
             VStack(alignment: .leading, spacing: 6) {
                 GlassButton(
@@ -162,6 +174,10 @@ struct LocalMusicSection: View {
                 }
             )
         }
+        .sheet(isPresented: $showPlaylistOrder) {
+            LocalPlaylistOrderSheet()
+                .environmentObject(theme)
+        }
         .sheet(item: $selected) { playlist in
             LocalPlaylistDetailSheet(playlistID: playlist.id)
                 .environmentObject(player)
@@ -256,6 +272,42 @@ struct LocalMusicSection: View {
 
     private func platformSongCount(_ platform: String, _ count: Int) -> String {
         String(format: NSLocalizedString("%@ %d 首", comment: ""), NSLocalizedString(platform, comment: ""), count)
+    }
+}
+
+private struct LocalPlaylistOrderSheet: View {
+    @ObservedObject private var store = LocalLibraryStore.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var editMode: EditMode = .active
+
+    var body: some View {
+        BeansNavigationStack {
+            List {
+                ForEach(store.playlists) { playlist in
+                    HStack(spacing: 12) {
+                        Image(systemName: "music.note.list")
+                            .foregroundStyle(Color.beansAmber)
+                        Text(playlist.name)
+                            .foregroundStyle(Color.beansLabel)
+                        Spacer()
+                        Text(beansLocalSongCountText(playlist.songs.count))
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                }
+                .onMove { offsets, destination in
+                    store.playlists.move(fromOffsets: offsets, toOffset: destination)
+                }
+            }
+            .environment(\.editMode, $editMode)
+            .navigationTitle("歌单排序")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
     }
 }
 

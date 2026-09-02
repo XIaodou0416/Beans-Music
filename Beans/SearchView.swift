@@ -941,7 +941,14 @@ struct AlbumDetailView: View {
                 guard let id = Int(album.id.replacingOccurrences(of: "netease-", with: "")) else {
                     throw NSError(domain: "BeansAlbum", code: 1, userInfo: [NSLocalizedDescriptionKey: "专辑 ID 无效"])
                 }
-                result = try await NetEaseAPI.shared.albumSongs(albumID: id)
+                let direct = (try? await NetEaseAPI.shared.albumSongs(albumID: id)) ?? []
+                if !direct.isEmpty {
+                    result = direct
+                } else {
+                    let songs = (try? await NetEaseAPI.shared.search(keyword: album.name, limit: 100)) ?? []
+                    let matches = songs.filter { albumNamesMatch($0.album, album.name) }
+                    result = matches.isEmpty ? songs : matches
+                }
             case .qq:
                 let songs = try await QQMusicAPI.shared.searchSongs(keyword: album.name, limit: 100)
                 let matches = songs.filter { albumNamesMatch($0.album, album.name) }
