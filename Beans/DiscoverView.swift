@@ -6,6 +6,7 @@ struct DiscoverView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+    @ObservedObject private var chartCovers = ChartCoverStore.shared
 
     @State private var topLists: [TopList] = []
     @State private var dailySongs: [Song] = []
@@ -547,19 +548,19 @@ struct DiscoverView: View {
                 LazyHStack(spacing: 16) {
                     if source == .netease {
                         ForEach(Array(neteaseTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, topList in
-                            nativeRankCard(index: index, name: beansChartName(topList.name), subtitle: topList.updateFrequency, coverURL: topList.coverURL) {
+                            nativeRankCard(index: index, name: beansChartName(topList.name), subtitle: topList.updateFrequency, coverURL: topList.coverURL, customCover: chartCovers.image(for: .netease)) {
                                 selectedTopList = topList
                             }
                         }
                     } else if source == .qq {
                         ForEach(Array(qqTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
-                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansLocalized("QQ 峰尖榜", "QQ Music Peak Chart"), coverURL: info.coverURL) {
+                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansLocalized("QQ 峰尖榜", "QQ Music Peak Chart"), coverURL: info.coverURL, customCover: chartCovers.image(for: .qq)) {
                                 selectedQQTopList = info
                             }
                         }
                     } else {
                         ForEach(Array(kugouTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
-                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: info.updateFrequency, coverURL: info.coverURL) {
+                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: info.updateFrequency, coverURL: info.coverURL, customCover: chartCovers.image(for: .kugou)) {
                                 selectedKugouTopList = info
                             }
                         }
@@ -573,14 +574,20 @@ struct DiscoverView: View {
         .id("rankTopSection")
     }
 
-    private func nativeRankCard(index: Int, name: String, subtitle: String, coverURL: URL?, action: @escaping () -> Void) -> some View {
+    private func nativeRankCard(index: Int, name: String, subtitle: String, coverURL: URL?, customCover: UIImage? = nil, action: @escaping () -> Void) -> some View {
         Button {
             BeansHaptics.tap()
             action()
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 ZStack {
-                    CoverImage(url: coverURL, size: 148, cornerRadius: 10)
+                    if let customCover {
+                        Image(uiImage: customCover)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        CoverImage(url: coverURL, size: 148, cornerRadius: 10)
+                    }
                     LinearGradient(
                         colors: [.black.opacity(0.08), .black.opacity(0.68)],
                         startPoint: .top,
@@ -615,7 +622,7 @@ struct DiscoverView: View {
     private var rankRowsContent: some View {
         if source == .netease {
             ForEach(Array(neteaseTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, topList in
-                rankRow(index: index, name: beansChartName(topList.name), subtitle: topList.updateFrequency, coverURL: topList.coverURL) {
+                rankRow(index: index, name: beansChartName(topList.name), subtitle: topList.updateFrequency, coverURL: topList.coverURL, customCover: chartCovers.image(for: .netease)) {
                     BeansHaptics.tap()
                     selectedTopList = topList
                 }
@@ -623,7 +630,7 @@ struct DiscoverView: View {
             }
         } else if source == .qq {
             ForEach(Array(qqTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
-                rankRow(index: index, name: beansChartName(info.name), subtitle: beansLocalized("QQ 峰尖榜", "QQ Music Peak Chart"), coverURL: info.coverURL) {
+                rankRow(index: index, name: beansChartName(info.name), subtitle: beansLocalized("QQ 峰尖榜", "QQ Music Peak Chart"), coverURL: info.coverURL, customCover: chartCovers.image(for: .qq)) {
                     BeansHaptics.tap()
                     selectedQQTopList = info
                 }
@@ -631,7 +638,7 @@ struct DiscoverView: View {
             }
         } else if source == .kugou {
             ForEach(Array(kugouTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
-                rankRow(index: index, name: beansChartName(info.name), subtitle: info.updateFrequency, coverURL: info.coverURL) {
+                rankRow(index: index, name: beansChartName(info.name), subtitle: info.updateFrequency, coverURL: info.coverURL, customCover: chartCovers.image(for: .kugou)) {
                     BeansHaptics.tap()
                     selectedKugouTopList = info
                 }
@@ -662,7 +669,7 @@ struct DiscoverView: View {
         .buttonStyle(.plain)
     }
 
-    private func rankRow(index: Int, name: String, subtitle: String, coverURL: URL?, action: @escaping () -> Void) -> some View {
+    private func rankRow(index: Int, name: String, subtitle: String, coverURL: URL?, customCover: UIImage? = nil, action: @escaping () -> Void) -> some View {
         Button {
             action()
         } label: {
@@ -671,7 +678,15 @@ struct DiscoverView: View {
                     .font(BeansFont.appFont(16, .bold, .rounded))
                     .foregroundStyle(index < 3 ? Color.beansAmber : Color.beansComment)
                     .frame(width: 24)
-                CoverImage(url: coverURL, size: 52, cornerRadius: 12)
+                if let customCover {
+                    Image(uiImage: customCover)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 52, height: 52)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    CoverImage(url: coverURL, size: 52, cornerRadius: 12)
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(name)
                         .font(BeansFont.appFont(15, .semibold))
@@ -1622,6 +1637,7 @@ private struct HomeUnifiedSearchSheet: View {
     @EnvironmentObject private var player: PlayerManager
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+    @ObservedObject private var chartCovers = ChartCoverStore.shared
 
     @State private var keyword = ""
     @State private var results: [Song] = []

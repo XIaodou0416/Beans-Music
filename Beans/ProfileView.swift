@@ -1230,6 +1230,7 @@ struct SettingsView: View {
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
+    @ObservedObject private var chartCovers = ChartCoverStore.shared
     @AppStorage("beans.thirdPartyAPIKeys") private var thirdPartyAPIKeys = ""
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
@@ -1237,6 +1238,7 @@ struct SettingsView: View {
     @State private var platformExpanded = false
     @State private var playbackExpanded = false
     @State private var showWallpaperPicker = false
+    @State private var chartCoverTarget: SearchProvider?
     @State private var showFontImporter = false
     @State private var showGreetingFontImporter = false
     /// 更新日志
@@ -1402,8 +1404,9 @@ struct SettingsView: View {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 22) {
+                    LazyVStack(alignment: .leading, spacing: 16) {
                         appearanceSection
+                        chartCoverSection
                         platformSection
                         playbackSection
                         changelogSection
@@ -1438,6 +1441,14 @@ struct SettingsView: View {
         .fullScreenCover(isPresented: $showFontImporter) {
             FontDocumentPicker { url in
                 installFont(from: url)
+            }
+            .ignoresSafeArea()
+        }
+        .sheet(item: $chartCoverTarget) { provider in
+            WallpaperPhotoPicker { data in
+                chartCovers.set(data, for: provider)
+                chartCoverTarget = nil
+                BeansHaptics.success()
             }
             .ignoresSafeArea()
         }
@@ -2409,6 +2420,65 @@ struct SettingsView: View {
         )
     }
 
+    private var chartCoverSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "排行榜封面")
+            VStack(spacing: 0) {
+                chartCoverRow(.netease, title: "网易云音乐")
+                Divider().opacity(0.25)
+                chartCoverRow(.qq, title: "QQ音乐")
+                Divider().opacity(0.25)
+                chartCoverRow(.kugou, title: "酷狗音乐")
+            }
+            .padding(.horizontal, 14)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
+    }
+
+    private func chartCoverRow(_ provider: SearchProvider, title: LocalizedStringKey) -> some View {
+        HStack(spacing: 10) {
+            if let image = chartCovers.image(for: provider) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 42, height: 42)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            } else {
+                Image(systemName: "music.note.list")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 42, height: 42)
+                    .background(Color.beansAmber.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+            Text(title)
+                .font(BeansFont.appFont(14, .medium))
+                .foregroundStyle(Color.beansLabel)
+            Spacer()
+            if chartCovers.image(for: provider) != nil {
+                Button {
+                    chartCovers.remove(for: provider)
+                    BeansHaptics.select()
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.beansComment)
+                .accessibilityLabel("删除排行榜封面")
+            }
+            Button {
+                chartCoverTarget = provider
+            } label: {
+                Image(systemName: "photo.badge.plus")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Color.beansAmber)
+            .accessibilityLabel("选择排行榜封面")
+        }
+        .padding(.vertical, 10)
+    }
+
     /// 更新日志入口
     private var changelogSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2591,6 +2661,7 @@ struct SettingsView: View {
         }
         for (key, value) in defaults.dictionaryRepresentation() {
             guard Self.isBackupCandidateKey(key) else { continue }
+            guard key != "beans.chartCoverData" else { continue }
             guard !Self.isExcludedBackupKey(key, includeAccounts: includeAccounts, includeWallpapers: includeWallpapers, includeKeys: includeKeys) else { continue }
             // 超大原始 Data 直接跳过（壁纸 base64 已以字符串形式存于 beans.wallpapers.data，不受影响）
             if let data = value as? Data, data.count > 2 * 1024 * 1024 { continue }
@@ -2598,6 +2669,10 @@ struct SettingsView: View {
             // 逐个校验可序列化，异常类型直接跳过，避免整份备份生成失败
             guard JSONSerialization.isValidJSONObject([key: safe]) else { continue }
             payload[key] = safe
+        }
+        let chartCoverPayload = ChartCoverStore.shared.backupPayload()
+        if !chartCoverPayload.isEmpty {
+            payload["beans.chartCoverData"] = chartCoverPayload
         }
         // 字体文件（Documents/Fonts）随备份一起导出
         if let font = FontManager.exportFontData() {
@@ -2657,10 +2732,15 @@ struct SettingsView: View {
         var count = 0
         for (key, value) in json {
             guard Self.isBackupCandidateKey(key) else { continue }
+            guard key != "beans.chartCoverData" else { continue }
             guard !Self.isExcludedBackupKey(key, includeAccounts: true, includeWallpapers: true) else { continue }
             guard let restored = backupPlistSafe(value) else { continue }
             defaults.set(restored, forKey: key)
             count += 1
+        }
+        if let coverPayload = json["beans.chartCoverData"] as? [String: String] {
+            ChartCoverStore.shared.restore(from: coverPayload)
+            count += coverPayload.count
         }
         defaults.removeObject(forKey: "beans.wallpapers.deleted")
         // 恢复壁纸：写回 beans.wallpapers.* 后重建文件（沙盒路径变化也能恢复）
@@ -2777,6 +2857,7 @@ struct SettingsView: View {
         theme.setBackground("")
         theme.setBackgroundSyncAll(true)
         theme.clearAllWallpapers()
+        ChartCoverStore.shared.clearAll()
         theme.setUIStyle(.liquid)
         LyricBackgroundStore.clear()
         PlatformPreferenceStore.shared.resetToDefault()
