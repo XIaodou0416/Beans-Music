@@ -2007,6 +2007,7 @@ struct PlayerView: View {
 
     // MARK: - 进度区块（可点按 / 拖动的进度条 + 当前时间 / 总时长 + ±15 秒）
 
+    @ViewBuilder
     private func progressBlock(styleOverride: Int? = nil, accentOverride: Color? = nil) -> some View {
         let isAppleMusicStyle = playerButtonStyle == .appleMusic
         let trackColor: Color = isAppleMusicStyle ? .white.opacity(0.18) : palette.secondary.opacity(0.26)
