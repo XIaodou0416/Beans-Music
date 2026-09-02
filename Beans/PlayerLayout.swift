@@ -77,12 +77,14 @@ enum PlayerLayoutStore {
         var migrated = dict
         var needsSave = false
 
-        if migrated[PlayerLayoutPart.vinylAlbum.rawValue] == PlayerLayoutEntry(x: 0, y: -8, scale: 1) {
-            migrated[PlayerLayoutPart.vinylAlbum.rawValue] = PlayerLayoutEntry(x: 0, y: -56, scale: 1)
+        if migrated[PlayerLayoutPart.vinylAlbum.rawValue] == PlayerLayoutEntry(x: 0, y: -8, scale: 1)
+            || migrated[PlayerLayoutPart.vinylAlbum.rawValue] == PlayerLayoutEntry(x: 0, y: -56, scale: 1) {
+            migrated[PlayerLayoutPart.vinylAlbum.rawValue] = PlayerLayoutEntry()
             needsSave = true
         }
-        if migrated[PlayerLayoutPart.vinylLyric.rawValue] == PlayerLayoutEntry(x: 0, y: -10, scale: 1) {
-            migrated[PlayerLayoutPart.vinylLyric.rawValue] = PlayerLayoutEntry(x: -2, y: -56, scale: 1)
+        if migrated[PlayerLayoutPart.vinylLyric.rawValue] == PlayerLayoutEntry(x: 0, y: -10, scale: 1)
+            || migrated[PlayerLayoutPart.vinylLyric.rawValue] == PlayerLayoutEntry(x: -2, y: -56, scale: 1) {
+            migrated[PlayerLayoutPart.vinylLyric.rawValue] = PlayerLayoutEntry()
             needsSave = true
         }
 
@@ -122,9 +124,9 @@ enum PlayerLayoutStore {
         case .topBack, .topTitle, .topFavorite, .cover, .title, .previewLyric:
             return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
         case .vinylAlbum:
-            return PlayerLayoutEntry(x: 0, y: -56, scale: 1)
+            return PlayerLayoutEntry()
         case .vinylLyric:
-            return PlayerLayoutEntry(x: -2, y: -56, scale: 1)
+            return PlayerLayoutEntry()
         case .progress:
             return PlayerLayoutEntry(x: 0, y: 17, scale: 1)
         case .controls:
