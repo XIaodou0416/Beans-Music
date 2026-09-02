@@ -14,12 +14,14 @@ struct ArtistHomeSheet: View {
         self.artistName = artist.name
         self.artistSource = artist.source
         self.artistID = artist.id
+        _artist = State(initialValue: artist)
     }
 
     init(artistName: String, artistSource: SongSource = .netease) {
         self.artistName = artistName
         self.artistSource = artistSource
         self.artistID = nil
+        _artist = State(initialValue: nil)
     }
 
     @State private var artist: Artist?

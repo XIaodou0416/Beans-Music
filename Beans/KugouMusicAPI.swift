@@ -173,14 +173,18 @@ final class KugouMusicAPI {
         var result: [Song] = []
         var seen = Set<String>()
         let pageSize = min(max(limit, 1), 50)
-        let pages = max(1, Int(ceil(Double(min(max(limit, 1), 150)) / Double(pageSize))))
+        // 综合搜索接口经常固定只返回 15 条，即使 pagesize 请求更大；
+        // 不要用 songs.count < pageSize 判断分页结束，否则歌手页永远只得到首屏。
+        let pages = max(1, min(30, Int(ceil(Double(min(max(limit, 1), 300)) / 15.0)) + 2))
         for page in 1...pages {
             let songs = try await searchSongsCompletePage(keyword: keyword, page: page, pageSize: pageSize)
+            guard !songs.isEmpty else { break }
+            let before = result.count
             for song in songs where seen.insert(song.identityKey).inserted {
                 result.append(song)
                 if result.count >= limit { return result }
             }
-            if songs.count < pageSize { break }
+            if result.count == before { break }
         }
         return result
     }

@@ -942,10 +942,12 @@ struct AlbumDetailView: View {
                 result = try await NetEaseAPI.shared.albumSongs(albumID: id)
             case .qq:
                 let songs = try await QQMusicAPI.shared.searchSongs(keyword: album.name, limit: 100)
-                result = songs.filter { $0.album == album.name || $0.album.localizedCaseInsensitiveCompare(album.name) == .orderedSame }
+                let matches = songs.filter { albumNamesMatch($0.album, album.name) }
+                result = matches.isEmpty ? songs : matches
             case .kugou:
                 let songs = try await KugouMusicAPI.shared.searchSongs(keyword: album.name, limit: 100)
-                result = songs.filter { $0.album == album.name || $0.album.localizedCaseInsensitiveCompare(album.name) == .orderedSame }
+                let matches = songs.filter { albumNamesMatch($0.album, album.name) }
+                result = matches.isEmpty ? songs : matches
             }
             await MainActor.run {
                 tracks = result
@@ -958,6 +960,21 @@ struct AlbumDetailView: View {
                 isLoading = false
             }
         }
+    }
+
+    private func albumNamesMatch(_ lhs: String, _ rhs: String) -> Bool {
+        func normalized(_ value: String) -> String {
+            value
+                .lowercased()
+                .replacingOccurrences(of: "（", with: "(")
+                .replacingOccurrences(of: "）", with: ")")
+                .replacingOccurrences(of: "[（(].*?[）)]", with: "", options: .regularExpression)
+                .filter { !$0.isWhitespace && $0 != "-" && $0 != "·" }
+        }
+        let a = normalized(lhs)
+        let b = normalized(rhs)
+        guard !a.isEmpty, !b.isEmpty else { return false }
+        return a == b || a.contains(b) || b.contains(a)
     }
 }
 

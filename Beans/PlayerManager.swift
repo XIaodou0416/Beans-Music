@@ -102,6 +102,9 @@ final class PlayerManager: NSObject, ObservableObject {
     private var thirdPartyRetryExcludedHostsBySong: [String: Set<String>] = [:]
     /// QQ 官方地址返回成功但实际不可播放时，只切换到第三方一次，避免官方/第三方之间循环。
     private var qqThirdPartyFallbackSongKey: String?
+    /// 同一首 QQ 歌曲在一次加载周期内只允许启动一轮第三方解析。
+    /// AVPlayer 可能同时发出 status.failed 和 failedToPlayToEndTime，二者不能各自再扣一次额度。
+    private var qqThirdPartyResolveInFlight = Set<String>()
     private var playbackConfirmationWorkItem: DispatchWorkItem?
     private static let nowPlayingArtworkCache = NSCache<NSURL, UIImage>()
 
@@ -431,7 +434,12 @@ final class PlayerManager: NSObject, ObservableObject {
                 // QQ 官方地址失败后只走 QQ 第三方音源，不跨平台匹配同名歌曲。
                 urlString = try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid)
                 if urlString == nil {
+                    qqThirdPartyResolveInFlight.insert(song.identityKey)
                     (urlString, resolvedThirdParty) = await qqFallback(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
+                    qqThirdPartyResolveInFlight.remove(song.identityKey)
+                    if resolvedThirdParty != nil {
+                        qqThirdPartyFallbackSongKey = song.identityKey
+                    }
                 }
             } else {
                 (urlString, resolvedThirdParty) = await neteaseResolve(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
@@ -622,7 +630,9 @@ final class PlayerManager: NSObject, ObservableObject {
         guard let song = currentSong,
               song.source == .qq,
               let qqMid = song.qqMid,
-              !qqMid.isEmpty else { return false }
+              !qqMid.isEmpty,
+              qqThirdPartyFallbackSongKey != song.identityKey,
+              !qqThirdPartyResolveInFlight.contains(song.identityKey) else { return false }
 
         let generation = loadGeneration
         let resume = progress
@@ -684,9 +694,11 @@ final class PlayerManager: NSObject, ObservableObject {
               let qqMid = song.qqMid,
               !qqMid.isEmpty,
               qqThirdPartyFallbackSongKey != song.identityKey,
+              !qqThirdPartyResolveInFlight.contains(song.identityKey),
               defaults.object(forKey: "beans.enableUnblock") as? Bool ?? true else { return false }
 
         qqThirdPartyFallbackSongKey = song.identityKey
+        qqThirdPartyResolveInFlight.insert(song.identityKey)
         let generation = loadGeneration
         let resume = progress
         let strict = shouldLockOfficialOnly(song)
@@ -697,6 +709,7 @@ final class PlayerManager: NSObject, ObservableObject {
         Task {
             let (_, resolved) = await self.qqFallback(song: song, quality: BeansAudioQuality.current, enableUnblock: true, strict: strict)
             await MainActor.run {
+                self.qqThirdPartyResolveInFlight.remove(song.identityKey)
                 guard generation == self.loadGeneration,
                       self.currentSong?.identityKey == song.identityKey else { return }
                 if let resolved {
