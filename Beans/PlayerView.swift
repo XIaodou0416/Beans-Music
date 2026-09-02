@@ -965,13 +965,18 @@ struct PlayerView: View {
 
             Spacer(minLength: 0)
 
-            compactActionButton(
-                icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
-                active: localLibrary.containsSong(song)
-            ) {
+            Button {
+                BeansHaptics.tap()
                 guard let song else { return }
                 toggleLocalFavorite(song)
+            } label: {
+                Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(localLibrary.containsSong(song) ? albumTitleForeground : albumTitleForeground.opacity(0.78))
+                    .frame(width: 38, height: 38)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
             Menu {
                 Button("定时关闭") { showSleepTimer = true }
