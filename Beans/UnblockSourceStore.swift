@@ -91,6 +91,8 @@ final class UnblockSourceStore: ObservableObject {
         ),
     ]
 
+    static let protectedPresetSourceIDs = Set(paidPresetSources.map(\.id))
+
     @Published var sources: [ThirdPartySource] {
         didSet { save() }
     }
@@ -127,6 +129,18 @@ final class UnblockSourceStore: ObservableObject {
         if let data = try? JSONEncoder().encode(sources) {
             defaults.set(data, forKey: presetsKey)
         }
+    }
+
+    func isProtectedPreset(_ source: ThirdPartySource) -> Bool {
+        source.isPreset || Self.protectedPresetSourceIDs.contains(source.id)
+    }
+
+    @discardableResult
+    func removeSource(id: String) -> Bool {
+        guard !Self.protectedPresetSourceIDs.contains(id) else { return false }
+        let originalCount = sources.count
+        sources.removeAll { $0.id == id }
+        return sources.count != originalCount
     }
 
     private static func seedPaidPresets(into savedSources: [ThirdPartySource]) -> [ThirdPartySource] {

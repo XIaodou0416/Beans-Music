@@ -2381,14 +2381,22 @@ struct SettingsView: View {
                         Toggle("", isOn: sourceEnabledBinding(source.id))
                             .labelsHidden()
                             .tint(Color.beansAmber)
-                        Button {
-                            sourceStore.sources.removeAll { $0.id == source.id }
-                            ToastCenter.shared.show("已移除音源")
-                        } label: {
-                            Image(systemName: "trash")
-                                .foregroundStyle(Color.red.opacity(0.85))
+                        if sourceStore.isProtectedPreset(source) {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.beansComment)
+                                .accessibilityLabel("内置音源不可删除")
+                        } else {
+                            Button {
+                                if sourceStore.removeSource(id: source.id) {
+                                    ToastCenter.shared.show("已移除音源")
+                                }
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundStyle(Color.red.opacity(0.85))
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
