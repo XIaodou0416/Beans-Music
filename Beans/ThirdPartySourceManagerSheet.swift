@@ -16,7 +16,7 @@ struct ThirdPartySourceManagerSheet: View {
     @State private var editingDraft: ThirdPartySourceDraft?
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 LazyVStack(spacing: 14) {
                     headerCard
@@ -44,6 +44,7 @@ struct ThirdPartySourceManagerSheet: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
         .sheet(item: $editingDraft) { draft in
             SourceEditorSheet(draft: draft) { updated in
                 store.upsert(updated.toSource())
@@ -128,8 +129,9 @@ struct ThirdPartySourceManagerSheet: View {
                     ZStack(alignment: .topLeading) {
                         TextEditor(text: $importText)
                             .frame(minHeight: 150)
-                            .scrollContentBackground(.hidden)
                             .padding(8)
+                            .background(Color.clear)
+                            .modifier(ScrollContentBackgroundHidden())
                         if importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Text(beansLocalized("粘贴 JSON / 配置 / 脚本内容", "Paste JSON / config / script text"))
                                 .font(BeansFont.appFont(13))
@@ -563,7 +565,7 @@ private struct SourceEditorSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(spacing: 14) {
                     editorCard
@@ -587,6 +589,7 @@ private struct SourceEditorSheet: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     private var editorCard: some View {
@@ -633,8 +636,9 @@ private struct SourceEditorSheet: View {
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $draft.headersText)
                         .frame(minHeight: 140)
-                        .scrollContentBackground(.hidden)
                         .padding(8)
+                        .background(Color.clear)
+                        .modifier(ScrollContentBackgroundHidden())
                     if draft.headersText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(beansLocalized("每行一个 key: value", "One key: value per line"))
                             .font(BeansFont.appFont(12))
@@ -664,6 +668,16 @@ private struct SourceEditorSheet: View {
             BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .beansCardShadow(radius: 8, y: 3)
+    }
+}
+
+private struct ScrollContentBackgroundHidden: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content.scrollContentBackground(.hidden)
+        } else {
+            content
+        }
     }
 }
 
