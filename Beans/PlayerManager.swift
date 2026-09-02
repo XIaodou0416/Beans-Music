@@ -183,7 +183,9 @@ final class PlayerManager: NSObject, ObservableObject {
             buildPlayOrder()
         }
         savePersistedPlaybackState()
-        ToastCenter.shared.show("已加入下一首播放")
+        Task { @MainActor in
+            ToastCenter.shared.show("已加入下一首播放")
+        }
     }
 
     func togglePlayPause() {
