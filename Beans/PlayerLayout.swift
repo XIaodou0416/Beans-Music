@@ -16,6 +16,7 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
     case controls = "控制行"
     case loop = "循环按钮"
     case previous = "上一首"
+    case playPause = "播放暂停"
     case next = "下一首"
     case queue = "播放列表"
     case lyric = "歌词"
@@ -133,6 +134,8 @@ enum PlayerLayoutStore {
             return PlayerLayoutEntry(x: 0, y: 14, scale: 1.05)
         case .loop:
             return PlayerLayoutEntry(x: -5, y: 0, scale: 1.15)
+        case .playPause:
+            return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
         case .queue:
             return PlayerLayoutEntry(x: 5, y: 0, scale: 1.15)
         case .previous, .next:

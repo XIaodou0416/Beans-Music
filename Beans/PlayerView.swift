@@ -2247,6 +2247,7 @@ struct PlayerView: View {
                 .clipShape(Circle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+        .modifier(Layoutable(part: .playPause, enabled: layoutMode, data: $layoutData))
     }
 
 
