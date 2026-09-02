@@ -444,9 +444,6 @@ struct PlayerView: View {
                     }
                 }
                 .offset(y: vinylDismissDragOffset)
-                .scaleEffect(1 - min(vinylDismissDragOffset / 900, 0.035))
-                .opacity(1 - min(vinylDismissDragOffset / 520, 0.22))
-                .simultaneousGesture(vinylCloseGesture)
             } else {
                 GeometryReader { geo in
                     ZStack {
@@ -1790,13 +1787,17 @@ struct PlayerView: View {
     }
 
     private var vinylTopIndicator: some View {
-        Capsule()
-            .fill(.white.opacity(0.7))
-            .frame(width: 42, height: 5)
-            .frame(width: 64, height: 29)
-            .contentShape(Rectangle())
-            .gesture(vinylCloseGesture)
-            .accessibilityLabel("收起播放器")
+        ZStack(alignment: .top) {
+            Color.clear
+            Capsule()
+                .fill(.white.opacity(0.7))
+                .frame(width: 44, height: 5)
+                .padding(.top, 1)
+        }
+        .frame(width: 180, height: 82)
+        .contentShape(Rectangle())
+        .gesture(vinylCloseGesture)
+        .accessibilityLabel("收起播放器")
     }
 
     // MARK: - 空态兜底（歌曲数据为空时不出现空白页）
@@ -1867,9 +1868,35 @@ struct PlayerView: View {
             deckGrabber
         }
         .padding(.horizontal, 24)
-        .padding(.top, 0)
-        .padding(.bottom, bottomInset)
+        .padding(.top, 12)
+        .padding(.bottom, max(12, bottomInset + 4))
         .frame(maxWidth: .infinity)
+        .background {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.black.opacity(0.20),
+                                    Color.black.opacity(0.08),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .blendMode(.multiply)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.11), lineWidth: 0.8)
+                }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .padding(.horizontal, 14)
+        .padding(.bottom, 6)
     }
 
     /// 底部指示线：只有在指示线附近上滑才呼出评论区（避免误触控制按钮）

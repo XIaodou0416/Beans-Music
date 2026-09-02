@@ -1249,6 +1249,7 @@ struct SettingsView: View {
     @State private var showRestoreConfirm = false
     @State private var showSourceHelp = false
     @State private var showThirdPartyKeys = true
+    @State private var showSourceManager = false
     @State private var backupExpanded = false
     @State private var backupIncludeAccounts = false
     @State private var backupIncludeWallpapers = false
@@ -1474,6 +1475,10 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showLogViewer) {
             LogViewerSheet(importedText: nil)
+                .environmentObject(theme)
+        }
+        .sheet(isPresented: $showSourceManager) {
+            ThirdPartySourceManagerSheet()
                 .environmentObject(theme)
         }
         .fullScreenCover(isPresented: $showRestorePicker) {
@@ -2298,10 +2303,10 @@ struct SettingsView: View {
                             .foregroundStyle(Color.beansAmber)
                             .frame(width: 28)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("第三方播放会员歌提醒")
+                            Text(beansLocalized("第三方播放会员歌提醒", "VIP song notice for third-party playback"))
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                                Text("未识别到对应会员且会员歌曲通过第三方音源播放成功时提示")
+                                Text(beansLocalized("未识别到对应会员且会员歌曲通过第三方音源播放成功时提示", "Show a notice when a VIP song is successfully played by a third-party source without matching membership."))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -2314,17 +2319,33 @@ struct SettingsView: View {
                     Image(systemName: "shippingbox.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(Color.beansAmber)
-                    Text("第三方音源")
+                    Text(beansLocalized("第三方音源", "Third-party Sources"))
                         .font(BeansFont.appFont(13, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     Spacer()
-                    Text("\(presetSourceCount) 个")
+                    Text(beansLocalized("\(presetSourceCount) 个", "\(presetSourceCount) sources"))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
 
+                Button {
+                    showSourceManager = true
+                    BeansHaptics.tap()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.and.pencil")
+                        Text(beansLocalized("管理 / 导入音源", "Manage / Import Sources"))
+                    }
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.black, in: Capsule())
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+
                 HStack {
-                    Text("第三方音源密钥")
+                    Text(beansLocalized("第三方音源密钥", "Third-party source key"))
                         .font(BeansFont.appFont(13, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     Spacer()
@@ -2338,9 +2359,9 @@ struct SettingsView: View {
                 HStack(spacing: 8) {
                     Group {
                         if showThirdPartyKeys {
-                            TextField("填写你购买的专属密钥", text: $thirdPartyAPIKeys)
+                            TextField(beansLocalized("填写你购买的专属密钥", "Enter your purchased private key"), text: $thirdPartyAPIKeys)
                         } else {
-                            SecureField("填写你购买的专属密钥", text: $thirdPartyAPIKeys)
+                            SecureField(beansLocalized("填写你购买的专属密钥", "Enter your purchased private key"), text: $thirdPartyAPIKeys)
                         }
                     }
                     .font(BeansFont.appFont(13))
@@ -2361,44 +2382,10 @@ struct SettingsView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
-                Text("输入后才会启用第三方音源。密钥只保存在本机，不会上传到 Beans 服务器。")
+                Text(beansLocalized("输入后才会启用第三方音源。密钥只保存在本机，不会上传到 Beans 服务器。", "Third-party sources are only enabled after you enter a key. The key is stored locally and never uploaded to Beans servers."))
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
                     .frame(maxWidth: .infinity, alignment: .leading)
-
-                ForEach(sourceStore.sources) { source in
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(source.name)
-                                .font(BeansFont.appFont(13, .medium))
-                                .foregroundStyle(Color.beansLabel)
-                                .lineLimit(1)
-                            Text("自定义接口 · \(source.kind.uppercased())")
-                                .font(BeansFont.appFont(10))
-                                .foregroundStyle(Color.beansComment)
-                        }
-                        Spacer()
-                        Toggle("", isOn: sourceEnabledBinding(source.id))
-                            .labelsHidden()
-                            .tint(Color.beansAmber)
-                        if sourceStore.isProtectedPreset(source) {
-                            Image(systemName: "lock.fill")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Color.beansComment)
-                                .accessibilityLabel("内置音源不可删除")
-                        } else {
-                            Button {
-                                if sourceStore.removeSource(id: source.id) {
-                                    ToastCenter.shared.show("已移除音源")
-                                }
-                            } label: {
-                                Image(systemName: "trash")
-                                    .foregroundStyle(Color.red.opacity(0.85))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
             }
             .padding(16)
             .background {
@@ -2408,16 +2395,6 @@ struct SettingsView: View {
             .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-    }
-
-    private func sourceEnabledBinding(_ id: String) -> Binding<Bool> {
-        Binding(
-            get: { sourceStore.sources.first(where: { $0.id == id })?.enabled ?? false },
-            set: { value in
-                guard let index = sourceStore.sources.firstIndex(where: { $0.id == id }) else { return }
-                sourceStore.sources[index].enabled = value
-            }
-        )
     }
 
     private var chartCoverSection: some View {

@@ -114,12 +114,34 @@ final class UnblockSourceStore: ObservableObject {
             savedSources = []
         }
 
-        // 只保留当前支持的预设，旧版导入脚本不再参与播放，避免重复请求。
+        // 既保留当前支持的预设，也保留用户导入/创建的自定义音源。
+        // 预设项按内置模板更新字段，自定义项保持原样。
         let supportedPresetIDs = Set(Self.paidPresetSources.map(\.id))
-        let existingPresets = savedSources.filter {
-            $0.isPreset && supportedPresetIDs.contains($0.id)
+        var normalized: [ThirdPartySource] = []
+        var seen = Set<String>()
+        for source in savedSources {
+            if source.isPreset {
+                guard supportedPresetIDs.contains(source.id) else { continue }
+                guard let preset = Self.paidPresetSources.first(where: { $0.id == source.id }) else { continue }
+                var updated = preset
+                updated.name = source.name.isEmpty ? preset.name : source.name
+                updated.kind = source.kind.isEmpty ? preset.kind : source.kind
+                updated.template = source.template.isEmpty ? preset.template : source.template
+                updated.urlPath = source.urlPath.isEmpty ? preset.urlPath : source.urlPath
+                updated.headers = source.headers.isEmpty ? preset.headers : source.headers
+                updated.enabled = source.enabled
+                updated.isPreset = true
+                if seen.insert(updated.id).inserted {
+                    normalized.append(updated)
+                }
+            } else if seen.insert(source.id).inserted {
+                normalized.append(source)
+            }
         }
-        sources = Self.seedPaidPresets(into: existingPresets)
+        for preset in Self.paidPresetSources where !seen.contains(preset.id) {
+            normalized.append(preset)
+        }
+        sources = normalized
         defaults.removeObject(forKey: legacyCustomKey)
         defaults.removeObject(forKey: legacyLXKey)
         save()
@@ -135,26 +157,61 @@ final class UnblockSourceStore: ObservableObject {
         source.isPreset || Self.protectedPresetSourceIDs.contains(source.id)
     }
 
+    func addSource(_ source: ThirdPartySource) {
+        upsert(source)
+    }
+
+    func addSources(_ newSources: [ThirdPartySource]) {
+        guard !newSources.isEmpty else { return }
+        var merged = sources
+        for source in newSources {
+            if let index = merged.firstIndex(where: { $0.id == source.id }) {
+                merged[index] = source
+            } else {
+                merged.append(source)
+            }
+        }
+        sources = merged
+        save()
+    }
+
+    func upsert(_ source: ThirdPartySource) {
+        var merged = sources
+        if let index = merged.firstIndex(where: { $0.id == source.id }) {
+            merged[index] = source
+        } else {
+            merged.append(source)
+        }
+        sources = merged
+        save()
+    }
+
+    func moveSource(id: String, by offset: Int) {
+        guard let index = sources.firstIndex(where: { $0.id == id }) else { return }
+        let target = min(max(0, index + offset), max(0, sources.count - 1))
+        guard target != index else { return }
+        var reordered = sources
+        let item = reordered.remove(at: index)
+        reordered.insert(item, at: target)
+        sources = reordered
+        save()
+    }
+
+    func updateEnabled(id: String, enabled: Bool) {
+        guard let index = sources.firstIndex(where: { $0.id == id }) else { return }
+        var updated = sources
+        updated[index].enabled = enabled
+        sources = updated
+        save()
+    }
+
     @discardableResult
     func removeSource(id: String) -> Bool {
         guard !Self.protectedPresetSourceIDs.contains(id) else { return false }
         let originalCount = sources.count
         sources.removeAll { $0.id == id }
+        save()
         return sources.count != originalCount
-    }
-
-    private static func seedPaidPresets(into savedSources: [ThirdPartySource]) -> [ThirdPartySource] {
-        var seeded = savedSources
-        for preset in paidPresetSources {
-            if let index = seeded.firstIndex(where: { $0.id == preset.id }) {
-                var updated = preset
-                updated.enabled = seeded[index].enabled
-                seeded[index] = updated
-            } else {
-                seeded.append(preset)
-            }
-        }
-        return seeded
     }
 
 }

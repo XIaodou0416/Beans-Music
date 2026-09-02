@@ -9,6 +9,21 @@ private struct ReferenceLyricCenterKey: PreferenceKey {
     }
 }
 
+private struct ReferencePlaybackPresentationMetrics {
+    static let indicatorTopSpacing: CGFloat = 1
+    static let indicatorWidth: CGFloat = 44
+    static let indicatorHeight: CGFloat = 5
+    static let indicatorHitWidth: CGFloat = 180
+    static let indicatorHitHeight: CGFloat = 82
+    static let dismissDistance: CGFloat = 110
+    static let dismissPrediction: CGFloat = 190
+    static let dismissAnimation = Animation.spring(
+        response: 0.48,
+        dampingFraction: 0.86,
+        blendDuration: 0.08
+    )
+}
+
 struct ReferencePlaybackView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
@@ -75,13 +90,9 @@ struct ReferencePlaybackView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .animation(.easeInOut(duration: 0.22), value: showLyrics)
 
-                    playbackControls
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, max(14, geometry.safeAreaInsets.bottom + 4))
+                    playbackControls(bottomInset: geometry.safeAreaInsets.bottom)
                 }
                 .offset(y: dismissDragOffset)
-                .scaleEffect(1 - min(dismissDragOffset / 900, 0.035))
-                .opacity(1 - min(dismissDragOffset / 520, 0.22))
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
@@ -121,14 +132,20 @@ struct ReferencePlaybackView: View {
     }
 
     private var topIndicator: some View {
-        Capsule()
-            .fill(.white.opacity(0.7))
-            .frame(width: 42, height: 5)
-            .frame(width: 64, height: 29)
-            .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.top)))
-            .contentShape(Rectangle())
-            .gesture(closeGesture)
-            .accessibilityLabel("收起播放器")
+        ZStack(alignment: .top) {
+            Color.clear
+            Capsule()
+                .fill(.white.opacity(0.7))
+                .frame(width: ReferencePlaybackPresentationMetrics.indicatorWidth,
+                       height: ReferencePlaybackPresentationMetrics.indicatorHeight)
+                .padding(.top, ReferencePlaybackPresentationMetrics.indicatorTopSpacing)
+        }
+        .frame(width: ReferencePlaybackPresentationMetrics.indicatorHitWidth,
+               height: ReferencePlaybackPresentationMetrics.indicatorHitHeight)
+        .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.top)))
+        .contentShape(Rectangle())
+        .gesture(closeGesture)
+        .accessibilityLabel("收起播放器")
     }
 
     private func coverPage(size: CGSize) -> some View {
@@ -193,7 +210,6 @@ struct ReferencePlaybackView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 32)
-        .simultaneousGesture(closeGesture)
     }
 
     private var compactTrackHeader: some View {
@@ -345,7 +361,7 @@ struct ReferencePlaybackView: View {
         }
     }
 
-    private var playbackControls: some View {
+    private func playbackControls(bottomInset: CGFloat) -> some View {
         VStack(spacing: 15) {
             ReferenceScrubber()
                 .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.progress)))
@@ -406,6 +422,35 @@ struct ReferencePlaybackView: View {
             .frame(maxWidth: 420)
             .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.actions)))
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, max(14, bottomInset + 4))
+        .background {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.black.opacity(0.22),
+                                    Color.black.opacity(0.10),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .blendMode(.multiply)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.8)
+                }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
         .gesture(commentsGesture)
     }
 
@@ -584,9 +629,10 @@ struct ReferencePlaybackView: View {
             .onEnded { value in
                 let translation = max(value.translation.height, 0)
                 let prediction = max(value.predictedEndTranslation.height, 0)
-                if translation > 110 || prediction > 190 {
+                if translation > ReferencePlaybackPresentationMetrics.dismissDistance
+                    || prediction > ReferencePlaybackPresentationMetrics.dismissPrediction {
                     BeansHaptics.medium()
-                    withAnimation(.interactiveSpring(response: 0.48, dampingFraction: 0.86, blendDuration: 0.08)) {
+                    withAnimation(ReferencePlaybackPresentationMetrics.dismissAnimation) {
                         dismissDragOffset = max(translation, 180)
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
