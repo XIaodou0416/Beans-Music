@@ -970,11 +970,19 @@ struct PlayerView: View {
                 guard let song else { return }
                 toggleLocalFavorite(song)
             } label: {
-                Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(localLibrary.containsSong(song) ? albumTitleForeground : albumTitleForeground.opacity(0.78))
-                    .frame(width: 38, height: 38)
-                    .contentShape(Rectangle())
+                if localLibrary.containsSong(song) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(albumTitleForeground)
+                        .frame(width: 38, height: 38)
+                        .contentShape(Rectangle())
+                } else {
+                    Image(systemName: "heart")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(albumTitleForeground.opacity(0.78))
+                        .frame(width: 38, height: 38)
+                        .contentShape(Rectangle())
+                }
             }
             .buttonStyle(.plain)
 
