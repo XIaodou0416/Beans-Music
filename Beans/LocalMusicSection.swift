@@ -168,13 +168,13 @@ struct LocalMusicSection: View {
                 if let liked {
                     let neteaseSongs = try await NetEaseAPI.shared.playlistTracks(id: liked.id)
                     songs.append(contentsOf: neteaseSongs)
-                    details.append("网易云 \(neteaseSongs.count) 首")
+                    details.append(platformSongCount("网易云", neteaseSongs.count))
                 } else {
-                    details.append("网易云未找到喜欢歌单")
+                    details.append(NSLocalizedString("网易云未找到喜欢歌单", comment: ""))
                 }
             } catch {
                 BeansLogger.shared.log("三平台同步：网易云失败 \(error.localizedDescription)", level: .error)
-                details.append("网易云请求失败")
+                details.append(NSLocalizedString("网易云请求失败", comment: ""))
             }
         } else if targets.contains(.netease) {
             details.append(NSLocalizedString("网易云未登录", comment: ""))
@@ -183,16 +183,16 @@ struct LocalMusicSection: View {
             let cachedIDs = Set(songs.filter { $0.source == .netease }.map(\.id))
             let cached = favorites.neteaseFavoriteSongs.filter { !cachedIDs.contains($0.id) }
             songs.append(contentsOf: cached)
-            if !cached.isEmpty { details.append("网易云缓存补充 \(cached.count) 首") }
+            if !cached.isEmpty { details.append(String(format: NSLocalizedString("网易云缓存补充 %d 首", comment: ""), cached.count)) }
         }
         if targets.contains(.qq), QQMusicAuth.shared.isLoggedIn {
             do {
                 let qqSongs = try await QQMusicAPI.shared.favoriteSongs(limit: 0)
                 songs.append(contentsOf: qqSongs)
-                details.append("QQ音乐 \(qqSongs.count) 首")
+                details.append(platformSongCount("QQ音乐", qqSongs.count))
             } catch {
                 BeansLogger.shared.log("三平台同步：QQ音乐失败 \(error.localizedDescription)", level: .error)
-                details.append("QQ音乐请求失败")
+                details.append(NSLocalizedString("QQ音乐请求失败", comment: ""))
             }
         } else if targets.contains(.qq) {
             details.append(NSLocalizedString("QQ音乐未登录", comment: ""))
@@ -208,13 +208,13 @@ struct LocalMusicSection: View {
                 if let liked {
                     let kugouSongs = try await KugouMusicAPI.shared.playlistSongs(listID: liked.id)
                     songs.append(contentsOf: kugouSongs)
-                    details.append("酷狗音乐 \(kugouSongs.count) 首")
+                    details.append(platformSongCount("酷狗音乐", kugouSongs.count))
                 } else {
-                    details.append("酷狗音乐未找到喜欢歌单")
+                    details.append(NSLocalizedString("酷狗音乐未找到喜欢歌单", comment: ""))
                 }
             } catch {
                 BeansLogger.shared.log("三平台同步：酷狗音乐失败 \(error.localizedDescription)", level: .error)
-                details.append("酷狗音乐请求失败")
+                details.append(NSLocalizedString("酷狗音乐请求失败", comment: ""))
             }
         } else if targets.contains(.kugou) {
             details.append(NSLocalizedString("酷狗音乐未登录", comment: ""))
@@ -229,8 +229,12 @@ struct LocalMusicSection: View {
             .joined(separator: " + ") + "喜欢"
         let added = store.syncSongs(unique, intoPlaylistNamed: playlistName)
         syncing = false
-        syncMessage = details.joined(separator: "，") + "；合计 \(unique.count) 首"
-        ToastCenter.shared.show(unique.isEmpty ? "没有获取到该平台的喜欢歌曲" : "已同步 \(unique.count) 首，新增 \(added) 首到本地歌单“\(playlistName)”")
+        syncMessage = details.joined(separator: NSLocalizedString("，", comment: "")) + String(format: NSLocalizedString("；合计 %d 首", comment: ""), unique.count)
+        ToastCenter.shared.show(unique.isEmpty ? NSLocalizedString("没有获取到该平台的喜欢歌曲", comment: "") : String(format: NSLocalizedString("已同步 %d 首，新增 %d 首到本地歌单“%@”", comment: ""), unique.count, added, playlistName))
+    }
+
+    private func platformSongCount(_ platform: String, _ count: Int) -> String {
+        String(format: NSLocalizedString("%@ %d 首", comment: ""), NSLocalizedString(platform, comment: ""), count)
     }
 }
 

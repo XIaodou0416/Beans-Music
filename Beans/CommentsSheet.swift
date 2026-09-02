@@ -4,13 +4,20 @@ import SwiftUI
 
 func beansRelativeTime(_ date: Date) -> String {
     let interval = Date().timeIntervalSince(date)
-    if interval < 60 { return "刚刚" }
-    if interval < 3600 { return "\(Int(interval / 60)) 分钟前" }
-    if interval < 86400 { return "\(Int(interval / 3600)) 小时前" }
-    if interval < 86400 * 30 { return "\(Int(interval / 86400)) 天前" }
+    if interval < 60 { return NSLocalizedString("刚刚", comment: "") }
+    if interval < 3600 { return String(format: NSLocalizedString("%d 分钟前", comment: ""), Int(interval / 60)) }
+    if interval < 86400 { return String(format: NSLocalizedString("%d 小时前", comment: ""), Int(interval / 3600)) }
+    if interval < 86400 * 30 { return String(format: NSLocalizedString("%d 天前", comment: ""), Int(interval / 86400)) }
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd"
     return formatter.string(from: date)
+}
+
+private func beansCommentCountText(songName: String, platform: String? = nil, count: Int) -> String {
+    if let platform {
+        return String(format: NSLocalizedString("《%@》 · %@ %d 条评论", comment: ""), songName, NSLocalizedString(platform, comment: ""), count)
+    }
+    return String(format: NSLocalizedString("《%@》 · 共 %d 条评论", comment: ""), songName, count)
 }
 
 // MARK: - 评论区
@@ -68,7 +75,7 @@ struct CommentsSheet: View {
     private func neteaseCommentList(_ page: NetEaseAPI.SongCommentPage) -> some View {
         List {
             Section {
-                Text("《\(song.name)》 · 共 \(page.total) 条评论")
+                Text(beansCommentCountText(songName: song.name, count: page.total))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
             }
@@ -168,9 +175,7 @@ struct CommentsSheet: View {
             } else {
                 List {
                     Section {
-                        Text(qqTotal > 0
-                            ? "《\(song.name)》 · QQ 音乐 \(qqTotal) 条评论"
-                            : "《\(song.name)》 · QQ 音乐 \(qqComments.count) 条评论")
+                        Text(beansCommentCountText(songName: song.name, platform: "QQ 音乐", count: qqTotal > 0 ? qqTotal : qqComments.count))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                     }
@@ -213,9 +218,7 @@ struct CommentsSheet: View {
             } else {
                 List {
                     Section {
-                        Text(kugouTotal > 0
-                            ? "《\(song.name)》 · 酷狗音乐 \(kugouTotal) 条评论"
-                            : "《\(song.name)》 · 酷狗音乐 \(kugouComments.count) 条评论")
+                        Text(beansCommentCountText(songName: song.name, platform: "酷狗音乐", count: kugouTotal > 0 ? kugouTotal : kugouComments.count))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                     }

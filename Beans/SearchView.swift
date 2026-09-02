@@ -591,7 +591,7 @@ struct SearchView: View {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         HStack {
-                            Text("找到 \(artistResults.count) 位 · \(provider.rawValue)")
+                            Text(String(format: NSLocalizedString("找到 %d 位 · %@", comment: ""), artistResults.count, NSLocalizedString(provider.rawValue, comment: "")))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
                             Spacer()
@@ -659,7 +659,7 @@ struct SearchView: View {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         HStack {
-                            Text("找到 \(albumResults.count) 张 · \(provider.rawValue)")
+                            Text(String(format: NSLocalizedString("找到 %d 张 · %@", comment: ""), albumResults.count, NSLocalizedString(provider.rawValue, comment: "")))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
                             Spacer()

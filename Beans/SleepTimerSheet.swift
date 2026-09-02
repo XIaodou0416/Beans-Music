@@ -16,7 +16,7 @@ struct SleepTimerSheet: View {
                 if player.sleepTimerRemaining > 0 {
                     Section("当前定时") {
                         Label {
-                            Text("剩余 \(player.sleepTimerFormatted ?? "0:00")")
+                            Text(String(format: NSLocalizedString("剩余 %@", comment: ""), player.sleepTimerFormatted ?? "0:00"))
                         } icon: {
                             Image(systemName: "moon.zzz.fill")
                                 .foregroundStyle(Color.beansAmber)
@@ -30,7 +30,7 @@ struct SleepTimerSheet: View {
                             dismiss()
                         } label: {
                             HStack {
-                                Text("\(minutes) 分钟后关闭")
+                                Text(String(format: NSLocalizedString("%d 分钟后关闭", comment: ""), minutes))
                                     .foregroundStyle(Color.beansLabel)
                                 Spacer()
                                 if isActive(minutes) {
@@ -52,7 +52,7 @@ struct SleepTimerSheet: View {
                         HStack {
                             Text("自定义")
                             Spacer()
-                            Text("\(customMinutes) 分钟")
+                            Text(String(format: NSLocalizedString("%d 分钟", comment: ""), customMinutes))
                                 .foregroundStyle(Color.beansComment)
                         }
                     }
@@ -60,7 +60,7 @@ struct SleepTimerSheet: View {
                         player.startSleepTimer(minutes: customMinutes)
                         dismiss()
                     } label: {
-                        Label("\(customMinutes) 分钟后关闭", systemImage: "timer")
+                        Label(String(format: NSLocalizedString("%d 分钟后关闭", comment: ""), customMinutes), systemImage: "timer")
                             .foregroundStyle(Color.beansLabel)
                     }
                 }
