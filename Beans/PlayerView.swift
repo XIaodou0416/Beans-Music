@@ -1871,32 +1871,6 @@ struct PlayerView: View {
         .padding(.top, 12)
         .padding(.bottom, max(12, bottomInset + 4))
         .frame(maxWidth: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.black.opacity(0.20),
-                                    Color.black.opacity(0.08),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .blendMode(.multiply)
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.11), lineWidth: 0.8)
-                }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .padding(.horizontal, 14)
-        .padding(.bottom, 6)
     }
 
     /// 底部指示线：只有在指示线附近上滑才呼出评论区（避免误触控制按钮）

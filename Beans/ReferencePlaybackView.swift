@@ -425,32 +425,6 @@ struct ReferencePlaybackView: View {
         .padding(.horizontal, 24)
         .padding(.top, 10)
         .padding(.bottom, max(14, bottomInset + 4))
-        .background {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.black.opacity(0.22),
-                                    Color.black.opacity(0.10),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .blendMode(.multiply)
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.8)
-                }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 6)
         .gesture(commentsGesture)
     }
 
