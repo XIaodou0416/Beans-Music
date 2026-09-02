@@ -437,9 +437,6 @@ final class PlayerManager: NSObject, ObservableObject {
                     qqThirdPartyResolveInFlight.insert(song.identityKey)
                     (urlString, resolvedThirdParty) = await qqFallback(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
                     qqThirdPartyResolveInFlight.remove(song.identityKey)
-                    if resolvedThirdParty != nil {
-                        qqThirdPartyFallbackSongKey = song.identityKey
-                    }
                 }
             } else {
                 (urlString, resolvedThirdParty) = await neteaseResolve(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
@@ -649,6 +646,7 @@ final class PlayerManager: NSObject, ObservableObject {
             return false
         }
         thirdPartyRetryExcludedHostsBySong[song.identityKey] = excludedHosts
+        qqThirdPartyResolveInFlight.insert(song.identityKey)
         BeansLogger.shared.log(
             "第三方播放地址失效，重新解析一次：歌曲=\(song.name)｜系统=\(UIDevice.current.systemVersion)｜排除域名=\(excludedHosts.sorted().joined(separator: ","))",
             level: .debug
@@ -662,6 +660,8 @@ final class PlayerManager: NSObject, ObservableObject {
                 excludedHosts: excludedHosts
             )
             await MainActor.run {
+                self.qqThirdPartyResolveInFlight.remove(song.identityKey)
+                self.qqThirdPartyFallbackSongKey = song.identityKey
                 guard generation == self.loadGeneration,
                       self.currentSong?.identityKey == song.identityKey else { return }
                 if let resolved {
