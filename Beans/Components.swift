@@ -8,7 +8,7 @@ func beansSongCountText(_ count: Int) -> String {
 }
 
 func beansLocalSongCountText(_ count: Int) -> String {
-    String(format: NSLocalizedString("%d 首 · 本机", comment: ""), count)
+    beansLocalized("\(count) 首 · 本机", "\(count) songs · On device")
 }
 
 func beansTimeString(_ seconds: Double) -> String {

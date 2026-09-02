@@ -232,7 +232,7 @@ struct LibraryView: View {
 
     private var librarySubtitle: String {
         switch source {
-        case .netease: return "网易云音乐歌单"
+        case .netease: return beansLocalized("网易云音乐歌单", "NetEase Cloud Music Playlists")
         case .qq: return "QQ 音乐收藏与歌单"
         case .kugou: return "酷狗云端歌单"
         }

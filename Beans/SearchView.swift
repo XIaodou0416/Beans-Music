@@ -262,7 +262,7 @@ struct SearchView: View {
             SearchTextField(
                 text: $keyword,
                 controller: searchController,
-                placeholder: "搜索歌曲、歌手、专辑",
+                placeholder: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
                 textColor: UIColor.beansLabel,
                 onSubmit: { text in
                     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -531,7 +531,7 @@ struct SearchView: View {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         HStack {
-                            Text(String(format: NSLocalizedString("找到 %d 首 · %@", comment: ""), songResults.count, NSLocalizedString(provider.rawValue, comment: "")))
+                            Text(beansLocalized("找到 \(songResults.count) 首 · \(provider.rawValue)", "Found \(songResults.count) songs · \(beansPlatformName(provider))"))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
                             Spacer()
@@ -591,7 +591,7 @@ struct SearchView: View {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         HStack {
-                            Text(String(format: NSLocalizedString("找到 %d 位 · %@", comment: ""), artistResults.count, NSLocalizedString(provider.rawValue, comment: "")))
+                            Text(beansLocalized("找到 \(artistResults.count) 位 · \(provider.rawValue)", "Found \(artistResults.count) artists · \(beansPlatformName(provider))"))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
                             Spacer()
@@ -659,7 +659,7 @@ struct SearchView: View {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         HStack {
-                            Text(String(format: NSLocalizedString("找到 %d 张 · %@", comment: ""), albumResults.count, NSLocalizedString(provider.rawValue, comment: "")))
+                            Text(beansLocalized("找到 \(albumResults.count) 张 · \(provider.rawValue)", "Found \(albumResults.count) albums · \(beansPlatformName(provider))"))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
                             Spacer()

@@ -408,7 +408,7 @@ struct LocalPlaylistDetailSheet: View {
                     }
                     .beansScrollContentBackgroundHidden()
                     .listStyle(.plain)
-                    .searchable(text: $playlistSearchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索本地歌单歌曲")
+                    .searchable(text: $playlistSearchText, placement: .navigationBarDrawer(displayMode: .always), prompt: LocalizedStringKey("搜索本地歌单歌曲"))
                 } else {
                     EmptyStateView(icon: "music.note.list", text: "歌单不存在或已删除")
                 }
@@ -564,7 +564,7 @@ struct LocalSearchAddSheet: View {
         BeansNavigationStack {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
-                    TextField("输入歌名搜索", text: $keyword)
+                    TextField(beansLocalized("输入歌名搜索", "Search by song title"), text: $keyword)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)

@@ -1680,7 +1680,7 @@ private struct HomeUnifiedSearchSheet: View {
             SearchTextField(
                 text: $keyword,
                 controller: searchController,
-                placeholder: "搜索三平台歌曲",
+                placeholder: beansLocalized("搜索三平台歌曲", "Search across three platforms"),
                 textColor: UIColor.beansLabel,
                 onSubmit: { text in
                     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1757,7 +1757,7 @@ private struct HomeUnifiedSearchSheet: View {
             ScrollView {
                 LazyVStack(spacing: 8) {
                     HStack {
-                        Text(String(format: NSLocalizedString("找到 %d 首 · 全平台", comment: ""), results.count))
+                        Text(beansLocalized("找到 \(results.count) 首 · 全平台", "Found \(results.count) songs · All Platforms"))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                         Spacer()

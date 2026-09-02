@@ -3297,7 +3297,7 @@ struct PlayerSettingsSheet: View {
                     .font(BeansFont.appFont(13))
                     .foregroundStyle(Color.beansLabel)
                 Spacer()
-                Text(valueText)
+                Text(beansLocalizedSettingValue(valueText))
                     .font(BeansFont.appFont(12, .semibold))
                     .foregroundStyle(Color.beansAmber)
             }

@@ -92,8 +92,8 @@ struct ArtistHomeSheet: View {
                     .truncationMode(.tail)
                     .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 Text(artistSource == .netease
-                     ? String(format: NSLocalizedString("热门歌曲 %d 首 · 专辑 %d 张", comment: ""), hotSongs.count, albums.count)
-                     : String(format: NSLocalizedString("热门歌曲 %d 首", comment: ""), hotSongs.count))
+                     ? beansLocalized("热门歌曲 \(hotSongs.count) 首 · 专辑 \(albums.count) 张", "Popular songs: \(hotSongs.count) · Albums: \(albums.count)")
+                     : beansLocalized("热门歌曲 \(hotSongs.count) 首", "Popular songs: \(hotSongs.count)"))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
             }
@@ -145,7 +145,7 @@ struct ArtistHomeSheet: View {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.beansComment)
-                    TextField("搜索歌手歌曲", text: $searchText)
+                    TextField(beansLocalized("搜索歌手歌曲", "Search artist songs"), text: $searchText)
                         .font(BeansFont.appFont(14))
                         .autocorrectionDisabled()
                     if !searchText.isEmpty {

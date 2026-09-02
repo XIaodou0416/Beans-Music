@@ -100,7 +100,7 @@ struct PlaylistView: View {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.beansComment)
-                    TextField("搜索歌单内歌曲", text: $searchText)
+                    TextField(beansLocalized("搜索歌单内歌曲", "Search songs in playlist"), text: $searchText)
                         .font(BeansFont.appFont(14))
                         .autocorrectionDisabled()
                     if !searchText.isEmpty {
