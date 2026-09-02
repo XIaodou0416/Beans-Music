@@ -109,6 +109,16 @@ struct LocalMusicSection: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
+                            Button {
+                                store.movePlaylist(id: playlist.id, offset: -1)
+                            } label: {
+                                Label("移到前面", systemImage: "arrow.up")
+                            }
+                            Button {
+                                store.movePlaylist(id: playlist.id, offset: 1)
+                            } label: {
+                                Label("移到后面", systemImage: "arrow.down")
+                            }
                             Button(role: .destructive) {
                                 BeansHaptics.tap()
                                 store.deletePlaylist(id: playlist.id)

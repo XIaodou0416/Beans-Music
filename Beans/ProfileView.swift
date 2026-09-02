@@ -1247,7 +1247,6 @@ struct SettingsView: View {
     @State private var showRestorePicker = false
     @State private var pendingRestore: [String: Any]?
     @State private var showRestoreConfirm = false
-    @State private var showResetSettingsConfirm = false
     @State private var showSourceHelp = false
     @State private var showThirdPartyKeys = true
     @State private var backupExpanded = false
@@ -1499,14 +1498,6 @@ struct SettingsView: View {
             }
             Button("取消", role: .cancel) {}
         }
-        .confirmationDialog("重置所有设置？", isPresented: $showResetSettingsConfirm, titleVisibility: .visible) {
-            Button("重置设置", role: .destructive) {
-                resetAllSettingsKeepingAccounts()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("会恢复主题、播放器、平台显示、壁纸、布局等设置，但保留已登录账号。")
-        }
         .onAppear {
             homeRenderingPaused = true
         }
@@ -1519,6 +1510,8 @@ struct SettingsView: View {
     private var themeSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             appearanceSection
+            chartCoverSection
+            platformSection
         }
     }
 
@@ -2129,10 +2122,6 @@ struct SettingsView: View {
                     .foregroundStyle(Color.beansLabel)
                 }
 
-                // 主题模式的全部主题相关选项统一放在这里，避免展开主题模式后还要到外层寻找。
-                chartCoverSection
-                platformSection
-
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -2425,7 +2414,6 @@ struct SettingsView: View {
 
     private var chartCoverSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "排行榜封面")
             VStack(spacing: 0) {
                 ForEach(SearchProvider.allCases) { provider in
                     DisclosureGroup {
@@ -2596,10 +2584,6 @@ struct SettingsView: View {
                     BeansHaptics.tap()
                     showRestorePicker = true
                 }
-            }
-            backupActionButton(icon: "arrow.counterclockwise.circle", title: "重置所有设置（保留登录）") {
-                BeansHaptics.tap()
-                showResetSettingsConfirm = true
             }
             if let backupMessage {
                 Text(backupMessage)
@@ -2861,32 +2845,6 @@ struct SettingsView: View {
             content()
                 .transaction { transaction in transaction.animation = nil }
         }
-    }
-
-    private func resetAllSettingsKeepingAccounts() {
-        let defaults = UserDefaults.standard
-        var removed = 0
-        for key in defaults.dictionaryRepresentation().keys {
-            guard Self.isBackupCandidateKey(key) else { continue }
-            guard !Self.isAccountBackupKey(key) else { continue }
-            guard !Self.isSystemBackupKey(key) else { continue }
-            guard key != "beans.disclaimerAccepted" else { continue }
-            defaults.removeObject(forKey: key)
-            removed += 1
-        }
-        theme.set(.amber)
-        theme.clearCustomAccent()
-        theme.setBackground("")
-        theme.setBackgroundSyncAll(true)
-        theme.clearAllWallpapers()
-        ChartCoverStore.shared.clearAll()
-        theme.setUIStyle(.liquid)
-        LyricBackgroundStore.clear()
-        PlatformPreferenceStore.shared.resetToDefault()
-        BeansHaptics.success()
-        backupMessage = "已重置 \(removed) 项设置，登录信息已保留"
-        ToastCenter.shared.show("设置已重置")
-        BeansLogger.shared.log("重置所有设置：移除 \(removed) 项，保留登录信息", level: .info)
     }
 
     /// 任意 UserDefaults 值 → JSON 可序列化（Data 转 base64、Date 转时间戳）

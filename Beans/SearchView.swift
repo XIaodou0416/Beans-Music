@@ -94,9 +94,13 @@ struct SearchView: View {
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
 
     @State private var keyword = ""
-    @State private var provider: SearchProvider = .netease
+    @AppStorage("beans.search.provider") private var providerRaw = SearchProvider.netease.rawValue
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     private var searchProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
+    private var provider: SearchProvider {
+        get { SearchProvider(rawValue: providerRaw) ?? .netease }
+        set { providerRaw = newValue.rawValue }
+    }
     /// 已加载热门搜索的 provider（避免切 tab 反复加载）
     @State private var hotLoadedProvider: SearchProvider?
     @State private var resultType: SearchResultType = .song

@@ -61,6 +61,14 @@ final class LocalLibraryStore: ObservableObject {
         playlists[idx].name = name
     }
 
+    /// 调整本地歌单顺序，顺序会随歌单一起持久化。
+    func movePlaylist(id: UUID, offset: Int) {
+        guard let index = playlists.firstIndex(where: { $0.id == id }) else { return }
+        let destination = index + offset
+        guard playlists.indices.contains(destination) else { return }
+        playlists.swapAt(index, destination)
+    }
+
     /// 添加歌曲到本地歌单（按 identityKey 去重）
     func addSong(_ song: Song, to id: UUID) {
         guard let idx = playlists.firstIndex(where: { $0.id == id }) else { return }
