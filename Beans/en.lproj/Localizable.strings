@@ -117,7 +117,7 @@
 "播放失败自动下一首" = "Auto-skip on Playback Failure";
 "播放失败自动下一首：\\(failedSong.name)｜原因=\\(reason)" = "Log message \(failedSong.name) \(reason)";
 "播放体验" = "Playback Experience";
-"播放页背景浮尘新增开关，默认关闭；动态浮尘支持 density and size controls.";
+"播放页背景浮尘新增开关，默认关闭；动态浮尘支持密度和大小调节" = "Player background particles now have a switch, default off; dynamic particles support density and size controls.";
 "播放页支持从顶部下划关闭，并加入缩放、淡出动画" = "The player can be dismissed by swiping down from the top, with scale and fade animations.";
 "播放中断失败" = "Playback Interrupted";
 "布局" = "Layout";
