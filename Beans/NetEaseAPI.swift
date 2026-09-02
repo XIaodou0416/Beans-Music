@@ -575,6 +575,27 @@ final class NetEaseAPI {
         return list.compactMap(Song.init(json:))
     }
 
+    func intelligenceList(songID: Int, playlistID: Int, count: Int = 30) async throws -> [Song] {
+        let json = try await request(
+            "/api/playmode/intelligence/list",
+            payload: [
+                "songId": songID,
+                "type": "fromPlayOne",
+                "playlistId": playlistID,
+                "startMusicId": songID,
+                "count": count
+            ],
+            crypto: "weapi"
+        )
+        let data = json["data"] as? [[String: Any]] ?? []
+        return data.compactMap { item in
+            if let songInfo = item["songInfo"] as? [String: Any] {
+                return Song(json: songInfo)
+            }
+            return Song(json: item)
+        }
+    }
+
     func personalFM() async throws -> [Song] {
         let json = try await request("/api/v1/radio/get", payload: [:], crypto: "weapi")
         let list = json["data"] as? [[String: Any]] ?? []

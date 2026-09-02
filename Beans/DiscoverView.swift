@@ -17,6 +17,7 @@ struct DiscoverView: View {
     @State private var selectedTopList: TopList?
     @State private var selectedPlaylist: Playlist?
     @State private var showDailyList = false
+    @State private var recommendationActionLoading: String?
     @State private var showHomePlatformMenu = false
     @State private var showSectionSort = false
     /// 主页板块顺序（每日推荐 / 排行榜 / 歌单广场，可自定义）
@@ -127,7 +128,7 @@ struct DiscoverView: View {
                             ForEach(homeOrder.filter { availableSections.contains($0) }, id: \.self) { key in
                                 switch key {
                                 case "每日推荐":
-                                    if !dailySongs.isEmpty {
+                                    if source == .netease || !dailySongs.isEmpty {
                                         dailySection
                                             .sectionEntrance(delay: 0)
                                     }
@@ -155,6 +156,9 @@ struct DiscoverView: View {
             .refreshable {
                 guard !homeRenderingPaused else { return }
                 await load(force: true)
+            }
+            .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
+                homePlatformSelectionMenu
             }
             .task(id: "\(source.rawValue)-\(homeRenderingPaused)") {
                 guard !homeRenderingPaused else { return }
@@ -732,9 +736,63 @@ struct DiscoverView: View {
         return LinearGradient(colors: palettes[seed], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    // MARK: - 每日推荐（横滑歌曲卡 + 播放）
+    // MARK: - 每日推荐
 
+    @ViewBuilder
     private var dailySection: some View {
+        if source == .netease {
+            neteaseRecommendationCards
+        } else {
+            dailySongCards
+        }
+    }
+
+    private var neteaseRecommendationCards: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "推荐")
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    neteaseRecommendationCard(
+                        title: "每日推荐",
+                        subtitle: dailyRecommendationSubtitle,
+                        icon: "calendar",
+                        coverURL: dailySongs.first?.coverURL,
+                        gradient: [Color(red: 0.95, green: 0.36, blue: 0.28), Color(red: 0.96, green: 0.68, blue: 0.30)],
+                        loadingKey: nil
+                    ) {
+                        BeansHaptics.tap()
+                        showDailyList = true
+                    }
+
+                    neteaseRecommendationCard(
+                        title: "私人漫游",
+                        subtitle: "从喜欢的歌开始漫游",
+                        icon: "wave.3.right.circle.fill",
+                        coverURL: nil,
+                        gradient: [Color(red: 0.16, green: 0.22, blue: 0.42), Color(red: 0.41, green: 0.28, blue: 0.65)],
+                        loadingKey: "fm"
+                    ) {
+                        startPersonalFM()
+                    }
+
+                    neteaseRecommendationCard(
+                        title: "心动模式",
+                        subtitle: "你的红心歌曲和相似推荐",
+                        icon: "heart.circle.fill",
+                        coverURL: nil,
+                        gradient: [Color(red: 0.84, green: 0.16, blue: 0.38), Color(red: 0.98, green: 0.43, blue: 0.35)],
+                        loadingKey: "heartbeat"
+                    ) {
+                        startHeartbeatMode()
+                    }
+                }
+                .padding(.vertical, 3)
+            }
+            .padding(.trailing, isNativeClean ? -24 : 0)
+        }
+    }
+
+    private var dailySongCards: some View {
         VStack(alignment: .leading, spacing: 14) {
             // 横滑歌曲卡：每日推荐前 8 首
             ScrollView(.horizontal, showsIndicators: false) {
@@ -796,8 +854,149 @@ struct DiscoverView: View {
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
-        .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
-            homePlatformSelectionMenu
+    }
+
+    private var dailyRecommendationSubtitle: String {
+        if dailySongs.isEmpty {
+            return beansLocalized("每天 6:00 更新", "Refreshes at 6:00 daily")
+        }
+        return String(format: beansLocalized("%d 首 · 每天 6:00 更新", "%d songs · refreshes at 6:00 daily"), dailySongs.count)
+    }
+
+    private func neteaseRecommendationCard(
+        title: String,
+        subtitle: String,
+        icon: String,
+        coverURL: URL?,
+        gradient: [Color],
+        loadingKey: String?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            ZStack(alignment: .bottomLeading) {
+                if let coverURL {
+                    CoverImage(url: coverURL, size: isNativeClean ? 184 : 168, cornerRadius: isNativeClean ? 16 : 18)
+                        .overlay {
+                            LinearGradient(
+                                colors: [.black.opacity(0.05), .black.opacity(0.62)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        }
+                } else {
+                    RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous)
+                        .fill(LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .overlay(alignment: .topTrailing) {
+                            Circle()
+                                .fill(.white.opacity(0.16))
+                                .frame(width: 92, height: 92)
+                                .blur(radius: 3)
+                                .offset(x: 24, y: -26)
+                        }
+                        .overlay(alignment: .center) {
+                            Image(systemName: icon)
+                                .font(.system(size: 46, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.32))
+                                .offset(x: 34, y: -18)
+                        }
+                }
+
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 7) {
+                        Image(systemName: icon)
+                            .font(.system(size: 15, weight: .bold))
+                        if let loadingKey, recommendationActionLoading == loadingKey {
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(0.72)
+                        }
+                    }
+                    .foregroundStyle(.white.opacity(0.92))
+                    Spacer(minLength: 0)
+                    Text(LocalizedStringKey(title))
+                        .font(BeansFont.appFont(isNativeClean ? 20 : 18, .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(BeansFont.appFont(12, .semibold))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
+                }
+                .padding(14)
+            }
+            .frame(width: isNativeClean ? 184 : 168, height: isNativeClean ? 184 : 168)
+            .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
+            .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 16, x: 0, y: 8)
+            .contentShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.95))
+        .disabled(loadingKey != nil && recommendationActionLoading != nil)
+    }
+
+    private func startPersonalFM() {
+        guard auth.isLoggedIn else {
+            ToastCenter.shared.show("请先登录网易云音乐")
+            return
+        }
+        guard recommendationActionLoading == nil else { return }
+        recommendationActionLoading = "fm"
+        Task {
+            defer { Task { @MainActor in recommendationActionLoading = nil } }
+            do {
+                let songs = try await NetEaseAPI.shared.personalFM()
+                await MainActor.run {
+                    if songs.isEmpty {
+                        ToastCenter.shared.show("私人漫游暂时没有推荐")
+                    } else {
+                        player.play(songs: songs, startAt: 0)
+                        ToastCenter.shared.show("已开启私人漫游")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    BeansLogger.shared.log("私人漫游加载失败：\(error.localizedDescription)", level: .error)
+                    ToastCenter.shared.show("私人漫游加载失败")
+                }
+            }
+        }
+    }
+
+    private func startHeartbeatMode() {
+        guard let uid = auth.user?.uid else {
+            ToastCenter.shared.show("请先登录网易云音乐")
+            return
+        }
+        guard recommendationActionLoading == nil else { return }
+        recommendationActionLoading = "heartbeat"
+        Task {
+            defer { Task { @MainActor in recommendationActionLoading = nil } }
+            do {
+                let playlists = try await NetEaseAPI.shared.userPlaylists(uid: uid)
+                guard let liked = playlists.first(where: { $0.name == "我喜欢的音乐" }) else {
+                    await MainActor.run { ToastCenter.shared.show("未找到我喜欢的音乐") }
+                    return
+                }
+                let likedSongs = try await NetEaseAPI.shared.playlistTracks(id: liked.id)
+                guard let seed = likedSongs.randomElement() else {
+                    await MainActor.run { ToastCenter.shared.show("先收藏一些喜欢的歌曲吧") }
+                    return
+                }
+                let songs = try await NetEaseAPI.shared.intelligenceList(songID: seed.id, playlistID: liked.id)
+                await MainActor.run {
+                    if songs.isEmpty {
+                        ToastCenter.shared.show("心动模式暂时不可用")
+                    } else {
+                        player.play(songs: songs, startAt: 0)
+                        ToastCenter.shared.show("已开启心动模式")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    BeansLogger.shared.log("心动模式加载失败：\(error.localizedDescription)", level: .error)
+                    ToastCenter.shared.show("心动模式加载失败")
+                }
+            }
         }
     }
 
