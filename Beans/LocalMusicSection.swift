@@ -64,7 +64,7 @@ struct LocalMusicSection: View {
             if store.playlists.isEmpty {
                 EmptyStateView(
                     icon: "internaldrive",
-                    text: NSLocalizedString("还没有本地歌单\n新建一个歌单，把喜欢的歌曲收藏到本机", comment: "")
+                    text: "还没有本地歌单\n新建一个歌单，把喜欢的歌曲收藏到本机"
                 )
             } else {
                 VStack(spacing: 0) {

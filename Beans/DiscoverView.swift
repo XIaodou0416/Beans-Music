@@ -439,11 +439,11 @@ struct DiscoverView: View {
         let custom = homeGreetingText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !custom.isEmpty { return custom }
         let hour = Calendar.current.component(.hour, from: Date())
-        if isNativeClean { return NSLocalizedString("推荐", comment: "") }
+        if isNativeClean { return "推荐" }
         switch hour {
-        case 5..<12: return NSLocalizedString("早上好", comment: "")
-        case 12..<18: return NSLocalizedString("下午好", comment: "")
-        default: return NSLocalizedString("晚上好", comment: "")
+        case 5..<12: return "早上好"
+        case 12..<18: return "下午好"
+        default: return "晚上好"
         }
     }
 
