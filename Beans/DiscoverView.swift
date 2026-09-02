@@ -385,13 +385,13 @@ struct DiscoverView: View {
                 Spacer()
                 HStack(spacing: 10) {
                     if !homeHeaderHideSort {
-                        GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
+                        GlassIconButton(systemName: "arrow.up.arrow.down") {
                             BeansHaptics.tap()
                             showSectionSort = true
                         }
                     }
                     if !homeHeaderHideRefresh {
-                        GlassIconButton(systemName: "arrow.clockwise", forceLiquid: isNativeClean) {
+                        GlassIconButton(systemName: "arrow.clockwise") {
                             BeansHaptics.tap()
                             Task { await load(force: true) }
                         }
@@ -485,6 +485,12 @@ struct DiscoverView: View {
 
     /// 网易云排行榜：全部榜单保留，热歌榜置顶
     private var neteaseTopLists: [TopList] {
+        let preferredIDs = [19_723_756, 3_779_629, 2_884_035, 3_778_678, 60_198]
+        let byID = Dictionary(uniqueKeysWithValues: topLists.map { ($0.id, $0) })
+        let preferred = preferredIDs.compactMap { byID[$0] }
+        if !preferred.isEmpty {
+            return preferred
+        }
         var list = topLists
         if let hot = list.first(where: { $0.name.contains("热歌榜") }),
            let idx = list.firstIndex(where: { $0.id == hot.id }), idx != 0 {
@@ -618,9 +624,7 @@ struct DiscoverView: View {
                     .font(BeansFont.appFont(15, .bold))
                     .foregroundStyle(Color.primary)
                     .lineLimit(1)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background { BeansGlass(shape: Capsule()) }
+                    .frame(width: 148, alignment: .leading)
                 Text(subtitle)
                     .font(BeansFont.appFont(12, .medium))
                     .foregroundStyle(Color.secondary)
@@ -973,16 +977,23 @@ struct DiscoverView: View {
             defer { Task { @MainActor in recommendationActionLoading = nil } }
             do {
                 let playlists = try await NetEaseAPI.shared.userPlaylists(uid: uid)
-                guard let liked = playlists.first(where: { $0.name == "我喜欢的音乐" }) else {
-                    await MainActor.run { ToastCenter.shared.show("未找到我喜欢的音乐") }
+                let liked = playlists.first(where: { $0.isNetEaseLikedPlaylist })
+                let songs: [Song]
+                if let liked {
+                    let likedSongs = try await NetEaseAPI.shared.playlistTracks(id: liked.id)
+                    guard let seed = likedSongs.randomElement() else {
+                        await MainActor.run { ToastCenter.shared.show("先收藏一些喜欢的歌曲吧") }
+                        return
+                    }
+                    songs = try await NetEaseAPI.shared.intelligenceList(songID: seed.id, playlistID: liked.id)
+                    BeansLogger.shared.log("心动模式：喜欢歌单 specialType=\(liked.specialType) id=\(liked.id) seed=\(seed.id) 返回 \(songs.count) 首", level: songs.isEmpty ? .warn : .info)
+                } else if let seed = dailySongs.randomElement() ?? player.currentSong {
+                    songs = try await NetEaseAPI.shared.simiSongs(id: seed.id)
+                    BeansLogger.shared.log("心动模式：未找到喜欢歌单，使用相似歌曲兜底 seed=\(seed.id) 返回 \(songs.count) 首", level: songs.isEmpty ? .warn : .info)
+                } else {
+                    await MainActor.run { ToastCenter.shared.show("先播放或收藏一些歌曲吧") }
                     return
                 }
-                let likedSongs = try await NetEaseAPI.shared.playlistTracks(id: liked.id)
-                guard let seed = likedSongs.randomElement() else {
-                    await MainActor.run { ToastCenter.shared.show("先收藏一些喜欢的歌曲吧") }
-                    return
-                }
-                let songs = try await NetEaseAPI.shared.intelligenceList(songID: seed.id, playlistID: liked.id)
                 await MainActor.run {
                     if songs.isEmpty {
                         ToastCenter.shared.show("心动模式暂时不可用")
@@ -1025,38 +1036,9 @@ struct DiscoverView: View {
 
     private var personalizedSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: source == .qq ? "QQ音乐热门歌单" : "歌单广场")
-            if source == .netease {
-                // 官方分类标签：点击切换分类（「全部」为官方精品歌单）
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(catChips, id: \.self) { cat in
-                            Button {
-                                BeansHaptics.tap()
-                                guard cat != neteaseCat else { return }
-                                neteaseCat = cat
-                                Task { await loadPlaylists(cat: cat) }
-                            } label: {
-                                Text(LocalizedStringKey(cat))
-                                    .font(BeansFont.appFont(12, .medium))
-                                    .foregroundStyle(neteaseCat == cat ? Color.white : Color.beansComment)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background {
-                                        if neteaseCat == cat {
-                                            Capsule().fill(Color.beansAmber.opacity(0.72))
-                                        }
-                                        BeansGlass(shape: Capsule())
-                                    }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-            }
+            SectionHeader(title: playlistSectionTitle)
             if visiblePersonalizedPlaylists.isEmpty {
-                EmptyStateView(icon: "music.note.list", text: source == .qq ? "QQ音乐热门歌单暂未加载成功\n下拉刷新可重新获取" : "歌单广场暂时没有内容")
+                EmptyStateView(icon: "music.note.list", text: playlistEmptyText)
             } else if isNativeClean && !playlistsExpanded {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
@@ -1113,7 +1095,12 @@ struct DiscoverView: View {
                             .padding(8)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background {
-                                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                if isNativeClean {
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(Color.primary.opacity(0.04))
+                                } else {
+                                    BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                }
                             }
                         }
                         .buttonStyle(GlassPressButtonStyle(scale: 0.96))
@@ -1138,11 +1125,33 @@ struct DiscoverView: View {
                     .foregroundStyle(Color.beansAmber)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 11)
-                    .background { BeansGlass(shape: Capsule()) }
+                    .background {
+                        if isNativeClean {
+                            Capsule().fill(Color.primary.opacity(0.045))
+                        } else {
+                            BeansGlass(shape: Capsule())
+                        }
+                    }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.97))
             }
+        }
+    }
+
+    private var playlistSectionTitle: String {
+        switch source {
+        case .netease: return "推荐歌单"
+        case .qq: return "QQ音乐热门歌单"
+        case .kugou: return "歌单广场"
+        }
+    }
+
+    private var playlistEmptyText: String {
+        switch source {
+        case .netease: return "推荐歌单暂时没有内容"
+        case .qq: return "QQ音乐热门歌单暂未加载成功\n下拉刷新可重新获取"
+        case .kugou: return "歌单广场暂时没有内容"
         }
     }
 
@@ -1325,16 +1334,11 @@ struct DiscoverView: View {
         case .netease:
             async let a = NetEaseAPI.shared.topLists()
             async let b = NetEaseAPI.shared.dailyRecommend()
-            // 「全部」展示官方精品歌单，其他分类展示该分类热门歌单
-            async let c = neteaseCat == "全部"
-                ? NetEaseAPI.shared.highQualityPlaylists(limit: 18)
-                : NetEaseAPI.shared.playlistSquare(cat: neteaseCat, order: "hot", limit: 18)
-            async let d = NetEaseAPI.shared.playlistCatlist()
-            let (tl, dr, pp, cats) = try await (a, b, c, d)
+            async let c = NetEaseAPI.shared.recommendedHomePlaylists(loggedIn: auth.isLoggedIn, limit: 18)
+            let (tl, dr, pp) = try await (a, b, c)
             snapshot.topLists = tl
             snapshot.dailySongs = dr
             snapshot.personalized = pp
-            if !cats.isEmpty { playlistCats = cats }
         case .kugou:
             async let songs = KugouMusicAPI.shared.searchSongs(keyword: "热门歌曲", limit: 30)
             async let ranks = KugouMusicAPI.shared.topLists(limit: 10)

@@ -203,6 +203,7 @@ struct Playlist: Identifiable, Hashable {
     var coverURL: URL?
     let trackCount: Int
     let creatorName: String
+    let specialType: Int
     /// 歌单来源（网易云 / QQ音乐），非网易云歌单用对应接口加载
     let source: SongSource
 
@@ -212,6 +213,7 @@ struct Playlist: Identifiable, Hashable {
         self.coverURL = coverURL
         self.trackCount = trackCount
         self.creatorName = ""
+        self.specialType = 0
         self.source = source
     }
 
@@ -220,9 +222,10 @@ struct Playlist: Identifiable, Hashable {
         self.id = id
         name = json["name"] as? String ?? ""
         trackCount = json["trackCount"] as? Int ?? 0
-        let pic = json["coverImgUrl"] as? String ?? ""
+        let pic = json["coverImgUrl"] as? String ?? json["picUrl"] as? String ?? ""
         coverURL = pic.isEmpty ? nil : URL(string: pic)
         creatorName = (json["creator"] as? [String: Any])?["nickname"] as? String ?? ""
+        specialType = json["specialType"] as? Int ?? 0
         source = .netease
     }
 
@@ -234,7 +237,12 @@ struct Playlist: Identifiable, Hashable {
         let pic = json["picUrl"] as? String ?? ""
         coverURL = pic.isEmpty ? nil : URL(string: pic)
         creatorName = ""
+        specialType = json["specialType"] as? Int ?? 0
         source = .netease
+    }
+
+    var isNetEaseLikedPlaylist: Bool {
+        source == .netease && (specialType == 5 || name == "我喜欢的音乐" || name.localizedCaseInsensitiveContains("liked songs"))
     }
 }
 

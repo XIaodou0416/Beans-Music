@@ -540,6 +540,24 @@ final class NetEaseAPI {
         return list.compactMap(Playlist.init(personalizedJSON:))
     }
 
+    func recommendResource() async throws -> [Playlist] {
+        let json = try await request("/api/v1/discovery/recommend/resource", payload: [:], crypto: "weapi")
+        let list = json["recommend"] as? [[String: Any]] ?? []
+        return list.compactMap(Playlist.init(json:))
+    }
+
+    func recommendedHomePlaylists(loggedIn: Bool, limit: Int = 18) async -> [Playlist] {
+        if loggedIn {
+            async let recommend = try? recommendResource()
+            async let personalized = try? personalizedPlaylists(limit: limit)
+            let head = await recommend ?? []
+            let tail = await personalized ?? []
+            var seen = Set<Int>()
+            return Array((head + tail).filter { seen.insert($0.id).inserted }.prefix(limit))
+        }
+        return (try? await personalizedPlaylists(limit: limit)) ?? []
+    }
+
     // MARK: - 更多发现
 
     func hotSearch() async throws -> [String] {

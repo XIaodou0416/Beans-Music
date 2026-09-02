@@ -1024,6 +1024,8 @@
 "搜索每日推荐" = "Search daily recommendations";
 "每天 6:00 更新" = "Refreshes at 6:00 daily";
 "%d 首 · 每天 6:00 更新" = "%d songs · refreshes at 6:00 daily";
+"推荐歌单" = "Recommended Playlists";
+"推荐歌单暂时没有内容" = "No recommended playlists yet";
 "私人漫游" = "Personal FM";
 "从喜欢的歌开始漫游" = "Roam from songs you love";
 "心动模式" = "Heartbeat Mode";
@@ -1034,6 +1036,7 @@
 "私人漫游加载失败" = "Failed to load Personal FM";
 "未找到我喜欢的音乐" = "Could not find Liked Songs";
 "先收藏一些喜欢的歌曲吧" = "Like a few songs first";
+"先播放或收藏一些歌曲吧" = "Play or like a few songs first";
 "心动模式暂时不可用" = "Heartbeat Mode is unavailable right now";
 "已开启心动模式" = "Heartbeat Mode started";
 "心动模式加载失败" = "Failed to load Heartbeat Mode";
