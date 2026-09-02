@@ -398,6 +398,50 @@ struct PlayerView: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
                     }
                 }
+            } else if coverPlayerStyle == .vinyl {
+                GeometryReader { geo in
+                    ZStack {
+                        background
+                            .ignoresSafeArea()
+
+                        VStack(spacing: 0) {
+                            headerBar
+                            content(geo: geo)
+                        }
+                        .foregroundStyle(palette.text)
+
+                        controlDeck(bottomInset: geo.safeAreaInsets.bottom)
+                            .frame(maxWidth: .infinity)
+                            .frame(maxHeight: .infinity, alignment: .bottom)
+
+                        if layoutMode {
+                            layoutToolbar
+                                .contentShape(Rectangle())
+                                .frame(maxWidth: .infinity)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                                .padding(.top, 54)
+                                .transition(.opacity)
+                        }
+
+                        if showMoreActions {
+                            Color.black.opacity(0.001)
+                                .ignoresSafeArea()
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+                                        showMoreActions = false
+                                    }
+                                }
+                                .zIndex(70)
+
+                            playerMoreActionsPanel
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                .padding(.top, 76)
+                                .zIndex(80)
+                                .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
+                        }
+                    }
+                }
             } else {
                 GeometryReader { geo in
                     ZStack {
@@ -833,7 +877,66 @@ struct PlayerView: View {
         switch coverPlayerStyle {
         case .classic, .appleMusic:
             classicAlbumPanel(geo: geo)
+        case .vinyl:
+            vinylAlbumPanel(geo: geo)
         }
+    }
+
+    private func vinylAlbumPanel(geo: GeometryProxy) -> some View {
+        let size = min(304, min(geo.size.width * 0.72, geo.size.height * 0.50))
+        return VStack(spacing: 14) {
+            Spacer(minLength: 2)
+
+            VinylTurntableView(
+                coverURL: song?.coverURL,
+                isPlaying: playerVisualsActive,
+                trackId: song?.id,
+                size: size,
+                onTap: { toggleLyrics() },
+                onNextTrack: { player.next() },
+                onPreviousTrack: { player.previous() }
+            )
+            .modifier(Layoutable(part: .cover, enabled: layoutMode, data: $layoutData))
+
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(song?.name ?? "未在播放")
+                        .font(BeansFont.appFont(22, .bold))
+                        .foregroundStyle(albumTitleForeground)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.55)
+                        .multilineTextAlignment(.center)
+                        .shadow(color: albumGlow(albumTitleColor, strong: true), radius: albumTextGlow ? 10 : 0, y: 2)
+                    if showSongVIPBadge, song?.isVIP == true {
+                        Text("VIP")
+                            .font(BeansFont.appFont(9, .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
+                            .shadow(color: palette.accent.opacity(0.45), radius: 6)
+                    }
+                }
+                .shadow(color: albumTextGlow ? palette.accent.opacity(0.30) : .clear, radius: albumTextGlow ? 10 : 0)
+                Text(subtitle)
+                    .font(BeansFont.appFont(14, .medium))
+                    .foregroundStyle(albumArtistForeground)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .shadow(color: albumGlow(albumArtistColor), radius: albumTextGlow ? 7 : 0, y: 1)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openArtistHome() }
+            }
+            .padding(.horizontal, 36)
+            .modifier(Layoutable(part: .title, enabled: layoutMode, data: $layoutData))
+
+            lyricPreviewBox
+                .modifier(Layoutable(part: .previewLyric, enabled: layoutMode, data: $layoutData))
+
+            Spacer(minLength: 2)
+        }
+        .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func classicAlbumPanel(geo: GeometryProxy) -> some View {
