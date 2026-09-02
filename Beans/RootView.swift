@@ -119,6 +119,7 @@ struct RootView: View {
                         MiniPlayerAccessoryModifier(
                             isActive: player.currentSong != nil,
                             showPlayer: $showPlayer,
+                            clock: player.clock,
                             colorScheme: colorScheme
                         )
                     )
@@ -422,6 +423,7 @@ private struct ClearSheetBackground: ViewModifier {
 private struct MiniPlayerAccessoryModifier: ViewModifier {
     let isActive: Bool
     @Binding var showPlayer: Bool
+    let clock: PlaybackClock
     let colorScheme: ColorScheme
 
     @ViewBuilder
@@ -430,6 +432,7 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
             content.tabViewBottomAccessory {
                 MiniPlayerView(showPlayer: $showPlayer, presentation: .accessory)
                     .padding(.horizontal, 12)
+                    .environmentObject(clock)
                     .environment(\.colorScheme, colorScheme)
             }
         } else {

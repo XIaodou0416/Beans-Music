@@ -614,10 +614,21 @@ final class NetEaseAPI {
         }
     }
 
-    func personalFM() async throws -> [Song] {
-        let json = try await request("/api/v1/radio/get", payload: [:], crypto: "weapi")
-        let list = json["data"] as? [[String: Any]] ?? []
-        return list.compactMap(Song.init(json:))
+    func personalFM(limit: Int = 12) async throws -> [Song] {
+        var songs: [Song] = []
+        var seen = Set<String>()
+        let batchCount = max(1, Int(ceil(Double(limit) / 3.0)))
+        for _ in 0..<batchCount {
+            let json = try await request("/api/v1/radio/get", payload: [:], crypto: "weapi")
+            let list = json["data"] as? [[String: Any]] ?? []
+            let batch = list.compactMap(Song.init(json:))
+            for song in batch where seen.insert(song.identityKey).inserted {
+                songs.append(song)
+                if songs.count >= limit { return songs }
+            }
+            if batch.isEmpty { break }
+        }
+        return songs
     }
 
     // MARK: - 歌单编辑
