@@ -1519,8 +1519,6 @@ struct SettingsView: View {
     private var themeSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             appearanceSection
-            chartCoverSection
-            platformSection
         }
     }
 
@@ -2130,6 +2128,10 @@ struct SettingsView: View {
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansLabel)
                 }
+
+                // 主题模式的全部主题相关选项统一放在这里，避免展开主题模式后还要到外层寻找。
+                chartCoverSection
+                platformSection
 
                 }
 
