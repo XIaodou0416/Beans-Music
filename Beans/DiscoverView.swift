@@ -553,7 +553,7 @@ struct DiscoverView: View {
                         }
                     } else if source == .qq {
                         ForEach(Array(qqTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
-                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: "QQ 峰尖榜", coverURL: info.coverURL) {
+                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansLocalized("QQ 峰尖榜", "QQ Music Peak Chart"), coverURL: info.coverURL) {
                                 selectedQQTopList = info
                             }
                         }
@@ -623,7 +623,7 @@ struct DiscoverView: View {
             }
         } else if source == .qq {
             ForEach(Array(qqTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
-                rankRow(index: index, name: beansChartName(info.name), subtitle: "QQ 峰尖榜", coverURL: info.coverURL) {
+                rankRow(index: index, name: beansChartName(info.name), subtitle: beansLocalized("QQ 峰尖榜", "QQ Music Peak Chart"), coverURL: info.coverURL) {
                     BeansHaptics.tap()
                     selectedQQTopList = info
                 }
@@ -1196,7 +1196,7 @@ struct QQTopListDetailView: View {
                 }
             }
             }
-            .navigationTitle(name)
+            .navigationTitle(beansChartName(name))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "搜索榜单歌曲")
         }
@@ -1452,7 +1452,7 @@ struct TopListDetailView: View {
         HStack(spacing: 14) {
             CoverImage(url: topList.coverURL, size: 88, cornerRadius: 8)
             VStack(alignment: .leading, spacing: 6) {
-                Text(topList.name)
+                Text(beansChartName(topList.name))
                     .font(BeansFont.appFont(18, .bold))
                     .foregroundStyle(Color.beansLabel)
                 Text(topList.updateFrequency)
