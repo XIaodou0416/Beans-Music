@@ -932,6 +932,7 @@ struct PlayerView: View {
         }
         .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .modifier(Layoutable(part: .vinylAlbum, enabled: layoutMode, data: $layoutData))
     }
 
     private var vinylCompactHeader: some View {
@@ -1119,6 +1120,7 @@ struct PlayerView: View {
         .onDisappear {
             vinylLyricsResumeTask?.cancel()
         }
+        .modifier(Layoutable(part: .vinylLyric, enabled: layoutMode, data: $layoutData))
     }
 
     private var vinylLyricsHeader: some View {
@@ -1948,18 +1950,9 @@ struct PlayerView: View {
                 .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
             deckGrabber
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 8)
-        .padding(.bottom, max(10, bottomInset + 2))
-        .background {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 0.8)
-                }
-        }
-        .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, max(12, bottomInset + 4))
         .frame(maxWidth: .infinity)
     }
 
