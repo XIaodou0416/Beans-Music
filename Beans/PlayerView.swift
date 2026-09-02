@@ -901,16 +901,16 @@ struct PlayerView: View {
     }
 
     private func vinylAlbumPanel(geo: GeometryProxy) -> some View {
-        let size = min(304, min(geo.size.width * 0.72, geo.size.height * 0.50))
+        let size = min(304, min(geo.size.width * 0.72, geo.size.height * 0.48))
         let showPreview = !lyrics.isEmpty
-        return VStack(spacing: 14) {
+        return VStack(spacing: 12) {
             vinylTopIndicator
 
             vinylCompactHeader
-                .padding(.horizontal, 20)
-                .padding(.top, 4)
+                .padding(.horizontal, 18)
+                .padding(.top, 0)
 
-            Spacer(minLength: 2)
+            Spacer(minLength: 0)
 
             VinylTurntableView(
                 coverURL: song?.coverURL,
@@ -925,10 +925,10 @@ struct PlayerView: View {
 
             if showPreview {
                 vinylMiniLyricsPreview
-                    .padding(.top, 2)
+                    .padding(.top, 0)
             }
 
-            Spacer(minLength: 2)
+            Spacer(minLength: 0)
         }
         .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1044,8 +1044,8 @@ struct PlayerView: View {
             vinylTopIndicator
 
             vinylLyricsHeader
-                .padding(.horizontal, 24)
-                .padding(.bottom, 10)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
 
             if lyrics.isEmpty {
                 vinylEmptyLyricsView
@@ -1328,8 +1328,8 @@ struct PlayerView: View {
     private func classicAlbumPanel(geo: GeometryProxy) -> some View {
         let size = coverSize(in: geo)
         let coverRadius: CGFloat = circularCover ? size / 2 : min(24, size * 0.08)
-        return VStack(spacing: 16) {
-            Spacer(minLength: 2)
+        return VStack(spacing: 12) {
+            Spacer(minLength: 0)
 
             Button {
                 toggleLyrics()
@@ -1449,7 +1449,7 @@ struct PlayerView: View {
             lyricPreviewBox
                 .modifier(Layoutable(part: .previewLyric, enabled: layoutMode, data: $layoutData))
 
-            Spacer(minLength: 2)
+            Spacer(minLength: 0)
         }
         .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1826,9 +1826,9 @@ struct PlayerView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 4)
-            .padding(.bottom, 3)
+            .padding(.horizontal, 18)
+            .padding(.top, 0)
+            .padding(.bottom, 0)
 
             // 歌词视口截止到底栏上方：当前行在可见区居中（26 版风格，无渐隐遮挡）
             Group {
@@ -1937,7 +1937,7 @@ struct PlayerView: View {
 
     /// 底部控制栏估算高度（单行控制后降低，给歌词视口更多空间）
     /// 底部控制栏预留高度（越小歌词视口越大；需 >= 控制栏实际高度避免遮挡；可视化开启时控制栏更高）
-    private var deckInset: CGFloat { 116 }
+    private var deckInset: CGFloat { 102 }
 
     @ViewBuilder
     private func controlDeck(bottomInset: CGFloat) -> some View {
@@ -1948,9 +1948,18 @@ struct PlayerView: View {
                 .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
             deckGrabber
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, max(12, bottomInset + 4))
+        .padding(.horizontal, 18)
+        .padding(.top, 8)
+        .padding(.bottom, max(10, bottomInset + 2))
+        .background {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 0.8)
+                }
+        }
+        .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
         .frame(maxWidth: .infinity)
     }
 
@@ -2001,7 +2010,7 @@ struct PlayerView: View {
 
     private func progressBlock(styleOverride: Int? = nil, accentOverride: Color? = nil) -> some View {
         VStack(spacing: 1) {
-            SeekBar(accent: accentOverride ?? progressAccent, track: palette.secondary.opacity(0.3), style: styleOverride ?? progressBarStyle)
+            SeekBar(accent: accentOverride ?? progressAccent, track: palette.secondary.opacity(0.26), style: styleOverride ?? progressBarStyle)
             HStack(spacing: 6) {
                 seekPillButton("gobackward.15") { player.seekBy(-15) }
                 Text(beansTimeString(clock.progress))
@@ -2056,7 +2065,7 @@ struct PlayerView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 6)
     }
 
     private var secondaryPlayerButtonSize: CGFloat {
