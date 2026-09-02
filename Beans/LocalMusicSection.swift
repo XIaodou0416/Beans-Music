@@ -15,6 +15,7 @@ struct LocalMusicSection: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
+    @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
 
     @State private var showCreate = false
     @State private var newName = ""
@@ -23,6 +24,13 @@ struct LocalMusicSection: View {
     @State private var syncMessage = ""
     @State private var showSyncPicker = false
     @State private var selectedSyncTargets: Set<SyncTarget> = []
+
+    private var emptyLocalPlaylistText: String {
+        if languageRaw == AppLanguage.english.rawValue {
+            return "No local playlists yet\nCreate a playlist and save favorite songs on this device"
+        }
+        return "还没有本地歌单\n新建一个歌单，把喜欢的歌曲收藏到本机"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -64,7 +72,7 @@ struct LocalMusicSection: View {
             if store.playlists.isEmpty {
                 EmptyStateView(
                     icon: "internaldrive",
-                    text: "还没有本地歌单\n新建一个歌单，把喜欢的歌曲收藏到本机"
+                    text: emptyLocalPlaylistText
                 )
             } else {
                 VStack(spacing: 0) {
