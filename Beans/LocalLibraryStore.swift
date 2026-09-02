@@ -66,7 +66,16 @@ final class LocalLibraryStore: ObservableObject {
         guard let index = playlists.firstIndex(where: { $0.id == id }) else { return }
         let destination = index + offset
         guard playlists.indices.contains(destination) else { return }
-        playlists.swapAt(index, destination)
+        var reordered = playlists
+        reordered.swapAt(index, destination)
+        playlists = reordered
+    }
+
+    /// 使用 List 的拖动结果更新顺序，显式重新赋值确保 @Published 与持久化都能触发。
+    func movePlaylists(from offsets: IndexSet, to destination: Int) {
+        var reordered = playlists
+        reordered.move(fromOffsets: offsets, toOffset: destination)
+        playlists = reordered
     }
 
     /// 添加歌曲到本地歌单（按 identityKey 去重）

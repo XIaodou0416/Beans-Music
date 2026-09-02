@@ -117,7 +117,7 @@ struct ProfileView: View {
             Spacer()
             HStack(spacing: 10) {
                 if !homeHeaderHideSort {
-                    GlassIconButton(systemName: "arrow.up.arrow.down") {
+                    GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
                         BeansHaptics.tap()
                         showSectionSort = true
                     }
@@ -140,7 +140,7 @@ struct ProfileView: View {
                     .foregroundStyle(Color.beansLabel)
                 Spacer(minLength: 12)
                 if !homeHeaderHideSort {
-                    GlassIconButton(systemName: "arrow.up.arrow.down") {
+                    GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
                         BeansHaptics.tap()
                         showSectionSort = true
                     }

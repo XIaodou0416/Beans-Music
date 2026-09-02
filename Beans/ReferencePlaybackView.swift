@@ -29,7 +29,7 @@ struct ReferencePlaybackView: View {
     let onPlayerSettings: () -> Void
 
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
-    @AppStorage("beans.appleMusic.showVolume") private var showVolumeControl = true
+    @AppStorage("beans.appleMusic.showVolume") private var showVolumeControl = false
     @AppStorage("beans.appleMusic.primaryHex") private var primaryHex = ""
     @AppStorage("beans.appleMusic.secondaryHex") private var secondaryHex = ""
     @AppStorage("beans.appleMusic.accentHex") private var accentHex = ""

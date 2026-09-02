@@ -988,17 +988,29 @@ final class QQMusicAPI {
         var result: [QQTopInfo] = []
         for item in list {
             guard let id = item["id"] as? Int else { continue }
+            let name = item["topTitle"] as? String ?? (item["title"] as? String ?? "")
+            // 总览接口同时返回 MV/有声等非歌曲榜单；它们的详情接口没有可解析的歌曲，
+            // 继续展示会让用户点进一个空白榜单。只保留歌曲榜单。
+            guard !Self.isNonSongTopList(id: id, name: name) else { continue }
             let songs = (item["songList"] as? [[String: Any]]) ?? []
             let topNames = songs.compactMap { $0["songname"] as? String }.prefix(3).map { $0 }
             result.append(QQTopInfo(
                 id: id,
-                name: item["topTitle"] as? String ?? (item["title"] as? String ?? ""),
+                name: name,
                 subTitle: item["subTitle"] as? String ?? "",
                 topSongNames: topNames,
                 coverURL: Self.normalizedQQImageURL(item["picUrl"])
             ))
         }
         return result
+    }
+
+    private static func isNonSongTopList(id: Int, name: String) -> Bool {
+        // These IDs are currently exposed by QQ's overview endpoint but return no
+        // playable song records from fcg_v8_toplist_cp.fcg.
+        if id == 201 || id == 75 { return true }
+        let normalized = name.lowercased()
+        return normalized.contains("mv") || name.contains("有声") || name.contains("电台")
     }
 
     /// 某个峰尖榜的歌曲列表

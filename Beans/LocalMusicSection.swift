@@ -296,10 +296,12 @@ private struct LocalPlaylistOrderSheet: View {
                     }
                 }
                 .onMove { offsets, destination in
-                    store.playlists.move(fromOffsets: offsets, toOffset: destination)
+                    store.movePlaylists(from: offsets, to: destination)
                 }
             }
             .environment(\.editMode, $editMode)
+            .listStyle(.plain)
+            .beansScrollContentBackgroundHidden()
             .navigationTitle("歌单排序")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -945,18 +945,27 @@ struct AlbumDetailView: View {
                 if !direct.isEmpty {
                     result = direct
                 } else {
-                    let songs = (try? await NetEaseAPI.shared.search(keyword: album.name, limit: 100)) ?? []
-                    let matches = songs.filter { albumNamesMatch($0.album, album.name) }
-                    result = matches.isEmpty ? songs : matches
+                    result = await searchFallbackSongs(
+                        queries: [albumSearchQuery, album.name],
+                        search: { query in
+                            (try? await NetEaseAPI.shared.search(keyword: query, limit: 100)) ?? []
+                        }
+                    )
                 }
             case .qq:
-                let songs = try await QQMusicAPI.shared.searchSongs(keyword: album.name, limit: 100)
-                let matches = songs.filter { albumNamesMatch($0.album, album.name) }
-                result = matches.isEmpty ? songs : matches
+                result = await searchFallbackSongs(
+                    queries: [albumSearchQuery, album.name],
+                    search: { query in
+                        (try? await QQMusicAPI.shared.searchSongs(keyword: query, limit: 100)) ?? []
+                    }
+                )
             case .kugou:
-                let songs = try await KugouMusicAPI.shared.searchSongs(keyword: album.name, limit: 100)
-                let matches = songs.filter { albumNamesMatch($0.album, album.name) }
-                result = matches.isEmpty ? songs : matches
+                result = await searchFallbackSongs(
+                    queries: [albumSearchQuery, album.name],
+                    search: { query in
+                        (try? await KugouMusicAPI.shared.searchSongs(keyword: query, limit: 100)) ?? []
+                    }
+                )
             }
             await MainActor.run {
                 tracks = result
@@ -967,6 +976,81 @@ struct AlbumDetailView: View {
             await MainActor.run {
                 errorMessage = error.localizedDescription
                 isLoading = false
+            }
+        }
+    }
+
+    private var albumSearchQuery: String {
+        let artist = album.artistName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return artist.isEmpty ? album.name : "\(artist) \(album.name)"
+    }
+
+    private func searchFallbackSongs(
+        queries: [String],
+        search: (String) async -> [Song]
+    ) async -> [Song] {
+        guard !normalizedArtist(album.artistName).isEmpty else {
+            BeansLogger.shared.log(
+                "专辑详情筛选跳过：缺少目标歌手，平台=\(album.source.rawValue) 专辑=\(album.name)",
+                level: .debug
+            )
+            return []
+        }
+        var tried = Set<String>()
+        for query in queries {
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, tried.insert(trimmed).inserted else { continue }
+            let songs = await search(trimmed)
+            let matches = songs.filter(albumSongMatches)
+            BeansLogger.shared.log(
+                "专辑详情筛选：平台=\(album.source.rawValue) 查询=\(trimmed) 原始=\(songs.count) 专辑歌手匹配=\(matches.count)",
+                level: .debug
+            )
+            if !matches.isEmpty {
+                var seen = Set<String>()
+                return matches.filter { seen.insert($0.identityKey).inserted }
+            }
+        }
+        // Do not display an artist's unrelated songs just because the album-name
+        // search returned something. An empty result is safer than a wrong album.
+        return []
+    }
+
+    private func albumSongMatches(_ song: Song) -> Bool {
+        guard albumNamesMatch(song.album, album.name) else { return false }
+        return artistsMatch(expected: album.artistName, actual: song.artists)
+    }
+
+    private func normalizedArtist(_ value: String) -> String {
+        value
+            .lowercased()
+            .replacingOccurrences(of: "（", with: "(")
+            .replacingOccurrences(of: "）", with: ")")
+            .replacingOccurrences(of: #"[（(].*?[）)]"#, with: "", options: .regularExpression)
+            .filter { !$0.isWhitespace && !$0.isPunctuation }
+    }
+
+    private func artistTokens(_ value: String) -> [String] {
+        let separators = CharacterSet(charactersIn: "/／,，、&＆+＋|｜;；")
+        return value
+            .components(separatedBy: separators)
+            .map(normalizedArtist)
+            .filter { !$0.isEmpty }
+    }
+
+    private func artistsMatch(expected: String, actual: String) -> Bool {
+        let expectedTokens = artistTokens(expected)
+        let actualTokens = artistTokens(actual)
+        guard !expectedTokens.isEmpty, !actualTokens.isEmpty else { return false }
+
+        // A song may add a featured artist, so one exact primary-artist token is
+        // sufficient. Prefix matching is limited to longer names to avoid
+        // treating an unrelated short name as the same artist.
+        return expectedTokens.contains { expectedToken in
+            actualTokens.contains { actualToken in
+                if expectedToken == actualToken { return true }
+                guard min(expectedToken.count, actualToken.count) >= 3 else { return false }
+                return expectedToken.hasPrefix(actualToken) || actualToken.hasPrefix(expectedToken)
             }
         }
     }

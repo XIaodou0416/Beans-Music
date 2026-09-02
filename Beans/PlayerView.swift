@@ -105,8 +105,8 @@ struct PlayerView: View {
     @AppStorage("beans.albumTextGradient") private var albumTextGradient = false
     @AppStorage("beans.albumTextGlow") private var albumTextGlow = false
     @AppStorage("beans.albumTextGlowIntensity") private var albumTextGlowIntensity = 1.0
-    @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.classic.rawValue
-    @AppStorage("beans.appleMusic.showVolume") private var appleShowVolume = true
+    @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
+    @AppStorage("beans.appleMusic.showVolume") private var appleShowVolume = false
     @AppStorage("beans.appleMusic.primaryHex") private var applePrimaryHex = ""
     @AppStorage("beans.appleMusic.secondaryHex") private var appleSecondaryHex = ""
     @AppStorage("beans.appleMusic.accentHex") private var appleAccentHex = ""
@@ -167,7 +167,7 @@ struct PlayerView: View {
     }
 
     private var coverPlayerStyle: BeansCoverPlayerStyle {
-        return BeansCoverPlayerStyle(rawValue: coverPlayerStyleRaw) ?? .classic
+        return BeansCoverPlayerStyle(rawValue: coverPlayerStyleRaw) ?? .appleMusic
     }
 
     private func toggleLocalFavorite(_ song: Song) {
@@ -2011,7 +2011,7 @@ struct PlayerView: View {
         appleSecondaryHex = ""
         appleAccentHex = ""
         appleVolumeHex = ""
-        appleShowVolume = true
+        appleShowVolume = false
         appleShowLyricPreview = true
         appleSyncWallpaper = false
         appleWallpaperBlur = 14
@@ -2907,7 +2907,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.albumTextGradient") private var albumTextGradient = false
     @AppStorage("beans.albumTextGlow") private var albumTextGlow = false
     @AppStorage("beans.albumTextGlowIntensity") private var albumTextGlowIntensity = 1.0
-    @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.classic.rawValue
+    @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
     @AppStorage("beans.appleMusic.showLyricPreview") private var appleShowLyricPreview = true
     @Environment(\.dismiss) private var dismiss
     @AppStorage("beans.playerSettings.playbackExpanded") private var playbackExpanded = false

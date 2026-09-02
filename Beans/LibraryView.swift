@@ -35,6 +35,16 @@ enum LibraryProvider: String, CaseIterable, Identifiable {
     }
 }
 
+private extension LibraryProvider {
+    var songSource: SongSource {
+        switch self {
+        case .netease: return .netease
+        case .qq: return .qq
+        case .kugou: return .kugou
+        }
+    }
+}
+
 struct LibraryView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
@@ -46,6 +56,7 @@ struct LibraryView: View {
 
     @State private var showHistory = false
     @State private var showSectionSort = false
+    @State private var showSyncedPlaylistSort = false
     /// 音乐库板块顺序（本地音乐库 / 我的歌单 / 最近播放，可自定义）
     @State private var libraryOrder = SectionOrderStore.load(SectionOrderStore.libraryKey, defaults: SectionOrderStore.libraryDefaults)
     @State private var selectedPlaylist: Playlist?
@@ -64,6 +75,38 @@ struct LibraryView: View {
     @State private var kugouSavedAt = Date.distantPast
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     private var libraryProviders: [LibraryProvider] { platformPrefs.enabledLibraryProviders }
+
+    private var orderedNeteasePlaylists: [Playlist] {
+        SyncedPlaylistOrderStore.shared.ordered(auth.playlists, source: .netease)
+    }
+
+    private var orderedQQPlaylists: [Playlist] {
+        SyncedPlaylistOrderStore.shared.ordered(qqPlaylists, source: .qq)
+    }
+
+    private var orderedKugouPlaylists: [Playlist] {
+        SyncedPlaylistOrderStore.shared.ordered(kugouPlaylists, source: .kugou)
+    }
+
+    private var syncedPlaylistBinding: Binding<[Playlist]> {
+        Binding(
+            get: {
+                switch source {
+                case .netease: return orderedNeteasePlaylists
+                case .qq: return orderedQQPlaylists
+                case .kugou: return orderedKugouPlaylists
+                }
+            },
+            set: { value in
+                switch source {
+                case .netease: auth.playlists = value
+                case .qq: qqPlaylists = value
+                case .kugou: kugouPlaylists = value
+                }
+                SyncedPlaylistOrderStore.shared.save(value, source: source.songSource)
+            }
+        )
+    }
 
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
@@ -161,6 +204,14 @@ struct LibraryView: View {
             )
                 .onDisappear { SectionOrderStore.save(SectionOrderStore.libraryKey, libraryOrder) }
         }
+        .sheet(isPresented: $showSyncedPlaylistSort) {
+            SyncedPlaylistOrderSheet(
+                title: "\(source.rawValue)歌单排序",
+                source: source.songSource,
+                playlists: syncedPlaylistBinding
+            )
+            .environmentObject(theme)
+        }
         .sheet(item: $selectedPlaylist) { playlist in
             PlaylistView(playlist: playlist)
                 .environmentObject(player)
@@ -196,6 +247,10 @@ struct LibraryView: View {
                         BeansHaptics.tap()
                         showSectionSort = true
                     }
+                    GlassIconButton(systemName: "list.number", forceLiquid: isNativeClean) {
+                        BeansHaptics.tap()
+                        showSyncedPlaylistSort = true
+                    }
                 }
                 }
             }
@@ -212,6 +267,10 @@ struct LibraryView: View {
                     GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
                         BeansHaptics.tap()
                         showSectionSort = true
+                    }
+                    GlassIconButton(systemName: "list.number", forceLiquid: isNativeClean) {
+                        BeansHaptics.tap()
+                        showSyncedPlaylistSort = true
                     }
                 }
             }
@@ -246,15 +305,6 @@ struct LibraryView: View {
             }
         } label: {
             HStack(spacing: 8) {
-                if let imageName = source.brandImageName {
-                    Image(imageName)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: isNativeClean ? 28 : 24, height: isNativeClean ? 28 : 24)
-                } else {
-                    Image(systemName: source.icon)
-                        .font(.system(size: isNativeClean ? 25 : 21, weight: .semibold))
-                }
                 Text("音乐库")
                     .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
                     .foregroundStyle(Color.beansLabel)
@@ -283,7 +333,7 @@ struct LibraryView: View {
                 createPlaylistCard
             } else {
                 VStack(spacing: 0) {
-                    ForEach(auth.playlists) { playlist in
+                    ForEach(orderedNeteasePlaylists) { playlist in
                         Button {
                             selectedPlaylist = playlist
                         } label: {
@@ -494,7 +544,7 @@ struct LibraryView: View {
                 EmptyStateView(icon: "music.note.list", text: "暂无 QQ 歌单")
             } else {
                 VStack(spacing: 0) {
-                    ForEach(qqPlaylists) { playlist in
+                    ForEach(orderedQQPlaylists) { playlist in
                         Button {
                             selectedPlaylist = playlist
                         } label: {
@@ -551,7 +601,7 @@ struct LibraryView: View {
                 EmptyStateView(icon: "music.note.list", text: "暂未同步到酷狗歌单，下拉刷新试试")
             } else {
                 VStack(spacing: 0) {
-                    ForEach(kugouPlaylists) { playlist in
+                    ForEach(orderedKugouPlaylists) { playlist in
                         Button {
                             selectedPlaylist = playlist
                         } label: {
