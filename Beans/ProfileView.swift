@@ -1241,7 +1241,6 @@ struct SettingsView: View {
     @State private var showGreetingFontImporter = false
     /// 更新日志
     @State private var showChangelog = false
-    /// 配置备份与恢复
     @State private var backupDoc: BackupDocument?
     @State private var showExportBackup = false
     @State private var showRestorePicker = false

@@ -1991,7 +1991,7 @@ struct PlayerView: View {
         let isAppleMusicStyle = playerButtonStyle == .appleMusic
         let trackColor: Color = isAppleMusicStyle ? .white.opacity(0.18) : palette.secondary.opacity(0.26)
         let timeColor: Color = isAppleMusicStyle ? .white.opacity(0.58) : palette.secondary
-        VStack(spacing: 1) {
+        return VStack(spacing: 1) {
             SeekBar(accent: accentOverride ?? progressAccent, track: trackColor, style: styleOverride ?? progressBarStyle)
             HStack(spacing: 6) {
                 if !isAppleMusicStyle {
