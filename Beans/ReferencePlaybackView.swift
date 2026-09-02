@@ -214,7 +214,6 @@ struct ReferencePlaybackView: View {
                 active: localLibrary.containsSong(song)
             ) { onFavorite() }
             Menu {
-                Button("评论", action: onComments)
                 Button("定时关闭", action: onSleepTimer)
                 Button("添加到本地歌单", action: onAddToLocalPlaylist)
                 Button("下载歌曲", action: onDownload)
@@ -331,7 +330,6 @@ struct ReferencePlaybackView: View {
                     onFavorite()
                 }
                 Menu {
-                    Button("评论", action: onComments)
                     Button("定时关闭", action: onSleepTimer)
                     Button("添加到本地歌单", action: onAddToLocalPlaylist)
                     Button("下载歌曲", action: onDownload)

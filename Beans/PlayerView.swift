@@ -552,7 +552,7 @@ struct PlayerView: View {
             Button("取消", role: .cancel) {}
         }
         .confirmationDialog("下载《\(song?.name ?? "当前歌曲")》", isPresented: $showDownloadPicker, titleVisibility: .visible) {
-            ForEach(DownloadQuality.allCases) { quality in
+            ForEach([DownloadQuality.lossless, .high, .low]) { quality in
                 Button(quality.label) {
                     Task { await downloadCurrent(quality) }
                 }
@@ -560,9 +560,6 @@ struct PlayerView: View {
             Button("取消", role: .cancel) {}
         }
         .confirmationDialog("更多操作", isPresented: $showNativeMoreActions, titleVisibility: .visible) {
-            Button("评论") {
-                showComments = true
-            }
             Button("定时关闭") {
                 showSleepTimer = true
             }
