@@ -108,6 +108,7 @@ struct SearchView: View {
     @State private var errorMessage: String?
     @State private var showAddToPlaylist: Song?
     @State private var selectedArtist: Artist?
+    @State private var selectedAlbum: Album?
     @ObservedObject private var historyStore = SearchHistoryStore.shared
     @State private var debounceTask: Task<Void, Never>?
     @State private var searchTask: Task<Void, Never>?
@@ -191,6 +192,11 @@ struct SearchView: View {
         .sheet(item: $selectedArtist) { artist in
             ArtistHomeSheet(artist: artist)
                 .environmentObject(player)
+        }
+        .sheet(item: $selectedAlbum) { album in
+            AlbumDetailView(album: album)
+                .environmentObject(player)
+                .environmentObject(theme)
         }
     }
 
@@ -695,7 +701,7 @@ struct SearchView: View {
                             Button {
                                 BeansHaptics.tap()
                                 searchController.dismissKeyboard()
-                                searchBy(album.name)
+                                selectedAlbum = album
                             } label: {
                                 HStack(spacing: 12) {
                                     CoverImage(url: album.coverURL, size: 46, cornerRadius: 10)
@@ -709,7 +715,7 @@ struct SearchView: View {
                                             .foregroundStyle(Color.beansComment)
                                     }
                                     Spacer(minLength: 8)
-                                    Image(systemName: "magnifyingglass")
+                                    Image(systemName: "chevron.right")
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundStyle(Color.beansComment)
                                 }
@@ -853,6 +859,105 @@ struct SearchView: View {
             }
         }
         await searchTask?.value
+    }
+}
+
+/// 专辑详情页：点击搜索结果直接进入专辑内容，不再把专辑名当作歌曲关键词重新搜索。
+struct AlbumDetailView: View {
+    let album: Album
+    @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var theme: ThemeStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var tracks: [Song] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    var body: some View {
+        BeansNavigationStack {
+            ZStack {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                if isLoading {
+                    LoadingStateView()
+                } else if let errorMessage {
+                    ErrorStateView(message: errorMessage) { Task { await load() } }
+                } else {
+                    List {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 14) {
+                                CoverImage(url: album.coverURL, size: 92, cornerRadius: 16)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(album.name)
+                                        .font(BeansFont.appFont(19, .bold))
+                                        .foregroundStyle(Color.beansLabel)
+                                        .lineLimit(2)
+                                    Text(album.artistName.isEmpty ? "未知歌手" : album.artistName)
+                                        .font(BeansFont.appFont(13))
+                                        .foregroundStyle(Color.beansComment)
+                                    Text(beansSongCountText(tracks.count))
+                                        .font(BeansFont.appFont(12))
+                                        .foregroundStyle(Color.beansComment)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            if !tracks.isEmpty {
+                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                                    player.play(songs: tracks, startAt: 0)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 10)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+
+                        ForEach(Array(tracks.enumerated()), id: \.element.identityKey) { index, song in
+                            SongCell(song: song, glassRow: true, playbackContext: tracks, playbackIndex: index) {
+                                player.play(songs: tracks, startAt: index)
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .beansScrollContentBackgroundHidden()
+                }
+            }
+            .navigationTitle(album.name)
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+        do {
+            let result: [Song]
+            switch album.source {
+            case .netease:
+                guard let id = Int(album.id.replacingOccurrences(of: "netease-", with: "")) else {
+                    throw NSError(domain: "BeansAlbum", code: 1, userInfo: [NSLocalizedDescriptionKey: "专辑 ID 无效"])
+                }
+                result = try await NetEaseAPI.shared.albumSongs(albumID: id)
+            case .qq:
+                let songs = try await QQMusicAPI.shared.searchSongs(keyword: album.name, limit: 100)
+                result = songs.filter { $0.album == album.name || $0.album.localizedCaseInsensitiveCompare(album.name) == .orderedSame }
+            case .kugou:
+                let songs = try await KugouMusicAPI.shared.searchSongs(keyword: album.name, limit: 100)
+                result = songs.filter { $0.album == album.name || $0.album.localizedCaseInsensitiveCompare(album.name) == .orderedSame }
+            }
+            await MainActor.run {
+                tracks = result
+                isLoading = false
+                if result.isEmpty { errorMessage = "未找到专辑歌曲" }
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                isLoading = false
+            }
+        }
     }
 }
 

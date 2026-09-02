@@ -1518,6 +1518,7 @@ struct SettingsView: View {
     /// 主题相关设置统一归组，避免平台和排行榜外观选项散落在设置页。
     private var themeSection: some View {
         VStack(alignment: .leading, spacing: 16) {
+            SectionHeader(title: "主题功能")
             appearanceSection
             chartCoverSection
             platformSection
@@ -1605,7 +1606,7 @@ struct SettingsView: View {
     /// 外观设置（原「我的」页外观折叠内容）
     private var appearanceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "主题功能")
+            SectionHeader(title: "主题外观")
             // 外观设置行：点击展开 / 收起全部外观设置
             Button {
                 BeansHaptics.select()
@@ -1618,7 +1619,7 @@ struct SettingsView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(Color.beansAmber)
                         .frame(width: 28)
-                    Text("主题功能")
+                    Text("主题模式")
                         .font(BeansFont.appFont(15))
                         .foregroundStyle(Color.beansLabel)
                     Spacer()
