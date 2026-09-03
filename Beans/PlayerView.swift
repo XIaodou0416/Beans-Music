@@ -24,6 +24,7 @@ struct PlayerView: View {
     @State private var showNativeMoreActions = false
     @State private var showMoreSettingsHint = false
     @AppStorage("beans.playerMoreSettingsHintSeen") private var playerMoreSettingsHintSeen = false
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
     /// 下载完成后直接弹原生分享（用户自行选择保存或转发）
     @State private var shareFile: ShareFileItem?
     @State private var sharedFileURL: URL?
@@ -658,8 +659,10 @@ struct PlayerView: View {
             Button("添加到本地歌单") {
                 showAddToLocalPlaylist = true
             }
-            Button("下载歌曲") {
-                showDownloadPicker = true
+            if downloadFeatureUnlocked {
+                Button("下载歌曲") {
+                    showDownloadPicker = true
+                }
             }
             Button("播放器设置") {
                 openPlayerSettings()
@@ -853,9 +856,11 @@ struct PlayerView: View {
                 showMoreActions = false
                 showAddToLocalPlaylist = true
             }
-            moreActionRow("下载歌曲", systemName: "arrow.down.circle") {
-                showMoreActions = false
-                showDownloadPicker = true
+            if downloadFeatureUnlocked {
+                moreActionRow("下载歌曲", systemName: "arrow.down.circle") {
+                    showMoreActions = false
+                    showDownloadPicker = true
+                }
             }
             moreActionRow("播放器设置", systemName: "slider.horizontal.3") {
                 showMoreActions = false
@@ -1032,7 +1037,9 @@ struct PlayerView: View {
             Menu {
                 Button("定时关闭") { showSleepTimer = true }
                 Button("添加到本地歌单") { showAddToLocalPlaylist = true }
-                Button("下载歌曲") { showDownloadPicker = true }
+                if downloadFeatureUnlocked {
+                    Button("下载歌曲") { showDownloadPicker = true }
+                }
                 Button("播放器设置") { openPlayerSettings() }
             } label: {
                 Image(systemName: "ellipsis")
@@ -1222,7 +1229,9 @@ struct PlayerView: View {
             Menu {
                 Button("定时关闭") { showSleepTimer = true }
                 Button("添加到本地歌单") { showAddToLocalPlaylist = true }
-                Button("下载歌曲") { showDownloadPicker = true }
+                if downloadFeatureUnlocked {
+                    Button("下载歌曲") { showDownloadPicker = true }
+                }
                 Button("播放器设置") { openPlayerSettings() }
             } label: {
                 Image(systemName: "ellipsis")
@@ -1643,8 +1652,10 @@ struct PlayerView: View {
                     controlPanelAction(icon: "text.bubble", title: "评论") {
                         showComments = true
                     }
-                    controlPanelAction(icon: "arrow.down.circle", title: "下载") {
-                        showDownloadPicker = true
+                    if downloadFeatureUnlocked {
+                        controlPanelAction(icon: "arrow.down.circle", title: "下载") {
+                            showDownloadPicker = true
+                        }
                     }
                     controlPanelAction(icon: "ellipsis", title: "更多") {
                         showNativeMoreActions = true

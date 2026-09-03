@@ -7,6 +7,7 @@ struct SongCell: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
     @AppStorage(ThirdPartyAudioQuality.downloadStorageKey) private var downloadQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     let song: Song
     var showCover = true
@@ -89,10 +90,12 @@ struct SongCell: View {
             } label: {
                 Label("添加到歌单", systemImage: "text.badge.plus")
             }
-            Button {
-                Task { await downloadSong() }
-            } label: {
-                Label("下载歌曲", systemImage: "arrow.down.circle")
+            if downloadFeatureUnlocked {
+                Button {
+                    Task { await downloadSong() }
+                } label: {
+                    Label("下载歌曲", systemImage: "arrow.down.circle")
+                }
             }
             if !isCurrent {
                 Button {

@@ -1,0 +1,307 @@
+import SwiftUI
+import UniformTypeIdentifiers
+
+private struct FeedbackAttachment: Identifiable, Hashable {
+    let id: UUID
+    let url: URL
+    let contentType: UTType
+
+    init(url: URL, contentType: UTType) {
+        id = UUID()
+        self.url = url
+        self.contentType = contentType
+    }
+
+    var title: String {
+        url.lastPathComponent
+    }
+
+    var icon: String {
+        contentType.conforms(to: .movie) ? "video.fill" : "photo.fill"
+    }
+}
+
+struct FeedbackSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var theme: ThemeStore
+
+    @State private var phoneModel = ""
+    @State private var phoneSystem = ""
+    @State private var problem = ""
+    @State private var attachments: [FeedbackAttachment] = []
+    @State private var showImporter = false
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
+
+    private var canSubmit: Bool {
+        !phoneModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !phoneSystem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !problem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !isSubmitting
+    }
+
+    var body: some View {
+        BeansNavigationStack {
+            ZStack {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(beansLocalized("问题反馈", "Feedback"))
+                                .font(BeansFont.appFont(24, .bold))
+                                .foregroundStyle(Color.beansLabel)
+                            Text(beansLocalized("请填写设备信息和遇到的问题；图片与视频可选。", "Device details and an issue description are required. Images and videos are optional."))
+                                .font(BeansFont.appFont(12))
+                                .foregroundStyle(Color.beansComment)
+                        }
+
+                        feedbackField(
+                            title: beansLocalized("手机型号", "Phone model"),
+                            prompt: beansLocalized("例如：iPhone 16 Pro", "For example: iPhone 16 Pro"),
+                            text: $phoneModel
+                        )
+                        feedbackField(
+                            title: beansLocalized("手机系统", "System version"),
+                            prompt: beansLocalized("例如：iOS 26.0", "For example: iOS 26.0"),
+                            text: $phoneSystem
+                        )
+
+                        VStack(alignment: .leading, spacing: 9) {
+                            Text(beansLocalized("遇到的问题", "Issue"))
+                                .font(BeansFont.appFont(13, .semibold))
+                                .foregroundStyle(Color.beansLabel)
+                            ZStack(alignment: .topLeading) {
+                                if problem.isEmpty {
+                                    Text(beansLocalized("请描述出现问题时的操作和现象", "Describe what you did and what happened"))
+                                        .font(BeansFont.appFont(13))
+                                        .foregroundStyle(Color.beansComment.opacity(0.72))
+                                        .padding(.horizontal, 13)
+                                        .padding(.vertical, 12)
+                                        .allowsHitTesting(false)
+                                }
+                                TextEditor(text: $problem)
+                                    .font(BeansFont.appFont(13))
+                                    .foregroundStyle(Color.beansLabel)
+                                    .frame(minHeight: 120)
+                                    .padding(7)
+                            }
+                            .background {
+                                BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(beansLocalized("附件", "Attachments"))
+                                        .font(BeansFont.appFont(13, .semibold))
+                                        .foregroundStyle(Color.beansLabel)
+                                    Text(beansLocalized("可选：图片或视频", "Optional: images or videos"))
+                                        .font(BeansFont.appFont(11))
+                                        .foregroundStyle(Color.beansComment)
+                                }
+                                Spacer()
+                                Button {
+                                    showImporter = true
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(Color.beansAmber)
+                                        .frame(width: 32, height: 32)
+                                        .background {
+                                            BeansSurface(shape: Circle())
+                                        }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(beansLocalized("添加附件", "Add attachment"))
+                            }
+
+                            if !attachments.isEmpty {
+                                VStack(spacing: 0) {
+                                    ForEach(attachments) { attachment in
+                                        HStack(spacing: 10) {
+                                            Image(systemName: attachment.icon)
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundStyle(Color.beansAmber)
+                                                .frame(width: 22)
+                                            Text(attachment.title)
+                                                .font(BeansFont.appFont(12))
+                                                .foregroundStyle(Color.beansLabel)
+                                                .lineLimit(1)
+                                            Spacer()
+                                            Button {
+                                                removeAttachment(attachment)
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .font(.system(size: 16))
+                                                    .foregroundStyle(Color.beansComment.opacity(0.72))
+                                            }
+                                            .buttonStyle(.plain)
+                                            .accessibilityLabel(beansLocalized("移除附件", "Remove attachment"))
+                                        }
+                                        .padding(.vertical, 10)
+                                        if attachment.id != attachments.last?.id {
+                                            Divider().overlay(Color.beansComment.opacity(0.14))
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .background {
+                                    BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                }
+                            }
+                        }
+
+                        Button {
+                            submit()
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isSubmitting {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Image(systemName: "paperplane.fill")
+                                }
+                                Text(isSubmitting
+                                     ? beansLocalized("正在提交", "Submitting")
+                                     : beansLocalized("提交反馈", "Submit feedback"))
+                            }
+                            .font(BeansFont.appFont(14, .semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                            .background(canSubmit ? Color.black : Color.beansComment.opacity(0.42), in: Capsule())
+                        }
+                        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+                        .disabled(!canSubmit)
+                    }
+                    .padding(20)
+                    .frame(maxWidth: 620)
+                    .frame(maxWidth: .infinity)
+                }
+                .beansScrollIndicatorsHidden()
+            }
+            .navigationTitle(beansLocalized("反馈", "Feedback"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(beansLocalized("完成", "Done")) { dismiss() }
+                }
+            }
+        }
+        .fileImporter(
+            isPresented: $showImporter,
+            allowedContentTypes: [.image, .movie],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                urls.forEach(addAttachment)
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
+        .alert(beansLocalized("提交失败", "Submission failed"), isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button(beansLocalized("知道了", "OK"), role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private func feedbackField(title: String, prompt: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(BeansFont.appFont(13, .semibold))
+                .foregroundStyle(Color.beansLabel)
+            TextField(prompt, text: text)
+                .font(BeansFont.appFont(13))
+                .foregroundStyle(Color.beansLabel)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(.horizontal, 13)
+                .frame(height: 42)
+                .background {
+                    BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+        }
+    }
+
+    private func addAttachment(_ sourceURL: URL) {
+        let shouldStop = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if shouldStop {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let contentType = UTType(filenameExtension: sourceURL.pathExtension) ?? .data
+        guard contentType.conforms(to: .image) || contentType.conforms(to: .movie) else {
+            errorMessage = beansLocalized("只能添加图片或视频附件。", "Only image and video attachments are supported.")
+            return
+        }
+        guard let copyURL = FeedbackAttachmentStore.copyToTemporaryDirectory(sourceURL) else {
+            errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
+            return
+        }
+        attachments.append(FeedbackAttachment(url: copyURL, contentType: contentType))
+    }
+
+    private func removeAttachment(_ attachment: FeedbackAttachment) {
+        try? FileManager.default.removeItem(at: attachment.url)
+        attachments.removeAll { $0.id == attachment.id }
+    }
+
+    private func submit() {
+        guard canSubmit else { return }
+        isSubmitting = true
+        let currentAttachments = attachments.map(\.url)
+        Task {
+            do {
+                let result = try await DeviceReporter.shared.submitFeedback(
+                    phoneModel: phoneModel,
+                    phoneSystem: phoneSystem,
+                    problem: problem,
+                    attachmentURLs: currentAttachments
+                )
+                await MainActor.run {
+                    isSubmitting = false
+                    if result.downloadUnlocked {
+                        UserDefaults.standard.set(true, forKey: BeansBackendSettings.downloadUnlockKey)
+                    }
+                    currentAttachments.forEach { try? FileManager.default.removeItem(at: $0) }
+                    ToastCenter.shared.show(
+                        result.downloadUnlocked
+                            ? beansLocalized("反馈已提交，下载功能已解锁", "Feedback submitted. Downloads unlocked.")
+                            : beansLocalized("反馈已提交", "Feedback submitted.")
+                    )
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isSubmitting = false
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+}
+
+private enum FeedbackAttachmentStore {
+    static func copyToTemporaryDirectory(_ sourceURL: URL) -> URL? {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("BeansFeedbackUploads", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let destination = directory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension(sourceURL.pathExtension)
+            try FileManager.default.copyItem(at: sourceURL, to: destination)
+            return destination
+        } catch {
+            return nil
+        }
+    }
+}

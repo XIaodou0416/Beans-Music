@@ -183,6 +183,10 @@ final class PlayerManager: NSObject, ObservableObject {
 
     func play(songs: [Song], startAt index: Int = 0) {
         guard !songs.isEmpty else { return }
+        guard !defaults.bool(forKey: BeansBackendSettings.blockedKey) else {
+            ToastCenter.shared.show("当前设备暂不可播放")
+            return
+        }
         queue = songs
         buildPlayOrder()
         jumpToOrderPosition(min(max(index, 0), songs.count - 1))

@@ -42,6 +42,7 @@ struct ReferencePlaybackView: View {
     @AppStorage("beans.appleMusic.wallpaperBlur") private var wallpaperBlur = 14.0
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
     @AppStorage("beans.appleMusic.showLyricPreview") private var showLyricPreview = true
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
     @State private var lyricCenters: [UUID: CGFloat] = [:]
     @State private var focusedLyricID: UUID?
     @State private var lyricsViewportHeight: CGFloat = 0
@@ -205,7 +206,9 @@ struct ReferencePlaybackView: View {
             Menu {
                 Button("定时关闭", action: onSleepTimer)
                 Button("添加到本地歌单", action: onAddToLocalPlaylist)
-                Button("下载歌曲", action: onDownload)
+                if downloadFeatureUnlocked {
+                    Button("下载歌曲", action: onDownload)
+                }
                 Button("播放器设置", action: onPlayerSettings)
             } label: {
                 Image(systemName: "ellipsis")
@@ -321,7 +324,9 @@ struct ReferencePlaybackView: View {
                 Menu {
                     Button("定时关闭", action: onSleepTimer)
                     Button("添加到本地歌单", action: onAddToLocalPlaylist)
-                    Button("下载歌曲", action: onDownload)
+                    if downloadFeatureUnlocked {
+                        Button("下载歌曲", action: onDownload)
+                    }
                     Button("播放器设置", action: onPlayerSettings)
                 } label: {
                     Image(systemName: "ellipsis")
