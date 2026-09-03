@@ -578,58 +578,121 @@ final class KugouMusicAPI {
     }
 
     private func upstreamRankSongs(rankID: Int, limit: Int) async throws -> [Song] {
-        let response = try await upstreamRequest(
-            "/openapi/kmr/v2/rank/audio",
-            method: "POST",
-            data: [
-                "show_portrait_mv": 1,
-                "show_type_total": 1,
-                "filter_original_remarks": 1,
-                "area_code": 1,
-                "pagesize": min(max(limit, 1), 100),
-                "rank_cid": 0,
-                "type": 1,
-                "page": 1,
-                "rank_id": rankID,
-            ],
-            headers: ["kg-tid": "369"]
-        )
-        let rows = Self.deepArrays(
-            response.json,
-            names: ["songs", "songlist", "list", "info", "data", "audio"]
-        )
-        return Array(rows.compactMap(Self.mapCompleteTrack).prefix(max(limit, 1)))
+        let target = max(limit, 1)
+        // The KMR endpoint may cap a response at roughly 20 rows regardless of
+        // pagesize, so a single request silently truncates chart details.
+        let pageSize = min(max(target, 1), 100)
+        let pageCount = max(1, min(50, Int(ceil(Double(target) / 30.0)) + 2))
+        var songs: [Song] = []
+        var seen = Set<String>()
+
+        for page in 1...pageCount {
+            let response = try await upstreamRequest(
+                "/openapi/kmr/v2/rank/audio",
+                method: "POST",
+                data: [
+                    "show_portrait_mv": 1,
+                    "show_type_total": 1,
+                    "filter_original_remarks": 1,
+                    "area_code": 1,
+                    "pagesize": pageSize,
+                    "rank_cid": 0,
+                    "type": 1,
+                    "page": page,
+                    "rank_id": rankID,
+                ],
+                headers: ["kg-tid": "369"]
+            )
+            let rows = Self.deepArrays(
+                response.json,
+                names: ["songs", "songlist", "list", "info", "data", "audio"]
+            )
+            let batch = rows.compactMap(Self.mapCompleteTrack)
+            if batch.isEmpty { break }
+
+            let before = songs.count
+            for song in batch where seen.insert(song.identityKey).inserted {
+                songs.append(song)
+                if songs.count >= target { return Array(songs.prefix(target)) }
+            }
+            // Some server-side chart variants repeat page one when they do not
+            // support pagination. Stop instead of issuing identical requests.
+            if songs.count == before { break }
+        }
+
+        return Array(songs.prefix(target))
     }
 
     /// 酷狗官方排行榜歌曲。
     func rankSongs(rankID: Int, limit: Int = 100) async throws -> [Song] {
-        if let upstream = try? await upstreamRankSongs(rankID: rankID, limit: limit), !upstream.isEmpty {
+        let target = max(limit, 1)
+        let upstream = (try? await upstreamRankSongs(rankID: rankID, limit: target)) ?? []
+        if !upstream.isEmpty {
             BeansLogger.shared.log("酷狗 KMR 排行榜歌曲：rankid=\(rankID) 返回 \(upstream.count) 首", level: .debug)
-            return upstream
         }
-        if let songs = try? await officialWebRankSongs(rankID: rankID, limit: limit), !songs.isEmpty {
-            guard songs.contains(where: { $0.coverURL == nil }) else { return songs }
-            if let mobileSongs = try? await mobileRankSongs(rankID: rankID, limit: limit), !mobileSongs.isEmpty {
-                let merged = Self.mergeRankCovers(primary: songs, fallback: mobileSongs)
-                BeansLogger.shared.log("酷狗排行榜封面补齐：rankid=\(rankID) 官网=\(songs.count) 移动端=\(mobileSongs.count)", level: .debug)
-                return merged
-            }
-            return songs
+
+        // Keep the KMR order, but use the other official endpoints to fill a
+        // short page. This handles chart variants that expose only 20-22 rows
+        // through one of the APIs.
+        var merged = upstream
+        if merged.count < target,
+           let official = try? await officialWebRankSongs(rankID: rankID, limit: target),
+           !official.isEmpty {
+            merged = Self.mergeRankSongs(primary: merged, fallback: official, limit: target)
+            BeansLogger.shared.log("酷狗排行榜歌曲补齐：rankid=\(rankID) KMR=\(upstream.count) 官网=\(official.count) 当前=\(merged.count)", level: .debug)
         }
-        return try await mobileRankSongs(rankID: rankID, limit: limit)
+
+        if merged.count < target,
+           let mobile = try? await mobileRankSongs(rankID: rankID, limit: target),
+           !mobile.isEmpty {
+            merged = Self.mergeRankSongs(primary: merged, fallback: mobile, limit: target)
+            BeansLogger.shared.log("酷狗排行榜歌曲补齐：rankid=\(rankID) 当前=\(merged.count) 移动端=\(mobile.count)", level: .debug)
+        }
+
+        if merged.isEmpty {
+            throw NetEaseError.decoding("酷狗排行榜歌曲为空")
+        }
+
+        // If the main source has rows but missing covers, enrich them without
+        // changing the order or the song metadata selected above.
+        if merged.contains(where: { $0.coverURL == nil }),
+           let mobile = try? await mobileRankSongs(rankID: rankID, limit: target),
+           !mobile.isEmpty {
+            merged = Self.mergeRankCovers(primary: merged, fallback: mobile)
+        }
+        return Array(merged.prefix(target))
     }
 
     private func mobileRankSongs(rankID: Int, limit: Int) async throws -> [Song] {
-        var components = URLComponents(string: "https://m.kugou.com/rank/info")!
-        components.queryItems = [
-            URLQueryItem(name: "rankid", value: "\(rankID)"),
-            URLQueryItem(name: "page", value: "1"),
-            URLQueryItem(name: "json", value: "true"),
-        ]
-        guard let url = components.url else { throw NetEaseError.unknown("酷狗排行榜地址无效") }
-        let json = try await getJSON(url, ua: Self.browserUA)
-        let rows = (json["songs"] as? [String: Any])?["list"] as? [[String: Any]] ?? []
-        return rows.prefix(limit).compactMap(Self.mapTrack)
+        let target = max(limit, 1)
+        let pageSize = min(max(target, 1), 100)
+        let pageCount = max(1, min(50, Int(ceil(Double(target) / 20.0)) + 2))
+        var songs: [Song] = []
+        var seen = Set<String>()
+
+        for page in 1...pageCount {
+            var components = URLComponents(string: "https://m.kugou.com/rank/info")!
+            components.queryItems = [
+                URLQueryItem(name: "rankid", value: "\(rankID)"),
+                URLQueryItem(name: "page", value: "\(page)"),
+                URLQueryItem(name: "pagesize", value: "\(pageSize)"),
+                URLQueryItem(name: "json", value: "true"),
+            ]
+            guard let url = components.url else { throw NetEaseError.unknown("酷狗排行榜地址无效") }
+            let json = try await getJSON(url, ua: Self.browserUA)
+            let rows = (json["songs"] as? [String: Any])?["list"] as? [[String: Any]] ?? []
+            let batch = rows.compactMap(Self.mapCompleteTrack)
+            if batch.isEmpty { break }
+
+            let before = songs.count
+            for song in batch where seen.insert(song.identityKey).inserted {
+                songs.append(song)
+                if songs.count >= target { return Array(songs.prefix(target)) }
+            }
+            if songs.count == before { break }
+        }
+
+        return Array(songs.prefix(target))
     }
 
     /// 酷狗官方歌单广场（移动站点 JSON）。
@@ -1754,6 +1817,32 @@ final class KugouMusicAPI {
                 fee: song.fee
             )
         }
+    }
+
+    private static func mergeRankSongs(primary: [Song], fallback: [Song], limit: Int) -> [Song] {
+        let target = max(limit, 1)
+        var result: [Song] = []
+        var seenIdentity = Set<String>()
+        var seenContent = Set<String>()
+
+        for song in primary + fallback {
+            let contentKey = rankSongContentKey(song)
+            guard seenIdentity.insert(song.identityKey).inserted else { continue }
+            if !contentKey.isEmpty, !seenContent.insert(contentKey).inserted { continue }
+            result.append(song)
+            if result.count >= target { break }
+        }
+        return result
+    }
+
+    private static func rankSongContentKey(_ song: Song) -> String {
+        if let hash = song.kugouHash?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !hash.isEmpty {
+            return "hash:\(hash)"
+        }
+        if let audioID = song.kugouAlbumAudioId?.trimmingCharacters(in: .whitespacesAndNewlines), !audioID.isEmpty {
+            return "audio:\(audioID)"
+        }
+        return "meta:\(song.name.lowercased())|\(song.artists.lowercased())|\(song.album.lowercased())|\(Int(song.duration))"
     }
 
     private static func rankCoverMatchKey(_ song: Song) -> String {
