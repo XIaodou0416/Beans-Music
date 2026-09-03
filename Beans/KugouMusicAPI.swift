@@ -156,11 +156,12 @@ final class KugouMusicAPI {
         guard auth.isLoggedIn else { return [] }
         auth.prepareDevice()
 
+        let target = max(limit, 1)
         var songs: [Song] = []
         var seen = Set<String>()
         var lastHash: String?
         var lastSongID: String?
-        let batchCount = max(1, min(6, Int(ceil(Double(max(limit, 1)) / 3.0))))
+        let batchCount = max(1, min(8, Int(ceil(Double(target) / 3.0)) + 1))
 
         for _ in 0..<batchCount {
             let clientTime = Int(Date().timeIntervalSince1970 * 1000)
@@ -204,19 +205,32 @@ final class KugouMusicAPI {
             )
             let rows = Self.deepArrays(
                 response.json,
-                names: ["songs", "songlist", "list", "data", "recommend", "recommend_list"]
+                names: ["songs", "song", "songlist", "list", "data", "recommend", "recommend_list", "recommend_song", "personal_fm", "result"]
             )
             let batch = rows.compactMap(Self.mapCompleteTrack)
-            if batch.isEmpty { break }
+            if batch.isEmpty {
+                let code = Self.deepInt(response.json, names: ["code", "status", "error_code", "errcode"])
+                let message = Self.deepString(response.json, names: ["msg", "message", "error_msg", "error_message"])
+                BeansLogger.shared.log("酷狗私人漫游接口无歌曲：code=\(code) message=\(message.isEmpty ? "无" : message)", level: .debug)
+                break
+            }
             for song in batch where seen.insert(song.identityKey).inserted {
                 songs.append(song)
-                if songs.count >= limit { return Array(songs.prefix(limit)) }
+                if songs.count >= target { return Array(songs.prefix(target)) }
             }
             lastHash = batch.last?.kugouHash
             lastSongID = batch.last?.kugouAlbumAudioId
             if lastHash == nil && lastSongID == nil { break }
         }
 
+        // Keep the feature usable when the personal-FM service returns an empty
+        // payload for a valid login by falling back to Kugou daily suggestions.
+        if songs.isEmpty,
+           let fallback = try? await everydayRecommend(limit: target),
+           !fallback.isEmpty {
+            BeansLogger.shared.log("酷狗私人漫游无个性化结果，使用每日推荐兜底：返回 \(fallback.count) 首", level: .debug)
+            return Array(fallback.prefix(target))
+        }
         BeansLogger.shared.log("酷狗私人漫游：返回 \(songs.count) 首", level: songs.isEmpty ? .warn : .info)
         return songs
     }
@@ -470,6 +484,7 @@ final class KugouMusicAPI {
 
     /// 酷狗官方歌手歌曲接口。每页最多 100 首，按热度排序。
     func artistSongs(authorID: String, page: Int = 1, limit: Int = 100) async throws -> [Song] {
+        let target = min(max(limit, 1), 100)
         let response = try await upstreamRequest(
             "/openapi/kmr/v2/audio_group/author",
             params: [
@@ -477,7 +492,7 @@ final class KugouMusicAPI {
                 "area_code": "all",
                 "sort": "1",
                 "page": "\(max(page, 1))",
-                "pagesize": "\(min(max(limit, 1), 100))",
+                "pagesize": "\(target)",
                 "replace_api_version": "1",
                 "mvdata_need": "1",
                 "show_audio_honor": "1",
@@ -490,9 +505,58 @@ final class KugouMusicAPI {
             response.json,
             names: ["songs", "songlist", "list", "info", "audio", "data"]
         )
-        let songs = rows.compactMap(Self.mapCompleteTrack)
+        var songs = rows.compactMap(Self.mapCompleteTrack)
+        if songs.count < target {
+            let legacy = (try? await legacyArtistSongs(authorID: authorID, page: page, limit: target)) ?? []
+            if !legacy.isEmpty {
+                songs = Self.mergeRankSongs(primary: songs, fallback: legacy, limit: target)
+            }
+        }
         BeansLogger.shared.log("酷狗歌手歌曲：author=\(authorID) page=\(page) 返回 \(songs.count) 首", level: .debug)
-        return Array(songs.prefix(min(max(limit, 1), 100)))
+        return Array(songs.prefix(target))
+    }
+
+    /// 老版作者歌曲接口作为分页补充，避免新版接口固定只返回 19 首。
+    private func legacyArtistSongs(authorID: String, page: Int, limit: Int) async throws -> [Song] {
+        let auth = KugouMusicAuth.shared
+        let clientTime = Int(Date().timeIntervalSince1970)
+        var data: [String: Any] = [
+            "appid": upstreamAppID,
+            "clientver": upstreamClientVersion,
+            "mid": auth.mid,
+            "clienttime": clientTime,
+            "key": upstreamParamsKey("\(clientTime)"),
+            "author_id": authorID,
+            "pagesize": min(max(limit, 1), 100),
+            "page": max(page, 1),
+            "sort": 1,
+            "area_code": "all",
+        ]
+        if !auth.userId.isEmpty {
+            data["userid"] = Int(auth.userId) ?? 0
+            data["kguid"] = Int(auth.userId) ?? 0
+        }
+        if !auth.token.isEmpty { data["token"] = auth.token }
+        let body = try JSONSerialization.data(withJSONObject: data)
+        let bodyString = String(data: body, encoding: .utf8) ?? ""
+        var params = upstreamBaseParams()
+        params["clienttime"] = "\(clientTime)"
+        params["signature"] = upstreamAndroidSignature(params: params, data: bodyString)
+        let response = try await request(
+            "/kmr/v1/audio_group/author",
+            baseURL: "https://openapi.kugou.com",
+            method: "POST",
+            params: params,
+            body: body,
+            headers: upstreamHeaders(extra: [
+                "x-router": "openapi.kugou.com",
+                "kg-tid": "220",
+                "clienttime": "\(clientTime)",
+                "Content-Type": "application/json",
+            ])
+        )
+        let rows = Self.deepArrays(response.json, names: ["songs", "songlist", "list", "info", "audio", "data"])
+        return rows.compactMap(Self.mapCompleteTrack)
     }
 
     /// 基于酷狗官方歌曲搜索结果聚合专辑，保留官方专辑名、歌手与封面。
@@ -1505,7 +1569,7 @@ final class KugouMusicAPI {
         var final = upstreamBaseParams()
         params.forEach { final[$0.key] = $0.value }
         let bodyString = body.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-        final["signature"] = androidSignature(params: final, data: bodyString)
+        final["signature"] = upstreamAndroidSignature(params: final, data: bodyString)
         var requestHeaders = upstreamHeaders(extra: headers)
         if body != nil, requestHeaders["Content-Type"] == nil {
             requestHeaders["Content-Type"] = "application/json"
@@ -1594,6 +1658,11 @@ final class KugouMusicAPI {
     private func androidSignature(params: [String: String], data: String) -> String {
         let body = params.keys.sorted().map { "\($0)=\(params[$0] ?? "")" }.joined()
         return "\(androidSignKey)\(body)\(data)\(androidSignKey)".kgMD5Hex
+    }
+
+    private func upstreamAndroidSignature(params: [String: String], data: String) -> String {
+        let body = params.keys.sorted().map { "\($0)=\(params[$0] ?? "")" }.joined()
+        return "\(upstreamSignSalt)\(body)\(data)\(upstreamSignSalt)".kgMD5Hex
     }
 
     private func webSignature(params: [String: String]) -> String {

@@ -48,6 +48,20 @@ final class ChartCoverStore: ObservableObject {
         return UIImage(contentsOfFile: path)
     }
 
+    /// Returns a chart cover for display, including bundled artwork for the
+    /// Kugou Rising Chart. User-selected artwork always takes precedence.
+    func displayImage(for provider: SearchProvider, index: Int, chartName: String?) -> UIImage? {
+        if let custom = image(for: provider, index: index) {
+            return custom
+        }
+        guard provider == .kugou,
+              let chartName,
+              chartName.localizedCaseInsensitiveContains("飙升") || chartName.localizedCaseInsensitiveContains("rising") else {
+            return nil
+        }
+        return UIImage(named: "KugouRisingChart")
+    }
+
     func set(_ data: Data, for provider: SearchProvider, index: Int) {
         guard let image = UIImage(data: data),
               let jpeg = image.jpegData(compressionQuality: 0.92) else { return }

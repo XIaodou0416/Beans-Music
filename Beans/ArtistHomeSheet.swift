@@ -368,22 +368,30 @@ struct ArtistHomeSheet: View {
     /// 酷狗暂未提供稳定的公开歌手主页数据时，使用官方综合搜索结果兜底。
     /// 这里严格按歌手名过滤，避免把关键词搜索的其他歌手歌曲混进来。
     private func loadKugouArtist() async {
-        let artists = (try? await KugouMusicAPI.shared.searchArtists(keyword: artistName, limit: 10)) ?? []
-        if let first = artists.first {
-            artist = first
+        let resolvedArtist: Artist?
+        if let artistID,
+           !artistID.isEmpty,
+           !artistID.hasPrefix("qq-") {
+            let rawID = artistID.replacingOccurrences(of: "kugou-", with: "")
+            resolvedArtist = artist ?? Artist(id: rawID, name: artistName, coverURL: nil, source: .kugou)
+        } else {
+            resolvedArtist = (try? await KugouMusicAPI.shared.searchArtists(keyword: artistName, limit: 10))?.first
+        }
+        if let resolvedArtist {
+            artist = resolvedArtist
         }
         let normalizedName = artistName.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
 
         var songs: [Song] = []
-        if let first = artists.first,
-           !first.id.isEmpty,
-           !first.id.hasPrefix("qq-") {
+        if let resolvedArtist,
+           !resolvedArtist.id.isEmpty,
+           !resolvedArtist.id.hasPrefix("qq-") {
             var seen = Set<String>()
             let pageSize = 100
             let maxSongs = 1_000
             for page in 1...(maxSongs / pageSize) {
                 let batch = (try? await KugouMusicAPI.shared.artistSongs(
-                    authorID: first.id,
+                    authorID: resolvedArtist.id,
                     page: page,
                     limit: pageSize
                 )) ?? []
@@ -396,6 +404,27 @@ struct ArtistHomeSheet: View {
                 if songs.count >= maxSongs || songs.count == before {
                     break
                 }
+            }
+        }
+
+        // The author endpoint has historically returned only 19 rows for some
+        // accounts/charts. Supplement a short result with paged song search,
+        // then keep only tracks whose artist field matches this artist.
+        if songs.count < 100 {
+            async let exact = KugouMusicAPI.shared.searchSongs(keyword: artistName, limit: 300)
+            async let works = KugouMusicAPI.shared.searchSongs(keyword: "\(artistName) 歌曲", limit: 300)
+            let candidates = [
+                (try? await exact) ?? [],
+                (try? await works) ?? [],
+            ]
+            var seen = Set(songs.map(\.identityKey))
+            for song in candidates.flatMap({ $0 }) {
+                let matchesArtist = song.artists
+                    .split(whereSeparator: { "/,、".contains($0) })
+                    .map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .contains { $0 == normalizedName || $0.contains(normalizedName) || normalizedName.contains($0) }
+                guard matchesArtist, seen.insert(song.identityKey).inserted else { continue }
+                songs.append(song)
             }
         }
 
@@ -416,7 +445,7 @@ struct ArtistHomeSheet: View {
 
         hotSongs = songs.filter { song in
             song.artists
-                .split(separator: "/")
+                .split(whereSeparator: { "/,、".contains($0) })
                 .map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
                 .contains { $0 == normalizedName || $0.contains(normalizedName) || normalizedName.contains($0) }
         }

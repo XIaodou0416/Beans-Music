@@ -229,7 +229,7 @@ struct DiscoverView: View {
             .sheet(item: $selectedKugouTopList) { info in
                 KugouTopListDetailView(
                     topList: info,
-                    customCover: chartCovers.image(for: .kugou, index: kugouTopLists.firstIndex(where: { $0.id == info.id }) ?? 0)
+                    customCover: chartCovers.displayImage(for: .kugou, index: kugouTopLists.firstIndex(where: { $0.id == info.id }) ?? 0, chartName: info.name)
                 )
                     .environmentObject(player)
                     .environmentObject(auth)
@@ -581,7 +581,7 @@ struct DiscoverView: View {
                         }
                     } else {
                         ForEach(Array(kugouTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
-                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.updateFrequency), coverURL: info.coverURL, customCover: chartCovers.image(for: .kugou, index: index)) {
+                            nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.updateFrequency), coverURL: info.coverURL, customCover: chartCovers.displayImage(for: .kugou, index: index, chartName: info.name)) {
                                 selectedKugouTopList = info
                             }
                         }
@@ -657,7 +657,7 @@ struct DiscoverView: View {
             }
         } else if source == .kugou {
             ForEach(Array(kugouTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
-                rankRow(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.updateFrequency), coverURL: info.coverURL, customCover: chartCovers.image(for: .kugou, index: index)) {
+                rankRow(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.updateFrequency), coverURL: info.coverURL, customCover: chartCovers.displayImage(for: .kugou, index: index, chartName: info.name)) {
                     BeansHaptics.tap()
                     selectedKugouTopList = info
                 }

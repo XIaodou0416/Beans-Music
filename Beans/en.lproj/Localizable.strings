@@ -865,6 +865,8 @@
 "主页、音乐库、我的、设置页增加 iPad 最大宽度适配" = "Home, Music Library, Profile, and Settings now have better maximum-width layouts on iPad.";
 "主页板块排序" = "Home Section Order";
 "主页背景色" = "Home Background Color";
+"背景颜色" = "Background Color";
+"背景模式" = "Background Mode";
 "主页壁纸模糊度" = "Home Wallpaper Blur";
 "主页聚合搜索：\\(trimmed)" = "Log entry";
 "主页聚合搜索完成：\\(trimmed) 结果=\\(results.count)" = "Log entry";
@@ -901,6 +903,7 @@
 "Apple Music 外观" = "Apple Music Appearance";
 "Apple Music 样式" = "Apple Music Style";
 "黑胶播放器" = "Vinyl Player";
+"黑胶唱盘" = "Vinyl Turntable";
 "黑胶歌词" = "Vinyl Lyrics";
 "黑胶歌词顶部" = "Vinyl Lyrics Header";
 "黑胶歌词文字" = "Vinyl Lyrics Text";
