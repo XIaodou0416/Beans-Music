@@ -1189,8 +1189,6 @@ struct SettingsView: View {
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     /// 官方地址不可用时，是否尝试第三方音源
     @AppStorage("beans.enableUnblock") private var enableBuiltInSources = true
-    /// 开启后只使用内置免费音源，不调用付费音源。
-    @AppStorage("beans.useFreeAudioSource") private var useFreeAudioSource = false
     /// 第三方音源播放会员歌成功时提醒，默认开启
     @AppStorage("beans.showThirdPartyVIPNotice") private var showThirdPartyVIPNotice = true
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
@@ -1198,6 +1196,7 @@ struct SettingsView: View {
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
     @AppStorage(BeansHaptics.enabledKey) private var hapticsEnabled = true
+    @AppStorage("beans.playback.autoResumeLast") private var autoResumeLastPlayback = false
     @AppStorage("beans.labelColorHex") private var labelColorHex = ""
     @AppStorage("beans.homeGreetingText") private var homeGreetingText = ""
     @AppStorage("beans.homeGreetingSize") private var homeGreetingSize = 30.0
@@ -2277,6 +2276,27 @@ struct SettingsView: View {
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
+                Toggle(isOn: $autoResumeLastPlayback) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "play.square.stack.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(beansLocalized("启动时自动播放上次歌曲", "Auto-play the last song on launch"))
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text(beansLocalized("打开软件后自动恢复上次未播放完的歌曲", "Automatically resume the last unfinished song when the app starts."))
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color.beansAmber)
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
                 Toggle(isOn: $hapticsEnabled) {
                     HStack(spacing: 12) {
                         Image(systemName: "iphone.radiowaves.left.and.right")
@@ -2314,17 +2334,17 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 .tint(Color.beansAmber)
 
-                Toggle(isOn: $useFreeAudioSource) {
+                Toggle(isOn: .constant(false)) {
                     HStack(spacing: 12) {
                         Image(systemName: "gift.fill")
                             .font(.system(size: 14))
                             .foregroundStyle(Color.beansAmber)
                             .frame(width: 28)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(beansLocalized("使用免费音源", "Use free source"))
+                            Text(beansLocalized("使用免费音源（暂不可用）", "Use free source (currently unavailable)"))
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text(beansLocalized("开启后只调用内置免费音源，不使用付费音源", "When enabled, only the built-in free source is used; paid sources are skipped."))
+                            Text(beansLocalized("当前固定关闭，仅保留付费音源播放", "This option is locked off; only paid sources are used."))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -2332,6 +2352,7 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .tint(Color.beansAmber)
+                .disabled(true)
 
                 Toggle(isOn: $showThirdPartyVIPNotice) {
                     HStack(spacing: 12) {

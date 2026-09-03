@@ -232,6 +232,7 @@ struct DiscoverView: View {
                     customCover: chartCovers.image(for: .kugou, index: kugouTopLists.firstIndex(where: { $0.id == info.id }) ?? 0)
                 )
                     .environmentObject(player)
+                    .environmentObject(auth)
             }
             .sheet(item: $selectedQQPlaylist) { playlist in
                 PlaylistView(playlist: playlist)
@@ -1436,6 +1437,7 @@ struct QQTopListDetailView: View {
             .searchable(text: $searchText, prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         }
         .task { await load() }
+        .beansDetailMiniPlayer()
     }
 
     private var filteredTracks: [Song] {
@@ -1524,6 +1526,7 @@ struct QQPlaylistSongsSheet: View {
             .searchable(text: $searchText, prompt: beansLocalized("搜索歌单内歌曲", "Search playlist songs"))
         }
         .task { await load() }
+        .beansDetailMiniPlayer()
     }
 
     private var filteredTracks: [Song] {
@@ -1687,6 +1690,7 @@ struct TopListDetailView: View {
             .searchable(text: $searchText, prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         }
         .task { await load() }
+        .beansDetailMiniPlayer()
     }
 
     private var header: some View {
@@ -1818,6 +1822,7 @@ struct KugouTopListDetailView: View {
             .searchable(text: $searchText, prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         }
         .task { await load() }
+        .beansDetailMiniPlayer()
     }
 
     private var header: some View {

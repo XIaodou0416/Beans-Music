@@ -10,18 +10,7 @@ private struct ReferenceLyricCenterKey: PreferenceKey {
 }
 
 private struct ReferencePlaybackPresentationMetrics {
-    static let indicatorTopSpacing: CGFloat = 1
-    static let indicatorWidth: CGFloat = 44
-    static let indicatorHeight: CGFloat = 5
-    static let indicatorHitWidth: CGFloat = 180
-    static let indicatorHitHeight: CGFloat = 82
-    static let dismissDistance: CGFloat = 110
-    static let dismissPrediction: CGFloat = 190
-    static let dismissAnimation = Animation.spring(
-        response: 0.48,
-        dampingFraction: 0.86,
-        blendDuration: 0.08
-    )
+    static let headerTopSpacing: CGFloat = 20
 }
 
 struct ReferencePlaybackView: View {
@@ -34,7 +23,6 @@ struct ReferencePlaybackView: View {
     let song: Song?
     let lyrics: [LyricLine]
     @Binding var showLyrics: Bool
-    let onClose: () -> Void
     let onFavorite: () -> Void
     let onQueue: () -> Void
     let onComments: () -> Void
@@ -57,7 +45,6 @@ struct ReferencePlaybackView: View {
     @State private var focusedLyricID: UUID?
     @State private var lyricsViewportHeight: CGFloat = 0
     @State private var isDraggingLyrics = false
-    @State private var dismissDragOffset: CGFloat = 0
     @State private var resumeTask: Task<Void, Never>?
 
     private func layoutEntry(_ part: AppleMusicLayoutPart) -> PlayerLayoutEntry {
@@ -70,7 +57,7 @@ struct ReferencePlaybackView: View {
                 playerBackground
 
                 VStack(spacing: 0) {
-                    topIndicator
+                    Color.clear.frame(height: ReferencePlaybackPresentationMetrics.headerTopSpacing)
 
                     ZStack {
                         if showLyrics {
@@ -92,7 +79,6 @@ struct ReferencePlaybackView: View {
 
                     playbackControls(bottomInset: geometry.safeAreaInsets.bottom)
                 }
-                .offset(y: dismissDragOffset)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
@@ -101,9 +87,6 @@ struct ReferencePlaybackView: View {
             HighRefreshConfigurator()
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
-        }
-        .onAppear {
-            dismissDragOffset = 0
         }
         .onDisappear { resumeTask?.cancel() }
     }
@@ -129,23 +112,6 @@ struct ReferencePlaybackView: View {
                 .overlay(Color.black.opacity(0.48))
                 .ignoresSafeArea()
         }
-    }
-
-    private var topIndicator: some View {
-        ZStack(alignment: .top) {
-            Color.clear
-            Capsule()
-                .fill(.white.opacity(0.7))
-                .frame(width: ReferencePlaybackPresentationMetrics.indicatorWidth,
-                       height: ReferencePlaybackPresentationMetrics.indicatorHeight)
-                .padding(.top, ReferencePlaybackPresentationMetrics.indicatorTopSpacing)
-        }
-        .frame(width: ReferencePlaybackPresentationMetrics.indicatorHitWidth,
-               height: ReferencePlaybackPresentationMetrics.indicatorHitHeight)
-        .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.top)))
-        .contentShape(Rectangle())
-        .gesture(closeGesture)
-        .accessibilityLabel("收起播放器")
     }
 
     private func coverPage(size: CGSize) -> some View {
@@ -588,34 +554,6 @@ struct ReferencePlaybackView: View {
                     try? await Task.sleep(nanoseconds: 2_500_000_000)
                     guard !Task.isCancelled else { return }
                     isDraggingLyrics = false
-                }
-            }
-    }
-
-    private var closeGesture: some Gesture {
-        DragGesture(minimumDistance: 3, coordinateSpace: .global)
-            .onChanged { value in
-                guard value.translation.height > 0,
-                      value.translation.height > abs(value.translation.width) * 1.15 else { return }
-                let raw = value.translation.height
-                dismissDragOffset = raw < 120 ? raw : 120 + (raw - 120) * 0.45
-            }
-            .onEnded { value in
-                let translation = max(value.translation.height, 0)
-                let prediction = max(value.predictedEndTranslation.height, 0)
-                if translation > ReferencePlaybackPresentationMetrics.dismissDistance
-                    || prediction > ReferencePlaybackPresentationMetrics.dismissPrediction {
-                    BeansHaptics.medium()
-                    withAnimation(ReferencePlaybackPresentationMetrics.dismissAnimation) {
-                        dismissDragOffset = max(translation, 180)
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
-                        onClose()
-                    }
-                } else {
-                    withAnimation(.interactiveSpring(response: 0.30, dampingFraction: 0.72, blendDuration: 0.04)) {
-                        dismissDragOffset = 0
-                    }
                 }
             }
     }

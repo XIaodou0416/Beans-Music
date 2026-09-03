@@ -88,6 +88,11 @@ struct RootView: View {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
 
+    private var usesSystemPlayerDismissal: Bool {
+        if #available(iOS 18.0, *) { return true }
+        return false
+    }
+
     var body: some View {
         let _ = theme.accent
         let rootTabs = TabView(selection: $selection) {
@@ -147,23 +152,19 @@ struct RootView: View {
         }
         .fullScreenCover(isPresented: $showPlayer) {
             if #available(iOS 18.0, *) {
-                PlayerView(isPresented: $showPlayer)
-                    .environmentObject(favorites)
-                    .environmentObject(player)
-                    .environmentObject(player.clock)
-                    .environmentObject(auth)
+                playerPresentation
+                    .presentationBackground(.clear)
                     .navigationTransition(
                         .zoom(
                             sourceID: BeansNowPlayingTransitionID.surface,
                             in: nowPlayingTransition
                         )
                     )
+            } else if #available(iOS 16.4, *) {
+                playerPresentation
+                    .presentationBackground(.clear)
             } else {
-                PlayerView(isPresented: $showPlayer)
-                    .environmentObject(favorites)
-                    .environmentObject(player)
-                    .environmentObject(player.clock)
-                    .environmentObject(auth)
+                playerPresentation
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
@@ -388,6 +389,119 @@ struct RootView: View {
                 Label(LocalizedStringKey(provider.rawValue), systemImage: provider == current ? "checkmark" : provider.icon)
             }
         }
+    }
+
+    @ViewBuilder
+    private var playerPresentation: some View {
+        BeansNowPlayingPresentation(
+            isPresented: $showPlayer,
+            usesSystemInteractiveDismissal: usesSystemPlayerDismissal
+        ) {
+            PlayerView(isPresented: $showPlayer)
+                .environmentObject(favorites)
+                .environmentObject(player)
+                .environmentObject(player.clock)
+                .environmentObject(auth)
+        }
+    }
+}
+
+private enum BeansNowPlayingPresentationMetrics {
+    static let indicatorTopSpacing: CGFloat = 6
+    static let indicatorWidth: CGFloat = 44
+    static let indicatorHeight: CGFloat = 5
+    static let indicatorHitWidth: CGFloat = 180
+    static let indicatorHitHeight: CGFloat = 82
+    static let dismissDistance: CGFloat = 110
+    static let dismissPrediction: CGFloat = 190
+    static let dismissAnimation = Animation.spring(
+        response: 0.52,
+        dampingFraction: 0.90,
+        blendDuration: 0.10
+    )
+}
+
+private struct BeansNowPlayingPresentation<Content: View>: View {
+    @Binding var isPresented: Bool
+    let usesSystemInteractiveDismissal: Bool
+    let content: Content
+    @State private var dragOffset: CGFloat = 0
+
+    init(
+        isPresented: Binding<Bool>,
+        usesSystemInteractiveDismissal: Bool,
+        @ViewBuilder content: () -> Content
+    ) {
+        _isPresented = isPresented
+        self.usesSystemInteractiveDismissal = usesSystemInteractiveDismissal
+        self.content = content()
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let isPhone = proxy.size.width < 720
+            ZStack(alignment: .top) {
+                content
+
+                if isPhone {
+                    dragIndicator(safeAreaTop: proxy.safeAreaInsets.top)
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .offset(y: usesSystemInteractiveDismissal ? 0 : dragOffset)
+        }
+        .onAppear { dragOffset = 0 }
+    }
+
+    @ViewBuilder
+    private func dragIndicator(safeAreaTop: CGFloat) -> some View {
+        let surface = ZStack(alignment: .top) {
+            Color.clear
+            Capsule()
+                .fill(.white.opacity(0.70))
+                .frame(
+                    width: BeansNowPlayingPresentationMetrics.indicatorWidth,
+                    height: BeansNowPlayingPresentationMetrics.indicatorHeight
+                )
+                .padding(.top, BeansNowPlayingPresentationMetrics.indicatorTopSpacing)
+        }
+        .frame(
+            width: BeansNowPlayingPresentationMetrics.indicatorHitWidth,
+            height: BeansNowPlayingPresentationMetrics.indicatorHitHeight
+        )
+        .contentShape(Rectangle())
+        .accessibilityLabel("下拉关闭播放页")
+
+        if usesSystemInteractiveDismissal {
+            surface
+                .padding(.top, safeAreaTop)
+        } else {
+            surface
+                .padding(.top, safeAreaTop)
+                .gesture(dismissGesture)
+        }
+    }
+
+    private var dismissGesture: some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .global)
+            .onChanged { value in
+                dragOffset = max(value.translation.height, 0)
+            }
+            .onEnded { value in
+                let translation = max(value.translation.height, 0)
+                let prediction = max(value.predictedEndTranslation.height, 0)
+                if translation > BeansNowPlayingPresentationMetrics.dismissDistance
+                    || prediction > BeansNowPlayingPresentationMetrics.dismissPrediction {
+                    BeansHaptics.medium()
+                    withAnimation(BeansNowPlayingPresentationMetrics.dismissAnimation) {
+                        isPresented = false
+                    }
+                } else {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                        dragOffset = 0
+                    }
+                }
+            }
     }
 }
 

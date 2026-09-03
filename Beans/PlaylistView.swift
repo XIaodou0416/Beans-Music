@@ -63,6 +63,7 @@ struct PlaylistView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .task { await load() }
+        .beansDetailMiniPlayer()
     }
 
     private var header: some View {

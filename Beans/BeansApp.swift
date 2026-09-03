@@ -29,8 +29,12 @@ struct BeansApp: App {
             "beans.homeHeaderHideRefresh": true,
             PlatformPreferenceStore.hidePickerKey: true,
             "beans.homeWallpaperBlur": 0.0,
-            "beans.haptics.enabled": true
+            "beans.haptics.enabled": true,
+            "beans.useFreeAudioSource": false,
+            "beans.playback.autoResumeLast": false
         ])
+        // 免费音源当前仅保留为内置能力，不开放给用户主动启用。
+        UserDefaults.standard.set(false, forKey: "beans.useFreeAudioSource")
     }
 
     var body: some Scene {
@@ -51,6 +55,7 @@ struct BeansApp: App {
                 // 先让系统完成首帧，再恢复仅影响已安装用户的数据与媒体偏好。
                 await Task.yield()
                 player.restorePersistedPlayMode()
+                player.resumePersistedPlaybackIfEnabled()
                 FontManager.reinstallIfNeeded()
                 theme.restoreWallpapersIfNeeded()
                 await DeviceReporter.shared.reportLaunch()

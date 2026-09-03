@@ -36,8 +36,6 @@ struct PlayerView: View {
     @State private var vinylLyricsViewportHeight: CGFloat = 0
     @State private var vinylIsDraggingLyrics = false
     @State private var vinylLyricsResumeTask: Task<Void, Never>?
-    @State private var vinylDismissDragOffset: CGFloat = 0
-    @State private var vinylPresentationHeight: CGFloat = 0
     @AppStorage("beans.djVisual") private var djVisualEnabled = false
     @AppStorage("beans.djVisualIntensity") private var djVisualIntensity = 0.8
     @State private var dominantColor: RGBColor?
@@ -363,7 +361,6 @@ struct PlayerView: View {
                         song: song,
                         lyrics: lyrics,
                         showLyrics: $showLyrics,
-                        onClose: closePlayer,
                         onFavorite: {
                             guard let song else { return }
                             toggleLocalFavorite(song)
@@ -428,8 +425,6 @@ struct PlayerView: View {
                             .frame(maxWidth: .infinity)
                             .frame(maxHeight: .infinity, alignment: .bottom)
 
-                        vinylTopIndicator(topInset: geo.safeAreaInsets.top)
-
                         if layoutMode && coverPlayerStyle != .vinyl {
                             layoutToolbar
                                 .contentShape(Rectangle())
@@ -457,17 +452,7 @@ struct PlayerView: View {
                                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
                         }
                     }
-                    .onAppear {
-                        vinylPresentationHeight = geo.size.height
-                    }
-                    .onChange(of: geo.size.height) { vinylPresentationHeight = $0 }
                 }
-                .modifier(
-                    VinylDismissVisualModifier(
-                        dragOffset: vinylDismissDragOffset,
-                        presentationHeight: vinylPresentationHeight
-                    )
-                )
             } else {
                 GeometryReader { geo in
                     ZStack {
@@ -520,8 +505,6 @@ struct PlayerView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
-        // Vinyl can only be dismissed from its top indicator hit area.
-        .interactiveDismissDisabled(coverPlayerStyle == .vinyl)
         .overlay(alignment: .top) {
             if showMoreSettingsHint {
                 Text("点击顶部中间正在播放的标题，可打开更多设置")
@@ -540,7 +523,6 @@ struct PlayerView: View {
             dominantColor = nil
             await MainActor.run {
                 coverDrag = .zero
-                vinylDismissDragOffset = 0
                 vinylFocusedLyricIndex = nil
                 vinylIsDraggingLyrics = false
                 vinylLyricsViewportHeight = 0
@@ -564,7 +546,6 @@ struct PlayerView: View {
             PlayerLayoutStore.save(newValue)
         }
         .onAppear {
-            vinylDismissDragOffset = 0
             layoutPart = PlayerLayoutPart(rawValue: layoutPartRaw) ?? .progress
             showLyrics = lastLyricsPage
             if let path = LyricBackgroundStore.restoreFromBackup(), lyricBackgroundImagePath != path {
@@ -1246,23 +1227,6 @@ struct PlayerView: View {
             BeansHaptics.tap()
             toggleLyrics()
         }
-    }
-
-    private func vinylTopIndicator(topInset: CGFloat) -> some View {
-        ZStack(alignment: .top) {
-            Color.clear
-            Capsule()
-                .fill(.white.opacity(0.7))
-                .frame(width: 44, height: 5)
-                .padding(.top, 1)
-        }
-        .frame(width: 180, height: 82)
-        .contentShape(Rectangle())
-        .gesture(vinylCloseGesture)
-        .accessibilityLabel("下拉关闭播放页")
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, max(1, topInset))
-        .zIndex(20)
     }
 
     private func vinylLyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
@@ -2000,13 +1964,10 @@ struct PlayerView: View {
     private func controlDeck(bottomInset: CGFloat) -> some View {
         VStack(spacing: 0) {
             if coverPlayerStyle == .vinyl {
-                progressBlock(
-                    styleOverride: playerButtonStyle == .appleMusic ? 0 : nil,
-                    accentOverride: playerButtonStyle == .appleMusic ? .white.opacity(0.92) : nil
-                )
+                vinylKumoneProgress
                 .offset(y: VinylLayoutDefaults.progressY)
 
-                deckRow
+                vinylKumoneTransportControls
                     .scaleEffect(VinylLayoutDefaults.controlsScale)
                     .offset(y: VinylLayoutDefaults.controlsY)
             } else {
@@ -2027,6 +1988,50 @@ struct PlayerView: View {
         .padding(.top, 10)
         .padding(.bottom, max(12, bottomInset + 4))
         .frame(maxWidth: .infinity)
+    }
+
+    /// 黑胶样式使用与 Kumone 接近的纯三键传输控制，不受经典播放器按钮样式影响。
+    private var vinylKumoneTransportControls: some View {
+        HStack(spacing: 0) {
+            Button {
+                BeansHaptics.tap()
+                player.previous()
+            } label: {
+                Image(systemName: "backward.fill")
+                    .font(.system(size: 25, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 58)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                BeansHaptics.tap()
+                player.togglePlayPause()
+            } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 36, weight: .bold))
+                    .frame(maxWidth: .infinity, minHeight: 64)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                BeansHaptics.tap()
+                player.next()
+            } label: {
+                Image(systemName: "forward.fill")
+                    .font(.system(size: 25, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 58)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var vinylKumoneProgress: some View {
+        VinylKumoneScrubber()
     }
 
     /// 底部指示线：只有在指示线附近上滑才呼出评论区（避免误触控制按钮）
@@ -2790,40 +2795,6 @@ struct PlayerView: View {
         isPresented = false
     }
 
-    private var vinylCloseGesture: some Gesture {
-        DragGesture(minimumDistance: 3, coordinateSpace: .global)
-            .onChanged { value in
-                guard value.translation.height > 0,
-                      value.translation.height > abs(value.translation.width) * 1.15 else { return }
-                let raw = value.translation.height
-                vinylDismissDragOffset = raw < 120 ? raw : 120 + (raw - 120) * 0.45
-            }
-            .onEnded { value in
-                let translation = max(value.translation.height, 0)
-                let prediction = max(value.predictedEndTranslation.height, 0)
-                if translation > 110 || prediction > 190 {
-                    BeansHaptics.medium()
-                if #available(iOS 18.0, *) {
-                    // Kumone uses the system zoom transition from the mini player.
-                    withAnimation(.spring(response: 0.52, dampingFraction: 0.9, blendDuration: 0.1)) {
-                        closePlayer()
-                    }
-                } else {
-                    withAnimation(.interactiveSpring(response: 0.48, dampingFraction: 0.86, blendDuration: 0.08)) {
-                        vinylDismissDragOffset = max(vinylPresentationHeight * 0.72, 180)
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                        closePlayer()
-                    }
-                }
-                } else {
-                    withAnimation(.interactiveSpring(response: 0.30, dampingFraction: 0.72, blendDuration: 0.04)) {
-                        vinylDismissDragOffset = 0
-                    }
-                }
-            }
-    }
-
     /// 左右切歌：松手后旧封面沿手势方向飞出，新封面从对侧滑入（左滑下一首，右滑上一首）。
     private func handleSwipeEnd(horizontal: CGFloat) {
         guard swipeSwitchSong else { return }
@@ -2905,6 +2876,69 @@ struct PlayerView: View {
         }
     }
 
+}
+
+/// 黑胶页专用的白色极简进度条：非拖动时隐藏滑块，拖动时才显示。
+private struct VinylKumoneScrubber: View {
+    @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var clock: PlaybackClock
+    @State private var isDragging = false
+    @State private var dragProgress = 0.0
+
+    private var currentProgress: Double {
+        isDragging ? dragProgress : clock.progress
+    }
+
+    private var fraction: Double {
+        guard clock.duration > 0 else { return 0 }
+        return min(max(currentProgress / clock.duration, 0), 1)
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.white.opacity(0.25))
+                        .frame(height: 4)
+                    Capsule()
+                        .fill(.white)
+                        .frame(width: max(4, width * fraction), height: 4)
+                    Circle()
+                        .fill(.white)
+                        .frame(width: isDragging ? 13 : 9, height: isDragging ? 13 : 9)
+                        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                        .offset(x: width * fraction - (isDragging ? 6.5 : 4.5))
+                        .opacity(isDragging ? 1 : 0)
+                }
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            guard clock.duration > 0 else { return }
+                            isDragging = true
+                            dragProgress = min(max(value.location.x / width, 0), 1) * clock.duration
+                        }
+                        .onEnded { _ in
+                            player.seek(to: dragProgress)
+                            isDragging = false
+                        }
+                )
+            }
+            .frame(height: 14)
+
+            HStack {
+                Text(beansTimeString(currentProgress))
+                Spacer(minLength: 0)
+                Text(beansTimeString(clock.duration))
+            }
+            .font(BeansFont.appFont(10, .regular, .monospaced))
+            .foregroundStyle(.white.opacity(0.55))
+            .monospacedDigit()
+        }
+    }
 }
 
 // MARK: - 自定义进度条（点击 / 拖动均可跳转，配色跟随封面主色）
@@ -3181,27 +3215,6 @@ private struct LyricCenterPreferenceKey: PreferenceKey {
 
     static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
         value.merge(nextValue(), uniquingKeysWith: { $1 })
-    }
-}
-
-private struct VinylDismissVisualModifier: ViewModifier {
-    let dragOffset: CGFloat
-    let presentationHeight: CGFloat
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            // On iOS 18+, the matched transition performs the shrink into the
-            // mini player. Keep only the same direct, finger-following offset
-            // used by Kumone while the gesture is in progress.
-            content.offset(y: dragOffset)
-        } else {
-            let target = max(presentationHeight * 0.72, 180)
-            let progress = target > 0 ? min(max(dragOffset / target, 0), 1) : 0
-            content
-                .scaleEffect(1 - progress * 0.72, anchor: .bottom)
-                .offset(y: dragOffset * 0.18)
-        }
     }
 }
 

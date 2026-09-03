@@ -399,6 +399,45 @@ extension View {
     func beansScrollContentBackgroundHidden() -> some View {
         if #available(iOS 16, *) { self.scrollContentBackground(.hidden) } else { self }
     }
+
+    /// 在歌单、排行榜等详情页底部保留可用的迷你播放器。
+    func beansDetailMiniPlayer() -> some View {
+        modifier(BeansDetailMiniPlayerModifier())
+    }
+}
+
+private struct BeansDetailMiniPlayerModifier: ViewModifier {
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var theme: ThemeStore
+    @ObservedObject private var favorites = FavoritesStore.shared
+    @State private var showPlayer = false
+
+    func body(content: Content) -> some View {
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if player.currentSong != nil {
+                    MiniPlayerView(
+                        showPlayer: $showPlayer,
+                        presentation: .dock
+                    )
+                    .environmentObject(player.clock)
+                    .environmentObject(theme)
+                    .environmentObject(favorites)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 4)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .fullScreenCover(isPresented: $showPlayer) {
+                PlayerView(isPresented: $showPlayer)
+                    .environmentObject(auth)
+                    .environmentObject(player)
+                    .environmentObject(player.clock)
+                    .environmentObject(theme)
+                    .environmentObject(favorites)
+            }
+    }
 }
 
 // MARK: - 封面图

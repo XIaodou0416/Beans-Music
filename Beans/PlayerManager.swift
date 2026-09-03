@@ -111,8 +111,10 @@ final class PlayerManager: NSObject, ObservableObject {
     private let audioMixKey = "beans.audio.mixothers.v1"
     private let playModeKey = "beans.player.playMode"
     private let autoSkipOnFailureKey = "beans.playback.autoSkipOnFailure"
+    private let autoResumeLastPlaybackKey = "beans.playback.autoResumeLast"
     private let thirdPartyVIPNoticeKey = "beans.showThirdPartyVIPNotice"
     private let defaults = UserDefaults.standard
+    private var didAttemptAutoResume = false
 
     private struct ThirdPartyVIPNotice {
         let songKey: String
@@ -186,6 +188,15 @@ final class PlayerManager: NSObject, ObservableObject {
         Task { @MainActor in
             ToastCenter.shared.show("已加入下一首播放")
         }
+    }
+
+    /// 可选地恢复上次退出时的歌曲并立即播放，只在每次应用启动时执行一次。
+    func resumePersistedPlaybackIfEnabled() {
+        guard !didAttemptAutoResume else { return }
+        didAttemptAutoResume = true
+        guard defaults.object(forKey: autoResumeLastPlaybackKey) as? Bool ?? false,
+              currentSong != nil else { return }
+        loadCurrent(resumeAt: progress)
     }
 
     func togglePlayPause() {
@@ -464,17 +475,10 @@ final class PlayerManager: NSObject, ObservableObject {
                     guard generation == self.loadGeneration else { return }
                     self.isBuffering = false
                     self.loadFailed = true
-                    let hasUserSourceKey = (UserDefaults.standard
-                        .string(forKey: UnblockSourceStore.userAPIKeysKey)?
-                        .split(whereSeparator: { $0 == "\n" || $0 == "," || $0 == ";" })
-                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                        .filter { !$0.isEmpty }
-                        .isEmpty ?? true) == false
-                    let failureMessage = enableUnblock
-                        ? (hasUserSourceKey
-                           ? "播放失败，可能是音源调用上限或地址失效，请稍后重试"
-                           : "播放失败，您已开启第三方音源功能，请填写密钥后播放")
-                        : "播放失败，未获取到可用音源"
+                    let failureMessage = beansLocalized(
+                        "播放失败，当前音源暂时无法响应，请稍后重试或切换其他歌曲",
+                        "Playback failed. The current source did not respond. Please try again or switch songs."
+                    )
                     BeansLogger.shared.log("播放失败：\(song.name) - \(failureMessage)｜音质=\(quality.level)", level: .error)
                     ToastCenter.shared.show(failureMessage, duration: 3)
                     self.finishUnrecoverablePlaybackFailure(song: song, reason: "解析播放地址失败")
