@@ -1228,6 +1228,7 @@ struct DiscoverView: View {
 
     // MARK: - 动作
 
+    @MainActor
     private func load(force: Bool = false) async {
         guard !homeRenderingPaused else { return }
         let cache = DiscoverCache.shared
@@ -1368,6 +1369,7 @@ struct DiscoverView: View {
     }
 
     /// 网易云歌单广场：切换官方分类时单独拉取（不写缓存）
+    @MainActor
     private func loadPlaylists(cat: String) async {
         guard source == .netease else { return }
         do {
@@ -1423,6 +1425,7 @@ struct DiscoverView: View {
         return (try? await KugouMusicAPI.shared.searchSongs(keyword: "热门歌曲", limit: limit)) ?? []
     }
 
+    @MainActor
     private func apply(_ snapshot: DiscoverCache.Snapshot) {
         dailySongs = snapshot.dailySongs
         topLists = snapshot.topLists
@@ -1521,6 +1524,7 @@ struct QQTopListDetailView: View {
         }
     }
 
+    @MainActor
     private func load() async {
         loading = true
         errorMessage = nil
@@ -1610,6 +1614,7 @@ struct QQPlaylistSongsSheet: View {
         }
     }
 
+    @MainActor
     private func load() async {
         loading = true
         errorMessage = nil
@@ -1808,6 +1813,7 @@ struct TopListDetailView: View {
         }
     }
 
+    @MainActor
     private func load() async {
         loading = true
         errorMessage = nil
@@ -1943,6 +1949,7 @@ struct KugouTopListDetailView: View {
         }
     }
 
+    @MainActor
     private func load() async {
         loading = true
         errorMessage = nil
@@ -2156,6 +2163,7 @@ private struct HomeUnifiedSearchSheet: View {
         }
     }
 
+    @MainActor
     private func startSearch(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }

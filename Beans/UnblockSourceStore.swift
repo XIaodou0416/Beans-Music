@@ -117,6 +117,7 @@ final class UnblockSourceStore: ObservableObject {
             name: "CeruMusic · 免费音源",
             kind: "script-free",
             template: "",
+            headers: ["qualities": "128k,320k,flac,flac24bit"],
             quality: "320k",
             script: CeruMusicBuiltinSource.script,
             isPreset: true,
@@ -127,6 +128,7 @@ final class UnblockSourceStore: ObservableObject {
             name: "全豆要 · 免费音源",
             kind: "script-free",
             template: "",
+            headers: ["qualities": "128k,320k,flac,flac24bit"],
             quality: "320k",
             script: QuanDouYaoBuiltinSource.script,
             isPreset: true,
@@ -286,4 +288,73 @@ final class UnblockSourceStore: ObservableObject {
         return sources.count != originalCount
     }
 
+}
+
+extension UnblockSourceStore {
+    func availableThirdPartyQualities(usingFreeSources: Bool) -> [ThirdPartyAudioQuality] {
+        let activeSources = Self.activeSources(from: sources, useFreeSources: usingFreeSources)
+        let options = activeSources
+            .flatMap { Self.supportedQualities(for: $0) }
+            .uniquePreservingOrder()
+        return options.isEmpty ? ThirdPartyAudioQuality.allCases : options
+    }
+
+    static func activeSources(from allSources: [ThirdPartySource], useFreeSources: Bool) -> [ThirdPartySource] {
+        if singleSourceMode {
+            return [singlePresetSource]
+        }
+        return allSources.filter { source in
+            source.enabled && source.isFree == useFreeSources
+        }
+    }
+
+    static func supportedQualities(for source: ThirdPartySource) -> [ThirdPartyAudioQuality] {
+        if let explicit = explicitQualities(from: source.headers["qualities"] ?? source.headers["qualityOptions"] ?? source.headers["qualitys"]),
+           !explicit.isEmpty {
+            return explicit
+        }
+
+        if let script = source.script,
+           let explicit = scriptQualities(from: script),
+           !explicit.isEmpty {
+            return explicit
+        }
+
+        let kind = source.kind.lowercased()
+        if source.isFree || kind.contains("free") {
+            return [.kb128, .kb320, .flac, .flac24bit]
+        }
+        return ThirdPartyAudioQuality.allCases
+    }
+
+    private static func explicitQualities(from raw: String?) -> [ThirdPartyAudioQuality] {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return [] }
+        let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;|/[]\"'"))
+        return raw
+            .components(separatedBy: separators)
+            .compactMap { ThirdPartyAudioQuality(sourceValue: $0) }
+            .uniquePreservingOrder()
+    }
+
+    private static func scriptQualities(from script: String) -> [ThirdPartyAudioQuality]? {
+        let pattern = #"(?i)(?:qualitys?|qualityOptions)\s*[:=]\s*\[([^\]]*)\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(
+                in: script,
+                options: [],
+                range: NSRange(script.startIndex..<script.endIndex, in: script)
+              ),
+              match.numberOfRanges > 1,
+              let range = Range(match.range(at: 1), in: script) else {
+            return nil
+        }
+        return explicitQualities(from: String(script[range]))
+    }
+}
+
+private extension Array where Element: Hashable {
+    func uniquePreservingOrder() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
+    }
 }

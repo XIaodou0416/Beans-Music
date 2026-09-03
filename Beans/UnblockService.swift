@@ -25,6 +25,7 @@ enum UnblockService {
         qqMid: String? = nil,
         qqMediaMid: String? = nil,
         kugouID: String? = nil,
+        quality: ThirdPartyAudioQuality = .current,
         strict: Bool = false,
         excludedHosts: Set<String> = []
     ) async -> Resolved? {
@@ -73,6 +74,7 @@ enum UnblockService {
                             qqMid: qqMid,
                             qqMediaMid: qqMediaMid,
                             kugouID: kugouID,
+                            preferredQuality: quality,
                             excludedHosts: excludedHosts
                         )
                     }
@@ -85,6 +87,7 @@ enum UnblockService {
                         qqMid: qqMid,
                         qqMediaMid: qqMediaMid,
                         kugouID: kugouID,
+                        preferredQuality: quality,
                         excludedHosts: excludedHosts
                     )
                 }
@@ -127,6 +130,7 @@ enum UnblockService {
         qqMid: String?,
         qqMediaMid: String?,
         kugouID: String?,
+        preferredQuality: ThirdPartyAudioQuality,
         excludedHosts: Set<String>
     ) async -> Resolved? {
         guard !source.template.isEmpty else { return nil }
@@ -157,8 +161,11 @@ enum UnblockService {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             baseURLString = baseURLString.replacingOccurrences(of: "{keyword}", with: urlEncoded(keyword))
             baseURLString = baseURLString.replacingOccurrences(of: "{artist}", with: urlEncoded(artists))
-            for quality in qualityCandidates(for: source, songSource: songSource) {
-                let urlString = baseURLString.replacingOccurrences(of: "{quality}", with: quality)
+            for (qualityIndex, quality) in qualityCandidates(for: source, songSource: songSource, preferredQuality: preferredQuality).enumerated() {
+                if qualityIndex > 0 {
+                    BeansLogger.shared.log("第三方音源自动降级：\(source.name) 音质=\(quality)", level: .debug)
+                }
+                let urlString = replacingQualityPlaceholders(in: baseURLString, with: quality)
                 guard let url = URL(string: urlString) else { continue }
                 let idLabel = songSource == .qq && songIDs.count > 1 ? " ID=\(idIndex + 1)/\(songIDs.count)" : ""
                 if !apiKeys.isEmpty {
@@ -207,6 +214,7 @@ enum UnblockService {
         qqMid: String?,
         qqMediaMid: String?,
         kugouID: String?,
+        preferredQuality: ThirdPartyAudioQuality,
         excludedHosts: Set<String>
     ) async -> Resolved? {
         guard let script = source.script?.trimmingCharacters(in: .whitespacesAndNewlines), !script.isEmpty else { return nil }
@@ -224,9 +232,12 @@ enum UnblockService {
             return nil
         }
 
-        let qualities = qualityCandidates(for: source, songSource: songSource)
+        let qualities = qualityCandidates(for: source, songSource: songSource, preferredQuality: preferredQuality)
         for songID in songIDs {
-            for quality in qualities {
+            for (qualityIndex, quality) in qualities.enumerated() {
+                if qualityIndex > 0 {
+                    BeansLogger.shared.log("脚本音源自动降级：\(source.name) 音质=\(quality)", level: .debug)
+                }
                 if let resolved = await LXScriptSourceRunner.shared.resolve(
                     source: source,
                     script: script,
@@ -263,10 +274,17 @@ enum UnblockService {
             request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
         let keyLabel = idLabel + (keyTotal > 1 ? " 密钥=\(keyIndex)/\(keyTotal)" : "") + " 音质=\(quality)"
-        let metadataKeys: Set<String> = ["source", "quality", "br", "apiKey", "apiKeys"]
+        let metadataKeys: Set<String> = [
+            "source", "quality", "qualities", "qualityOptions", "qualitys",
+            "br", "level", "apiKey", "apiKeys"
+        ]
         for (key, value) in source.headers where !metadataKeys.contains(key) {
-            request.setValue(value, forHTTPHeaderField: key)
+            let resolvedValue = value
+                .replacingOccurrences(of: "{quality}", with: quality)
+                .replacingOccurrences(of: "{source}", with: source.headers["source"] ?? "")
+            request.setValue(resolvedValue, forHTTPHeaderField: key)
         }
+        request.setValue(quality, forHTTPHeaderField: "quality")
         let data: Data
         let response: URLResponse
         do {
@@ -368,21 +386,48 @@ enum UnblockService {
         host.contains("qq.com") || host.contains("qqmusic") || host.contains("ptqqmusic") || host.contains("gitv.tv")
     }
 
-    private static func qualityCandidates(for source: ThirdPartySource, songSource: SongSource) -> [String] {
-        let configured = source.quality.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "320k" : source.quality
-        let fallback: [String]
-        switch songSource {
-        case .qq:
-            fallback = ["320k", "128k", "flac"]
-        case .netease:
-            fallback = [configured, "exhigh", "higher", "standard"]
-        case .kugou:
-            fallback = [configured, "320k", "128k"]
+    private static func replacingQualityPlaceholders(in template: String, with quality: String) -> String {
+        ["{quality}", "{br}", "{level}"].reduce(template) { result, placeholder in
+            result.replacingOccurrences(of: placeholder, with: quality)
         }
+    }
+
+    private static func qualityCandidates(for source: ThirdPartySource, songSource: SongSource, preferredQuality: ThirdPartyAudioQuality) -> [String] {
+        let supported = Set(UnblockSourceStore.supportedQualities(for: source))
+        let sourceDefault = ThirdPartyAudioQuality(sourceValue: source.quality)
+        let platformDefault: ThirdPartyAudioQuality = {
+            switch songSource {
+            case .netease, .qq, .kugou:
+                return .kb320
+            }
+        }()
+
+        var ordered: [ThirdPartyAudioQuality] = []
+        ordered.append(contentsOf: preferredQuality.fallbackChain)
+        if let sourceDefault, sourceDefault != preferredQuality {
+            ordered.append(contentsOf: sourceDefault.fallbackChain)
+        }
+        if platformDefault != preferredQuality && platformDefault != sourceDefault {
+            ordered.append(contentsOf: platformDefault.fallbackChain)
+        }
+
+        let filtered = ordered.filter { supported.isEmpty || supported.contains($0) }
         var seen = Set<String>()
-        return ([configured] + fallback).filter { quality in
-            let trimmed = quality.trimmingCharacters(in: .whitespacesAndNewlines)
-            return !trimmed.isEmpty && seen.insert(trimmed).inserted
+        let result = filtered.compactMap { quality -> String? in
+            let trimmed = quality.rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty || !seen.insert(trimmed).inserted ? nil : trimmed
+        }
+        if !result.isEmpty { return result }
+
+        // 若源只声明了非标准档位，至少尝试它声明过的档位，不能越过能力表强行请求未知音质。
+        if !supported.isEmpty {
+            return UnblockSourceStore.supportedQualities(for: source).map(\.rawValue)
+        }
+
+        var fallbackSeen = Set<String>()
+        return ordered.compactMap { quality -> String? in
+            let trimmed = quality.rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty || !fallbackSeen.insert(trimmed).inserted ? nil : trimmed
         }
     }
 

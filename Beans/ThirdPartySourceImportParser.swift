@@ -101,6 +101,9 @@ enum ThirdPartySourceImportParser {
         let quality = string(in: dict, keys: ["quality", "br"]) ?? "320k"
 
         var headers = dictionary(in: dict, key: "headers")
+        if let qualities = qualityStrings(in: dict), !qualities.isEmpty {
+            headers["qualities"] = qualities.joined(separator: ",")
+        }
         for key in ["source", "quality", "br", "apiKey", "apiKeys", "signSalt", "fingerprint", "cookie", "tx_cookie", "wy_cookie"] {
             if let value = string(in: dict, keys: [key]), !value.isEmpty {
                 headers[key] = value
@@ -368,5 +371,27 @@ enum ThirdPartySourceImportParser {
         case "kugou", "kg": return "kg"
         default: return nil
         }
+    }
+
+    private static func qualityStrings(in dict: [String: Any]) -> [String]? {
+        for key in ["qualities", "qualityOptions", "qualitys"] {
+            guard let raw = dict[key] else { continue }
+            if let values = raw as? [String] {
+                let normalized = values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                if !normalized.isEmpty { return normalized }
+            }
+            if let values = raw as? [Any] {
+                let normalized = values.compactMap { value -> String? in
+                    if let string = value as? String { return string }
+                    if let number = value as? NSNumber { return number.stringValue }
+                    return nil
+                }
+                if !normalized.isEmpty { return normalized }
+            }
+            if let value = raw as? String, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return [value]
+            }
+        }
+        return nil
     }
 }

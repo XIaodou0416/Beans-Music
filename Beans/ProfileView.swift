@@ -1235,6 +1235,7 @@ struct SettingsView: View {
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
     @ObservedObject private var chartCovers = ChartCoverStore.shared
     @AppStorage("beans.thirdPartyAPIKeys") private var thirdPartyAPIKeys = ""
+    @AppStorage(ThirdPartyAudioQuality.storageKey) private var thirdPartyAudioQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
     @State private var appearanceExpanded = false
@@ -1296,6 +1297,42 @@ struct SettingsView: View {
 
     private var presetSourceCount: Int {
         sourceStore.sources.count
+    }
+
+    private var thirdPartyAudioQualityOptions: [ThirdPartyAudioQuality] {
+        let options = sourceStore.availableThirdPartyQualities(usingFreeSources: enableFreeSources)
+        return options.isEmpty ? ThirdPartyAudioQuality.allCases : options
+    }
+
+    private var thirdPartyAudioQualitySelection: Binding<ThirdPartyAudioQuality> {
+        Binding(
+            get: {
+                let stored = ThirdPartyAudioQuality(sourceValue: thirdPartyAudioQualityRaw) ?? .kb320
+                return thirdPartyAudioQualityOptions.first(where: { $0 == stored }) ?? thirdPartyAudioQualityOptions.first ?? .kb320
+            },
+            set: { newValue in
+                thirdPartyAudioQualityRaw = newValue.rawValue
+            }
+        )
+    }
+
+    private var thirdPartyAudioQualityTitle: String {
+        beansLocalized("第三方音源音质", "Third-party source quality")
+    }
+
+    private var thirdPartyAudioQualityHint: String {
+        beansLocalized("会优先按所选音质解析第三方音源，不可用时会自动降级。", "Third-party sources will try the selected quality first and downgrade automatically when unavailable.")
+    }
+
+    private var thirdPartyAudioQualityOptionsSignature: String {
+        thirdPartyAudioQualityOptions.map(\.rawValue).joined(separator: ",")
+    }
+
+    private func normalizeThirdPartyAudioQualitySelection() {
+        let valid = thirdPartyAudioQualityOptions.first(where: { $0.rawValue == thirdPartyAudioQualityRaw }) ?? thirdPartyAudioQualityOptions.first ?? .kb320
+        if valid.rawValue != thirdPartyAudioQualityRaw {
+            thirdPartyAudioQualityRaw = valid.rawValue
+        }
     }
 
     private var homeGreetingLines: [String] {
@@ -2486,6 +2523,34 @@ struct SettingsView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        Text(thirdPartyAudioQualityTitle)
+                            .font(BeansFont.appFont(13, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                        Spacer()
+                        Text(thirdPartyAudioQualitySelection.wrappedValue.displayName)
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    Picker("", selection: thirdPartyAudioQualitySelection) {
+                        ForEach(thirdPartyAudioQualityOptions) { quality in
+                            Text(quality.displayName).tag(quality)
+                        }
+                    }
+                    // Five quality levels do not fit comfortably in an iPhone segmented control.
+                    // Keep the picker compact so labels remain readable on small screens.
+                    .pickerStyle(.menu)
+                    Text(thirdPartyAudioQualityHint)
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+
                 Text(beansLocalized("输入后才会启用第三方音源。密钥只保存在本机，不会上传到 Beans 服务器。", "Third-party sources are only enabled after you enter a key. The key is stored locally and never uploaded to Beans servers."))
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
@@ -2497,6 +2562,9 @@ struct SettingsView: View {
             }
             .beansCardShadow(radius: 9, y: 3)
             .transition(.opacity.combined(with: .move(edge: .top)))
+            .task(id: thirdPartyAudioQualityOptionsSignature) {
+                normalizeThirdPartyAudioQualitySelection()
+            }
             }
         }
     }

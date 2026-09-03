@@ -633,6 +633,7 @@ private struct SourceEditorSheet: View {
                 Text("192k").tag("192k")
                 Text("320k").tag("320k")
                 Text("FLAC").tag("flac")
+                Text("FLAC 24-bit").tag("flac24bit")
                 Text("Hi-Res").tag("hires")
                 Text("Master").tag("master")
             }

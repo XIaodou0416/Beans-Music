@@ -30,9 +30,13 @@ final class QQMusicAuth: ObservableObject {
         session = URLSession(configuration: config, delegate: redirectBlocker, delegateQueue: nil)
         if let saved = defaults.dictionary(forKey: cookieKey) as? [String: String], !saved.isEmpty {
             cookies = saved
-            isLoggedIn = true
-            nickname = defaults.string(forKey: nickKey) ?? ""
-            vipBadge = defaults.string(forKey: vipKey)
+            let savedNickname = defaults.string(forKey: nickKey) ?? ""
+            let savedVIPBadge = defaults.string(forKey: vipKey)
+            updatePublishedState {
+                self.isLoggedIn = true
+                self.nickname = savedNickname
+                self.vipBadge = savedVIPBadge
+            }
         }
     }
 
@@ -139,12 +143,14 @@ final class QQMusicAuth: ObservableObject {
     func logout() {
         cookies = [:]
         qrsig = ""
-        isLoggedIn = false
-        nickname = ""
-        vipBadge = nil
         defaults.removeObject(forKey: cookieKey)
         defaults.removeObject(forKey: nickKey)
         defaults.removeObject(forKey: vipKey)
+        updatePublishedState {
+            self.isLoggedIn = false
+            self.nickname = ""
+            self.vipBadge = nil
+        }
     }
 
     // MARK: - 网页登录 / Cookie 导入
@@ -153,11 +159,16 @@ final class QQMusicAuth: ObservableObject {
     func importCookies(_ dict: [String: String], nickname: String?) {
         guard !dict.isEmpty else { return }
         cookies = dict
-        isLoggedIn = true
-        self.nickname = nickname ?? Self.fallbackNickname(dict)
+        let resolvedNickname = nickname ?? Self.fallbackNickname(dict)
+        updatePublishedState {
+            self.isLoggedIn = true
+            self.nickname = resolvedNickname
+        }
         defaults.set(cookies, forKey: cookieKey)
-        defaults.set(self.nickname, forKey: nickKey)
-        NotificationCenter.default.post(name: .beansQQLoginDidUpdate, object: nil)
+        defaults.set(resolvedNickname, forKey: nickKey)
+        updatePublishedState {
+            NotificationCenter.default.post(name: .beansQQLoginDidUpdate, object: nil)
+        }
         // 登录成功后异步刷新会员标识与真实昵称（失败静默降级）
         Task { await self.fetchVIPStatus() }
         Task { await self.fetchProfile() }
@@ -316,13 +327,16 @@ final class QQMusicAuth: ObservableObject {
             } catch {
                 return .error(error.localizedDescription)
             }
-            nickname = parsed.nickname
-            isLoggedIn = true
+            let resolvedNickname = parsed.nickname
+            updatePublishedState {
+                self.nickname = resolvedNickname
+                self.isLoggedIn = true
+            }
             defaults.set(cookies, forKey: cookieKey)
-            defaults.set(nickname, forKey: nickKey)
+            defaults.set(resolvedNickname, forKey: nickKey)
             Task { await self.fetchVIPStatus() }
             Task { await self.fetchProfile() }
-            return .success(parsed.nickname)
+            return .success(resolvedNickname)
         case "65", "68":
             return .expired
         case "67":
@@ -656,6 +670,16 @@ final class QQMusicAuth: ObservableObject {
         var r = d.truncatingRemainder(dividingBy: 4294967296.0)
         if r < 0 { r += 4294967296.0 }
         return UInt32(r)
+    }
+
+    /// URLSession and cookie callbacks are not guaranteed to run on the main
+    /// thread. Keep Combine/SwiftUI-visible state changes on the main thread.
+    private func updatePublishedState(_ update: @escaping () -> Void) {
+        if Thread.isMainThread {
+            update()
+        } else {
+            DispatchQueue.main.sync(execute: update)
+        }
     }
 
 }

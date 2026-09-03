@@ -48,6 +48,7 @@ final class KugouMusicAuth: ObservableObject {
     func prepareDevice() {
         var next = auth
         _ = Self.ensureDevice(&next)
+        guard next != auth else { return }
         save(next)
     }
 
@@ -64,6 +65,7 @@ final class KugouMusicAuth: ObservableObject {
 
     func saveDeviceDFID(_ dfid: String) {
         guard !dfid.isEmpty else { return }
+        guard auth["dfid"] != dfid else { return }
         var next = auth
         next["dfid"] = dfid
         save(next)
@@ -78,30 +80,56 @@ final class KugouMusicAuth: ObservableObject {
 
     func logout() {
         auth = [:]
-        isLoggedIn = false
-        userId = ""
-        nickname = ""
-        avatarURL = nil
-        vipBadge = nil
         defaults.removeObject(forKey: key)
-        NotificationCenter.default.post(name: .beansKugouLoginDidUpdate, object: nil)
+        updatePublishedState {
+            self.isLoggedIn = false
+            self.userId = ""
+            self.nickname = ""
+            self.avatarURL = nil
+            self.vipBadge = nil
+            NotificationCenter.default.post(name: .beansKugouLoginDidUpdate, object: nil)
+        }
     }
 
     private func save(_ value: [String: String]) {
         auth = value
         defaults.set(value, forKey: key)
         apply(value)
-        NotificationCenter.default.post(name: .beansKugouLoginDidUpdate, object: nil)
+        updatePublishedState {
+            NotificationCenter.default.post(name: .beansKugouLoginDidUpdate, object: nil)
+        }
     }
 
     private func apply(_ value: [String: String]) {
-        userId = (value["userid"] ?? value["user_id"] ?? "").filter(\.isNumber)
+        let nextUserId = (value["userid"] ?? value["user_id"] ?? "").filter(\.isNumber)
         let token = value["token"] ?? ""
-        isLoggedIn = !userId.isEmpty && !token.isEmpty
-        nickname = value["nickname"]?.removingPercentEncoding ?? value["nickname"] ?? ""
-        avatarURL = URL(string: value["avatar"] ?? "")
+        let nextIsLoggedIn = !nextUserId.isEmpty && !token.isEmpty
+        let nextNickname = value["nickname"]?.removingPercentEncoding ?? value["nickname"] ?? ""
+        let nextAvatarURL = URL(string: value["avatar"] ?? "")
         let vip = Int(value["vipType"] ?? value["vip_type"] ?? "0") ?? 0
-        vipBadge = vip > 0 ? "VIP" : nil
+
+        // URLSession completion handlers may resume on a non-main executor. SwiftUI
+        // observes these properties, so publish the complete auth snapshot on the
+        // main thread as one transaction instead of mutating @Published directly.
+        updatePublishedState {
+            if self.userId != nextUserId { self.userId = nextUserId }
+            if self.isLoggedIn != nextIsLoggedIn { self.isLoggedIn = nextIsLoggedIn }
+            if self.nickname != nextNickname { self.nickname = nextNickname }
+            if self.avatarURL != nextAvatarURL { self.avatarURL = nextAvatarURL }
+            let nextBadge = vip > 0 ? "VIP" : nil
+            if self.vipBadge != nextBadge { self.vipBadge = nextBadge }
+        }
+    }
+
+    /// Keep authentication/network code synchronous while making every observable
+    /// state change main-thread-only. `sync` is intentional here: callers such as
+    /// `pollQR` must see the new login state before they build the next request.
+    private func updatePublishedState(_ update: @escaping () -> Void) {
+        if Thread.isMainThread {
+            update()
+        } else {
+            DispatchQueue.main.sync(execute: update)
+        }
     }
 
     @discardableResult

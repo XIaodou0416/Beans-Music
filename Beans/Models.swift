@@ -31,6 +31,66 @@ enum BeansAudioQuality: String, CaseIterable, Identifiable {
     }
 }
 
+/// 第三方音源音质。
+enum ThirdPartyAudioQuality: String, CaseIterable, Identifiable, Sendable {
+    case kb128 = "128k"
+    case kb320 = "320k"
+    case flac = "flac"
+    case flac24bit = "flac24bit"
+    case hires = "hires"
+
+    static let storageKey = "beans.thirdPartyAudioQuality"
+
+    var id: String { rawValue }
+
+    /// 兼容第三方脚本常见的音质别名（例如 24bit / lossless）。
+    init?(sourceValue: String) {
+        let normalized = sourceValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        switch normalized {
+        case "128", "128k", "low", "standard": self = .kb128
+        case "320", "320k", "high", "exhigh": self = .kb320
+        case "flac", "lossless": self = .flac
+        case "24bit", "flac24", "flac24bit", "hires24": self = .flac24bit
+        case "hires", "highres", "high-resolution": self = .hires
+        default: return nil
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .kb128: return beansLocalized("128k", "128k")
+        case .kb320: return beansLocalized("320k", "320k")
+        case .flac: return beansLocalized("无损 FLAC", "FLAC")
+        case .flac24bit: return beansLocalized("FLAC 24 位", "FLAC 24-bit")
+        case .hires: return beansLocalized("Hi-Res", "Hi-Res")
+        }
+    }
+
+    /// 当前第三方音源优先音质。
+    static var current: ThirdPartyAudioQuality {
+        UserDefaults.standard.string(forKey: storageKey)
+            .flatMap { ThirdPartyAudioQuality(sourceValue: $0) } ?? .kb320
+    }
+
+    /// 从高到低的降级链。
+    var fallbackChain: [ThirdPartyAudioQuality] {
+        switch self {
+        case .kb128:
+            return [.kb128]
+        case .kb320:
+            return [.kb320, .kb128]
+        case .flac:
+            return [.flac, .kb320, .kb128]
+        case .flac24bit:
+            return [.flac24bit, .flac, .kb320, .kb128]
+        case .hires:
+            return [.hires, .flac24bit, .flac, .kb320, .kb128]
+        }
+    }
+}
+
 /// 歌曲来源（网易云 / QQ音乐 / 酷狗音乐）
 enum SongSource: String, Codable, Sendable {
     case netease

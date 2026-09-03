@@ -258,9 +258,12 @@ final class PlayerManager: NSObject, ObservableObject {
             toleranceAfter: .zero
         ) { [weak self] finished in
             guard let self, finished else { return }
-            let actual = self.player?.currentTime().seconds ?? clamped
-            if abs(actual - self.progress) > 0.25 {
-                self.progress = actual
+            self.performOnMain { [weak self] in
+                guard let self else { return }
+                let actual = self.player?.currentTime().seconds ?? clamped
+                if abs(actual - self.progress) > 0.25 {
+                    self.progress = actual
+                }
             }
         }
         updateNowPlaying()
@@ -452,7 +455,8 @@ final class PlayerManager: NSObject, ObservableObject {
             let enableUnblock = externalSourcesEnabled
             let strictUnlock = shouldLockOfficialOnly(song)
             let quality = (forceKugouStandard && song.source == .kugou) ? .standard : BeansAudioQuality.current
-            BeansLogger.shared.log("▶ 开始播放：\(song.name) - \(song.artists)｜平台=\(song.source.rawValue) id=\(song.id) 音质=\(quality.level) 免费听歌=\(enableUnblock ? "开" : "关") 官方受限=\(strictUnlock ? "是" : "否")", level: .info)
+            let thirdPartyQuality = ThirdPartyAudioQuality.current
+            BeansLogger.shared.log("▶ 开始播放：\(song.name) - \(song.artists)｜平台=\(song.source.rawValue) id=\(song.id) 音质=\(quality.level) 第三方音质=\(thirdPartyQuality.rawValue) 免费听歌=\(enableUnblock ? "开" : "关") 官方受限=\(strictUnlock ? "是" : "否")", level: .info)
             if UnblockSourceStore.singleSourceMode {
                 resolvedThirdParty = await UnblockService.resolve(
                     name: song.name,
@@ -462,21 +466,38 @@ final class PlayerManager: NSObject, ObservableObject {
                     qqMid: song.qqMid,
                     qqMediaMid: song.qqMediaMid,
                     kugouID: song.kugouHash ?? song.kugouAlbumAudioId,
+                    quality: thirdPartyQuality,
                     strict: true
                 )
             } else if song.source == .kugou {
                 urlString = try? await KugouMusicAPI.shared.songURL(song: song, quality: quality)
                 if urlString == nil {
-                    resolvedThirdParty = await kugouFallback(song: song, enableUnblock: enableUnblock)
+                    resolvedThirdParty = await kugouFallback(
+                        song: song,
+                        thirdPartyQuality: thirdPartyQuality,
+                        enableUnblock: enableUnblock
+                    )
                 }
             } else if song.source == .qq, let mid = song.qqMid {
                 // QQ 官方地址失败后只走 QQ 第三方音源，不跨平台匹配同名歌曲。
                 urlString = try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid)
                 if urlString == nil {
-                    (urlString, resolvedThirdParty) = await qqFallback(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
+                    (urlString, resolvedThirdParty) = await qqFallback(
+                        song: song,
+                        quality: quality,
+                        thirdPartyQuality: thirdPartyQuality,
+                        enableUnblock: enableUnblock,
+                        strict: strictUnlock
+                    )
                 }
             } else {
-                (urlString, resolvedThirdParty) = await neteaseResolve(song: song, quality: quality, enableUnblock: enableUnblock, strict: strictUnlock)
+                (urlString, resolvedThirdParty) = await neteaseResolve(
+                    song: song,
+                    quality: quality,
+                    thirdPartyQuality: thirdPartyQuality,
+                    enableUnblock: enableUnblock,
+                    strict: strictUnlock
+                )
             }
             if let resolved = resolvedThirdParty {
                 let notice = self.thirdPartyVIPNotice(for: song, sourceTitle: resolved.sourceTitle)
@@ -514,7 +535,13 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     /// 网易云播放地址解析：按设置音质取 URL，VIP/灰色歌曲交给第三方解锁。
-    private func neteaseResolve(song: Song, quality: BeansAudioQuality, enableUnblock: Bool, strict: Bool = false) async -> (String?, UnblockService.Resolved?) {
+    private func neteaseResolve(
+        song: Song,
+        quality: BeansAudioQuality,
+        thirdPartyQuality: ThirdPartyAudioQuality = .current,
+        enableUnblock: Bool,
+        strict: Bool = false
+    ) async -> (String?, UnblockService.Resolved?) {
         var urlString: String?
         var resolved: UnblockService.Resolved?
         let infos = try? await NetEaseAPI.shared.songURLInfo(ids: [song.id], level: quality.level)
@@ -535,6 +562,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 artists: song.artists,
                 neteaseID: song.id,
                 songSource: .netease,
+                quality: thirdPartyQuality,
                 strict: strict
             )
         }
@@ -543,7 +571,14 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     /// QQ 歌曲兜底：官方失败后只走 QQ 第三方接口，不跨平台匹配同名歌曲。
-    private func qqFallback(song: Song, quality _: BeansAudioQuality, enableUnblock: Bool, strict: Bool = false, excludedHosts: Set<String> = []) async -> (String?, UnblockService.Resolved?) {
+    private func qqFallback(
+        song: Song,
+        quality _: BeansAudioQuality,
+        thirdPartyQuality: ThirdPartyAudioQuality = .current,
+        enableUnblock: Bool,
+        strict: Bool = false,
+        excludedHosts: Set<String> = []
+    ) async -> (String?, UnblockService.Resolved?) {
         guard enableUnblock else {
             BeansLogger.shared.log("QQ兜底：\(song.name) 第三方=未启用", level: .debug)
             return (nil, nil)
@@ -556,6 +591,7 @@ final class PlayerManager: NSObject, ObservableObject {
             songSource: .qq,
             qqMid: song.qqMid,
             qqMediaMid: song.qqMediaMid,
+            quality: thirdPartyQuality,
             strict: strict,
             excludedHosts: excludedHosts
         )
@@ -564,7 +600,11 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     /// 酷狗兜底：官方播放失败后使用内置音源作为备选。
-    private func kugouFallback(song: Song, enableUnblock: Bool) async -> UnblockService.Resolved? {
+    private func kugouFallback(
+        song: Song,
+        thirdPartyQuality: ThirdPartyAudioQuality = .current,
+        enableUnblock: Bool
+    ) async -> UnblockService.Resolved? {
         guard enableUnblock else { return nil }
         let kugouID = song.kugouHash ?? song.kugouAlbumAudioId ?? ""
         if kugouID.isEmpty {
@@ -575,7 +615,8 @@ final class PlayerManager: NSObject, ObservableObject {
                 artists: song.artists,
                 neteaseID: 0,
                 songSource: .kugou,
-                kugouID: kugouID
+                kugouID: kugouID,
+                quality: thirdPartyQuality
             )
             if let resolved {
                 BeansLogger.shared.log("酷狗兜底：\(song.name) 酷狗音源=命中", level: .debug)
@@ -595,6 +636,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 artists: matched.artists,
                 neteaseID: matched.id,
                 songSource: .netease,
+                quality: thirdPartyQuality,
                 strict: strict
             )
             BeansLogger.shared.log("酷狗兜底转网易云音源：\(song.name) -> \(matched.name) 第三方=\(resolved != nil ? "命中" : "未命中")", level: .debug)
@@ -663,6 +705,7 @@ final class PlayerManager: NSObject, ObservableObject {
         let generation = loadGeneration
         let resume = progress
         let strict = shouldLockOfficialOnly(song)
+        let thirdPartyQuality = ThirdPartyAudioQuality.current
         var excludedHosts = thirdPartyRetryExcludedHostsBySong[song.identityKey] ?? []
         if let excludingHost, !excludingHost.isEmpty {
             excludedHosts.insert(excludingHost.lowercased())
@@ -683,6 +726,7 @@ final class PlayerManager: NSObject, ObservableObject {
             let (_, resolved) = await self.qqFallback(
                 song: song,
                 quality: BeansAudioQuality.current,
+                thirdPartyQuality: thirdPartyQuality,
                 enableUnblock: true,
                 strict: strict,
                 excludedHosts: excludedHosts
@@ -726,12 +770,19 @@ final class PlayerManager: NSObject, ObservableObject {
         let generation = loadGeneration
         let resume = progress
         let strict = shouldLockOfficialOnly(song)
+        let thirdPartyQuality = ThirdPartyAudioQuality.current
         BeansLogger.shared.log(
             "QQ 官方地址实际不可播放，切换第三方解析：歌曲=\(song.name)｜系统=\(UIDevice.current.systemVersion)",
             level: .debug
         )
         Task {
-            let (_, resolved) = await self.qqFallback(song: song, quality: BeansAudioQuality.current, enableUnblock: true, strict: strict)
+            let (_, resolved) = await self.qqFallback(
+                song: song,
+                quality: BeansAudioQuality.current,
+                thirdPartyQuality: thirdPartyQuality,
+                enableUnblock: true,
+                strict: strict
+            )
             await MainActor.run {
                 guard generation == self.loadGeneration,
                       self.currentSong?.identityKey == song.identityKey else { return }
@@ -812,43 +863,49 @@ final class PlayerManager: NSObject, ObservableObject {
         self.player = player
         playbackConfirmed = false
         itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            guard let self, self.player === player, item.status == .failed else { return }
-            self.logPlaybackFailure(
-                reason: "AVPlayerItem.status.failed",
-                item: item,
-                url: url,
-                isThirdParty: isThirdParty,
-                playbackHeaders: playbackHeaders
-            )
-            if isThirdParty && self.retryThirdPartyIfNeeded(excludingHost: url.host) { return }
-            if !isThirdParty && self.fallbackQQToThirdPartyIfNeeded() { return }
-            if self.retryKugouAtStandardIfNeeded(error: item.error) { return }
-            self.finishUnrecoverablePlaybackFailure(song: self.currentSong, reason: "AVPlayerItem 加载失败")
+            guard let self else { return }
+            self.performOnMain { [weak self] in
+                guard let self, self.player === player, item.status == .failed else { return }
+                self.logPlaybackFailure(
+                    reason: "AVPlayerItem.status.failed",
+                    item: item,
+                    url: url,
+                    isThirdParty: isThirdParty,
+                    playbackHeaders: playbackHeaders
+                )
+                if isThirdParty && self.retryThirdPartyIfNeeded(excludingHost: url.host) { return }
+                if !isThirdParty && self.fallbackQQToThirdPartyIfNeeded() { return }
+                if self.retryKugouAtStandardIfNeeded(error: item.error) { return }
+                self.finishUnrecoverablePlaybackFailure(song: self.currentSong, reason: "AVPlayerItem 加载失败")
+            }
         }
         timeControlStatusObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
-            guard let self, self.player === player else { return }
-            guard player.timeControlStatus == .playing, !self.playbackConfirmed else { return }
-            self.playbackConfirmationWorkItem?.cancel()
-            let confirmation = DispatchWorkItem { [weak self, weak player, weak item] in
-                guard let self,
-                      let player,
-                      let item,
-                      self.player === player,
-                      player.currentItem === item,
-                      player.timeControlStatus == .playing,
-                      item.status == .readyToPlay,
-                      !self.playbackConfirmed else { return }
-                self.playbackConfirmed = true
-                if let song = self.currentSong {
-                    BeansLogger.shared.log(
-                        "▶ 播放成功确认：\(song.name)｜URL=\(self.playbackURLSummary(url))｜第三方=\(isThirdParty ? "是" : "否")｜itemStatus=\(self.playerItemStatusDescription(item.status))",
-                        level: .info
-                    )
+            guard let self else { return }
+            self.performOnMain { [weak self] in
+                guard let self, self.player === player else { return }
+                guard player.timeControlStatus == .playing, !self.playbackConfirmed else { return }
+                self.playbackConfirmationWorkItem?.cancel()
+                let confirmation = DispatchWorkItem { [weak self, weak player, weak item] in
+                    guard let self,
+                          let player,
+                          let item,
+                          self.player === player,
+                          player.currentItem === item,
+                          player.timeControlStatus == .playing,
+                          item.status == .readyToPlay,
+                          !self.playbackConfirmed else { return }
+                    self.playbackConfirmed = true
+                    if let song = self.currentSong {
+                        BeansLogger.shared.log(
+                            "▶ 播放成功确认：\(song.name)｜URL=\(self.playbackURLSummary(url))｜第三方=\(isThirdParty ? "是" : "否")｜itemStatus=\(self.playerItemStatusDescription(item.status))",
+                            level: .info
+                        )
+                    }
+                    self.showPendingThirdPartyVIPNoticeIfNeeded()
                 }
-                self.showPendingThirdPartyVIPNoticeIfNeeded()
+                self.playbackConfirmationWorkItem = confirmation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: confirmation)
             }
-            self.playbackConfirmationWorkItem = confirmation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: confirmation)
         }
         if resumeAt > 0.5 {
             let seekTime = CMTime(seconds: resumeAt, preferredTimescale: 600)
@@ -911,6 +968,17 @@ final class PlayerManager: NSObject, ObservableObject {
             self?.finishUnrecoverablePlaybackFailure(song: self?.currentSong, reason: "播放中断失败")
         }
         updateNowPlaying()
+    }
+
+    /// AVFoundation KVO callbacks are not guaranteed to arrive on the main
+    /// thread. Serialize callbacks that touch ObservableObject state before
+    /// reading or mutating the player model.
+    private func performOnMain(_ work: @escaping () -> Void) {
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
+        }
     }
 
     private func finishUnrecoverablePlaybackFailure(song: Song?, reason: String) {
@@ -1115,6 +1183,12 @@ final class PlayerManager: NSObject, ObservableObject {
 
     /// 输出设备变化（插拔耳机 / 切换扬声器 / 来电路由等）后重新激活会话，避免播放无声
     @objc private func handleRouteChange(_ notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.handleRouteChange(notification)
+            }
+            return
+        }
         sessionConfigured = false
         configureAudioSession()
         if isPlaying, player?.timeControlStatus != .playing {
@@ -1136,6 +1210,12 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     @objc private func handleInterruption(_ notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.handleInterruption(notification)
+            }
+            return
+        }
         guard let info = notification.userInfo,
               let rawType = info[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
@@ -1276,32 +1356,40 @@ final class PlayerManager: NSObject, ObservableObject {
         center.togglePlayPauseCommand.isEnabled = true
         center.changePlaybackPositionCommand.isEnabled = true
         center.playCommand.addTarget { [weak self] _ in
-            self?.player?.playImmediately(atRate: Float(self?.rate ?? 1.0))
-            self?.isPlaying = true
-            self?.updateNowPlaying()
+            guard let self else { return .commandFailed }
+            self.performOnMain { [weak self] in
+                guard let self else { return }
+                self.player?.playImmediately(atRate: Float(self.rate))
+                self.isPlaying = true
+                self.updateNowPlaying()
+            }
             return .success
         }
         center.pauseCommand.addTarget { [weak self] _ in
-            self?.player?.pause()
-            self?.isPlaying = false
-            self?.updateNowPlaying()
+            guard let self else { return .commandFailed }
+            self.performOnMain { [weak self] in
+                guard let self else { return }
+                self.player?.pause()
+                self.isPlaying = false
+                self.updateNowPlaying()
+            }
             return .success
         }
         center.nextTrackCommand.addTarget { [weak self] _ in
-            self?.next()
+            self?.performOnMain { [weak self] in self?.next() }
             return .success
         }
         center.previousTrackCommand.addTarget { [weak self] _ in
-            self?.previous()
+            self?.performOnMain { [weak self] in self?.previous() }
             return .success
         }
         center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            self?.togglePlayPause()
+            self?.performOnMain { [weak self] in self?.togglePlayPause() }
             return .success
         }
         center.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
-            self?.seek(to: event.positionTime)
+            self?.performOnMain { [weak self] in self?.seek(to: event.positionTime) }
             return .success
         }
     }
