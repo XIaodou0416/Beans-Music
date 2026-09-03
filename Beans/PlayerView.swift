@@ -1967,7 +1967,7 @@ struct PlayerView: View {
                 vinylKumoneProgress
                 .offset(y: VinylLayoutDefaults.progressY)
 
-                vinylKumoneTransportControls
+                vinylKumoneControlRow
                     .scaleEffect(VinylLayoutDefaults.controlsScale)
                     .offset(y: VinylLayoutDefaults.controlsY)
             } else {
@@ -1988,6 +1988,39 @@ struct PlayerView: View {
         .padding(.top, 10)
         .padding(.bottom, max(12, bottomInset + 4))
         .frame(maxWidth: .infinity)
+    }
+
+    /// 黑胶样式的左右功能键与中间传输控制保持同一行，避免循环和播放列表被布局裁掉。
+    private var vinylKumoneControlRow: some View {
+        ZStack {
+            HStack {
+                vinylSideControl(icon: player.playMode.icon, active: player.playMode == .shuffle) {
+                    player.togglePlayMode()
+                }
+                Spacer(minLength: 0)
+                vinylSideControl(icon: "list.bullet") {
+                    showQueue = true
+                }
+            }
+            .padding(.horizontal, 4)
+
+            vinylKumoneTransportControls
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func vinylSideControl(icon: String, active: Bool = false, action: @escaping () -> Void) -> some View {
+        Button {
+            BeansHaptics.tap()
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(active ? Color.beansAmber : .white.opacity(0.86))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// 黑胶样式使用与 Kumone 接近的纯三键传输控制，不受经典播放器按钮样式影响。

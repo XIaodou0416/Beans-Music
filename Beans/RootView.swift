@@ -153,7 +153,6 @@ struct RootView: View {
         .fullScreenCover(isPresented: $showPlayer) {
             if #available(iOS 18.0, *) {
                 playerPresentation
-                    .presentationBackground(.clear)
                     .navigationTransition(
                         .zoom(
                             sourceID: BeansNowPlayingTransitionID.surface,
@@ -162,7 +161,6 @@ struct RootView: View {
                     )
             } else if #available(iOS 16.4, *) {
                 playerPresentation
-                    .presentationBackground(.clear)
             } else {
                 playerPresentation
             }
@@ -425,6 +423,7 @@ private struct BeansNowPlayingPresentation<Content: View>: View {
     @Binding var isPresented: Bool
     let usesSystemInteractiveDismissal: Bool
     let content: Content
+    @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
     @State private var dragOffset: CGFloat = 0
 
     init(
@@ -469,6 +468,7 @@ private struct BeansNowPlayingPresentation<Content: View>: View {
             width: BeansNowPlayingPresentationMetrics.indicatorHitWidth,
             height: BeansNowPlayingPresentationMetrics.indicatorHitHeight
         )
+        .modifier(AppleMusicLayoutTransform(entry: appleLayout.entry(for: .top)))
         .contentShape(Rectangle())
         .accessibilityLabel("下拉关闭播放页")
 

@@ -33,8 +33,6 @@ struct BeansApp: App {
             "beans.useFreeAudioSource": false,
             "beans.playback.autoResumeLast": false
         ])
-        // 免费音源当前仅保留为内置能力，不开放给用户主动启用。
-        UserDefaults.standard.set(false, forKey: "beans.useFreeAudioSource")
     }
 
     var body: some Scene {

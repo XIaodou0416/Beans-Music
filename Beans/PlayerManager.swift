@@ -116,6 +116,13 @@ final class PlayerManager: NSObject, ObservableObject {
     private let defaults = UserDefaults.standard
     private var didAttemptAutoResume = false
 
+    /// 付费音源与免费音源共用同一个第三方解析入口；任一模式开启即可执行兜底。
+    private var externalSourcesEnabled: Bool {
+        let paid = defaults.object(forKey: "beans.enableUnblock") as? Bool ?? true
+        let free = defaults.object(forKey: "beans.useFreeAudioSource") as? Bool ?? false
+        return paid || free
+    }
+
     private struct ThirdPartyVIPNotice {
         let songKey: String
         let message: String
@@ -439,7 +446,7 @@ final class PlayerManager: NSObject, ObservableObject {
             var urlString: String?
             var resolvedThirdParty: UnblockService.Resolved?
             // 免费听歌（灰色歌曲解锁）总开关：默认开启，官方失败后走对应平台第三方音源兜底。
-            let enableUnblock = defaults.object(forKey: "beans.enableUnblock") as? Bool ?? true
+            let enableUnblock = externalSourcesEnabled
             let strictUnlock = shouldLockOfficialOnly(song)
             let quality = (forceKugouStandard && song.source == .kugou) ? .standard : BeansAudioQuality.current
             BeansLogger.shared.log("▶ 开始播放：\(song.name) - \(song.artists)｜平台=\(song.source.rawValue) id=\(song.id) 音质=\(quality.level) 免费听歌=\(enableUnblock ? "开" : "关") 官方受限=\(strictUnlock ? "是" : "否")", level: .info)
@@ -636,7 +643,8 @@ final class PlayerManager: NSObject, ObservableObject {
         guard let song = currentSong,
               song.source == .qq,
               let qqMid = song.qqMid,
-              !qqMid.isEmpty else { return false }
+              !qqMid.isEmpty,
+              externalSourcesEnabled else { return false }
 
         let generation = loadGeneration
         let resume = progress
@@ -698,7 +706,7 @@ final class PlayerManager: NSObject, ObservableObject {
               let qqMid = song.qqMid,
               !qqMid.isEmpty,
               qqThirdPartyFallbackSongKey != song.identityKey,
-              defaults.object(forKey: "beans.enableUnblock") as? Bool ?? true else { return false }
+              externalSourcesEnabled else { return false }
 
         qqThirdPartyFallbackSongKey = song.identityKey
         let generation = loadGeneration

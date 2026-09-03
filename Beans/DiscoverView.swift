@@ -1434,7 +1434,7 @@ struct QQTopListDetailView: View {
             }
             .navigationTitle(beansChartName(name))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         }
         .task { await load() }
         .beansDetailMiniPlayer()
@@ -1523,7 +1523,7 @@ struct QQPlaylistSongsSheet: View {
             }
             .navigationTitle(playlist.name)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: beansLocalized("搜索歌单内歌曲", "Search playlist songs"))
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索歌单内歌曲", "Search playlist songs"))
         }
         .task { await load() }
         .beansDetailMiniPlayer()
@@ -1606,7 +1606,7 @@ struct DailySongsSheet: View {
             }
             .navigationTitle("今日推荐")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: beansLocalized("搜索每日推荐", "Search daily recommendations"))
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索每日推荐", "Search daily recommendations"))
         }
     }
 
@@ -1687,7 +1687,7 @@ struct TopListDetailView: View {
             }
             .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         }
         .task { await load() }
         .beansDetailMiniPlayer()
@@ -1819,7 +1819,7 @@ struct KugouTopListDetailView: View {
             }
             .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         }
         .task { await load() }
         .beansDetailMiniPlayer()

@@ -1189,6 +1189,8 @@ struct SettingsView: View {
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     /// 官方地址不可用时，是否尝试第三方音源
     @AppStorage("beans.enableUnblock") private var enableBuiltInSources = true
+    /// 免费音源和付费音源只能选择一个模式
+    @AppStorage("beans.useFreeAudioSource") private var enableFreeSources = false
     /// 第三方音源播放会员歌成功时提醒，默认开启
     @AppStorage("beans.showThirdPartyVIPNotice") private var showThirdPartyVIPNotice = true
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
@@ -1261,6 +1263,33 @@ struct SettingsView: View {
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
+    }
+
+    private var paidSourceBinding: Binding<Bool> {
+        Binding(
+            get: { enableBuiltInSources },
+            set: { enabled in
+                enableBuiltInSources = enabled
+                if enabled { enableFreeSources = false }
+            }
+        )
+    }
+
+    private var freeSourceBinding: Binding<Bool> {
+        Binding(
+            get: { enableFreeSources },
+            set: { enabled in
+                enableFreeSources = enabled
+                if enabled { enableBuiltInSources = false }
+            }
+        )
+    }
+
+    private func normalizeSourceMode() {
+        // 兼容旧版本可能同时保存为 true 的异常状态，优先保留付费音源模式。
+        if enableBuiltInSources && enableFreeSources {
+            enableFreeSources = false
+        }
     }
 
     private var presetSourceCount: Int {
@@ -1428,6 +1457,7 @@ struct SettingsView: View {
             }
         }
         .preferredColorScheme(themeMode.colorScheme)
+        .onAppear { normalizeSourceMode() }
         .sheet(isPresented: $showWallpaperPicker) {
             WallpaperPhotoPicker { data in
                 theme.addWallpaper(data)
@@ -2318,7 +2348,7 @@ struct SettingsView: View {
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
-                Toggle(isOn: $enableBuiltInSources) {
+                Toggle(isOn: paidSourceBinding) {
                     HStack(spacing: 12) {
                         Image(systemName: "externaldrive.connected.to.line.below")
                             .font(.system(size: 14))
@@ -2328,23 +2358,7 @@ struct SettingsView: View {
                             Text("使用第三方音源")
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                        }
-                    }
-                }
-                .toggleStyle(.switch)
-                .tint(Color.beansAmber)
-
-                Toggle(isOn: .constant(false)) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "gift.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(beansLocalized("使用免费音源（暂不可用）", "Use free source (currently unavailable)"))
-                                .font(BeansFont.appFont(15))
-                                .foregroundStyle(Color.beansLabel)
-                            Text(beansLocalized("当前固定关闭，仅保留付费音源播放", "This option is locked off; only paid sources are used."))
+                            Text(beansLocalized("付费音源已启用时，免费音源会锁定", "When paid sources are enabled, free sources are locked."))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -2352,7 +2366,27 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .tint(Color.beansAmber)
-                .disabled(true)
+                .disabled(enableFreeSources)
+
+                Toggle(isOn: freeSourceBinding) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "gift.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(beansLocalized("使用免费音源", "Use free sources"))
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text(beansLocalized("开启后付费音源会锁定，只使用免费音源", "Enabling this locks paid sources and uses free sources only."))
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color.beansAmber)
+                .disabled(enableBuiltInSources)
 
                 Toggle(isOn: $showThirdPartyVIPNotice) {
                     HStack(spacing: 12) {

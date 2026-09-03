@@ -17,6 +17,7 @@ struct ReferencePlaybackView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
 
@@ -82,7 +83,6 @@ struct ReferencePlaybackView: View {
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
-        .preferredColorScheme(.dark)
         .background {
             HighRefreshConfigurator()
                 .frame(width: 0, height: 0)
@@ -93,24 +93,31 @@ struct ReferencePlaybackView: View {
 
     @ViewBuilder
     private var playerBackground: some View {
-        if syncWallpaper, let image = theme.customBackgroundImage {
-            WallpaperImage(image: image)
-                .blur(radius: CGFloat(wallpaperBlur))
-                .scaleEffect(wallpaperBlur > 0 ? 1.08 : 1)
-                .overlay(Color.black.opacity(0.44))
+        ZStack {
+            // Full-screen covers need an opaque base so the home page cannot show through
+            // while the cover image is loading or when a presentation uses a clear surface.
+            Color(uiColor: .systemBackground)
                 .ignoresSafeArea()
-        } else if syncWallpaper, let color = theme.customBackground {
-            LinearGradient(
-                colors: [color.opacity(0.92), color.opacity(0.58), .black.opacity(0.88)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .blur(radius: CGFloat(wallpaperBlur * 0.35))
-            .ignoresSafeArea()
-        } else {
-            CoverBlurBackground(url: song?.coverURL, scheme: .dark)
-                .overlay(Color.black.opacity(0.48))
+
+            if syncWallpaper, let image = theme.customBackgroundImage {
+                WallpaperImage(image: image)
+                    .blur(radius: CGFloat(wallpaperBlur))
+                    .scaleEffect(wallpaperBlur > 0 ? 1.08 : 1)
+                    .overlay(Color.black.opacity(colorScheme == .dark ? 0.44 : 0.16))
+                    .ignoresSafeArea()
+            } else if syncWallpaper, let color = theme.customBackground {
+                LinearGradient(
+                    colors: [color.opacity(0.92), color.opacity(0.58), colorScheme == .dark ? .black.opacity(0.88) : .white.opacity(0.70)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .blur(radius: CGFloat(wallpaperBlur * 0.35))
                 .ignoresSafeArea()
+            } else {
+                CoverBlurBackground(url: song?.coverURL, scheme: colorScheme)
+                    .overlay(Color.black.opacity(colorScheme == .dark ? 0.48 : 0.14))
+                    .ignoresSafeArea()
+            }
         }
     }
 
