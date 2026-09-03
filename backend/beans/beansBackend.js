@@ -24,6 +24,9 @@ function createBeansRouter(options = {}) {
   const uploadDir = path.join(storageDir, 'uploads');
   const databasePath = path.join(storageDir, 'users.json');
   const adminPassword = String(options.adminPassword || process.env.BEANS_ADMIN_PASSWORD || '');
+  const browserAdmin = typeof options.adminMiddleware === 'function'
+    ? options.adminMiddleware
+    : requireBrowserAdmin(adminPassword);
 
   ensureDirectory(storageDir);
   ensureDirectory(uploadDir);
@@ -137,13 +140,13 @@ function createBeansRouter(options = {}) {
     return response.json(publicUserState(updatedUser));
   });
 
-  router.get('/admin', requireBrowserAdmin(adminPassword), (_request, response) => {
+  router.get('/admin', browserAdmin, (_request, response) => {
     response.type('html').send(renderAdminPage(loadDatabase()));
   });
 
   router.post(
     '/admin/user',
-    requireBrowserAdmin(adminPassword),
+    browserAdmin,
     express.urlencoded({ extended: false }),
     (request, response) => {
       const userID = text(request.body.user_id, 80);
