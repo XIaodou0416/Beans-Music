@@ -267,7 +267,9 @@ final class KugouMusicAPI {
 
     private func upstreamSearchSongs(keyword: String, limit: Int) async throws -> [Song] {
         let pageSize = min(max(limit, 1), 30)
-        let pageCount = max(1, min(20, Int(ceil(Double(max(limit, 1)) / Double(pageSize)))))
+        // The upstream endpoint commonly returns 15 rows even when pagesize is 30.
+        // Keep paging in that case so artist pages do not stop at the first 15 songs.
+        let pageCount = max(1, min(40, Int(ceil(Double(max(limit, 1)) / 15.0)) + 2))
         var result: [Song] = []
         var seen = Set<String>()
         for page in 1...pageCount {
@@ -290,11 +292,12 @@ final class KugouMusicAPI {
             )
             let batch = rows.compactMap(Self.mapCompleteTrack)
             if batch.isEmpty { break }
+            let before = result.count
             for song in batch where seen.insert(song.identityKey).inserted {
                 result.append(song)
                 if result.count >= limit { return Array(result.prefix(limit)) }
             }
-            if batch.count < pageSize { break }
+            if result.count == before { break }
         }
         return result
     }
@@ -716,11 +719,13 @@ final class KugouMusicAPI {
         let pid = "\(listID)"
         var all: [[String: Any]] = []
         var page = 1
+        let pageSize = 200
+        let maxSongs = 10_000
         repeat {
             let body: [String: Any] = [
                 "listid": pid,
                 "page": page,
-                "pagesize": 200,
+                "pagesize": pageSize,
                 "area_code": 1,
                 "show_relate_goods": 0,
                 "allplatform": 1,
@@ -733,9 +738,14 @@ final class KugouMusicAPI {
             let pageTracks = Self.deepArrays(json, names: ["songs", "songlist", "list", "info", "files", "data"])
             BeansLogger.shared.log("酷狗歌单歌曲：listid=\(pid) page=\(page) 返回 \(pageTracks.count) 首", level: .debug)
             all.append(contentsOf: pageTracks)
-            if pageTracks.count < 200 { break }
+            if all.count >= maxSongs { break }
+            if pageTracks.count < pageSize { break }
             page += 1
-        } while page <= 10
+        } while page <= maxSongs / pageSize
+        if all.count > maxSongs {
+            all = Array(all.prefix(maxSongs))
+        }
+        BeansLogger.shared.log("酷狗歌单歌曲：listid=\(pid) 最终最多加载 \(all.count) 首", level: .debug)
         return all
             .sorted { (Self.int($0["fsort"] ?? $0["sort"] ?? $0["position"]) ) < (Self.int($1["fsort"] ?? $1["sort"] ?? $1["position"])) }
             .compactMap(Self.mapTrack)

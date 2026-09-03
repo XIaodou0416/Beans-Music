@@ -187,7 +187,14 @@ final class AppleMusicLayoutStore: ObservableObject {
         if let raw = defaults.string(forKey: Self.dataKey),
            let data = raw.data(using: .utf8),
            let stored = try? JSONDecoder().decode([String: PlayerLayoutEntry].self, from: data) {
-            entries = stored
+            var normalized = stored
+            if normalized[AppleMusicLayoutPart.top.rawValue] == PlayerLayoutEntry() {
+                normalized[AppleMusicLayoutPart.top.rawValue] = Self.defaultEntry(for: .top)
+            }
+            entries = normalized
+            if normalized != stored {
+                save(normalized)
+            }
         } else {
             entries = Self.migrateLegacyEntries(from: defaults)
         }
@@ -231,7 +238,9 @@ final class AppleMusicLayoutStore: ObservableObject {
 
     static func defaultEntry(for part: AppleMusicLayoutPart) -> PlayerLayoutEntry {
         switch part {
-        case .top, .cover, .title, .previewLyric, .progress, .previous, .play, .next, .volume, .actions:
+        case .top:
+            return PlayerLayoutEntry(y: -63)
+        case .cover, .title, .previewLyric, .progress, .previous, .play, .next, .volume, .actions:
             return PlayerLayoutEntry()
         }
     }
@@ -245,7 +254,7 @@ final class AppleMusicLayoutStore: ObservableObject {
         }
 
         migrated[AppleMusicLayoutPart.top.rawValue] = PlayerLayoutEntry(
-            y: legacyDouble("beans.appleMusic.topY", defaultValue: 0)
+            y: legacyDouble("beans.appleMusic.topY", defaultValue: -63)
         )
         migrated[AppleMusicLayoutPart.cover.rawValue] = PlayerLayoutEntry(
             scale: legacyDouble("beans.appleMusic.coverScale", defaultValue: 1)

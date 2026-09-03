@@ -4241,7 +4241,11 @@ struct PlayerSettingsSheet: View {
                 playerButtonStyleRaw = BeansPlayerButtonStyle.appleMusic.rawValue
                 layoutMode = true
                 BeansHaptics.select()
-                dismiss()
+                if let onDismiss {
+                    onDismiss()
+                } else {
+                    dismiss()
+                }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "play.rectangle.on.rectangle")
@@ -4467,8 +4471,15 @@ struct PlayerSettingsSheet: View {
                 get: { layoutMode },
                 set: { newValue in
                     layoutMode = newValue
-                    // 开启后直接回到播放页进行调节
-                    if newValue { dismiss() }
+                    // This view is an overlay inside the player. Close only the
+                    // settings overlay so vinyl and Apple Music stay on the player.
+                    if newValue {
+                        if let onDismiss {
+                            onDismiss()
+                        } else {
+                            dismiss()
+                        }
+                    }
                 }
             ), caption: "开启后回到播放页，可拖动顶部栏、经典封面、歌词和底部控件")
             Divider().opacity(0.5)

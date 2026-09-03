@@ -760,6 +760,18 @@ struct DiscoverView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
                     neteaseRecommendationCard(
+                        title: "每日推荐",
+                        subtitle: dailyRecommendationSubtitle,
+                        icon: "calendar",
+                        coverURL: dailySongs.first?.coverURL,
+                        gradient: [Color(red: 0.95, green: 0.36, blue: 0.28), Color(red: 0.96, green: 0.68, blue: 0.30)],
+                        loadingKey: nil
+                    ) {
+                        BeansHaptics.tap()
+                        showDailyList = true
+                    }
+
+                    neteaseRecommendationCard(
                         title: "私人漫游",
                         subtitle: "从喜欢的歌开始漫游",
                         icon: "wave.3.right.circle.fill",
