@@ -236,9 +236,10 @@ final class BeansLXScriptRuntime {
         queue.sync {
             context.evaluateScript("if (typeof globalThis === 'undefined') { var globalThis = this; }")
             context.evaluateScript("if (typeof globalThis.lx === 'undefined') { globalThis.lx = lx; }")
-            context.evaluateScript("if (typeof console === 'undefined') { globalThis.console = { log: function() {}, warn: function() {}, error: function() {} }; }")
+            context.evaluateScript("if (typeof console === 'undefined') { globalThis.console = { log: function() {}, info: function() {}, debug: function() {}, warn: function() {}, error: function() {} }; }")
             context.evaluateScript("if (typeof module === 'undefined') { var module = { exports: {} }; var exports = module.exports; }")
-            context.evaluateScript("globalThis.cerumusic = { request: function(url, options) { return new Promise(function(resolve, reject) { lx.request(url, options, function(error, response) { if (error && error.message) { reject(error); } else { resolve(response); } }); }); }, utils: lx.utils }; ")
+            let appVersion = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.6.3"
+            context.evaluateScript("globalThis.cerumusic = { request: function(url, options) { return new Promise(function(resolve, reject) { lx.request(url, options, function(error, response) { if (error && error.message) { reject(error); } else { resolve(response); } }); }); }, utils: lx.utils, version: \(String(reflecting: appVersion)), NoticeCenter: function() {}, stopRequests: function() {} }; ")
             _ = context.evaluateScript(script)
             if context.exception == nil {
                 _ = context.evaluateScript("globalThis.__beansPlugin = module.exports;")

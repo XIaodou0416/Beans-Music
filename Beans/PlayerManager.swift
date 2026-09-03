@@ -118,6 +118,9 @@ final class PlayerManager: NSObject, ObservableObject {
 
     /// 付费音源与免费音源共用同一个第三方解析入口；任一模式开启即可执行兜底。
     private var externalSourcesEnabled: Bool {
+        if UnblockSourceStore.singleSourceMode {
+            return true
+        }
         let paid = defaults.object(forKey: "beans.enableUnblock") as? Bool ?? true
         let free = defaults.object(forKey: "beans.useFreeAudioSource") as? Bool ?? false
         return paid || free
@@ -450,7 +453,18 @@ final class PlayerManager: NSObject, ObservableObject {
             let strictUnlock = shouldLockOfficialOnly(song)
             let quality = (forceKugouStandard && song.source == .kugou) ? .standard : BeansAudioQuality.current
             BeansLogger.shared.log("▶ 开始播放：\(song.name) - \(song.artists)｜平台=\(song.source.rawValue) id=\(song.id) 音质=\(quality.level) 免费听歌=\(enableUnblock ? "开" : "关") 官方受限=\(strictUnlock ? "是" : "否")", level: .info)
-            if song.source == .kugou {
+            if UnblockSourceStore.singleSourceMode {
+                resolvedThirdParty = await UnblockService.resolve(
+                    name: song.name,
+                    artists: song.artists,
+                    neteaseID: song.source == .netease ? song.id : 0,
+                    songSource: song.source,
+                    qqMid: song.qqMid,
+                    qqMediaMid: song.qqMediaMid,
+                    kugouID: song.kugouHash ?? song.kugouAlbumAudioId,
+                    strict: true
+                )
+            } else if song.source == .kugou {
                 urlString = try? await KugouMusicAPI.shared.songURL(song: song, quality: quality)
                 if urlString == nil {
                     resolvedThirdParty = await kugouFallback(song: song, enableUnblock: enableUnblock)

@@ -69,6 +69,9 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
 final class UnblockSourceStore: ObservableObject {
     static let shared = UnblockSourceStore()
     static let userAPIKeysKey = "beans.thirdPartyAPIKeys"
+    /// 特殊版本只保留这一条内置脚本音源，其他音源不参与播放解析。
+    static let singleSourceMode = true
+    static let singleSourceID = "beans.special.cr.v1"
 
     private static let paidAPIURL = "https://source.shiqianjiang.cn/api/music"
     private static let paidURLTemplate = "\(paidAPIURL)/url?source={source}&songId={id}&quality={quality}"
@@ -131,7 +134,20 @@ final class UnblockSourceStore: ObservableObject {
         )
     ]
 
-    static let presetSources = paidPresetSources + freePresetSources
+    static let singlePresetSource = ThirdPartySource(
+        id: singleSourceID,
+        name: "CR 专属音源",
+        kind: "script-exclusive",
+        template: "",
+        quality: "hires",
+        script: CRMusicSpecialBuiltinSource.script,
+        isPreset: true,
+        isFree: false
+    )
+
+    static let presetSources: [ThirdPartySource] = singleSourceMode
+        ? [singlePresetSource]
+        : paidPresetSources + freePresetSources
     static let protectedPresetSourceIDs = Set(presetSources.map(\.id))
 
     @Published var sources: [ThirdPartySource] {
@@ -144,6 +160,14 @@ final class UnblockSourceStore: ObservableObject {
     private let legacyLXKey = "beans.unblock.lxScripts"
 
     private init() {
+        if Self.singleSourceMode {
+            sources = [Self.singlePresetSource]
+            defaults.removeObject(forKey: legacyCustomKey)
+            defaults.removeObject(forKey: legacyLXKey)
+            save()
+            return
+        }
+
         let savedSources: [ThirdPartySource]
         if let data = defaults.data(forKey: presetsKey),
            let list = try? JSONDecoder().decode([ThirdPartySource].self, from: data) {
@@ -200,10 +224,12 @@ final class UnblockSourceStore: ObservableObject {
     }
 
     func addSource(_ source: ThirdPartySource) {
+        guard !Self.singleSourceMode else { return }
         upsert(source)
     }
 
     func addSources(_ newSources: [ThirdPartySource]) {
+        guard !Self.singleSourceMode else { return }
         guard !newSources.isEmpty else { return }
         var merged = sources
         for source in newSources {
@@ -218,6 +244,7 @@ final class UnblockSourceStore: ObservableObject {
     }
 
     func upsert(_ source: ThirdPartySource) {
+        guard !Self.singleSourceMode else { return }
         var merged = sources
         if let index = merged.firstIndex(where: { $0.id == source.id }) {
             merged[index] = source
@@ -229,6 +256,7 @@ final class UnblockSourceStore: ObservableObject {
     }
 
     func moveSource(id: String, by offset: Int) {
+        guard !Self.singleSourceMode else { return }
         guard let index = sources.firstIndex(where: { $0.id == id }) else { return }
         let target = min(max(0, index + offset), max(0, sources.count - 1))
         guard target != index else { return }
@@ -240,6 +268,7 @@ final class UnblockSourceStore: ObservableObject {
     }
 
     func updateEnabled(id: String, enabled: Bool) {
+        guard !Self.singleSourceMode else { return }
         guard let index = sources.firstIndex(where: { $0.id == id }) else { return }
         var updated = sources
         updated[index].enabled = enabled
@@ -249,6 +278,7 @@ final class UnblockSourceStore: ObservableObject {
 
     @discardableResult
     func removeSource(id: String) -> Bool {
+        guard !Self.singleSourceMode else { return false }
         guard !Self.protectedPresetSourceIDs.contains(id) else { return false }
         let originalCount = sources.count
         sources.removeAll { $0.id == id }

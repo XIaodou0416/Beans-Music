@@ -34,13 +34,19 @@ enum UnblockService {
         let useFreeAudioSource = UserDefaults.standard.object(forKey: "beans.useFreeAudioSource") as? Bool ?? false
         let sources = UnblockSourceStore.shared.sources
             .filter { source in
-                source.enabled && source.isFree == useFreeAudioSource && (
+                guard source.enabled else { return false }
+                if UnblockSourceStore.singleSourceMode {
+                    return source.id == UnblockSourceStore.singleSourceID
+                }
+                return source.isFree == useFreeAudioSource && (
                     isScriptSource(source) ||
                     canUse(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
                 )
             }
         guard !sources.isEmpty else {
-            let mode = useFreeAudioSource ? "免费" : "付费"
+            let mode = UnblockSourceStore.singleSourceMode
+                ? "CR专用"
+                : (useFreeAudioSource ? "免费" : "付费")
             BeansLogger.shared.log(
                 "第三方音源未启用可用源：模式=\(mode) 平台=\(songSource.rawValue)",
                 level: .debug

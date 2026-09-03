@@ -132,6 +132,10 @@ final class DownloadManager {
             return resolved.url.absoluteString
         }
 
+        if UnblockSourceStore.singleSourceMode {
+            return nil
+        }
+
         if song.source == .qq, let mid = song.qqMid {
             return try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid, br: quality.qqBR)
         } else if song.source == .kugou {
