@@ -365,8 +365,8 @@ struct ArtistHomeSheet: View {
         loading = false
     }
 
-    /// 酷狗暂未提供稳定的公开歌手主页数据时，使用官方综合搜索结果兜底。
-    /// 这里严格按歌手名过滤，避免把关键词搜索的其他歌手歌曲混进来。
+    /// 酷狗歌手主页优先走作者歌曲接口，再补 `singer/song` 和综合搜索结果，
+    /// 避免部分歌手页只停在首批 19 首。
     private func loadKugouArtist() async {
         let resolvedArtist: Artist?
         if let artistID,
@@ -380,9 +380,8 @@ struct ArtistHomeSheet: View {
         if let resolvedArtist {
             artist = resolvedArtist
         }
-        let normalizedName = artistName.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-
         var songs: [Song] = []
+        var primarySongs: [Song] = []
         if let resolvedArtist,
            !resolvedArtist.id.isEmpty,
            !resolvedArtist.id.hasPrefix("qq-") {
@@ -399,6 +398,7 @@ struct ArtistHomeSheet: View {
                 let before = songs.count
                 for song in batch where seen.insert(song.identityKey).inserted {
                     songs.append(song)
+                    primarySongs.append(song)
                     if songs.count >= maxSongs { break }
                 }
                 if songs.count >= maxSongs || songs.count == before {
@@ -408,8 +408,7 @@ struct ArtistHomeSheet: View {
         }
 
         // The author endpoint has historically returned only 19 rows for some
-        // accounts/charts. Supplement a short result with paged song search,
-        // then keep only tracks whose artist field matches this artist.
+        // accounts/charts. Supplement a short result with paged song search.
         if songs.count < 100 {
             async let exact = KugouMusicAPI.shared.searchSongs(keyword: artistName, limit: 300)
             async let works = KugouMusicAPI.shared.searchSongs(keyword: "\(artistName) 歌曲", limit: 300)
@@ -419,11 +418,7 @@ struct ArtistHomeSheet: View {
             ]
             var seen = Set(songs.map(\.identityKey))
             for song in candidates.flatMap({ $0 }) {
-                let matchesArtist = song.artists
-                    .split(whereSeparator: { "/,、".contains($0) })
-                    .map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .contains { $0 == normalizedName || $0.contains(normalizedName) || normalizedName.contains($0) }
-                guard matchesArtist, seen.insert(song.identityKey).inserted else { continue }
+                guard seen.insert(song.identityKey).inserted else { continue }
                 songs.append(song)
             }
         }
@@ -443,16 +438,12 @@ struct ArtistHomeSheet: View {
             }
         }
 
-        hotSongs = songs.filter { song in
-            song.artists
-                .split(whereSeparator: { "/,、".contains($0) })
-                .map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
-                .contains { $0 == normalizedName || $0.contains(normalizedName) || normalizedName.contains($0) }
-        }
-        if hotSongs.isEmpty {
-            hotSongs = songs
+        hotSongs = songs
+        if hotSongs.isEmpty, !primarySongs.isEmpty {
+            hotSongs = primarySongs
         }
         hotSongs = Array(hotSongs.prefix(1_000))
+        BeansLogger.shared.log("酷狗歌手主页完成：artist=\(artistName) songs=\(hotSongs.count)", level: .debug)
         loading = false
     }
 }

@@ -485,6 +485,38 @@ final class KugouMusicAPI {
     /// 酷狗官方歌手歌曲接口。每页最多 100 首，按热度排序。
     func artistSongs(authorID: String, page: Int = 1, limit: Int = 100) async throws -> [Song] {
         let target = min(max(limit, 1), 100)
+        var songs: [Song] = []
+        var seen = Set<String>()
+
+        let upstream = (try? await upstreamArtistSongs(authorID: authorID, page: page, limit: target)) ?? []
+        for song in upstream where seen.insert(song.identityKey).inserted {
+            songs.append(song)
+        }
+
+        if songs.count < target {
+            let singer = (try? await officialArtistSongs(authorID: authorID, page: page, limit: target)) ?? []
+            if !singer.isEmpty {
+                for song in singer where seen.insert(song.identityKey).inserted {
+                    songs.append(song)
+                }
+            }
+        }
+
+        if songs.count < target {
+            let legacy = (try? await legacyArtistSongs(authorID: authorID, page: page, limit: target)) ?? []
+            if !legacy.isEmpty {
+                for song in legacy where seen.insert(song.identityKey).inserted {
+                    songs.append(song)
+                }
+            }
+        }
+
+        BeansLogger.shared.log("酷狗歌手歌曲：author=\(authorID) page=\(page) 返回 \(songs.count) 首", level: .debug)
+        return Array(songs.prefix(target))
+    }
+
+    private func upstreamArtistSongs(authorID: String, page: Int, limit: Int) async throws -> [Song] {
+        let target = min(max(limit, 1), 100)
         let response = try await upstreamRequest(
             "/openapi/kmr/v2/audio_group/author",
             params: [
@@ -505,15 +537,34 @@ final class KugouMusicAPI {
             response.json,
             names: ["songs", "songlist", "list", "info", "audio", "data"]
         )
-        var songs = rows.compactMap(Self.mapCompleteTrack)
-        if songs.count < target {
-            let legacy = (try? await legacyArtistSongs(authorID: authorID, page: page, limit: target)) ?? []
-            if !legacy.isEmpty {
-                songs = Self.mergeRankSongs(primary: songs, fallback: legacy, limit: target)
-            }
+        return rows.compactMap(Self.mapCompleteTrack)
+    }
+
+    /// 酷狗移动端歌手歌曲列表，通常比作者接口更完整。
+    private func officialArtistSongs(authorID: String, page: Int, limit: Int) async throws -> [Song] {
+        let target = min(max(limit, 1), 100)
+        var components = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/singer/song")!
+        components.queryItems = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "singerid", value: authorID),
+            URLQueryItem(name: "page", value: "\(max(page, 1))"),
+            URLQueryItem(name: "pagesize", value: "\(target)"),
+            URLQueryItem(name: "sorttype", value: "2"),
+            URLQueryItem(name: "sort", value: "1"),
+            URLQueryItem(name: "with_res_tag", value: "1"),
+            URLQueryItem(name: "identity", value: "3"),
+            URLQueryItem(name: "plat", value: "0"),
+            URLQueryItem(name: "area_code", value: "1"),
+            URLQueryItem(name: "version", value: "9108"),
+        ]
+        guard let url = components.url else { return [] }
+        let json = try await getJSON(url, ua: Self.browserUA)
+        let rows = Self.deepArrays(json, names: ["info", "songs", "songlist", "list", "data"])
+        let songs = rows.compactMap(Self.mapCompleteTrack)
+        if !songs.isEmpty {
+            BeansLogger.shared.log("酷狗 singer/song：author=\(authorID) page=\(page) 返回 \(songs.count) 首", level: .debug)
         }
-        BeansLogger.shared.log("酷狗歌手歌曲：author=\(authorID) page=\(page) 返回 \(songs.count) 首", level: .debug)
-        return Array(songs.prefix(target))
+        return songs
     }
 
     /// 老版作者歌曲接口作为分页补充，避免新版接口固定只返回 19 首。

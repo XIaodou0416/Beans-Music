@@ -1786,12 +1786,12 @@ struct SettingsView: View {
                             .font(.system(size: 14))
                             .foregroundStyle(Color.beansAmber)
                             .frame(width: 28)
-                        Text("主页背景色")
+                        Text(beansLocalized("主页背景色", "Home Background Color"))
                             .font(BeansFont.appFont(15))
                             .foregroundStyle(Color.beansLabel)
                         Spacer()
                     }
-                    Picker("背景模式", selection: $wallpaperAppearanceTarget) {
+                    Picker(beansLocalized("背景模式", "Background Mode"), selection: $wallpaperAppearanceTarget) {
                         ForEach(BeansWallpaperAppearance.allCases) { appearance in
                             Text(appearance.title).tag(appearance)
                         }
@@ -1803,7 +1803,7 @@ struct SettingsView: View {
                             .font(.system(size: 14))
                             .foregroundStyle(Color.beansAmber)
                             .frame(width: 28)
-                        Text("背景颜色")
+                        Text(beansLocalized("背景颜色", "Background Color"))
                             .font(BeansFont.appFont(15))
                             .foregroundStyle(Color.beansLabel)
                         Spacer()
