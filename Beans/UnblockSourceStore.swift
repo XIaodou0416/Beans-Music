@@ -136,4 +136,33 @@ final class UnblockSourceStore: ObservableObject {
         }
         return seeded
     }
+
+    // MARK: - 自定义音源导入与删除
+
+    /// 批量导入音源（文件导入/URL下载后调用）
+    /// - 按 id 去重，同名 id 覆盖，新 id 追加
+    func addSources(_ sources: [ThirdPartySource]) {
+        for source in sources {
+            if let index = presetSources.firstIndex(where: { $0.id == source.id }) {
+                presetSources[index] = source
+            } else {
+                presetSources.append(source)
+            }
+        }
+    }
+
+    /// 单个导入音源
+    func addSource(_ source: ThirdPartySource) {
+        addSources([source])
+    }
+
+    /// 删除音源（内置预设无法删除）
+    func deleteSource(id: String) {
+        presetSources.removeAll { $0.id == id }
+    }
+
+    /// 判断是否可以删除（只有非预设音源可删除）
+    func canDelete(source: ThirdPartySource) -> Bool {
+        !source.isPreset
+    }
 }
