@@ -29,7 +29,12 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
 
     /// 黑胶歌词现在拆成顶部信息和歌词文字两个独立组件，旧整体项不再显示在编辑器中。
     static var editableCases: [PlayerLayoutPart] {
-        allCases.filter { $0 != .vinylLyric }
+        allCases.filter {
+            $0 != .vinylLyric
+                && $0 != .vinylAlbum
+                && $0 != .vinylLyricsHeader
+                && $0 != .vinylLyricsText
+        }
     }
 }
 

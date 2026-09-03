@@ -37,8 +37,7 @@ struct PlayerView: View {
     @State private var vinylIsDraggingLyrics = false
     @State private var vinylLyricsResumeTask: Task<Void, Never>?
     @State private var vinylDismissDragOffset: CGFloat = 0
-    @AppStorage("beans.vinylLyricsTopRows") private var vinylLyricsTopRows = 3
-    @AppStorage("beans.vinylLyricsBottomRows") private var vinylLyricsBottomRows = 3
+    @State private var vinylPresentationHeight: CGFloat = 0
     @AppStorage("beans.djVisual") private var djVisualEnabled = false
     @AppStorage("beans.djVisualIntensity") private var djVisualIntensity = 0.8
     @State private var dominantColor: RGBColor?
@@ -176,6 +175,30 @@ struct PlayerView: View {
 
     private var coverPlayerStyle: BeansCoverPlayerStyle {
         return BeansCoverPlayerStyle(rawValue: coverPlayerStyleRaw) ?? .appleMusic
+    }
+
+    private enum VinylLayoutDefaults {
+        static let albumY: CGFloat = 20
+        static let controlsY: CGFloat = 1
+        static let controlsScale: CGFloat = 1.1
+        static let progressY: CGFloat = -20
+        static let lyricsHeaderY: CGFloat = 30
+        static let lyricsTextY: CGFloat = -52
+        static let lyricTopRows = 3
+        static let lyricBottomRows = 3
+    }
+
+    private var vinylDismissProgress: CGFloat {
+        guard vinylPresentationHeight > 0 else { return 0 }
+        return min(max(vinylDismissDragOffset / (vinylPresentationHeight * 0.72), 0), 1)
+    }
+
+    private var vinylDismissScale: CGFloat {
+        1 - vinylDismissProgress * 0.72
+    }
+
+    private var vinylDismissVisualOffset: CGFloat {
+        vinylDismissDragOffset * 0.18
     }
 
     private func toggleLocalFavorite(_ song: Song) {
@@ -418,7 +441,9 @@ struct PlayerView: View {
                             .frame(maxWidth: .infinity)
                             .frame(maxHeight: .infinity, alignment: .bottom)
 
-                        if layoutMode {
+                        vinylTopIndicator(topInset: geo.safeAreaInsets.top)
+
+                        if layoutMode && coverPlayerStyle != .vinyl {
                             layoutToolbar
                                 .contentShape(Rectangle())
                                 .frame(maxWidth: .infinity)
@@ -445,9 +470,13 @@ struct PlayerView: View {
                                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
                         }
                     }
-                    .simultaneousGesture(vinylCloseGesture)
+                    .onAppear {
+                        vinylPresentationHeight = geo.size.height
+                    }
+                    .onChange(of: geo.size.height) { vinylPresentationHeight = $0 }
                 }
-                .offset(y: vinylDismissDragOffset)
+                .scaleEffect(vinylDismissScale, anchor: .bottom)
+                .offset(y: vinylDismissVisualOffset)
             } else {
                 GeometryReader { geo in
                     ZStack {
@@ -927,7 +956,6 @@ struct PlayerView: View {
                 onNextTrack: { player.next() },
                 onPreviousTrack: { player.previous() }
             )
-            .modifier(Layoutable(part: .cover, enabled: layoutMode, data: $layoutData))
 
             if showPreview {
                 vinylMiniLyricsPreview
@@ -938,7 +966,7 @@ struct PlayerView: View {
         }
         .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .modifier(Layoutable(part: .vinylAlbum, enabled: layoutMode, data: $layoutData))
+        .offset(y: VinylLayoutDefaults.albumY)
     }
 
     private var vinylCompactHeader: some View {
@@ -1051,7 +1079,7 @@ struct PlayerView: View {
             vinylLyricsHeader
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
-                .modifier(Layoutable(part: .vinylLyricsHeader, enabled: layoutMode, data: $layoutData))
+                .offset(y: VinylLayoutDefaults.lyricsHeaderY)
                 .zIndex(3)
 
             Spacer(minLength: 0)
@@ -1063,7 +1091,7 @@ struct PlayerView: View {
                     ScrollViewReader { proxy in
                         ScrollView(showsIndicators: false) {
                             LazyVStack(alignment: .leading, spacing: 34) {
-                                Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(vinylLyricsTopRows), vinylLyricsViewportHeight * 0.18))
+                                Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(VinylLayoutDefaults.lyricTopRows), vinylLyricsViewportHeight * 0.18))
                                 ForEach(lyrics.indices, id: \.self) { index in
                                     vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
                                         .id(index)
@@ -1076,7 +1104,7 @@ struct PlayerView: View {
                                             }
                                         }
                                 }
-                                Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(vinylLyricsBottomRows), vinylLyricsViewportHeight * 0.18))
+                                Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(VinylLayoutDefaults.lyricBottomRows), vinylLyricsViewportHeight * 0.18))
                             }
                             .padding(.horizontal, 28)
                         }
@@ -1127,7 +1155,7 @@ struct PlayerView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: vinylLyricsViewportHeightLimit(in: geo))
-            .modifier(Layoutable(part: .vinylLyricsText, enabled: layoutMode, data: $layoutData))
+            .offset(y: VinylLayoutDefaults.lyricsTextY)
             .zIndex(1)
 
             Spacer(minLength: 0)
@@ -1227,6 +1255,23 @@ struct PlayerView: View {
         }
     }
 
+    private func vinylTopIndicator(topInset: CGFloat) -> some View {
+        ZStack(alignment: .top) {
+            Color.clear
+            Capsule()
+                .fill(.white.opacity(0.7))
+                .frame(width: 44, height: 5)
+                .padding(.top, 1)
+        }
+        .frame(width: 180, height: 82)
+        .contentShape(Rectangle())
+        .gesture(vinylCloseGesture)
+        .accessibilityLabel("下拉关闭播放页")
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, max(1, topInset))
+        .zIndex(20)
+    }
+
     private func vinylLyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
         Button {
             BeansHaptics.tap()
@@ -1289,13 +1334,13 @@ struct PlayerView: View {
     }
 
     private var vinylLyricsFocusAnchor: UnitPoint {
-        let total = CGFloat(max(vinylLyricsTopRows + vinylLyricsBottomRows, 1))
-        let y = min(max(CGFloat(vinylLyricsTopRows) / total, 0.18), 0.82)
+        let total = CGFloat(max(VinylLayoutDefaults.lyricTopRows + VinylLayoutDefaults.lyricBottomRows, 1))
+        let y = min(max(CGFloat(VinylLayoutDefaults.lyricTopRows) / total, 0.18), 0.82)
         return UnitPoint(x: 0.5, y: y)
     }
 
     private func vinylLyricsViewportHeightLimit(in geo: GeometryProxy) -> CGFloat {
-        let desired = CGFloat(vinylLyricsTopRows + vinylLyricsBottomRows + 1) * vinylLyricsLineSlotHeight
+        let desired = CGFloat(VinylLayoutDefaults.lyricTopRows + VinylLayoutDefaults.lyricBottomRows + 1) * vinylLyricsLineSlotHeight
         let available = max(220, geo.size.height - 100)
         return min(max(220, desired), available)
     }
@@ -1961,14 +2006,29 @@ struct PlayerView: View {
     @ViewBuilder
     private func controlDeck(bottomInset: CGFloat) -> some View {
         VStack(spacing: 0) {
-            progressBlock(
-                styleOverride: playerButtonStyle == .appleMusic ? 0 : nil,
-                accentOverride: playerButtonStyle == .appleMusic ? .white.opacity(0.92) : nil
-            )
+            if coverPlayerStyle == .vinyl {
+                progressBlock(
+                    styleOverride: playerButtonStyle == .appleMusic ? 0 : nil,
+                    accentOverride: playerButtonStyle == .appleMusic ? .white.opacity(0.92) : nil
+                )
+                .offset(y: VinylLayoutDefaults.progressY)
+
+                deckRow
+                    .scaleEffect(VinylLayoutDefaults.controlsScale)
+                    .offset(y: VinylLayoutDefaults.controlsY)
+            } else {
+                progressBlock(
+                    styleOverride: playerButtonStyle == .appleMusic ? 0 : nil,
+                    accentOverride: playerButtonStyle == .appleMusic ? .white.opacity(0.92) : nil
+                )
                 .modifier(Layoutable(part: .progress, enabled: layoutMode, data: $layoutData))
-            deckRow
-                .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
-            deckGrabber
+
+                deckRow
+                    .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
+            }
+            if coverPlayerStyle != .vinyl {
+                deckGrabber
+            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -2751,9 +2811,9 @@ struct PlayerView: View {
                 if translation > 110 || prediction > 190 {
                     BeansHaptics.medium()
                     withAnimation(.interactiveSpring(response: 0.48, dampingFraction: 0.86, blendDuration: 0.08)) {
-                        vinylDismissDragOffset = max(translation, 180)
+                        vinylDismissDragOffset = max(vinylPresentationHeight * 0.72, 180)
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
                         closePlayer()
                     }
                 } else {
@@ -3505,8 +3565,6 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.lyricGradMode") private var gradMode = 0
     @AppStorage("beans.lyricTranslation") private var lyricTranslation = true
     @AppStorage("beans.playerLayoutMode") private var layoutMode = false
-    @AppStorage("beans.vinylLyricsTopRows") private var vinylLyricsTopRows = 3
-    @AppStorage("beans.vinylLyricsBottomRows") private var vinylLyricsBottomRows = 3
     @AppStorage("beans.playerLayoutSelectedPart") private var layoutPartRaw = PlayerLayoutPart.progress.rawValue
     @AppStorage("beans.lyricAlignRaw") private var lyricAlignRaw = "center"
     @AppStorage("beans.lyricOffsetX") private var lyricOffsetX = 0.0
@@ -3793,7 +3851,6 @@ struct PlayerSettingsSheet: View {
                     lyricDisplayCard
                     lyricEffectCard
                     layoutCard
-                    vinylLayoutCard
                     coverCard
                 }
                 .padding(.horizontal, 16)
@@ -4345,58 +4402,6 @@ struct PlayerSettingsSheet: View {
             .font(BeansFont.appFont(13))
             .foregroundStyle(Color.beansAmber)
         }
-    }
-
-    /// 黑胶歌词的两个区域单独进入调节，避免在通用布局列表中难以找到。
-    private var vinylLayoutCard: some View {
-        settingCard("黑胶独立调节") {
-            Text("分别调整黑胶播放页、歌词顶部信息和中间歌词文字的位置与大小")
-                .font(BeansFont.appFont(12))
-                .foregroundStyle(Color.beansComment)
-                .fixedSize(horizontal: false, vertical: true)
-
-            vinylLayoutAction("调节黑胶播放器", part: .vinylAlbum, icon: "record.circle")
-            vinylLayoutAction("调节黑胶歌词顶部", part: .vinylLyricsHeader, icon: "music.note")
-            vinylLayoutAction("调节黑胶歌词文字", part: .vinylLyricsText, icon: "text.alignleft")
-            Divider().opacity(0.5)
-            settingSlider("歌词上方显示", valueText: "\(vinylLyricsTopRows) 行") {
-                Slider(value: Binding(get: { Double(vinylLyricsTopRows) }, set: { vinylLyricsTopRows = Int($0.rounded()) }), in: 1...8, step: 1)
-                    .tint(Color.beansAmber)
-            }
-            settingSlider("歌词下方显示", valueText: "\(vinylLyricsBottomRows) 行") {
-                Slider(value: Binding(get: { Double(vinylLyricsBottomRows) }, set: { vinylLyricsBottomRows = Int($0.rounded()) }), in: 1...8, step: 1)
-                    .tint(Color.beansAmber)
-            }
-        }
-    }
-
-    private func vinylLayoutAction(_ title: String, part: PlayerLayoutPart, icon: String) -> some View {
-        Button {
-            layoutPartRaw = part.rawValue
-            layoutMode = true
-            BeansHaptics.select()
-            dismiss()
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(width: 26, height: 26)
-                    .foregroundStyle(Color.beansAmber)
-                    .background(Color.beansAmber.opacity(0.12), in: Circle())
-                Text(title)
-                    .font(BeansFont.appFont(13, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                Spacer()
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.beansComment)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity)
-            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
     }
 
     /// 封面卡片：圆形封面 / 旋转

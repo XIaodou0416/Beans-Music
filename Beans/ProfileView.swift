@@ -1189,6 +1189,8 @@ struct SettingsView: View {
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     /// 官方地址不可用时，是否尝试第三方音源
     @AppStorage("beans.enableUnblock") private var enableBuiltInSources = true
+    /// 开启后只使用内置免费音源，不调用付费音源。
+    @AppStorage("beans.useFreeAudioSource") private var useFreeAudioSource = false
     /// 第三方音源播放会员歌成功时提醒，默认开启
     @AppStorage("beans.showThirdPartyVIPNotice") private var showThirdPartyVIPNotice = true
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
@@ -2284,6 +2286,25 @@ struct SettingsView: View {
                             Text("使用第三方音源")
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color.beansAmber)
+
+                Toggle(isOn: $useFreeAudioSource) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "gift.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(beansLocalized("使用免费音源", "Use free source"))
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text(beansLocalized("开启后只调用内置免费音源，不使用付费音源", "When enabled, only the built-in free source is used; paid sources are skipped."))
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
                         }
                     }
                 }

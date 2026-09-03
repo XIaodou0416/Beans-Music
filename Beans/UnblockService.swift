@@ -31,14 +31,21 @@ enum UnblockService {
         let hasSongIdentity = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !artists.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasSongIdentity else { return nil }
+        let useFreeAudioSource = UserDefaults.standard.object(forKey: "beans.useFreeAudioSource") as? Bool ?? false
         let sources = UnblockSourceStore.shared.sources
             .filter { source in
-                source.enabled && (
+                source.enabled && source.isFree == useFreeAudioSource && (
                     isScriptSource(source) ||
                     canUse(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
                 )
             }
-        guard !sources.isEmpty else { return nil }
+        guard !sources.isEmpty else {
+            BeansLogger.shared.log(
+                "第三方音源未启用可用源：模式=\(useFreeAudioSource ? \"免费\" : \"付费\") 平台=\(songSource.rawValue)",
+                level: .debug
+            )
+            return nil
+        }
 
         // LX、CR、QT 三个预设最终访问同一个接口，只保留每个请求指纹的第一个，
         // 避免同一首歌重复请求同一个服务，尤其避免酷狗回退时触发请求风暴。

@@ -8,6 +8,11 @@ import JavaScriptCore
 
 @objc protocol BeansLXScriptUtilsExports: JSExport {
     var buffer: BeansLXScriptBufferBridge { get }
+    var crypto: BeansLXScriptCryptoBridge { get }
+}
+
+@objc protocol BeansLXScriptCryptoExports: JSExport {
+    func md5(_ value: String) -> String
 }
 
 @objc protocol BeansLXScriptBridgeExports: JSExport {
@@ -53,6 +58,13 @@ final class BeansLXScriptBufferBridge: NSObject, BeansLXScriptBufferExports {
 
 final class BeansLXScriptUtilsBridge: NSObject, BeansLXScriptUtilsExports {
     let buffer = BeansLXScriptBufferBridge()
+    let crypto = BeansLXScriptCryptoBridge()
+}
+
+final class BeansLXScriptCryptoBridge: NSObject, BeansLXScriptCryptoExports {
+    func md5(_ value: String) -> String {
+        Data(value.utf8).md5Hex()
+    }
 }
 
 final class BeansLXScriptDoneBridge: NSObject, BeansLXScriptDoneExports {
@@ -224,8 +236,14 @@ final class BeansLXScriptRuntime {
         queue.sync {
             context.evaluateScript("if (typeof globalThis === 'undefined') { var globalThis = this; }")
             context.evaluateScript("if (typeof globalThis.lx === 'undefined') { globalThis.lx = lx; }")
+            context.evaluateScript("if (typeof console === 'undefined') { globalThis.console = { log: function() {}, warn: function() {}, error: function() {} }; }")
+            context.evaluateScript("if (typeof module === 'undefined') { var module = { exports: {} }; var exports = module.exports; }")
+            context.evaluateScript("globalThis.cerumusic = { request: function(url, options) { return new Promise(function(resolve, reject) { lx.request(url, options, function(error, response) { if (error && error.message) { reject(error); } else { resolve(response); } }); }); }, utils: lx.utils }; ")
             _ = context.evaluateScript(script)
-            initialized = context.exception == nil
+            if context.exception == nil {
+                _ = context.evaluateScript("globalThis.__beansPlugin = module.exports;")
+                initialized = context.exception == nil
+            }
         }
         if !initialized { return nil }
     }
@@ -257,17 +275,26 @@ final class BeansLXScriptRuntime {
         }
 
         queue.async {
-            guard let handler = self.handlers["request"] else {
+            let handler = self.handlers["request"]
+            let hasPluginResolver = self.context.evaluateScript("typeof __beansPlugin.musicUrl === 'function'")?.toBool() == true
+            guard handler != nil || hasPluginResolver else {
                 semaphore.signal()
                 return
             }
-            self.context.setObject(handler, forKeyedSubscript: "__beansHandler" as NSString)
+            if let handler {
+                self.context.setObject(handler, forKeyedSubscript: "__beansHandler" as NSString)
+            }
             self.context.setObject(payload as NSDictionary, forKeyedSubscript: "__beansPayload" as NSString)
             self.context.setObject(done, forKeyedSubscript: "__beansDone" as NSString)
+            let invocation = handler != nil
+                ? "__beansHandler(__beansPayload)"
+                : "__beansPlugin.musicUrl(__beansPayload.source, __beansPayload.info.musicInfo, __beansPayload.info.type)"
             _ = self.context.evaluateScript("""
             (function() {
                 try {
-                    Promise.resolve(__beansHandler(__beansPayload)).then(
+                    Promise.resolve(
+                        \(invocation)
+                    ).then(
                         function(value) { __beansDone.resolve(value); },
                         function(error) { __beansDone.reject(error && error.message ? error.message : String(error)); }
                     );

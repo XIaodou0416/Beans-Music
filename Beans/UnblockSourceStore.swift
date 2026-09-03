@@ -17,9 +17,10 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
     var script: String?
     var enabled: Bool = true
     var isPreset: Bool = false
+    var isFree: Bool = false
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, template, urlPath, headers, quality, script, enabled, isPreset
+        case id, name, kind, template, urlPath, headers, quality, script, enabled, isPreset, isFree
     }
 
     init(
@@ -32,7 +33,8 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         quality: String = "320k",
         script: String? = nil,
         enabled: Bool = true,
-        isPreset: Bool = false
+        isPreset: Bool = false,
+        isFree: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -44,6 +46,7 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         self.script = script
         self.enabled = enabled
         self.isPreset = isPreset
+        self.isFree = isFree
     }
 
     init(from decoder: Decoder) throws {
@@ -58,6 +61,7 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         script = try container.decodeIfPresent(String.self, forKey: .script)
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         isPreset = try container.decodeIfPresent(Bool.self, forKey: .isPreset) ?? false
+        isFree = try container.decodeIfPresent(Bool.self, forKey: .isFree) ?? false
     }
 }
 
@@ -104,7 +108,21 @@ final class UnblockSourceStore: ObservableObject {
         ),
     ]
 
-    static let protectedPresetSourceIDs = Set(paidPresetSources.map(\.id))
+    static let freePresetSources: [ThirdPartySource] = [
+        ThirdPartySource(
+            id: "beans.preset.cerumusic.free.v1",
+            name: "CeruMusic · 免费音源",
+            kind: "script-free",
+            template: "",
+            quality: "320k",
+            script: CeruMusicBuiltinSource.script,
+            isPreset: true,
+            isFree: true
+        )
+    ]
+
+    static let presetSources = paidPresetSources + freePresetSources
+    static let protectedPresetSourceIDs = Set(presetSources.map(\.id))
 
     @Published var sources: [ThirdPartySource] {
         didSet { save() }
@@ -129,13 +147,13 @@ final class UnblockSourceStore: ObservableObject {
 
         // 既保留当前支持的预设，也保留用户导入/创建的自定义音源。
         // 预设项按内置模板更新字段，自定义项保持原样。
-        let supportedPresetIDs = Set(Self.paidPresetSources.map(\.id))
+        let supportedPresetIDs = Set(Self.presetSources.map(\.id))
         var normalized: [ThirdPartySource] = []
         var seen = Set<String>()
         for source in savedSources {
             if source.isPreset {
                 guard supportedPresetIDs.contains(source.id) else { continue }
-                guard let preset = Self.paidPresetSources.first(where: { $0.id == source.id }) else { continue }
+                guard let preset = Self.presetSources.first(where: { $0.id == source.id }) else { continue }
                 var updated = preset
                 updated.name = source.name.isEmpty ? preset.name : source.name
                 updated.kind = source.kind.isEmpty ? preset.kind : source.kind
@@ -144,6 +162,7 @@ final class UnblockSourceStore: ObservableObject {
                 updated.headers = source.headers.isEmpty ? preset.headers : source.headers
                 updated.enabled = source.enabled
                 updated.isPreset = true
+                updated.isFree = preset.isFree
                 if seen.insert(updated.id).inserted {
                     normalized.append(updated)
                 }
@@ -151,7 +170,7 @@ final class UnblockSourceStore: ObservableObject {
                 normalized.append(source)
             }
         }
-        for preset in Self.paidPresetSources where !seen.contains(preset.id) {
+        for preset in Self.presetSources where !seen.contains(preset.id) {
             normalized.append(preset)
         }
         sources = normalized

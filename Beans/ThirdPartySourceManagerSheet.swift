@@ -382,12 +382,12 @@ private struct SourceRow: View {
                             .foregroundStyle(Color.beansLabel)
                             .lineLimit(1)
                         if source.isPreset {
-                            Text(beansLocalized("预设", "Preset"))
+                            Text(source.isFree ? beansLocalized("免费", "Free") : beansLocalized("预设", "Preset"))
                                 .font(BeansFont.appFont(10, .medium))
-                                .foregroundStyle(Color.beansAmber)
+                                .foregroundStyle(source.isFree ? Color.green : Color.beansAmber)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 3)
-                                .background(Color.beansAmber.opacity(0.12), in: Capsule())
+                                .background((source.isFree ? Color.green : Color.beansAmber).opacity(0.12), in: Capsule())
                         }
                     }
                     Text(subtitle)
