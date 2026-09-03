@@ -279,6 +279,18 @@ struct PlayerView: View {
         player.isPlaying && !showPlayerSettings
     }
 
+    private func openPlayerSettings() {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.86, blendDuration: 0.08)) {
+            showPlayerSettings = true
+        }
+    }
+
+    private func closePlayerSettings() {
+        withAnimation(.easeOut(duration: 0.24)) {
+            showPlayerSettings = false
+        }
+    }
+
     /// 当前行歌词颜色（可自定义；配色模式关闭时自动跟随封面取色）
     private var lyricCurrentColor: Color {
         guard lyricGradMode == 1 else { return palette.accent }
@@ -381,7 +393,7 @@ struct PlayerView: View {
                             showDownloadPicker = true
                         },
                         onPlayerSettings: {
-                            showPlayerSettings = true
+                            openPlayerSettings()
                         }
                     )
 
@@ -586,10 +598,21 @@ struct PlayerView: View {
                 CommentsSheet(song: song)
             }
         }
-        .fullScreenCover(isPresented: $showPlayerSettings) {
-            PlayerSettingsSheet()
-                .environmentObject(theme)
-                .environmentObject(player)
+        .overlay {
+            if showPlayerSettings {
+                PlayerSettingsSheet(onDismiss: closePlayerSettings)
+                    .environmentObject(theme)
+                    .environmentObject(player)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .move(edge: .bottom).combined(with: .opacity)
+                        )
+                    )
+                    .zIndex(100)
+            }
         }
         .sheet(item: $shareFile, onDismiss: cleanupSharedFile) { item in
             ShareSheet(items: [item.url])
@@ -634,7 +657,7 @@ struct PlayerView: View {
                 showDownloadPicker = true
             }
             Button("播放器设置") {
-                showPlayerSettings = true
+                openPlayerSettings()
             }
             Button("取消", role: .cancel) {}
         }
@@ -831,7 +854,7 @@ struct PlayerView: View {
             }
             moreActionRow("播放器设置", systemName: "slider.horizontal.3") {
                 showMoreActions = false
-                showPlayerSettings = true
+                openPlayerSettings()
             }
         }
         .padding(14)
@@ -1005,7 +1028,7 @@ struct PlayerView: View {
                 Button("定时关闭") { showSleepTimer = true }
                 Button("添加到本地歌单") { showAddToLocalPlaylist = true }
                 Button("下载歌曲") { showDownloadPicker = true }
-                Button("播放器设置") { showPlayerSettings = true }
+                Button("播放器设置") { openPlayerSettings() }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
@@ -1195,7 +1218,7 @@ struct PlayerView: View {
                 Button("定时关闭") { showSleepTimer = true }
                 Button("添加到本地歌单") { showAddToLocalPlaylist = true }
                 Button("下载歌曲") { showDownloadPicker = true }
-                Button("播放器设置") { showPlayerSettings = true }
+                Button("播放器设置") { openPlayerSettings() }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
@@ -3604,6 +3627,7 @@ struct LyricPreset {
 
 struct PlayerSettingsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
+    private let onDismiss: (() -> Void)?
     @AppStorage("beans.playerBreath") private var breath = 0.6
     @AppStorage("beans.playerDustMode") private var playerDustModeRaw = BeansPlayerDustMode.off.rawValue
     @AppStorage("beans.playerDustDensity") private var playerDustDensity = 1.0
@@ -3663,6 +3687,10 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.playerSettings.coverExpanded") private var coverExpanded = false
     @AppStorage("beans.playerSettings.appleMusicExpanded") private var appleMusicExpanded = false
     @State private var showLyricBackgroundPicker = false
+
+    init(onDismiss: (() -> Void)? = nil) {
+        self.onDismiss = onDismiss
+    }
 
     private var tiltYText: String {
         if lyricTiltY == 0 { return "关闭" }
@@ -3925,7 +3953,13 @@ struct PlayerSettingsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
+                    Button("完成") {
+                        if let onDismiss {
+                            onDismiss()
+                        } else {
+                            dismiss()
+                        }
+                    }
                 }
             }
         }

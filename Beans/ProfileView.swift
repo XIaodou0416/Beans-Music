@@ -1197,6 +1197,7 @@ struct SettingsView: View {
     /// 高刷新率请求，默认开启
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
+    @AppStorage(BeansHaptics.enabledKey) private var hapticsEnabled = true
     @AppStorage("beans.playback.autoResumeLast") private var autoResumeLastPlayback = false
     @AppStorage("beans.labelColorHex") private var labelColorHex = ""
     @AppStorage("beans.homeGreetingText") private var homeGreetingText = ""
@@ -2319,6 +2320,22 @@ struct SettingsView: View {
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color.beansAmber)
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
+                Toggle(isOn: $hapticsEnabled) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "iphone.radiowaves.left.and.right")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        Text(beansLocalized("触感反馈", "Haptic Feedback"))
+                            .font(BeansFont.appFont(15))
+                            .foregroundStyle(Color.beansLabel)
                     }
                 }
                 .toggleStyle(.switch)

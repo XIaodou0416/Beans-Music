@@ -82,6 +82,17 @@ struct MiniPlayerView: View {
                 Spacer(minLength: 8)
                 Button {
                     BeansHaptics.tap()
+                    player.previous()
+                } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                        .frame(width: controlSize, height: controlSize)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(GlassPressButtonStyle())
+                Button {
+                    BeansHaptics.tap()
                     player.togglePlayPause()
                 } label: {
                     PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 16)
@@ -133,11 +144,6 @@ struct MiniPlayerView: View {
                     RoundedRectangle(cornerRadius: containerRadius, style: .continuous)
                         .fill(.clear)
                 }
-            }
-            .overlay(alignment: .bottom) {
-                ProgressLine(progress: clock.progress, duration: clock.duration)
-                    .frame(height: 2.5)
-                    .padding(.horizontal, 12)
             }
             .clipShape(RoundedRectangle(cornerRadius: containerRadius, style: .continuous))
             .shadow(color: presentation.showsCardSurface ? .black.opacity(0.16) : .clear, radius: 12, y: 6)
