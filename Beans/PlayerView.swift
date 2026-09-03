@@ -37,6 +37,8 @@ struct PlayerView: View {
     @State private var vinylIsDraggingLyrics = false
     @State private var vinylLyricsResumeTask: Task<Void, Never>?
     @State private var vinylDismissDragOffset: CGFloat = 0
+    @AppStorage("beans.vinylLyricsTopRows") private var vinylLyricsTopRows = 3
+    @AppStorage("beans.vinylLyricsBottomRows") private var vinylLyricsBottomRows = 3
     @AppStorage("beans.djVisual") private var djVisualEnabled = false
     @AppStorage("beans.djVisualIntensity") private var djVisualIntensity = 0.8
     @State private var dominantColor: RGBColor?
@@ -1052,6 +1054,8 @@ struct PlayerView: View {
                 .modifier(Layoutable(part: .vinylLyricsHeader, enabled: layoutMode, data: $layoutData))
                 .zIndex(3)
 
+            Spacer(minLength: 0)
+
             Group {
                 if lyrics.isEmpty {
                     vinylEmptyLyricsView
@@ -1059,7 +1063,7 @@ struct PlayerView: View {
                     ScrollViewReader { proxy in
                         ScrollView(showsIndicators: false) {
                             LazyVStack(alignment: .leading, spacing: 34) {
-                                Color.clear.frame(height: max(120, vinylLyricsViewportHeight * 0.38))
+                                Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(vinylLyricsTopRows), vinylLyricsViewportHeight * 0.18))
                                 ForEach(lyrics.indices, id: \.self) { index in
                                     vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
                                         .id(index)
@@ -1072,7 +1076,7 @@ struct PlayerView: View {
                                             }
                                         }
                                 }
-                                Color.clear.frame(height: max(135, vinylLyricsViewportHeight * 0.38))
+                                Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(vinylLyricsBottomRows), vinylLyricsViewportHeight * 0.18))
                             }
                             .padding(.horizontal, 28)
                         }
@@ -1121,8 +1125,12 @@ struct PlayerView: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: vinylLyricsViewportHeightLimit(in: geo))
             .modifier(Layoutable(part: .vinylLyricsText, enabled: layoutMode, data: $layoutData))
             .zIndex(1)
+
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onDisappear {
@@ -1276,15 +1284,31 @@ struct PlayerView: View {
         vinylIsDraggingLyrics ? vinylFocusedLyricIndex : (vinylFocusedLyricIndex ?? vinylCurrentLyricIndex)
     }
 
+    private var vinylLyricsLineSlotHeight: CGFloat {
+        max(56, CGFloat(lyricFontSize) * 1.9 + CGFloat(lyricLineSpacing))
+    }
+
+    private var vinylLyricsFocusAnchor: UnitPoint {
+        let total = CGFloat(max(vinylLyricsTopRows + vinylLyricsBottomRows, 1))
+        let y = min(max(CGFloat(vinylLyricsTopRows) / total, 0.18), 0.82)
+        return UnitPoint(x: 0.5, y: y)
+    }
+
+    private func vinylLyricsViewportHeightLimit(in geo: GeometryProxy) -> CGFloat {
+        let desired = CGFloat(vinylLyricsTopRows + vinylLyricsBottomRows + 1) * vinylLyricsLineSlotHeight
+        let available = max(220, geo.size.height - 100)
+        return min(max(220, desired), available)
+    }
+
     private func vinylUpdateFocusedLyric(from centers: [Int: CGFloat]) {
         guard vinylIsDraggingLyrics, vinylLyricsViewportHeight > 0, !centers.isEmpty else { return }
-        let center = vinylLyricsViewportHeight / 2
-        vinylFocusedLyricIndex = centers.min { abs($0.value - center) < abs($1.value - center) }?.key
+        let focusY = vinylLyricsViewportHeight * vinylLyricsFocusAnchor.y
+        vinylFocusedLyricIndex = centers.min { abs($0.value - focusY) < abs($1.value - focusY) }?.key
     }
 
     private func vinylScrollToCurrentLyric(proxy: ScrollViewProxy, animated: Bool) {
         guard let index = vinylCurrentLyricIndex else { return }
-        let action = { proxy.scrollTo(index, anchor: .center) }
+        let action = { proxy.scrollTo(index, anchor: vinylLyricsFocusAnchor) }
         if animated {
             withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.38)) { action() }
         } else {
@@ -1297,7 +1321,7 @@ struct PlayerView: View {
         let target = vinylFocusedLyricIndex ?? vinylCurrentLyricIndex
         if let target {
             withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.34)) {
-                proxy.scrollTo(target, anchor: .center)
+                proxy.scrollTo(target, anchor: vinylLyricsFocusAnchor)
             }
         }
         vinylLyricsResumeTask = Task { @MainActor in
@@ -2344,7 +2368,7 @@ struct PlayerView: View {
                             layoutPart = part
                             layoutPartRaw = part.rawValue
                         } label: {
-                            Text(part.rawValue)
+                            Text(LocalizedStringKey(part.rawValue))
                                 .font(BeansFont.appFont(12, .semibold))
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
@@ -4332,6 +4356,15 @@ struct PlayerSettingsSheet: View {
             vinylLayoutAction("调节黑胶播放器", part: .vinylAlbum, icon: "record.circle")
             vinylLayoutAction("调节黑胶歌词顶部", part: .vinylLyricsHeader, icon: "music.note")
             vinylLayoutAction("调节黑胶歌词文字", part: .vinylLyricsText, icon: "text.alignleft")
+            Divider().opacity(0.5)
+            settingSlider("歌词上方显示", valueText: "\(vinylLyricsTopRows) 行") {
+                Slider(value: Binding(get: { Double(vinylLyricsTopRows) }, set: { vinylLyricsTopRows = Int($0.rounded()) }), in: 1...8, step: 1)
+                    .tint(Color.beansAmber)
+            }
+            settingSlider("歌词下方显示", valueText: "\(vinylLyricsBottomRows) 行") {
+                Slider(value: Binding(get: { Double(vinylLyricsBottomRows) }, set: { vinylLyricsBottomRows = Int($0.rounded()) }), in: 1...8, step: 1)
+                    .tint(Color.beansAmber)
+            }
         }
     }
 

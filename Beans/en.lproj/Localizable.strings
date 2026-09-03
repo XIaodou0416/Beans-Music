@@ -143,7 +143,7 @@
 "单曲循环" = "Repeat One";
 "当前：默认背景" = "Current: Default Background";
 "当前：已应用壁纸" = "Current: Wallpaper applied";
-"当前播放歌词下方显示译文（网易云 tlyric）" = "（ tlyric）";
+"当前播放歌词下方显示译文（网易云 tlyric）" = "Show translated lyrics below the current line (NetEase tlyric)";
 "当前定时" = "Current Timer";
 "当前歌曲播放失败，已自动切到下一首" = "The current song failed, so playback skipped to the next song.";
 "当前歌曲解析失败或播放地址失效时，自动跳到下一首" = "Automatically skip to the next song when parsing fails or the playback URL expires.";
@@ -900,6 +900,17 @@
 "Apple Music 实时布局" = "Apple Music Live Layout";
 "Apple Music 外观" = "Apple Music Appearance";
 "Apple Music 样式" = "Apple Music Style";
+"黑胶播放器" = "Vinyl Player";
+"黑胶歌词" = "Vinyl Lyrics";
+"黑胶歌词顶部" = "Vinyl Lyrics Header";
+"黑胶歌词文字" = "Vinyl Lyrics Text";
+"黑胶独立调节" = "Vinyl Layout Controls";
+"分别调整黑胶播放页、歌词顶部信息和中间歌词文字的位置与大小" = "Adjust the vinyl player, lyrics header, and lyric text position and size independently.";
+"调节黑胶播放器" = "Adjust Vinyl Player";
+"调节黑胶歌词顶部" = "Adjust Vinyl Lyrics Header";
+"调节黑胶歌词文字" = "Adjust Vinyl Lyrics Text";
+"歌词上方显示" = "Lyrics Above";
+"歌词下方显示" = "Lyrics Below";
 "紧凑淡雅" = "Compact Soft";
 "控制面板" = "Control Panel";
 "控制中心" = "Control Center";
