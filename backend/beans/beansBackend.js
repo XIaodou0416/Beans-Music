@@ -79,7 +79,7 @@ function createBeansRouter(options = {}) {
         original_name: text(file.originalname, 180),
         mime_type: file.mimetype,
         size: file.size,
-        url: `uploads/${encodeURIComponent(file.filename)}`,
+        url: `/beans/uploads/${encodeURIComponent(file.filename)}`,
       }));
       const feedbackID = crypto.randomUUID();
 
@@ -159,7 +159,7 @@ function createBeansRouter(options = {}) {
         user.download_unlocked = request.body.download_unlocked === 'on';
         user.action_note = text(request.body.action_note, 500);
       });
-      response.redirect('admin');
+      response.redirect('/beans/admin');
     }
   );
 
@@ -323,7 +323,7 @@ function renderAdminPage(database) {
       <td class="id">${escapeHtml(user.user_id)}<br><small>${escapeHtml(user.last_ip)}</small></td>
       <td>${escapeHtml(user.device_model || user.device_name)}<br><small>${escapeHtml(`${user.system_name} ${user.system_version}`)}</small></td>
       <td>${escapeHtml(`${user.app_version} (${user.app_build})`)}<br><small>${escapeHtml(user.last_seen_at)}</small></td>
-      <td><form method="post" action="admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> 拉黑</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> 下载已解锁</label><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>
+      <td><form method="post" action="/beans/admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> 拉黑</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> 下载已解锁</label><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>
     </tr>
   `).join('');
   const feedbackRows = database.feedback.slice(0, 300).map((item) => {
