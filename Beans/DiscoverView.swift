@@ -1394,8 +1394,7 @@ struct DiscoverView: View {
             snapshot.dailySongs = dr
             snapshot.personalized = pp
         case .kugou:
-            async let songs: [Song] = (try? await KugouMusicAPI.shared.everydayRecommend(limit: 30))
-                ?? ((try? await KugouMusicAPI.shared.searchSongs(keyword: "热门歌曲", limit: 30)) ?? [])
+            async let songs = loadKugouDailySongs(limit: 30)
             async let ranks = KugouMusicAPI.shared.topLists(limit: 10)
             async let playlists = KugouMusicAPI.shared.recommendPlaylists(limit: 12)
             let (daily, top, pp) = try await (songs, ranks, playlists)
@@ -1404,6 +1403,13 @@ struct DiscoverView: View {
             snapshot.personalized = pp
         }
         return snapshot
+    }
+
+    private func loadKugouDailySongs(limit: Int) async -> [Song] {
+        if let songs = try? await KugouMusicAPI.shared.everydayRecommend(limit: limit), !songs.isEmpty {
+            return songs
+        }
+        return (try? await KugouMusicAPI.shared.searchSongs(keyword: "热门歌曲", limit: limit)) ?? []
     }
 
     private func apply(_ snapshot: DiscoverCache.Snapshot) {
