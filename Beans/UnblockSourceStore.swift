@@ -309,8 +309,10 @@ extension UnblockSourceStore {
     }
 
     static func supportedQualities(for source: ThirdPartySource) -> [ThirdPartyAudioQuality] {
-        if let explicit = explicitQualities(from: source.headers["qualities"] ?? source.headers["qualityOptions"] ?? source.headers["qualitys"]),
-           !explicit.isEmpty {
+        let explicit = explicitQualities(
+            from: source.headers["qualities"] ?? source.headers["qualityOptions"] ?? source.headers["qualitys"]
+        )
+        if !explicit.isEmpty {
             return explicit
         }
 
