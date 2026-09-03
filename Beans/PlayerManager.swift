@@ -81,6 +81,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var failureObserver: NSObjectProtocol?
     private var itemStatusObserver: NSKeyValueObservation?
     private var timeControlStatusObserver: NSKeyValueObservation?
+    private var equalizerSettingsObserver: NSObjectProtocol?
     private var playbackConfirmed = false
     private var pendingThirdPartyVIPNotice: ThirdPartyVIPNotice?
     private var sessionConfigured = false
@@ -152,6 +153,19 @@ final class PlayerManager: NSObject, ObservableObject {
         loadHistory()
         loadPlayCounts()
         restorePersistedPlaybackState()
+        equalizerSettingsObserver = NotificationCenter.default.addObserver(
+            forName: BeansEqualizer.settingsDidChange,
+            object: BeansEqualizer.shared,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyEqualizerToCurrentItem()
+        }
+    }
+
+    deinit {
+        if let equalizerSettingsObserver {
+            NotificationCenter.default.removeObserver(equalizerSettingsObserver)
+        }
     }
 
     /// 在首帧之后恢复轻量播放偏好，避免安装后启动阶段触碰系统媒体服务。
@@ -861,6 +875,7 @@ final class PlayerManager: NSObject, ObservableObject {
         let player = AVPlayer(playerItem: item)
         player.rate = Float(rate)
         self.player = player
+        configureEqualizer(for: item)
         playbackConfirmed = false
         itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             guard let self else { return }
@@ -1088,6 +1103,38 @@ final class PlayerManager: NSObject, ObservableObject {
         playbackConfirmed = false
         pendingThirdPartyVIPNotice = nil
         lastPublishedProgress = -1
+    }
+
+    /// 均衡器通过 AVAudioMix 的音频处理 tap 工作，不改动 URL、队列或播放器状态。
+    /// 曲目切换和开关均复用这里的挂载流程，避免让网络请求跑到主线程。
+    private func applyEqualizerToCurrentItem() {
+        guard let item = player?.currentItem else { return }
+        configureEqualizer(for: item)
+    }
+
+    private func configureEqualizer(for item: AVPlayerItem) {
+        guard BeansEqualizer.shared.isEnabled else {
+            item.audioMix = nil
+            return
+        }
+
+        let asset = item.asset
+        asset.loadValuesAsynchronously(forKeys: ["tracks"]) { [weak self, weak item, weak asset] in
+            guard let self, let item, let asset else { return }
+            var error: NSError?
+            guard asset.statusOfValue(forKey: "tracks", error: &error) == .loaded,
+                  let track = asset.tracks(withMediaType: .audio).first,
+                  let mix = BeansEqualizer.shared.makeAudioMix(for: track) else {
+                return
+            }
+            self.performOnMain { [weak self, weak item] in
+                guard let self,
+                      let item,
+                      self.player?.currentItem === item,
+                      BeansEqualizer.shared.isEnabled else { return }
+                item.audioMix = mix
+            }
+        }
     }
 
     private func thirdPartyVIPNotice(for song: Song, sourceTitle: String) -> ThirdPartyVIPNotice? {

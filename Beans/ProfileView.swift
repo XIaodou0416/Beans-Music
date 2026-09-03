@@ -1236,6 +1236,7 @@ struct SettingsView: View {
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
     @ObservedObject private var chartCovers = ChartCoverStore.shared
+    @ObservedObject private var equalizer = BeansEqualizer.shared
     @AppStorage("beans.thirdPartyAPIKeys") private var thirdPartyAPIKeys = ""
     @AppStorage(ThirdPartyAudioQuality.storageKey) private var thirdPartyAudioQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
@@ -1258,6 +1259,7 @@ struct SettingsView: View {
     @State private var showSourceHelp = false
     @State private var showThirdPartyKeys = true
     @State private var showSourceManager = false
+    @State private var showEqualizer = false
     @State private var backupExpanded = false
     @State private var backupIncludeAccounts = false
     @State private var backupIncludeWallpapers = false
@@ -1608,6 +1610,7 @@ struct SettingsView: View {
                     LazyVStack(alignment: .leading, spacing: 16) {
                         themeSection
                         playbackSection
+                        equalizerSection
                         changelogSection
                         backupSection
                         logSection
@@ -1686,6 +1689,10 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showSourceManager) {
             ThirdPartySourceManagerSheet()
+                .environmentObject(theme)
+        }
+        .sheet(isPresented: $showEqualizer) {
+            EqualizerSettingsView()
                 .environmentObject(theme)
         }
         .fullScreenCover(isPresented: $showRestorePicker) {
@@ -2422,6 +2429,42 @@ struct SettingsView: View {
     }
 
     /// 播放与歌词设置。
+    private var equalizerSection: some View {
+        Button {
+            BeansHaptics.select()
+            showEqualizer = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(beansLocalized("均衡器", "Equalizer"))
+                        .font(BeansFont.appFont(15))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(beansLocalized("调节低音、人声与高音", "Adjust bass, vocals, and treble"))
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer()
+                Text(equalizer.isEnabled ? beansLocalized("已开启", "On") : beansLocalized("已关闭", "Off"))
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(equalizer.isEnabled ? Color.beansAmber : Color.beansComment)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.beansComment.opacity(0.6))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+    }
+
     private var playbackSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button {
@@ -3309,6 +3352,217 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .zIndex(2)
         }
+    }
+}
+
+// MARK: - 均衡器
+
+struct EqualizerSettingsView: View {
+    @EnvironmentObject private var theme: ThemeStore
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var equalizer = BeansEqualizer.shared
+
+    private var enabledBinding: Binding<Bool> {
+        Binding(
+            get: { equalizer.isEnabled },
+            set: { equalizer.setEnabled($0) }
+        )
+    }
+
+    private func gainBinding(_ index: Int) -> Binding<Double> {
+        Binding(
+            get: { equalizer.bandGains.indices.contains(index) ? equalizer.bandGains[index] : 0 },
+            set: { equalizer.setBandGain(at: index, to: $0) }
+        )
+    }
+
+    var body: some View {
+        BeansNavigationStack {
+            ZStack {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        controlCard
+                        presetCard
+                        bandsCard
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 32)
+                    .frame(maxWidth: 680)
+                    .frame(maxWidth: .infinity)
+                }
+                .beansScrollIndicatorsHidden()
+            }
+            .navigationTitle(beansLocalized("均衡器", "Equalizer"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(beansLocalized("完成", "Done")) { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var controlCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: enabledBinding) {
+                HStack(spacing: 11) {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(beansLocalized("启用均衡器", "Enable Equalizer"))
+                            .font(BeansFont.appFont(15, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                        Text(beansLocalized("播放时实时应用当前调节", "Apply the current tuning while playing"))
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(Color.beansAmber)
+
+            Text(beansLocalized("均衡器仅处理 Beans 当前播放的音乐，不影响其他 App。", "The equalizer only processes music playing in Beans."))
+                .font(BeansFont.appFont(11))
+                .foregroundStyle(Color.beansComment)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(14)
+        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
+    }
+
+    private var presetCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(beansLocalized("预设", "Preset"))
+                    .font(BeansFont.appFont(14, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer()
+                Menu {
+                    ForEach(BeansEqualizerPreset.allCases.filter { $0 != .custom }) { preset in
+                        Button(preset.displayName) {
+                            equalizer.applyPreset(preset)
+                            BeansHaptics.select()
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(equalizer.selectedPreset.displayName)
+                            .font(BeansFont.appFont(13, .medium))
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.beansAmber)
+                    .padding(.horizontal, 11)
+                    .frame(height: 31)
+                    .background { BeansSurface(shape: Capsule()) }
+                }
+            }
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                ForEach(BeansEqualizerPreset.allCases.filter { $0 != .custom }) { preset in
+                    let selected = equalizer.selectedPreset == preset
+                    Button {
+                        equalizer.applyPreset(preset)
+                        BeansHaptics.select()
+                    } label: {
+                        Text(preset.displayName)
+                            .font(BeansFont.appFont(11.5, selected ? .semibold : .regular))
+                            .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 30)
+                            .background {
+                                Capsule().fill(selected ? Color.beansAmber.opacity(0.14) : Color.primary.opacity(0.035))
+                            }
+                            .overlay {
+                                Capsule().strokeBorder(selected ? Color.beansAmber.opacity(0.42) : Color.primary.opacity(0.06), lineWidth: 0.8)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Button {
+                equalizer.reset()
+                BeansHaptics.select()
+            } label: {
+                Label(beansLocalized("重置调节", "Reset adjustments"), systemImage: "arrow.counterclockwise")
+                    .font(BeansFont.appFont(12.5, .medium))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 34)
+                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 10, style: .continuous)) }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
+    }
+
+    private var bandsCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(beansLocalized("自定义调节", "Custom tuning"))
+                        .font(BeansFont.appFont(14, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(beansLocalized("范围 -12 dB 至 +12 dB", "Range: -12 dB to +12 dB"))
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer()
+            }
+
+            ForEach(Array(BeansEqualizer.bandFrequencies.enumerated()), id: \.offset) { index, frequency in
+                equalizerBandRow(index: index, frequency: frequency)
+                if index < BeansEqualizer.bandFrequencies.count - 1 {
+                    Divider().overlay(Color.beansComment.opacity(0.14))
+                }
+            }
+        }
+        .padding(14)
+        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
+    }
+
+    private func equalizerBandRow(index: Int, frequency: Double) -> some View {
+        let gain = equalizer.bandGains.indices.contains(index) ? equalizer.bandGains[index] : 0
+        return VStack(spacing: 6) {
+            HStack {
+                Text(frequencyLabel(frequency))
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer()
+                Text(String(format: "%+.1f dB", gain))
+                    .font(BeansFont.appFont(12, .semibold))
+                    .foregroundStyle(abs(gain) > 0.01 ? Color.beansAmber : Color.beansComment)
+                    .monospacedDigit()
+            }
+            Slider(value: gainBinding(index), in: -BeansEqualizer.maximumGain...BeansEqualizer.maximumGain, step: 0.5)
+                .tint(Color.beansAmber)
+                .transaction { transaction in transaction.animation = nil }
+            HStack {
+                Text("-12")
+                Spacer()
+                Text("0")
+                Spacer()
+                Text("+12")
+            }
+            .font(BeansFont.appFont(10))
+            .foregroundStyle(Color.beansComment.opacity(0.75))
+        }
+    }
+
+    private func frequencyLabel(_ frequency: Double) -> String {
+        if frequency >= 1_000 {
+            let value = frequency / 1_000
+            return value.rounded() == value ? "\(Int(value)) kHz" : String(format: "%.1f kHz", value)
+        }
+        return "\(Int(frequency)) Hz"
     }
 }
 
