@@ -11,7 +11,10 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
     case title = "歌名"
     case previewLyric = "预览歌词"
     case vinylAlbum = "黑胶播放器"
+    /// 保留旧的整体黑胶歌词布局键，用于兼容已保存的用户设置。
     case vinylLyric = "黑胶歌词"
+    case vinylLyricsHeader = "黑胶歌词顶部"
+    case vinylLyricsText = "黑胶歌词文字"
     case progress = "进度条"
     case controls = "控制行"
     case loop = "循环按钮"
@@ -23,6 +26,11 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
     case grabber = "指示线"
 
     var id: String { rawValue }
+
+    /// 黑胶歌词现在拆成顶部信息和歌词文字两个独立组件，旧整体项不再显示在编辑器中。
+    static var editableCases: [PlayerLayoutPart] {
+        allCases.filter { $0 != .vinylLyric }
+    }
 }
 
 /// Apple Music 播放页实时调试组件。
@@ -79,13 +87,24 @@ enum PlayerLayoutStore {
         var needsSave = false
 
         if migrated[PlayerLayoutPart.vinylAlbum.rawValue] == PlayerLayoutEntry(x: 0, y: -8, scale: 1)
-            || migrated[PlayerLayoutPart.vinylAlbum.rawValue] == PlayerLayoutEntry(x: 0, y: -56, scale: 1) {
-            migrated[PlayerLayoutPart.vinylAlbum.rawValue] = PlayerLayoutEntry()
+            || migrated[PlayerLayoutPart.vinylAlbum.rawValue] == PlayerLayoutEntry(x: 0, y: -56, scale: 1)
+            || migrated[PlayerLayoutPart.vinylAlbum.rawValue] == PlayerLayoutEntry() {
+            migrated[PlayerLayoutPart.vinylAlbum.rawValue] = PlayerLayoutEntry(x: 0, y: 20, scale: 1)
             needsSave = true
         }
         if migrated[PlayerLayoutPart.vinylLyric.rawValue] == PlayerLayoutEntry(x: 0, y: -10, scale: 1)
             || migrated[PlayerLayoutPart.vinylLyric.rawValue] == PlayerLayoutEntry(x: -2, y: -56, scale: 1) {
             migrated[PlayerLayoutPart.vinylLyric.rawValue] = PlayerLayoutEntry()
+            needsSave = true
+        }
+
+        // 将旧版“黑胶歌词”整体偏移迁移到新的顶部和歌词文字组件。
+        if migrated[PlayerLayoutPart.vinylLyricsHeader.rawValue] == nil,
+           migrated[PlayerLayoutPart.vinylLyricsText.rawValue] == nil {
+            let legacy = migrated[PlayerLayoutPart.vinylLyric.rawValue] ?? PlayerLayoutEntry()
+            migrated[PlayerLayoutPart.vinylLyricsHeader.rawValue] = legacy
+            migrated[PlayerLayoutPart.vinylLyricsText.rawValue] = legacy
+            migrated.removeValue(forKey: PlayerLayoutPart.vinylLyric.rawValue)
             needsSave = true
         }
 
@@ -125,8 +144,8 @@ enum PlayerLayoutStore {
         case .topBack, .topTitle, .topFavorite, .cover, .title, .previewLyric:
             return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
         case .vinylAlbum:
-            return PlayerLayoutEntry()
-        case .vinylLyric:
+            return PlayerLayoutEntry(x: 0, y: 20, scale: 1)
+        case .vinylLyric, .vinylLyricsHeader, .vinylLyricsText:
             return PlayerLayoutEntry()
         case .progress:
             return PlayerLayoutEntry(x: 0, y: 17, scale: 1)

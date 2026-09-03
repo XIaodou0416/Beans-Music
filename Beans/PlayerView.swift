@@ -1043,80 +1043,83 @@ struct PlayerView: View {
             vinylLyricsHeader
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
+                .modifier(Layoutable(part: .vinylLyricsHeader, enabled: layoutMode, data: $layoutData))
 
-            if lyrics.isEmpty {
-                vinylEmptyLyricsView
-            } else {
-                ScrollViewReader { proxy in
-                    ScrollView(showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 26) {
-                            Color.clear.frame(height: max(88, vinylLyricsViewportHeight * 0.30))
-                            ForEach(lyrics.indices, id: \.self) { index in
-                                vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
-                                    .id(index)
-                                    .background {
-                                        GeometryReader { rowGeometry in
-                                            Color.clear.preference(
-                                                key: LyricCenterPreferenceKey.self,
-                                                value: [index: rowGeometry.frame(in: .named("vinylLyricsViewport")).midY]
-                                            )
+            Group {
+                if lyrics.isEmpty {
+                    vinylEmptyLyricsView
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView(showsIndicators: false) {
+                            LazyVStack(alignment: .leading, spacing: 26) {
+                                Color.clear.frame(height: max(88, vinylLyricsViewportHeight * 0.30))
+                                ForEach(lyrics.indices, id: \.self) { index in
+                                    vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
+                                        .id(index)
+                                        .background {
+                                            GeometryReader { rowGeometry in
+                                                Color.clear.preference(
+                                                    key: LyricCenterPreferenceKey.self,
+                                                    value: [index: rowGeometry.frame(in: .named("vinylLyricsViewport")).midY]
+                                                )
+                                            }
                                         }
-                                    }
+                                }
+                                Color.clear.frame(height: max(110, vinylLyricsViewportHeight * 0.34))
                             }
-                            Color.clear.frame(height: max(110, vinylLyricsViewportHeight * 0.34))
+                            .padding(.horizontal, 28)
                         }
-                        .padding(.horizontal, 28)
-                    }
-                    .coordinateSpace(name: "vinylLyricsViewport")
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0.0),
-                                .init(color: .black, location: 0.12),
-                                .init(color: .black, location: 0.84),
-                                .init(color: .clear, location: 1.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
+                        .coordinateSpace(name: "vinylLyricsViewport")
+                        .mask(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear, location: 0.0),
+                                    .init(color: .black, location: 0.12),
+                                    .init(color: .black, location: 0.84),
+                                    .init(color: .clear, location: 1.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         )
-                    )
-                    .background {
-                        GeometryReader { viewport in
-                            Color.clear
-                                .onAppear { vinylLyricsViewportHeight = viewport.size.height }
-                                .onChange(of: viewport.size.height) { vinylLyricsViewportHeight = $0 }
-                        }
-                    }
-                    .onPreferenceChange(LyricCenterPreferenceKey.self) { centers in
-                        vinylUpdateFocusedLyric(from: centers)
-                    }
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 4)
-                            .onChanged { _ in
-                                vinylIsDraggingLyrics = true
-                                vinylLyricsResumeTask?.cancel()
+                        .background {
+                            GeometryReader { viewport in
+                                Color.clear
+                                    .onAppear { vinylLyricsViewportHeight = viewport.size.height }
+                                    .onChange(of: viewport.size.height) { vinylLyricsViewportHeight = $0 }
                             }
-                            .onEnded { _ in
-                                vinylScheduleLyricsResume(proxy: proxy)
-                            }
-                    )
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-                            vinylScrollToCurrentLyric(proxy: proxy, animated: false)
                         }
-                    }
-                    .onChange(of: vinylCurrentLyricIndex) { _ in
-                        guard !vinylIsDraggingLyrics else { return }
-                        vinylScrollToCurrentLyric(proxy: proxy, animated: true)
+                        .onPreferenceChange(LyricCenterPreferenceKey.self) { centers in
+                            vinylUpdateFocusedLyric(from: centers)
+                        }
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 4)
+                                .onChanged { _ in
+                                    vinylIsDraggingLyrics = true
+                                    vinylLyricsResumeTask?.cancel()
+                                }
+                                .onEnded { _ in
+                                    vinylScheduleLyricsResume(proxy: proxy)
+                                }
+                        )
+                        .onAppear {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                                vinylScrollToCurrentLyric(proxy: proxy, animated: false)
+                            }
+                        }
+                        .onChange(of: vinylCurrentLyricIndex) { _ in
+                            guard !vinylIsDraggingLyrics else { return }
+                            vinylScrollToCurrentLyric(proxy: proxy, animated: true)
+                        }
                     }
                 }
             }
+            .modifier(Layoutable(part: .vinylLyricsText, enabled: layoutMode, data: $layoutData))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onDisappear {
             vinylLyricsResumeTask?.cancel()
         }
-        .modifier(Layoutable(part: .vinylLyric, enabled: layoutMode, data: $layoutData))
     }
 
     private var vinylLyricsHeader: some View {
@@ -2327,7 +2330,7 @@ struct PlayerView: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(PlayerLayoutPart.allCases) { part in
+                    ForEach(PlayerLayoutPart.editableCases) { part in
                         Button {
                             BeansHaptics.select()
                             layoutPart = part
