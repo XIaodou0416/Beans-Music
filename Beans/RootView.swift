@@ -457,7 +457,9 @@ private struct BeansNowPlayingPresentation<Content: View>: View {
         let surface = ZStack(alignment: .top) {
             Color.clear
             Capsule()
-                .fill(.white.opacity(0.70))
+                // Keep the indicator's hit area and gesture, but hide the visual
+                // handle so the player uses a clean full-screen surface.
+                .fill(.clear)
                 .frame(
                     width: BeansNowPlayingPresentationMetrics.indicatorWidth,
                     height: BeansNowPlayingPresentationMetrics.indicatorHeight
