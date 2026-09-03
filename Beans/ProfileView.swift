@@ -1352,76 +1352,121 @@ struct SettingsView: View {
     }
 
     private var playbackQualitySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 9) {
                 Image(systemName: "waveform")
-                    .font(.system(size: 14))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.beansAmber)
-                    .frame(width: 28)
+                    .frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(beansLocalized("播放音质", "Playback quality"))
-                        .font(BeansFont.appFont(15, .semibold))
+                        .font(BeansFont.appFont(14, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     Text(beansLocalized("按列表选择，无法使用时会由平台自动降级。", "Choose a quality below; the platform will downgrade automatically when unavailable."))
-                        .font(BeansFont.appFont(11))
+                        .font(BeansFont.appFont(10))
                         .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
                 }
                 Spacer()
             }
 
-            ForEach(BeansAudioQuality.allCases) { quality in
-                Button {
-                    playbackAudioQualitySelection.wrappedValue = quality
-                } label: {
-                    HStack {
-                        Text(quality.displayName)
-                            .font(BeansFont.appFont(13))
-                            .foregroundStyle(Color.beansLabel)
-                        Spacer()
-                        if playbackAudioQualitySelection.wrappedValue == quality {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(Color.beansAmber)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 7), GridItem(.flexible(), spacing: 7)], spacing: 7) {
+                ForEach(BeansAudioQuality.allCases) { quality in
+                    let selected = playbackAudioQualitySelection.wrappedValue == quality
+                    Button {
+                        playbackAudioQualitySelection.wrappedValue = quality
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(quality.displayName)
+                                .font(BeansFont.appFont(12.5, selected ? .semibold : .regular))
+                                .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                            Spacer(minLength: 2)
+                            if selected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(Color.beansAmber)
+                            }
                         }
+                        .padding(.horizontal, 10)
+                        .frame(height: 34)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(selected ? Color.beansAmber.opacity(0.13) : Color.primary.opacity(0.035))
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .strokeBorder(selected ? Color.beansAmber.opacity(0.45) : Color.primary.opacity(0.07), lineWidth: 0.8)
+                        }
+                        .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
-        .padding(14)
-        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
+        .padding(12)
+        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
     }
 
     private var downloadQualitySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 9) {
                 Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 14))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.beansAmber)
-                    .frame(width: 28)
+                    .frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(beansLocalized("下载音质", "Download quality"))
-                        .font(BeansFont.appFont(15, .semibold))
+                        .font(BeansFont.appFont(14, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     Text(beansLocalized("下载歌曲时优先使用此音质，不支持时自动尝试更低档位。", "Downloads use this quality first and retry lower qualities when unavailable."))
-                        .font(BeansFont.appFont(11))
+                        .font(BeansFont.appFont(10))
                         .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
                 }
                 Spacer()
             }
 
-            Picker(beansLocalized("下载音质", "Download quality"), selection: downloadAudioQualitySelection) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 7), GridItem(.flexible(), spacing: 7)], spacing: 7) {
                 ForEach(ThirdPartyAudioQuality.allCases) { quality in
-                    Text(quality.displayName).tag(quality)
+                    let selected = downloadAudioQualitySelection.wrappedValue == quality
+                    Button {
+                        downloadAudioQualitySelection.wrappedValue = quality
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(quality.displayName)
+                                .font(BeansFont.appFont(12.5, selected ? .semibold : .regular))
+                                .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
+                            Spacer(minLength: 2)
+                            if selected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(Color.beansAmber)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(height: 34)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(selected ? Color.beansAmber.opacity(0.13) : Color.primary.opacity(0.035))
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .strokeBorder(selected ? Color.beansAmber.opacity(0.45) : Color.primary.opacity(0.07), lineWidth: 0.8)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .pickerStyle(.inline)
-            .labelsHidden()
         }
-        .padding(14)
-        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
+        .padding(12)
+        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
     }
 
     private var homeGreetingLines: [String] {
