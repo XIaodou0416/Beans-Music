@@ -1022,6 +1022,12 @@ struct SettingsView: View {
     /// 日志
     @State private var showLogViewer = false
     @State private var showUsageGuide = false
+    /// 自定义音源导入
+    @State private var showImportMenu = false
+    @State private var showFileImporter = false
+    @State private var showURLImport = false
+    @State private var importURLString = ""
+    @State private var importingFromURL = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1116,6 +1122,35 @@ struct SettingsView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("会恢复主题、播放器、平台显示、壁纸、布局等设置，但保留已登录账号。")
+        }
+        .confirmationDialog("导入自定义音源", isPresented: $showImportMenu, titleVisibility: .visible) {
+            Button("从文件导入（JSON）") {
+                showFileImporter = true
+            }
+            Button("从URL导入") {
+                importURLString = ""
+                showURLImport = true
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("JSON 格式：{name, template, kind, urlPath, headers} 或数组")
+        }
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.json]) { result in
+            switch result {
+            case .success(let url):
+                BeansHaptics.success()
+                handleFileImport(url)
+            case .failure:
+                break
+            }
+        }
+        .sheet(isPresented: $showURLImport) {
+            URLImportSheet(
+                urlString: $importURLString,
+                importing: $importingFromURL,
+                onImport: { await handleURLImport() }
+            )
+            .modifier(BeansSheetModifier(detents: [.medium], dragIndicator: true))
         }
     }
 
@@ -1712,6 +1747,14 @@ struct SettingsView: View {
                     Text("\(presetSourceCount) 个")
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
+                    Button {
+                        BeansHaptics.tap()
+                        showImportMenu = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 17))
+                            .foregroundStyle(Color.beansAmber)
+                    }
                 }
 
                 ForEach(sourceStore.presetSources) { source in
@@ -1721,7 +1764,9 @@ struct SettingsView: View {
                                 .font(BeansFont.appFont(13, .medium))
                                 .foregroundStyle(Color.beansLabel)
                                 .lineLimit(1)
-                            Text("内置预设 · \(source.kind.replacingOccurrences(of: "paid-", with: "").uppercased())")
+                            Text(source.isPreset
+                                ? "内置预设 · \(source.kind.replacingOccurrences(of: "paid-", with: "").uppercased())"
+                                : "自定义 · \(source.kind)")
                                 .font(BeansFont.appFont(10))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -1729,6 +1774,18 @@ struct SettingsView: View {
                         Toggle("", isOn: sourceEnabledBinding(source.id))
                             .labelsHidden()
                             .tint(Color.beansAmber)
+                        if sourceStore.canDelete(source: source) {
+                            Button {
+                                BeansHaptics.tap()
+                                sourceStore.deleteSource(id: source.id)
+                                ToastCenter.shared.show("已删除音源")
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.red)
+                            }
+                            .frame(width: 28)
+                        }
                     }
                 }
 
@@ -1739,6 +1796,68 @@ struct SettingsView: View {
             }
             .beansCardShadow(radius: 9, y: 3)
             .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    // MARK: - 自定义音源导入
+
+    /// 处理文件导入
+    private func handleFileImport(_ url: URL) {
+        do {
+            let data = try Data(contentsOf: url)
+            if let single = try? JSONDecoder().decode(ThirdPartySource.self, from: data) {
+                sourceStore.addSource(single)
+                ToastCenter.shared.show("成功导入 1 个音源")
+            } else if let list = try? JSONDecoder().decode([ThirdPartySource].self, from: data) {
+                sourceStore.addSources(list)
+                ToastCenter.shared.show("成功导入 \(list.count) 个音源")
+            } else {
+                ToastCenter.shared.show("JSON 格式不正确，请检查文件")
+            }
+        } catch {
+            ToastCenter.shared.show("读取文件失败：\(error.localizedDescription)")
+        }
+    }
+
+    /// 从 URL 下载并导入
+    private func handleURLImport() async {
+        let trimmed = importURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), !trimmed.isEmpty else {
+            ToastCenter.shared.show("URL 格式不正确")
+            importingFromURL = false
+            return
+        }
+
+        importingFromURL = true
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let single = try? JSONDecoder().decode(ThirdPartySource.self, from: data) {
+                sourceStore.addSource(single)
+                await MainActor.run {
+                    ToastCenter.shared.show("成功导入 1 个音源")
+                    importingFromURL = false
+                    showURLImport = false
+                    importURLString = ""
+                }
+            } else if let list = try? JSONDecoder().decode([ThirdPartySource].self, from: data) {
+                sourceStore.addSources(list)
+                await MainActor.run {
+                    ToastCenter.shared.show("成功导入 \(list.count) 个音源")
+                    importingFromURL = false
+                    showURLImport = false
+                    importURLString = ""
+                }
+            } else {
+                await MainActor.run {
+                    ToastCenter.shared.show("JSON 格式不正确，请检查链接")
+                    importingFromURL = false
+                }
+            }
+        } catch {
+            await MainActor.run {
+                ToastCenter.shared.show("下载失败：\(error.localizedDescription)")
+                importingFromURL = false
             }
         }
     }
@@ -2372,5 +2491,61 @@ struct BackupDocumentPicker: UIViewControllerRepresentable {
             parent.onPick(url)
         }
         func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {}
+    }
+}
+
+// MARK: - URL 导入弹窗
+
+struct URLImportSheet: View {
+    @Binding var urlString: String
+    @Binding var importing: Bool
+    let onImport: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        BeansNavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("从 URL 导入自定义音源")
+                    .font(BeansFont.appFont(18, .bold))
+                    .foregroundStyle(Color.beansLabel)
+                Text("输入一个返回 JSON 格式音源数据的链接\n支持单个音源对象或音源数组")
+                    .font(BeansFont.appFont(13))
+                    .foregroundStyle(Color.beansComment)
+                TextField("https://example.com/source.json", text: $urlString)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(Color.beansGlassFill))
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                Spacer()
+                Button {
+                    Task { await onImport() }
+                } label: {
+                    HStack {
+                        if importing {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Text("开始导入")
+                                .font(BeansFont.appFont(16, .semibold))
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Capsule().fill(Color.beansAmber))
+                    .foregroundStyle(.white)
+                }
+                .disabled(importing || urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(16)
+            .navigationTitle("URL 导入")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+            }
+        }
     }
 }
