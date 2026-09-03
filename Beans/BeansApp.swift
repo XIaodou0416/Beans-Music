@@ -28,7 +28,8 @@ struct BeansApp: App {
             "beans.homeHeaderHideSort": true,
             "beans.homeHeaderHideRefresh": true,
             PlatformPreferenceStore.hidePickerKey: true,
-            "beans.homeWallpaperBlur": 0.0
+            "beans.homeWallpaperBlur": 0.0,
+            "beans.haptics.enabled": true
         ])
     }
 
