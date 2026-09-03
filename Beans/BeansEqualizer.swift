@@ -134,13 +134,13 @@ final class BeansEqualizer: ObservableObject {
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
             clientInfo: Unmanaged.passUnretained(self).toOpaque(),
-            init: Self.tapInit,
-            finalize: Self.tapFinalize,
-            prepare: Self.tapPrepare,
-            unprepare: Self.tapUnprepare,
-            process: Self.tapProcess
+            init: equalizerTapInit,
+            finalize: equalizerTapFinalize,
+            prepare: equalizerTapPrepare,
+            unprepare: equalizerTapUnprepare,
+            process: equalizerTapProcess
         )
-        var tap: Unmanaged<MTAudioProcessingTap>?
+        var tap: MTAudioProcessingTap?
         let status = MTAudioProcessingTapCreate(
             kCFAllocatorDefault,
             &callbacks,
@@ -153,7 +153,7 @@ final class BeansEqualizer: ObservableObject {
         }
 
         let parameters = AVMutableAudioMixInputParameters(track: track)
-        parameters.audioTapProcessor = tap.takeRetainedValue()
+        parameters.audioTapProcessor = tap
         let mix = AVMutableAudioMix()
         mix.inputParameters = [parameters]
         return mix
@@ -193,7 +193,7 @@ final class BeansEqualizer: ObservableObject {
         }
     }
 
-    private func prepare(with format: AudioStreamBasicDescription) {
+    fileprivate func prepare(with format: AudioStreamBasicDescription) {
         configurationLock.lock()
         sampleRate = max(format.mSampleRate, 8_000)
         processingFormatIsFloat32 = format.mFormatID == kAudioFormatLinearPCM
@@ -204,7 +204,7 @@ final class BeansEqualizer: ObservableObject {
         configurationLock.unlock()
     }
 
-    private func process(bufferList: UnsafeMutablePointer<AudioBufferList>, frameCount: Int) {
+    fileprivate func process(bufferList: UnsafeMutablePointer<AudioBufferList>, frameCount: Int) {
         guard frameCount > 0 else { return }
         configurationLock.lock()
         defer { configurationLock.unlock() }
@@ -244,58 +244,60 @@ final class BeansEqualizer: ObservableObject {
         }
     }
 
-    private static func tapInit(
-        _ tap: MTAudioProcessingTap,
-        clientInfo: UnsafeMutableRawPointer?,
-        tapStorageOut: UnsafeMutablePointer<UnsafeMutableRawPointer?>
-    ) {
-        tapStorageOut.pointee = clientInfo
-    }
+}
 
-    private static func tapFinalize(_ tap: MTAudioProcessingTap) {}
+private func equalizerTapInit(
+    _ tap: MTAudioProcessingTap,
+    clientInfo: UnsafeMutableRawPointer?,
+    tapStorageOut: UnsafeMutablePointer<UnsafeMutableRawPointer?>
+) {
+    tapStorageOut.pointee = clientInfo
+}
 
-    private static func tapPrepare(
-        _ tap: MTAudioProcessingTap,
-        maxFrames: CMItemCount,
-        processingFormat: UnsafePointer<AudioStreamBasicDescription>
-    ) {
-        guard let storage = MTAudioProcessingTapGetStorage(tap) else { return }
-        let equalizer = Unmanaged<BeansEqualizer>.fromOpaque(storage).takeUnretainedValue()
-        equalizer.prepare(with: processingFormat.pointee)
-    }
+private func equalizerTapFinalize(_ tap: MTAudioProcessingTap) {}
 
-    private static func tapUnprepare(_ tap: MTAudioProcessingTap) {}
+private func equalizerTapPrepare(
+    _ tap: MTAudioProcessingTap,
+    maxFrames: CMItemCount,
+    processingFormat: UnsafePointer<AudioStreamBasicDescription>
+) {
+    let storage = MTAudioProcessingTapGetStorage(tap)
+    let equalizer = Unmanaged<BeansEqualizer>.fromOpaque(storage).takeUnretainedValue()
+    equalizer.prepare(with: processingFormat.pointee)
+}
 
-    private static func tapProcess(
-        _ tap: MTAudioProcessingTap,
-        numberFrames: CMItemCount,
-        flags: MTAudioProcessingTapFlags,
-        bufferListInOut: UnsafeMutablePointer<AudioBufferList>,
-        numberFramesOut: UnsafeMutablePointer<CMItemCount>,
-        flagsOut: UnsafeMutablePointer<MTAudioProcessingTapFlags>
-    ) {
-        var sourceFlags = MTAudioProcessingTapFlags()
-        var sourceFrames: CMItemCount = 0
-        let status = MTAudioProcessingTapGetSourceAudio(
-            tap,
-            numberFrames,
-            bufferListInOut,
-            &sourceFlags,
-            nil,
-            &sourceFrames
-        )
-        guard status == noErr else {
-            numberFramesOut.pointee = 0
-            flagsOut.pointee = sourceFlags
-            return
-        }
+private func equalizerTapUnprepare(_ tap: MTAudioProcessingTap) {}
 
-        numberFramesOut.pointee = sourceFrames
+private func equalizerTapProcess(
+    _ tap: MTAudioProcessingTap,
+    numberFrames: CMItemCount,
+    flags: MTAudioProcessingTapFlags,
+    bufferListInOut: UnsafeMutablePointer<AudioBufferList>,
+    numberFramesOut: UnsafeMutablePointer<CMItemCount>,
+    flagsOut: UnsafeMutablePointer<MTAudioProcessingTapFlags>
+) {
+    let _ = flags
+    var sourceFlags = MTAudioProcessingTapFlags()
+    var sourceFrames: CMItemCount = 0
+    let status = MTAudioProcessingTapGetSourceAudio(
+        tap,
+        numberFrames,
+        bufferListInOut,
+        &sourceFlags,
+        nil,
+        &sourceFrames
+    )
+    guard status == noErr else {
+        numberFramesOut.pointee = 0
         flagsOut.pointee = sourceFlags
-        guard let storage = MTAudioProcessingTapGetStorage(tap) else { return }
-        let equalizer = Unmanaged<BeansEqualizer>.fromOpaque(storage).takeUnretainedValue()
-        equalizer.process(bufferList: bufferListInOut, frameCount: Int(sourceFrames))
+        return
     }
+
+    numberFramesOut.pointee = sourceFrames
+    flagsOut.pointee = sourceFlags
+    let storage = MTAudioProcessingTapGetStorage(tap)
+    let equalizer = Unmanaged<BeansEqualizer>.fromOpaque(storage).takeUnretainedValue()
+    equalizer.process(bufferList: bufferListInOut, frameCount: Int(sourceFrames))
 }
 
 private struct BiquadCoefficients {
