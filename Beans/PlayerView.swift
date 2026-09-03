@@ -1990,23 +1990,43 @@ struct PlayerView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// 黑胶样式的左右功能键与中间传输控制保持同一行，避免循环和播放列表被布局裁掉。
+    /// 黑胶样式控制行：左侧循环/上一首，中间播放，右侧下一首/播放列表。
     private var vinylKumoneControlRow: some View {
-        ZStack {
-            HStack {
+        HStack(spacing: 0) {
+            HStack(spacing: 6) {
                 vinylSideControl(icon: player.playMode.icon, active: player.playMode == .shuffle) {
                     player.togglePlayMode()
                 }
-                Spacer(minLength: 0)
+                vinylTransportControl(icon: "backward.fill", size: 25) {
+                    player.previous()
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                BeansHaptics.tap()
+                player.togglePlayPause()
+            } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 36, weight: .bold))
+                    .frame(width: 72, height: 64)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(width: 76)
+
+            HStack(spacing: 6) {
+                vinylTransportControl(icon: "forward.fill", size: 25) {
+                    player.next()
+                }
                 vinylSideControl(icon: "list.bullet") {
                     showQueue = true
                 }
             }
-            .padding(.horizontal, 4)
-
-            vinylKumoneTransportControls
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .frame(maxWidth: .infinity)
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, minHeight: 64)
     }
 
     private func vinylSideControl(icon: String, active: Bool = false, action: @escaping () -> Void) -> some View {
@@ -2023,44 +2043,17 @@ struct PlayerView: View {
         .buttonStyle(.plain)
     }
 
-    /// 黑胶样式使用与 Kumone 接近的纯三键传输控制，不受经典播放器按钮样式影响。
-    private var vinylKumoneTransportControls: some View {
-        HStack(spacing: 0) {
-            Button {
-                BeansHaptics.tap()
-                player.previous()
-            } label: {
-                Image(systemName: "backward.fill")
-                    .font(.system(size: 25, weight: .semibold))
-                    .frame(maxWidth: .infinity, minHeight: 58)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                BeansHaptics.tap()
-                player.togglePlayPause()
-            } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 36, weight: .bold))
-                    .frame(maxWidth: .infinity, minHeight: 64)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                BeansHaptics.tap()
-                player.next()
-            } label: {
-                Image(systemName: "forward.fill")
-                    .font(.system(size: 25, weight: .semibold))
-                    .frame(maxWidth: .infinity, minHeight: 58)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+    private func vinylTransportControl(icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+        Button {
+            BeansHaptics.tap()
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: size, weight: .semibold))
+                .frame(width: 44, height: 58)
+                .contentShape(Rectangle())
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
     }
 
     private var vinylKumoneProgress: some View {

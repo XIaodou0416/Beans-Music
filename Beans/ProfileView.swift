@@ -1197,7 +1197,6 @@ struct SettingsView: View {
     /// 高刷新率请求，默认开启
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
-    @AppStorage(BeansHaptics.enabledKey) private var hapticsEnabled = true
     @AppStorage("beans.playback.autoResumeLast") private var autoResumeLastPlayback = false
     @AppStorage("beans.labelColorHex") private var labelColorHex = ""
     @AppStorage("beans.homeGreetingText") private var homeGreetingText = ""
@@ -2327,27 +2326,6 @@ struct SettingsView: View {
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
-                Toggle(isOn: $hapticsEnabled) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "iphone.radiowaves.left.and.right")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(beansLocalized("触感反馈", "Haptic Feedback"))
-                                .font(BeansFont.appFont(15))
-                                .foregroundStyle(Color.beansLabel)
-                            Text(beansLocalized("关闭后，软件不会触发点击、选择和操作震动", "Turn off to disable tap, selection, and action haptics throughout the app."))
-                                .font(BeansFont.appFont(11))
-                                .foregroundStyle(Color.beansComment)
-                        }
-                    }
-                }
-                .toggleStyle(.switch)
-                .tint(Color.beansAmber)
-
-                Divider().overlay(Color.beansComment.opacity(0.15))
-
                 Toggle(isOn: paidSourceBinding) {
                     HStack(spacing: 12) {
                         Image(systemName: "externaldrive.connected.to.line.below")
@@ -2358,7 +2336,7 @@ struct SettingsView: View {
                             Text("使用第三方音源")
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text(beansLocalized("付费音源已启用时，免费音源会锁定", "When paid sources are enabled, free sources are locked."))
+                            Text(beansLocalized("开启后会自动关闭免费音源", "Enabling this automatically turns off free sources."))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -2366,7 +2344,6 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .tint(Color.beansAmber)
-                .disabled(enableFreeSources)
 
                 Toggle(isOn: freeSourceBinding) {
                     HStack(spacing: 12) {
@@ -2378,7 +2355,7 @@ struct SettingsView: View {
                             Text(beansLocalized("使用免费音源", "Use free sources"))
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text(beansLocalized("开启后付费音源会锁定，只使用免费音源", "Enabling this locks paid sources and uses free sources only."))
+                            Text(beansLocalized("开启后会自动关闭付费音源", "Enabling this automatically turns off paid sources."))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -2386,7 +2363,6 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .tint(Color.beansAmber)
-                .disabled(enableBuiltInSources)
 
                 Toggle(isOn: $showThirdPartyVIPNotice) {
                     HStack(spacing: 12) {
@@ -2398,9 +2374,6 @@ struct SettingsView: View {
                             Text(beansLocalized("第三方播放会员歌提醒", "VIP song notice for third-party playback"))
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                                Text(beansLocalized("未识别到对应会员且会员歌曲通过第三方音源播放成功时提示", "Show a notice when a VIP song is successfully played by a third-party source without matching membership."))
-                                .font(BeansFont.appFont(11))
-                                .foregroundStyle(Color.beansComment)
                         }
                     }
                 }

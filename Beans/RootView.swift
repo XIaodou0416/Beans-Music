@@ -406,7 +406,7 @@ struct RootView: View {
 
 private enum BeansNowPlayingPresentationMetrics {
     static let indicatorTopSpacing: CGFloat = 6
-    static let indicatorWidth: CGFloat = 44
+    static let indicatorWidth: CGFloat = 52
     static let indicatorHeight: CGFloat = 5
     static let indicatorHitWidth: CGFloat = 180
     static let indicatorHitHeight: CGFloat = 82

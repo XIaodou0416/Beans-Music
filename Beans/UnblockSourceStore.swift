@@ -118,6 +118,16 @@ final class UnblockSourceStore: ObservableObject {
             script: CeruMusicBuiltinSource.script,
             isPreset: true,
             isFree: true
+        ),
+        ThirdPartySource(
+            id: "beans.preset.quandouyao.free.v1",
+            name: "全豆要 · 免费音源",
+            kind: "script-free",
+            template: "",
+            quality: "320k",
+            script: QuanDouYaoBuiltinSource.script,
+            isPreset: true,
+            isFree: true
         )
     ]
 
