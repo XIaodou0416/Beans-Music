@@ -2,45 +2,50 @@ import Foundation
 
 // MARK: - 下载音质
 
-enum DownloadQuality: String, CaseIterable, Identifiable {
-    case low
-    case high
-    case lossless
+/// 下载复用第三方音源音质枚举，但与播放音质使用不同的 UserDefaults key。
+typealias DownloadQuality = ThirdPartyAudioQuality
 
-    var id: String { rawValue }
+extension ThirdPartyAudioQuality {
+    static var low: Self { .kb128 }
+    static var high: Self { .kb320 }
+    static var lossless: Self { .flac }
 
-    var label: String {
-        switch self {
-        case .low: return "低质量（128kbps）"
-        case .high: return "高质量（320kbps）"
-        case .lossless: return "无损 FLAC（需 VIP，不可用自动降级）"
-        }
-    }
+    var label: String { displayName }
 
-    /// 网易云音质档位（player/url v1 level）
+    /// 网易云 player/url 的 level 参数。
     var neteaseLevel: String {
         switch self {
-        case .low: return "standard"
-        case .high: return "exhigh"
-        case .lossless: return "lossless"
+        case .kb128: return "standard"
+        case .kb320: return "exhigh"
+        case .flac: return "lossless"
+        case .flac24bit, .hires, .atmos, .atmosPlus, .master: return "hires"
         }
     }
 
-    /// QQ 音乐音质档位（F000=FLAC / M800=320k / M500=128k）
+    /// QQ vkey 的 br 参数。高于 FLAC 的档位使用无损请求，第三方接口仍会
+    /// 收到原始质量名称并负责按能力降级。
     var qqBR: String {
         switch self {
-        case .low: return "M500"
-        case .high: return "M800"
-        case .lossless: return "F000"
+        case .kb128: return "M500"
+        case .kb320: return "M800"
+        case .flac, .flac24bit, .hires, .atmos, .atmosPlus, .master: return "F000"
         }
     }
 
-    /// 降级链：无损 -> 320k -> 128k；高质量 -> 320k -> 128k
-    var fallbackChain: [DownloadQuality] {
+    /// 酷狗官方接口所能理解的质量档位。
+    var beansQuality: BeansAudioQuality {
         switch self {
-        case .lossless: return [.lossless, .high, .low]
-        case .high: return [.high, .low]
-        case .low: return [.low]
+        case .kb128: return .standard
+        case .kb320: return .exhigh
+        case .flac: return .lossless
+        case .flac24bit, .hires, .atmos, .atmosPlus, .master: return .hires
+        }
+    }
+
+    var defaultFileExtension: String {
+        switch self {
+        case .kb128, .kb320: return "mp3"
+        case .flac, .flac24bit, .hires, .atmos, .atmosPlus, .master: return "flac"
         }
     }
 }
@@ -48,7 +53,16 @@ enum DownloadQuality: String, CaseIterable, Identifiable {
 /// 下载结果（downgraded 表示目标音质不可用，已自动降级）
 struct DownloadResult {
     let url: URL
+    let requestedQuality: DownloadQuality
+    let actualQuality: DownloadQuality
     let downgraded: Bool
+    let sourceName: String?
+}
+
+struct ResolvedDownloadURL {
+    let url: URL
+    let actualQuality: DownloadQuality
+    let sourceName: String?
 }
 
 // MARK: - 歌曲下载
@@ -64,19 +78,24 @@ final class DownloadManager {
     func download(song: Song, quality: DownloadQuality) async -> Result<DownloadResult, Error> {
         let chain = quality.fallbackChain
         var lastError: Error = NetEaseError.unknown("下载失败")
+        BeansLogger.shared.log(
+            "下载开始：\(song.name) 平台=\(song.source.rawValue) 请求音质=\(quality.rawValue)",
+            level: .info
+        )
 
         for (index, current) in chain.enumerated() {
-            // 1) 解析播放地址（与播放共用同一套接口，仅指定音质）
-            guard let urlString = await resolveURL(song: song, quality: current),
-                  let url = URL(string: urlString), !urlString.isEmpty else {
-                lastError = NetEaseError.unknown("无法解析播放地址（可能为 VIP 歌曲）")
+            // 1) 解析播放地址（与播放共用同一套接口，仅指定当前下载音质）
+            guard let resolved = await resolveURL(song: song, quality: current) else {
+                lastError = NetEaseError.unknown("无法解析播放地址（可能为 VIP 歌曲或音源不可用）")
                 continue
             }
 
             // 2) 下载到临时文件
             let tempURL: URL
+            let response: URLResponse
             do {
-                let (downloaded, response) = try await URLSession.shared.download(from: url)
+                let (downloaded, downloadResponse) = try await URLSession.shared.download(from: resolved.url)
+                response = downloadResponse
                 if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
                     lastError = NetEaseError.unknown("下载失败（HTTP \(http.statusCode)）")
                     continue
@@ -94,14 +113,8 @@ final class DownloadManager {
             let safeName = "\(song.name) - \(song.artists)"
                 .replacingOccurrences(of: "/", with: "-")
                 .replacingOccurrences(of: ":", with: "-")
-            let ext: String
-            if song.source == .qq {
-                ext = current == .lossless ? "flac" : "m4a"
-            } else if song.source == .kugou {
-                ext = current == .lossless ? "flac" : "mp3"
-            } else {
-                ext = current == .lossless ? "flac" : "mp3"
-            }
+            let actualQuality = resolved.actualQuality
+            let ext = fileExtension(for: resolved.url, response: response, quality: actualQuality)
             let dest = dir.appendingPathComponent("\(safeName).\(ext)")
             try? FileManager.default.removeItem(at: dest)
             do {
@@ -110,12 +123,29 @@ final class DownloadManager {
                 lastError = NetEaseError.unknown("保存失败：\(error.localizedDescription)")
                 continue
             }
-            return .success(DownloadResult(url: dest, downgraded: index > 0))
+            let downgraded = index > 0 || actualQuality != quality
+            BeansLogger.shared.log(
+                "下载成功：\(song.name) 平台=\(song.source.rawValue) 请求音质=\(quality.rawValue) 实际音质=\(actualQuality.rawValue) 降级=\(downgraded ? "是" : "否") 地址=\(safeURLSummary(resolved.url))",
+                level: .info
+            )
+            return .success(
+                DownloadResult(
+                    url: dest,
+                    requestedQuality: quality,
+                    actualQuality: actualQuality,
+                    downgraded: downgraded,
+                    sourceName: resolved.sourceName
+                )
+            )
         }
+        BeansLogger.shared.log(
+            "下载失败：\(song.name) 平台=\(song.source.rawValue) 请求音质=\(quality.rawValue) 所有候选质量均失败",
+            level: .error
+        )
         return .failure(lastError)
     }
 
-    private func resolveURL(song: Song, quality: DownloadQuality) async -> String? {
+    private func resolveURL(song: Song, quality: DownloadQuality) async -> ResolvedDownloadURL? {
         // 下载优先复用已配置的第三方音源，避免播放能用第三方而下载仍走官方地址。
         let thirdPartyID = song.source == .netease ? song.id : 0
         let thirdPartyKugouID = song.kugouHash ?? song.kugouAlbumAudioId
@@ -127,10 +157,17 @@ final class DownloadManager {
             qqMid: song.qqMid,
             qqMediaMid: song.qqMediaMid,
             kugouID: thirdPartyKugouID,
-            quality: ThirdPartyAudioQuality.current
+            quality: quality
         ) {
-            BeansLogger.shared.log("下载使用第三方音源：\(song.name) 来源=\(resolved.source)", level: .info)
-            return resolved.url.absoluteString
+            BeansLogger.shared.log(
+                "下载使用第三方音源：\(song.name) 来源=\(resolved.source) 请求音质=\(quality.rawValue) 实际音质=\(resolved.quality.rawValue)",
+                level: .info
+            )
+            return ResolvedDownloadURL(
+                url: resolved.url,
+                actualQuality: resolved.quality,
+                sourceName: resolved.source
+            )
         }
 
         if UnblockSourceStore.singleSourceMode {
@@ -138,12 +175,47 @@ final class DownloadManager {
         }
 
         if song.source == .qq, let mid = song.qqMid {
-            return try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid, br: quality.qqBR)
+            guard let urlString = try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid, br: quality.qqBR),
+                  let url = URL(string: urlString) else { return nil }
+            return ResolvedDownloadURL(url: url, actualQuality: quality, sourceName: nil)
         } else if song.source == .kugou {
-            return try? await KugouMusicAPI.shared.songURL(song: song)
+            guard let urlString = try? await KugouMusicAPI.shared.songURL(song: song, quality: quality.beansQuality),
+                  let url = URL(string: urlString) else { return nil }
+            return ResolvedDownloadURL(url: url, actualQuality: quality, sourceName: nil)
         } else {
             let urls = try? await NetEaseAPI.shared.songURLs(ids: [song.id], level: quality.neteaseLevel)
-            return urls?[song.id]
+            guard let urlString = urls?[song.id], let url = URL(string: urlString) else { return nil }
+            return ResolvedDownloadURL(url: url, actualQuality: quality, sourceName: nil)
         }
+    }
+
+    private func fileExtension(for url: URL, response: URLResponse, quality: DownloadQuality) -> String {
+        if let mimeType = response.mimeType?.lowercased() {
+            if mimeType.contains("flac") { return "flac" }
+            if mimeType.contains("mpeg") || mimeType.contains("mp3") { return "mp3" }
+            if mimeType.contains("mp4") || mimeType.contains("m4a") { return "m4a" }
+            if mimeType.contains("aac") { return "aac" }
+            if mimeType.contains("ogg") { return "ogg" }
+            if mimeType.contains("wav") { return "wav" }
+        }
+
+        let knownExtensions = Set(["mp3", "m4a", "flac", "aac", "ogg", "wav"])
+        let urlExtension = url.pathExtension.lowercased()
+        if knownExtensions.contains(urlExtension) {
+            return urlExtension
+        }
+        if let suggestedFilename = response.suggestedFilename,
+           let responseExtension = suggestedFilename.split(separator: ".").last.map({ String($0).lowercased() }),
+           knownExtensions.contains(responseExtension) {
+            return responseExtension
+        }
+        return quality.defaultFileExtension
+    }
+
+    private func safeURLSummary(_ url: URL) -> String {
+        let host = url.host ?? "?"
+        let path = url.path.isEmpty ? "/" : url.path
+        let shortPath = path.count > 64 ? String(path.prefix(64)) + "..." : path
+        return "\(host)\(shortPath)"
     }
 }

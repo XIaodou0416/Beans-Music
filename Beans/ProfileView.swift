@@ -1198,6 +1198,8 @@ struct SettingsView: View {
     /// 高刷新率请求，默认开启
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
+    @AppStorage("beans.audioQuality") private var playbackAudioQualityRaw = BeansAudioQuality.hires.rawValue
+    @AppStorage(ThirdPartyAudioQuality.downloadStorageKey) private var downloadAudioQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
     @AppStorage(BeansHaptics.enabledKey) private var hapticsEnabled = true
     @AppStorage("beans.playback.autoResumeLast") private var autoResumeLastPlayback = false
     @AppStorage("beans.labelColorHex") private var labelColorHex = ""
@@ -1333,6 +1335,93 @@ struct SettingsView: View {
         if valid.rawValue != thirdPartyAudioQualityRaw {
             thirdPartyAudioQualityRaw = valid.rawValue
         }
+    }
+
+    private var playbackAudioQualitySelection: Binding<BeansAudioQuality> {
+        Binding(
+            get: { BeansAudioQuality(rawValue: playbackAudioQualityRaw) ?? .hires },
+            set: { playbackAudioQualityRaw = $0.rawValue }
+        )
+    }
+
+    private var downloadAudioQualitySelection: Binding<ThirdPartyAudioQuality> {
+        Binding(
+            get: { ThirdPartyAudioQuality(sourceValue: downloadAudioQualityRaw) ?? .kb320 },
+            set: { downloadAudioQualityRaw = $0.rawValue }
+        )
+    }
+
+    private var playbackQualitySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(beansLocalized("播放音质", "Playback quality"))
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(beansLocalized("按列表选择，无法使用时会由平台自动降级。", "Choose a quality below; the platform will downgrade automatically when unavailable."))
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer()
+            }
+
+            ForEach(BeansAudioQuality.allCases) { quality in
+                Button {
+                    playbackAudioQualitySelection.wrappedValue = quality
+                } label: {
+                    HStack {
+                        Text(quality.displayName)
+                            .font(BeansFont.appFont(13))
+                            .foregroundStyle(Color.beansLabel)
+                        Spacer()
+                        if playbackAudioQualitySelection.wrappedValue == quality {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color.beansAmber)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
+    }
+
+    private var downloadQualitySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(beansLocalized("下载音质", "Download quality"))
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(beansLocalized("下载歌曲时优先使用此音质，不支持时自动尝试更低档位。", "Downloads use this quality first and retry lower qualities when unavailable."))
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer()
+            }
+
+            Picker(beansLocalized("下载音质", "Download quality"), selection: downloadAudioQualitySelection) {
+                ForEach(ThirdPartyAudioQuality.allCases) { quality in
+                    Text(quality.displayName).tag(quality)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        }
+        .padding(14)
+        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
     }
 
     private var homeGreetingLines: [String] {
@@ -2386,6 +2475,14 @@ struct SettingsView: View {
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
+                playbackQualitySection
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
+                downloadQualitySection
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
                 Toggle(isOn: $hapticsEnabled) {
                     HStack(spacing: 12) {
                         Image(systemName: "iphone.radiowaves.left.and.right")
@@ -2538,14 +2635,26 @@ struct SettingsView: View {
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                     }
-                    Picker("", selection: thirdPartyAudioQualitySelection) {
-                        ForEach(thirdPartyAudioQualityOptions) { quality in
-                            Text(quality.displayName).tag(quality)
+                    ForEach(thirdPartyAudioQualityOptions) { quality in
+                        Button {
+                            thirdPartyAudioQualitySelection.wrappedValue = quality
+                        } label: {
+                            HStack {
+                                Text(quality.displayName)
+                                    .font(BeansFont.appFont(13))
+                                    .foregroundStyle(Color.beansLabel)
+                                Spacer()
+                                if thirdPartyAudioQualitySelection.wrappedValue == quality {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(Color.beansAmber)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
-                    // Five quality levels do not fit comfortably in an iPhone segmented control.
-                    // Keep the picker compact so labels remain readable on small screens.
-                    .pickerStyle(.menu)
                     Text(thirdPartyAudioQualityHint)
                         .font(BeansFont.appFont(11))
                         .foregroundStyle(Color.beansComment)

@@ -308,18 +308,37 @@ extension UnblockSourceStore {
         }
     }
 
-    static func supportedQualities(for source: ThirdPartySource) -> [ThirdPartyAudioQuality] {
+    static func supportedQualities(
+        for source: ThirdPartySource,
+        providerCode: String? = nil
+    ) -> [ThirdPartyAudioQuality] {
         let explicit = explicitQualities(
             from: source.headers["qualities"] ?? source.headers["qualityOptions"] ?? source.headers["qualitys"]
         )
         if !explicit.isEmpty {
+            if let providerCode {
+                let platform = Set(ThirdPartyAudioQuality.supported(providerCode: providerCode))
+                return explicit.filter { platform.contains($0) }
+            }
             return explicit
         }
 
         if let script = source.script,
            let explicit = scriptQualities(from: script),
            !explicit.isEmpty {
+            if let providerCode {
+                let platform = Set(ThirdPartyAudioQuality.supported(providerCode: providerCode))
+                return explicit.filter { platform.contains($0) }
+            }
             return explicit
+        }
+
+        if let providerCode {
+            return ThirdPartyAudioQuality.supported(providerCode: providerCode)
+        }
+
+        if let sourceProvider = source.headers["source"] ?? source.headers["platform"] {
+            return ThirdPartyAudioQuality.supported(providerCode: sourceProvider)
         }
 
         let kind = source.kind.lowercased()

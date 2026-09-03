@@ -129,6 +129,11 @@ struct PlayerView: View {
     private var song: Song? { player.currentSong }
     private let rateOptions: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
+    private var downloadQualityOptions: [DownloadQuality] {
+        guard let song else { return DownloadQuality.allCases }
+        return DownloadQuality.supported(for: song.source)
+    }
+
     /// 封面主色联动调色板：背景渐变 / 进度条 / 播放暂停键 / 功能按钮 / 歌词高亮等全部跟随封面主色。
     /// 安全机制：只在切歌（.task(id: song?.identityKey)）时一次性提取并更新，绝不随封面加载过程高频重算 @State，
     /// 避免整页反复重绘导致的布局错乱与发烫。深浅模式切换时及时重算配色。
@@ -639,7 +644,7 @@ struct PlayerView: View {
             Button("取消", role: .cancel) {}
         }
         .confirmationDialog("下载《\(song?.name ?? "当前歌曲")》", isPresented: $showDownloadPicker, titleVisibility: .visible) {
-            ForEach([DownloadQuality.lossless, .high, .low]) { quality in
+            ForEach(downloadQualityOptions) { quality in
                 Button(quality.label) {
                     Task { await downloadCurrent(quality) }
                 }
@@ -2782,12 +2787,21 @@ struct PlayerView: View {
 
     private func downloadCurrent(_ quality: DownloadQuality) async {
         guard let song else { return }
+        UserDefaults.standard.set(quality.rawValue, forKey: ThirdPartyAudioQuality.downloadStorageKey)
         BeansHaptics.medium()
-        ToastCenter.shared.show("开始下载：\(song.name)")
+        ToastCenter.shared.show("开始下载：\(song.name)（\(quality.displayName)）")
         let result = await DownloadManager.shared.download(song: song, quality: quality)
         switch result {
         case .success(let downloadResult):
-            BeansLogger.shared.log("下载完成，弹出分享：\(song.name)（\(quality.rawValue)\(downloadResult.downgraded ? "，已自动降级" : "")）", level: .info)
+            if downloadResult.downgraded {
+                ToastCenter.shared.show("目标音质不可用，已降级为 \(downloadResult.actualQuality.displayName)", duration: 3)
+            } else {
+                ToastCenter.shared.show("下载完成：\(downloadResult.actualQuality.displayName)", duration: 2)
+            }
+            BeansLogger.shared.log(
+                "下载完成，弹出分享：\(song.name)（请求=\(downloadResult.requestedQuality.rawValue) 实际=\(downloadResult.actualQuality.rawValue)\(downloadResult.downgraded ? "，已自动降级" : "")）",
+                level: .info
+            )
             sharedFileURL = downloadResult.url
             shareFile = ShareFileItem(url: downloadResult.url)
         case .failure(let error):

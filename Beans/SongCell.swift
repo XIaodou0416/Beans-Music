@@ -6,7 +6,7 @@ struct SongCell: View {
     @EnvironmentObject private var auth: AuthStore
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
-    @AppStorage("beans.audioQuality") private var audioQualityRaw = BeansAudioQuality.exhigh.rawValue
+    @AppStorage(ThirdPartyAudioQuality.downloadStorageKey) private var downloadQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
 
     let song: Song
     var showCover = true
@@ -119,17 +119,20 @@ struct SongCell: View {
 
     @MainActor
     private func downloadSong() async {
-        let quality: DownloadQuality
-        switch audioQualityRaw {
-        case BeansAudioQuality.lossless.rawValue: quality = .lossless
-        case BeansAudioQuality.exhigh.rawValue: quality = .high
-        default: quality = .low
+        let quality = DownloadQuality(sourceValue: downloadQualityRaw) ?? .kb320
+        let supported = DownloadQuality.supported(for: song.source)
+        let effectiveQuality = supported.contains(quality) ? quality : (supported.last ?? .kb320)
+        if effectiveQuality.rawValue != downloadQualityRaw {
+            downloadQualityRaw = effectiveQuality.rawValue
         }
         BeansHaptics.medium()
-        ToastCenter.shared.show("开始下载：\(song.name)")
-        let result = await DownloadManager.shared.download(song: song, quality: quality)
+        ToastCenter.shared.show("开始下载：\(song.name)（\(effectiveQuality.displayName)）")
+        let result = await DownloadManager.shared.download(song: song, quality: effectiveQuality)
         switch result {
         case .success(let downloaded):
+            if downloaded.downgraded {
+                ToastCenter.shared.show("目标音质不可用，已降级为 \(downloaded.actualQuality.displayName)", duration: 3)
+            }
             shareFile = ShareFileItem(url: downloaded.url)
         case .failure(let error):
             ToastCenter.shared.show("下载失败：\(error.localizedDescription)", duration: 3)

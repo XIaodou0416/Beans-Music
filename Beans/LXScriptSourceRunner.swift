@@ -380,7 +380,11 @@ final class LXScriptSourceRunner {
               let playable = playableURL(url, excludedHosts: excludedHosts) else {
             return nil
         }
-        return UnblockService.Resolved(url: playable, source: source.name)
+        return UnblockService.Resolved(
+            url: playable,
+            source: source.name,
+            quality: ThirdPartyAudioQuality(sourceValue: quality) ?? .kb320
+        )
     }
 
     private func runtime(for source: ThirdPartySource, script: String) -> BeansLXScriptRuntime? {

@@ -4,8 +4,15 @@ enum UnblockService {
     struct Resolved {
         let url: URL
         let source: String
+        let quality: ThirdPartyAudioQuality
 
         var sourceTitle: String { source }
+
+        init(url: URL, source: String, quality: ThirdPartyAudioQuality = .kb320) {
+            self.url = url
+            self.source = source
+            self.quality = quality
+        }
     }
 
     private static let session: URLSession = {
@@ -328,7 +335,11 @@ enum UnblockService {
             return nil
         }
         BeansLogger.shared.log("第三方音源命中：\(source.name)\(keyLabel)", level: .info)
-        return Resolved(url: playURL, source: source.name)
+        return Resolved(
+            url: playURL,
+            source: source.name,
+            quality: ThirdPartyAudioQuality(sourceValue: quality) ?? .kb320
+        )
     }
 
     /// 部分第三方接口会固定返回不稳定的 QQ CDN 节点。
@@ -393,7 +404,9 @@ enum UnblockService {
     }
 
     private static func qualityCandidates(for source: ThirdPartySource, songSource: SongSource, preferredQuality: ThirdPartyAudioQuality) -> [String] {
-        let supported = Set(UnblockSourceStore.supportedQualities(for: source))
+        let provider = providerCode(for: songSource)
+        let supported = Set(UnblockSourceStore.supportedQualities(for: source, providerCode: provider))
+        let platformSupported = Set(ThirdPartyAudioQuality.supported(providerCode: provider))
         let sourceDefault = ThirdPartyAudioQuality(sourceValue: source.quality)
         let platformDefault: ThirdPartyAudioQuality = {
             switch songSource {
@@ -411,7 +424,9 @@ enum UnblockService {
             ordered.append(contentsOf: platformDefault.fallbackChain)
         }
 
-        let filtered = ordered.filter { supported.isEmpty || supported.contains($0) }
+        let filtered = ordered.filter {
+            platformSupported.contains($0) && (supported.isEmpty || supported.contains($0))
+        }
         var seen = Set<String>()
         let result = filtered.compactMap { quality -> String? in
             let trimmed = quality.rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -421,7 +436,9 @@ enum UnblockService {
 
         // 若源只声明了非标准档位，至少尝试它声明过的档位，不能越过能力表强行请求未知音质。
         if !supported.isEmpty {
-            return UnblockSourceStore.supportedQualities(for: source).map(\.rawValue)
+            return UnblockSourceStore
+                .supportedQualities(for: source, providerCode: provider)
+                .map(\.rawValue)
         }
 
         var fallbackSeen = Set<String>()
