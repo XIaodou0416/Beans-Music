@@ -372,19 +372,48 @@ struct ArtistHomeSheet: View {
         if let first = artists.first {
             artist = first
         }
-        async let exact = KugouMusicAPI.shared.searchSongs(keyword: artistName, limit: 140)
-        async let hot = KugouMusicAPI.shared.searchSongs(keyword: "\(artistName) 热门", limit: 100)
-        async let works = KugouMusicAPI.shared.searchSongs(keyword: "\(artistName) 歌曲", limit: 100)
-        let batches = [
-            (try? await exact) ?? [],
-            (try? await hot) ?? [],
-            (try? await works) ?? [],
-        ]
-        var seen = Set<String>()
-        let songs = batches.flatMap { $0 }.filter { song in
-            seen.insert(song.identityKey).inserted
-        }
         let normalizedName = artistName.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var songs: [Song] = []
+        if let first = artists.first,
+           !first.id.isEmpty,
+           !first.id.hasPrefix("qq-") {
+            var seen = Set<String>()
+            let pageSize = 100
+            let maxSongs = 1_000
+            for page in 1...(maxSongs / pageSize) {
+                let batch = (try? await KugouMusicAPI.shared.artistSongs(
+                    authorID: first.id,
+                    page: page,
+                    limit: pageSize
+                )) ?? []
+                if batch.isEmpty { break }
+                let before = songs.count
+                for song in batch where seen.insert(song.identityKey).inserted {
+                    songs.append(song)
+                    if songs.count >= maxSongs { break }
+                }
+                if songs.count >= maxSongs || songs.count == before {
+                    break
+                }
+            }
+        }
+
+        if songs.isEmpty {
+            async let exact = KugouMusicAPI.shared.searchSongs(keyword: artistName, limit: 300)
+            async let hot = KugouMusicAPI.shared.searchSongs(keyword: "\(artistName) 热门", limit: 200)
+            async let works = KugouMusicAPI.shared.searchSongs(keyword: "\(artistName) 歌曲", limit: 200)
+            let batches = [
+                (try? await exact) ?? [],
+                (try? await hot) ?? [],
+                (try? await works) ?? [],
+            ]
+            var seen = Set<String>()
+            songs = batches.flatMap { $0 }.filter { song in
+                seen.insert(song.identityKey).inserted
+            }
+        }
+
         hotSongs = songs.filter { song in
             song.artists
                 .split(separator: "/")
@@ -394,7 +423,7 @@ struct ArtistHomeSheet: View {
         if hotSongs.isEmpty {
             hotSongs = songs
         }
-        hotSongs = Array(hotSongs.prefix(300))
+        hotSongs = Array(hotSongs.prefix(1_000))
         loading = false
     }
 }

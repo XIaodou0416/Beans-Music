@@ -392,8 +392,64 @@ final class KugouMusicAPI {
         return rows.prefix(min(max(pageSize, 1), 100)).compactMap(Self.mapCompleteTrack)
     }
 
+    /// 酷狗官方歌手搜索，保留 author_id，供歌手主页调用作者歌曲接口。
+    private func upstreamSearchArtists(keyword: String, limit: Int) async throws -> [Artist] {
+        let pageSize = min(max(limit, 1), 30)
+        let pageCount = max(1, min(10, Int(ceil(Double(max(limit, 1)) / Double(pageSize)))))
+        var result: [Artist] = []
+        var seen = Set<String>()
+
+        for page in 1...pageCount {
+            let response = try await upstreamRequest(
+                "/v1/search/author",
+                params: [
+                    "albumhide": "0",
+                    "iscorrection": "1",
+                    "keyword": keyword,
+                    "nocollect": "0",
+                    "page": "\(page)",
+                    "pagesize": "\(pageSize)",
+                    "platform": "AndroidFilter",
+                ],
+                headers: ["x-router": "complexsearch.kugou.com"]
+            )
+            let rows = Self.deepArrays(
+                response.json,
+                names: ["info", "authors", "artists", "author", "list", "data"]
+            )
+            if rows.isEmpty { break }
+
+            for item in rows {
+                let id = Self.string(
+                    item["author_id"] ?? item["authorid"] ?? item["singerid"] ?? item["singer_id"] ?? item["id"]
+                )
+                let name = Self.clean(
+                    Self.string(item["author_name"] ?? item["authorname"] ?? item["singername"] ?? item["name"])
+                )
+                guard !id.isEmpty, !name.isEmpty, seen.insert(id).inserted else { continue }
+                let cover = Self.normalizeURL(
+                    Self.string(item["avatar"] ?? item["pic"] ?? item["imgurl"] ?? item["img_url"] ?? item["author_pic"])
+                        .replacingOccurrences(of: "{size}", with: "400")
+                )
+                result.append(Artist(
+                    id: id,
+                    name: name,
+                    coverURL: URL(string: cover),
+                    source: .kugou
+                ))
+                if result.count >= limit { return result }
+            }
+            if rows.count < pageSize { break }
+        }
+        return result
+    }
+
     /// 基于酷狗官方歌曲搜索结果聚合歌手，保留官方歌手名与封面。
     func searchArtists(keyword: String, limit: Int = 40) async throws -> [Artist] {
+        if let artists = try? await upstreamSearchArtists(keyword: keyword, limit: limit), !artists.isEmpty {
+            BeansLogger.shared.log("酷狗歌手搜索完成：\(keyword) 结果=\(artists.count)", level: .info)
+            return artists
+        }
         let songs = try await searchSongs(keyword: keyword, limit: limit)
         var result: [Artist] = []
         var seen = Set<String>()
@@ -410,6 +466,33 @@ final class KugouMusicAPI {
             }
         }
         return result
+    }
+
+    /// 酷狗官方歌手歌曲接口。每页最多 100 首，按热度排序。
+    func artistSongs(authorID: String, page: Int = 1, limit: Int = 100) async throws -> [Song] {
+        let response = try await upstreamRequest(
+            "/openapi/kmr/v2/audio_group/author",
+            params: [
+                "author_id": authorID,
+                "area_code": "all",
+                "sort": "1",
+                "page": "\(max(page, 1))",
+                "pagesize": "\(min(max(limit, 1), 100))",
+                "replace_api_version": "1",
+                "mvdata_need": "1",
+                "show_audio_honor": "1",
+                "show_audio_tag": "1",
+                "replace_need": "1",
+            ],
+            headers: ["kg-tid": "36"]
+        )
+        let rows = Self.deepArrays(
+            response.json,
+            names: ["songs", "songlist", "list", "info", "audio", "data"]
+        )
+        let songs = rows.compactMap(Self.mapCompleteTrack)
+        BeansLogger.shared.log("酷狗歌手歌曲：author=\(authorID) page=\(page) 返回 \(songs.count) 首", level: .debug)
+        return Array(songs.prefix(min(max(limit, 1), 100)))
     }
 
     /// 基于酷狗官方歌曲搜索结果聚合专辑，保留官方专辑名、歌手与封面。

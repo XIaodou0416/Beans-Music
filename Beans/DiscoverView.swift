@@ -785,7 +785,6 @@ struct DiscoverView: View {
                 .padding(.vertical, 3)
             }
             .padding(.trailing, isNativeClean ? -24 : 0)
-            dailySongCards
         }
     }
 
