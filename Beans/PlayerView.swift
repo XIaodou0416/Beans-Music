@@ -3505,6 +3505,8 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.lyricGradMode") private var gradMode = 0
     @AppStorage("beans.lyricTranslation") private var lyricTranslation = true
     @AppStorage("beans.playerLayoutMode") private var layoutMode = false
+    @AppStorage("beans.vinylLyricsTopRows") private var vinylLyricsTopRows = 3
+    @AppStorage("beans.vinylLyricsBottomRows") private var vinylLyricsBottomRows = 3
     @AppStorage("beans.playerLayoutSelectedPart") private var layoutPartRaw = PlayerLayoutPart.progress.rawValue
     @AppStorage("beans.lyricAlignRaw") private var lyricAlignRaw = "center"
     @AppStorage("beans.lyricOffsetX") private var lyricOffsetX = 0.0
