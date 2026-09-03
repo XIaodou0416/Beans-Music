@@ -70,6 +70,7 @@ struct PlayerView: View {
     @AppStorage("beans.progressAccentHex") private var progressAccentHex = ""
     /// 播放器布局自由调整：开关 + 各组件 x/y/z 数据 + 当前选中组件
     @AppStorage("beans.playerLayoutMode") private var layoutMode = false
+    @AppStorage("beans.playerLayoutSelectedPart") private var layoutPartRaw = PlayerLayoutPart.progress.rawValue
     @State private var layoutData: [String: PlayerLayoutEntry] = PlayerLayoutStore.load()
     @State private var layoutPart: PlayerLayoutPart = .progress
     @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
@@ -539,6 +540,7 @@ struct PlayerView: View {
         }
         .onAppear {
             vinylDismissDragOffset = 0
+            layoutPart = PlayerLayoutPart(rawValue: layoutPartRaw) ?? .progress
             showLyrics = lastLyricsPage
             if let path = LyricBackgroundStore.restoreFromBackup(), lyricBackgroundImagePath != path {
                 lyricBackgroundImagePath = path
@@ -557,6 +559,9 @@ struct PlayerView: View {
         }
         .onChange(of: showLyrics) { newValue in
             lastLyricsPage = newValue
+        }
+        .onChange(of: layoutPartRaw) { rawValue in
+            layoutPart = PlayerLayoutPart(rawValue: rawValue) ?? .progress
         }
         .sheet(isPresented: $showQueue) {
             QueueView()
@@ -2334,6 +2339,7 @@ struct PlayerView: View {
                         Button {
                             BeansHaptics.select()
                             layoutPart = part
+                            layoutPartRaw = part.rawValue
                         } label: {
                             Text(part.rawValue)
                                 .font(BeansFont.appFont(12, .semibold))
@@ -3472,6 +3478,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.lyricGradMode") private var gradMode = 0
     @AppStorage("beans.lyricTranslation") private var lyricTranslation = true
     @AppStorage("beans.playerLayoutMode") private var layoutMode = false
+    @AppStorage("beans.playerLayoutSelectedPart") private var layoutPartRaw = PlayerLayoutPart.progress.rawValue
     @AppStorage("beans.lyricAlignRaw") private var lyricAlignRaw = "center"
     @AppStorage("beans.lyricOffsetX") private var lyricOffsetX = 0.0
     @AppStorage("beans.lyricAnchorY") private var lyricAnchorY = 0.0
@@ -3757,6 +3764,7 @@ struct PlayerSettingsSheet: View {
                     lyricDisplayCard
                     lyricEffectCard
                     layoutCard
+                    vinylLayoutCard
                     coverCard
                 }
                 .padding(.horizontal, 16)
@@ -4310,6 +4318,49 @@ struct PlayerSettingsSheet: View {
         }
     }
 
+    /// 黑胶歌词的两个区域单独进入调节，避免在通用布局列表中难以找到。
+    private var vinylLayoutCard: some View {
+        settingCard("黑胶独立调节") {
+            Text("分别调整黑胶播放页、歌词顶部信息和中间歌词文字的位置与大小")
+                .font(BeansFont.appFont(12))
+                .foregroundStyle(Color.beansComment)
+                .fixedSize(horizontal: false, vertical: true)
+
+            vinylLayoutAction("调节黑胶播放器", part: .vinylAlbum, icon: "record.circle")
+            vinylLayoutAction("调节黑胶歌词顶部", part: .vinylLyricsHeader, icon: "music.note")
+            vinylLayoutAction("调节黑胶歌词文字", part: .vinylLyricsText, icon: "text.alignleft")
+        }
+    }
+
+    private func vinylLayoutAction(_ title: String, part: PlayerLayoutPart, icon: String) -> some View {
+        Button {
+            layoutPartRaw = part.rawValue
+            layoutMode = true
+            BeansHaptics.select()
+            dismiss()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 26, height: 26)
+                    .foregroundStyle(Color.beansAmber)
+                    .background(Color.beansAmber.opacity(0.12), in: Circle())
+                Text(title)
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer()
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.beansComment)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+    }
+
     /// 封面卡片：圆形封面 / 旋转
     private var coverCard: some View {
         settingCard("封面", isExpanded: $coverExpanded) {
@@ -4466,6 +4517,7 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
             }
         }
     }
+
 }
 
 // MARK: - 下载文件分享（Identifiable 包装，供 sheet(item:) 使用）
