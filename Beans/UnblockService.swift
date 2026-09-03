@@ -40,8 +40,9 @@ enum UnblockService {
                 )
             }
         guard !sources.isEmpty else {
+            let mode = useFreeAudioSource ? "免费" : "付费"
             BeansLogger.shared.log(
-                "第三方音源未启用可用源：模式=\(useFreeAudioSource ? \"免费\" : \"付费\") 平台=\(songSource.rawValue)",
+                "第三方音源未启用可用源：模式=\(mode) 平台=\(songSource.rawValue)",
                 level: .debug
             )
             return nil
