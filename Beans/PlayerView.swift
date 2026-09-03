@@ -520,6 +520,8 @@ struct PlayerView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
+        // Vinyl can only be dismissed from its top indicator hit area.
+        .interactiveDismissDisabled(coverPlayerStyle == .vinyl)
         .overlay(alignment: .top) {
             if showMoreSettingsHint {
                 Text("点击顶部中间正在播放的标题，可打开更多设置")
