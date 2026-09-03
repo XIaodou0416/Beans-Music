@@ -184,7 +184,9 @@ final class PlayerManager: NSObject, ObservableObject {
     func play(songs: [Song], startAt index: Int = 0) {
         guard !songs.isEmpty else { return }
         guard !defaults.bool(forKey: BeansBackendSettings.blockedKey) else {
-            ToastCenter.shared.show("当前设备暂不可播放")
+            Task { @MainActor in
+                ToastCenter.shared.show("当前设备暂不可播放")
+            }
             return
         }
         queue = songs
