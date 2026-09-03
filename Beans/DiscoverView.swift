@@ -747,7 +747,32 @@ struct DiscoverView: View {
     private var dailySection: some View {
         if source == .netease {
             neteaseRecommendationCards
+        } else if source == .kugou {
+            kugouRecommendationCards
         } else {
+            dailySongCards
+        }
+    }
+
+    private var kugouRecommendationCards: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "推荐")
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    neteaseRecommendationCard(
+                        title: "私人漫游",
+                        subtitle: "从喜欢的歌开始漫游",
+                        icon: "wave.3.right.circle.fill",
+                        coverURL: nil,
+                        gradient: [Color(red: 0.08, green: 0.46, blue: 0.82), Color(red: 0.18, green: 0.72, blue: 0.72)],
+                        loadingKey: "kugouFM"
+                    ) {
+                        startKugouPersonalFM()
+                    }
+                }
+                .padding(.vertical, 3)
+            }
+            .padding(.trailing, isNativeClean ? -24 : 0)
             dailySongCards
         }
     }
@@ -961,6 +986,34 @@ struct DiscoverView: View {
             } catch {
                 await MainActor.run {
                     BeansLogger.shared.log("私人漫游加载失败：\(error.localizedDescription)", level: .error)
+                    ToastCenter.shared.show("私人漫游加载失败")
+                }
+            }
+        }
+    }
+
+    private func startKugouPersonalFM() {
+        guard KugouMusicAuth.shared.isLoggedIn else {
+            ToastCenter.shared.show("请先登录酷狗音乐")
+            return
+        }
+        guard recommendationActionLoading == nil else { return }
+        recommendationActionLoading = "kugouFM"
+        Task {
+            defer { Task { @MainActor in recommendationActionLoading = nil } }
+            do {
+                let songs = try await KugouMusicAPI.shared.personalFM(limit: 12)
+                await MainActor.run {
+                    if songs.isEmpty {
+                        ToastCenter.shared.show("私人漫游暂时没有推荐")
+                    } else {
+                        player.play(songs: songs, startAt: 0)
+                        ToastCenter.shared.show("已开启私人漫游")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    BeansLogger.shared.log("酷狗私人漫游加载失败：\(error.localizedDescription)", level: .error)
                     ToastCenter.shared.show("私人漫游加载失败")
                 }
             }
@@ -1341,7 +1394,8 @@ struct DiscoverView: View {
             snapshot.dailySongs = dr
             snapshot.personalized = pp
         case .kugou:
-            async let songs = KugouMusicAPI.shared.searchSongs(keyword: "热门歌曲", limit: 30)
+            async let songs: [Song] = (try? await KugouMusicAPI.shared.everydayRecommend(limit: 30))
+                ?? ((try? await KugouMusicAPI.shared.searchSongs(keyword: "热门歌曲", limit: 30)) ?? [])
             async let ranks = KugouMusicAPI.shared.topLists(limit: 10)
             async let playlists = KugouMusicAPI.shared.recommendPlaylists(limit: 12)
             let (daily, top, pp) = try await (songs, ranks, playlists)

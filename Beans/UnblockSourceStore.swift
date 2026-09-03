@@ -69,8 +69,8 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
 final class UnblockSourceStore: ObservableObject {
     static let shared = UnblockSourceStore()
     static let userAPIKeysKey = "beans.thirdPartyAPIKeys"
-    /// 特殊版本只保留这一条内置脚本音源，其他音源不参与播放解析。
-    static let singleSourceMode = true
+    /// 普通版本使用平台原生播放，并按用户设置启用第三方兜底。
+    static let singleSourceMode = false
     static let singleSourceID = "beans.special.cr.v1"
 
     private static let paidAPIURL = "https://source.shiqianjiang.cn/api/music"
