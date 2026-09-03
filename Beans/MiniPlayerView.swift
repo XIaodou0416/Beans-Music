@@ -13,6 +13,7 @@ struct MiniPlayerView: View {
     @EnvironmentObject private var clock: PlaybackClock
     @Binding var showPlayer: Bool
     var presentation: Presentation = .dock
+    var transitionNamespace: Namespace.ID?
     @State private var miniLyrics: [LyricLine] = []
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
@@ -144,6 +145,7 @@ struct MiniPlayerView: View {
             .animation(.spring(response: 0.34, dampingFraction: 0.86), value: showPlayer)
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+        .transitionSource(in: transitionNamespace)
         .padding(.horizontal, presentation.showsCardSurface ? 12 : 0)
         .task(id: player.currentSong?.identityKey) {
             await loadMiniLyrics()
@@ -165,5 +167,32 @@ struct MiniPlayerView: View {
         guard let raw else { return }
         guard player.currentSong?.identityKey == identity else { return }
         miniLyrics = LyricParser.parse(raw)
+    }
+}
+
+enum BeansNowPlayingTransitionID {
+    static let surface = "beans-now-playing-surface"
+}
+
+private struct BeansTransitionSourceModifier: ViewModifier {
+    let namespace: Namespace.ID?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let namespace, #available(iOS 18.0, *) {
+            content.matchedTransitionSource(
+                id: BeansNowPlayingTransitionID.surface,
+                in: namespace
+            )
+        } else {
+            content
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func transitionSource(in namespace: Namespace.ID?) -> some View {
+        modifier(BeansTransitionSourceModifier(namespace: namespace))
     }
 }

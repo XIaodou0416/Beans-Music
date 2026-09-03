@@ -188,19 +188,6 @@ struct PlayerView: View {
         static let lyricBottomRows = 3
     }
 
-    private var vinylDismissProgress: CGFloat {
-        guard vinylPresentationHeight > 0 else { return 0 }
-        return min(max(vinylDismissDragOffset / (vinylPresentationHeight * 0.72), 0), 1)
-    }
-
-    private var vinylDismissScale: CGFloat {
-        1 - vinylDismissProgress * 0.72
-    }
-
-    private var vinylDismissVisualOffset: CGFloat {
-        vinylDismissDragOffset * 0.18
-    }
-
     private func toggleLocalFavorite(_ song: Song) {
         if localLibrary.containsSong(song) {
             let removed = localLibrary.removeSongFromAllPlaylists(song)
@@ -475,8 +462,12 @@ struct PlayerView: View {
                     }
                     .onChange(of: geo.size.height) { vinylPresentationHeight = $0 }
                 }
-                .scaleEffect(vinylDismissScale, anchor: .bottom)
-                .offset(y: vinylDismissVisualOffset)
+                .modifier(
+                    VinylDismissVisualModifier(
+                        dragOffset: vinylDismissDragOffset,
+                        presentationHeight: vinylPresentationHeight
+                    )
+                )
             } else {
                 GeometryReader { geo in
                     ZStack {
@@ -2810,12 +2801,19 @@ struct PlayerView: View {
                 let prediction = max(value.predictedEndTranslation.height, 0)
                 if translation > 110 || prediction > 190 {
                     BeansHaptics.medium()
+                if #available(iOS 18.0, *) {
+                    // Kumone uses the system zoom transition from the mini player.
+                    withAnimation(.spring(response: 0.52, dampingFraction: 0.9, blendDuration: 0.1)) {
+                        closePlayer()
+                    }
+                } else {
                     withAnimation(.interactiveSpring(response: 0.48, dampingFraction: 0.86, blendDuration: 0.08)) {
                         vinylDismissDragOffset = max(vinylPresentationHeight * 0.72, 180)
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
                         closePlayer()
                     }
+                }
                 } else {
                     withAnimation(.interactiveSpring(response: 0.30, dampingFraction: 0.72, blendDuration: 0.04)) {
                         vinylDismissDragOffset = 0
@@ -3181,6 +3179,27 @@ private struct LyricCenterPreferenceKey: PreferenceKey {
 
     static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
         value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
+private struct VinylDismissVisualModifier: ViewModifier {
+    let dragOffset: CGFloat
+    let presentationHeight: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            // On iOS 18+, the matched transition performs the shrink into the
+            // mini player. Keep only the same direct, finger-following offset
+            // used by Kumone while the gesture is in progress.
+            content.offset(y: dragOffset)
+        } else {
+            let target = max(presentationHeight * 0.72, 180)
+            let progress = target > 0 ? min(max(dragOffset / target, 0), 1) : 0
+            content
+                .scaleEffect(1 - progress * 0.72, anchor: .bottom)
+                .offset(y: dragOffset * 0.18)
+        }
     }
 }
 

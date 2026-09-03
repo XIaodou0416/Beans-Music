@@ -40,6 +40,7 @@ struct RootView: View {
 
     @State private var selection: RootTab = .discover
     @State private var showPlayer = false
+    @Namespace private var nowPlayingTransition
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
@@ -120,7 +121,8 @@ struct RootView: View {
                             isActive: player.currentSong != nil,
                             showPlayer: $showPlayer,
                             clock: player.clock,
-                            colorScheme: colorScheme
+                            colorScheme: colorScheme,
+                            transitionNamespace: nowPlayingTransition
                         )
                     )
             } else {
@@ -144,11 +146,25 @@ struct RootView: View {
             platformSelectionMenu
         }
         .fullScreenCover(isPresented: $showPlayer) {
-            PlayerView(isPresented: $showPlayer)
-                .environmentObject(favorites)
-                .environmentObject(player)
-                .environmentObject(player.clock)
-                .environmentObject(auth)
+            if #available(iOS 18.0, *) {
+                PlayerView(isPresented: $showPlayer)
+                    .environmentObject(favorites)
+                    .environmentObject(player)
+                    .environmentObject(player.clock)
+                    .environmentObject(auth)
+                    .navigationTransition(
+                        .zoom(
+                            sourceID: BeansNowPlayingTransitionID.surface,
+                            in: nowPlayingTransition
+                        )
+                    )
+            } else {
+                PlayerView(isPresented: $showPlayer)
+                    .environmentObject(favorites)
+                    .environmentObject(player)
+                    .environmentObject(player.clock)
+                    .environmentObject(auth)
+            }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
         .animation(.easeInOut(duration: 0.22), value: selection)
@@ -328,7 +344,11 @@ struct RootView: View {
     private var legacyFloatingTabBar: some View {
         VStack(spacing: 8) {
             if player.currentSong != nil {
-                MiniPlayerView(showPlayer: $showPlayer, presentation: .dock)
+                MiniPlayerView(
+                    showPlayer: $showPlayer,
+                    presentation: .dock,
+                    transitionNamespace: nowPlayingTransition
+                )
                     .environmentObject(player.clock)
                     .padding(.horizontal, 12)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -425,12 +445,17 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
     @Binding var showPlayer: Bool
     let clock: PlaybackClock
     let colorScheme: ColorScheme
+    let transitionNamespace: Namespace.ID
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if isActive {
             content.tabViewBottomAccessory {
-                MiniPlayerView(showPlayer: $showPlayer, presentation: .accessory)
+                MiniPlayerView(
+                    showPlayer: $showPlayer,
+                    presentation: .accessory,
+                    transitionNamespace: transitionNamespace
+                )
                     .padding(.horizontal, 12)
                     .environmentObject(clock)
                     .environment(\.colorScheme, colorScheme)
