@@ -1178,6 +1178,7 @@ struct AccountHubSheet: View {
 struct SettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
@@ -1240,6 +1241,7 @@ struct SettingsView: View {
     @State private var platformExpanded = false
     @State private var playbackExpanded = false
     @State private var showWallpaperPicker = false
+    @State private var wallpaperAppearanceTarget: BeansWallpaperAppearance = .light
     @State private var chartCoverTarget: ChartCoverTarget?
     @State private var showFontImporter = false
     @State private var showGreetingFontImporter = false
@@ -1457,10 +1459,13 @@ struct SettingsView: View {
             }
         }
         .preferredColorScheme(themeMode.colorScheme)
-        .onAppear { normalizeSourceMode() }
+        .onAppear {
+            normalizeSourceMode()
+            wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
+        }
         .sheet(isPresented: $showWallpaperPicker) {
             WallpaperPhotoPicker { data in
-                theme.addWallpaper(data)
+                theme.addWallpaper(data, for: wallpaperAppearanceTarget.colorScheme)
                 BeansHaptics.success()
             }
             .ignoresSafeArea()
@@ -1785,9 +1790,26 @@ struct SettingsView: View {
                             .font(BeansFont.appFont(15))
                             .foregroundStyle(Color.beansLabel)
                         Spacer()
+                    }
+                    Picker("背景模式", selection: $wallpaperAppearanceTarget) {
+                        ForEach(BeansWallpaperAppearance.allCases) { appearance in
+                            Text(appearance.title).tag(appearance)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .tint(Color.beansAmber)
+                    HStack {
+                        Image(systemName: "circle.lefthalf.filled")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        Text("背景颜色")
+                            .font(BeansFont.appFont(15))
+                            .foregroundStyle(Color.beansLabel)
+                        Spacer()
                         ColorPicker("", selection: Binding(
-                            get: { theme.customBackground ?? Color.beansBackground },
-                            set: { theme.setBackground($0.hexString) }
+                            get: { theme.customBackground(for: wallpaperAppearanceTarget.colorScheme) ?? Color.beansBackground },
+                            set: { theme.setBackground($0.hexString, for: wallpaperAppearanceTarget.colorScheme) }
                         ))
                         .labelsHidden()
                     }
@@ -1816,7 +1838,7 @@ struct SettingsView: View {
                     if !theme.wallpaperPaths.isEmpty {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                             ForEach(theme.wallpaperPaths, id: \.self) { path in
-                                wallpaperCell(path: path)
+                                wallpaperCell(path: path, appearance: wallpaperAppearanceTarget)
                             }
                         }
                     } else {
@@ -1831,9 +1853,9 @@ struct SettingsView: View {
                         }
                     }
                     HStack(spacing: 12) {
-                        if theme.customBackgroundImage != nil {
+                        if theme.customBackgroundImage(for: wallpaperAppearanceTarget.colorScheme) != nil {
                             Button {
-                                theme.clearBackgroundImage()
+                                theme.clearBackgroundImage(for: wallpaperAppearanceTarget.colorScheme)
                                 BeansHaptics.select()
                             } label: {
                                 Text("清除当前背景")
@@ -1846,7 +1868,7 @@ struct SettingsView: View {
                             .buttonStyle(.plain)
                         }
                         Spacer()
-                            Text(LocalizedStringKey(theme.customBackgroundImage == nil ? "当前：默认背景" : "当前：已应用壁纸"))
+                            Text(LocalizedStringKey(theme.customBackgroundImage(for: wallpaperAppearanceTarget.colorScheme) == nil ? "当前：默认背景" : "当前：已应用壁纸"))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                     }
@@ -2693,6 +2715,11 @@ struct SettingsView: View {
 
     private static func isWallpaperBackupKey(_ key: String) -> Bool {
         key == "beans.background.image"
+            || key == "beans.background.image.light"
+            || key == "beans.background.image.dark"
+            || key == "beans.background.custom"
+            || key == "beans.background.custom.light"
+            || key == "beans.background.custom.dark"
             || key == "beans.wallpapers.list"
             || key == "beans.wallpapers.data"
             || key == "beans.lyricBackground.image"
@@ -2806,6 +2833,20 @@ struct SettingsView: View {
             defaults.set(restored, forKey: key)
             count += 1
         }
+        // 兼容旧备份：旧版本只有一套背景，恢复后让浅色和深色都继承它。
+        if json["beans.background.custom.light"] == nil,
+           json["beans.background.custom.dark"] == nil,
+           let legacy = json["beans.background.custom"] as? String {
+            defaults.set(legacy, forKey: "beans.background.custom.light")
+            defaults.set(legacy, forKey: "beans.background.custom.dark")
+        }
+        if json["beans.background.image.light"] == nil,
+           json["beans.background.image.dark"] == nil,
+           let legacy = json["beans.background.image"] as? String {
+            defaults.set(legacy, forKey: "beans.background.image.light")
+            defaults.set(legacy, forKey: "beans.background.image.dark")
+        }
+        theme.reloadBackgroundSettings()
         if let coverPayload = json["beans.chartCoverData"] as? [String: String] {
             ChartCoverStore.shared.restore(from: coverPayload)
             count += coverPayload.count
@@ -2998,13 +3039,13 @@ struct SettingsView: View {
         .padding(.top, 4)
     }
 
-    /// 壁纸格子：点击应用为当前背景；使用中的壁纸显示主题色边框+勾选；右上角删除
-    private func wallpaperCell(path: String) -> some View {
-        let isActive = path == theme.backgroundImagePath
+    /// 壁纸格子：点击应用到所选外观；使用中的壁纸显示主题色边框+勾选；右上角删除
+    private func wallpaperCell(path: String, appearance: BeansWallpaperAppearance) -> some View {
+        let isActive = path == theme.backgroundImagePath(for: appearance.colorScheme)
         return ZStack(alignment: .topTrailing) {
             Button {
                 BeansHaptics.tap()
-                theme.applyWallpaper(at: path)
+                theme.applyWallpaper(at: path, for: appearance.colorScheme)
             } label: {
                 Group {
                     if let img = BeansImageFileCache.image(at: path) {

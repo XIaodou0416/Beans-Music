@@ -102,6 +102,29 @@ enum BeansThemeMode: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - 壁纸外观目标
+
+enum BeansWallpaperAppearance: String, CaseIterable, Identifiable {
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .light: return beansLocalized("浅色模式", "Light Mode")
+        case .dark: return beansLocalized("深色模式", "Dark Mode")
+        }
+    }
+
+    var colorScheme: ColorScheme {
+        switch self {
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 // MARK: - 配色主题（多套配色，可在「我的 → 外观」中切换；全局统一生效）
 
 enum BeansAccent: String, CaseIterable, Identifiable {
@@ -291,12 +314,18 @@ final class ThemeStore: ObservableObject {
     @Published var accent: BeansAccent
     /// 自定义全局强调色（色盘任选，nil 表示使用预设主题）
     @Published var customAccentHex: String?
-    /// 自定义背景色（色盘任选，空串表示默认渐变背景）
-    @Published var backgroundHex: String = ""
+    /// 自定义背景色（浅色/深色分别保存，未设置的一侧回退到另一侧）
+    @Published private(set) var backgroundHexLight: String = ""
+    @Published private(set) var backgroundHexDark: String = ""
     /// 自定义背景是否同步到搜索 / 音乐库 / 我的等全部页面
     @Published var backgroundSyncAll = true
-    /// 当前使用的背景图片文件路径（空串表示未上传图片）
-    @Published var backgroundImagePath: String = ""
+    /// 当前使用的背景图片文件路径（兼容旧调用；按当前系统外观返回有效路径）
+    var backgroundImagePath: String {
+        backgroundImagePath(for: Self.currentColorScheme)
+    }
+    /// 浅色/深色分别使用的壁纸路径；未设置的一侧自动使用另一侧。
+    @Published private(set) var backgroundImagePathLight: String = ""
+    @Published private(set) var backgroundImagePathDark: String = ""
     /// 壁纸库：所有已上传壁纸的文件路径
     @Published var wallpaperPaths: [String] = []
     /// 全局 UI 风格：影响玻璃容器、卡片透明度与边框质感
@@ -304,8 +333,12 @@ final class ThemeStore: ObservableObject {
 
     private let customAccentKey = "beans.accent.custom"
     private let backgroundKey = "beans.background.custom"
+    private let backgroundLightKey = "beans.background.custom.light"
+    private let backgroundDarkKey = "beans.background.custom.dark"
     private let syncAllKey = "beans.background.syncAll"
     private let backgroundImageKey = "beans.background.image"
+    private let backgroundImageLightKey = "beans.background.image.light"
+    private let backgroundImageDarkKey = "beans.background.image.dark"
     private let wallpaperListKey = "beans.wallpapers.list"
     private let wallpaperDataKey = "beans.wallpapers.data"
     private let deletedKey = "beans.wallpapers.deleted"
@@ -316,9 +349,33 @@ final class ThemeStore: ObservableObject {
         accent = BeansAccent(rawValue: UserDefaults.standard.string(forKey: AccentTheme.key) ?? "") ?? .amber
         let savedAccent = UserDefaults.standard.string(forKey: customAccentKey)
         customAccentHex = (savedAccent?.isEmpty ?? true) ? nil : savedAccent
-        backgroundHex = UserDefaults.standard.string(forKey: backgroundKey) ?? ""
+        let legacyBackground = UserDefaults.standard.string(forKey: backgroundKey) ?? ""
+        let hasSplitBackground = UserDefaults.standard.object(forKey: backgroundLightKey) != nil
+            || UserDefaults.standard.object(forKey: backgroundDarkKey) != nil
+        if hasSplitBackground {
+            backgroundHexLight = UserDefaults.standard.string(forKey: backgroundLightKey) ?? ""
+            backgroundHexDark = UserDefaults.standard.string(forKey: backgroundDarkKey) ?? ""
+        } else {
+            // 旧版本只有一套背景，迁移成两套，避免升级后背景突然消失。
+            backgroundHexLight = legacyBackground
+            backgroundHexDark = legacyBackground
+            UserDefaults.standard.set(legacyBackground, forKey: backgroundLightKey)
+            UserDefaults.standard.set(legacyBackground, forKey: backgroundDarkKey)
+        }
         backgroundSyncAll = UserDefaults.standard.object(forKey: syncAllKey) as? Bool ?? true
-        backgroundImagePath = UserDefaults.standard.string(forKey: backgroundImageKey) ?? ""
+        let legacyImage = UserDefaults.standard.string(forKey: backgroundImageKey) ?? ""
+        let hasSplitImage = UserDefaults.standard.object(forKey: backgroundImageLightKey) != nil
+            || UserDefaults.standard.object(forKey: backgroundImageDarkKey) != nil
+        if hasSplitImage {
+            backgroundImagePathLight = UserDefaults.standard.string(forKey: backgroundImageLightKey) ?? ""
+            backgroundImagePathDark = UserDefaults.standard.string(forKey: backgroundImageDarkKey) ?? ""
+        } else {
+            // 旧版本只有一套壁纸，默认同时用于浅色和深色模式。
+            backgroundImagePathLight = legacyImage
+            backgroundImagePathDark = legacyImage
+            UserDefaults.standard.set(legacyImage, forKey: backgroundImageLightKey)
+            UserDefaults.standard.set(legacyImage, forKey: backgroundImageDarkKey)
+        }
         wallpaperPaths = UserDefaults.standard.stringArray(forKey: wallpaperListKey) ?? []
         let savedUIStyle = UserDefaults.standard.string(forKey: uiStyleKey) ?? ""
         if savedUIStyle.isEmpty {
@@ -371,30 +428,15 @@ final class ThemeStore: ObservableObject {
         }
         wallpaperPaths = restored
         saveWallpaperList()
-        if !backgroundImagePath.isEmpty, !deleted.contains(backgroundImagePath) {
-            if !FileManager.default.fileExists(atPath: backgroundImagePath),
-               let b64 = Self.wallpaperBackupValue(for: backgroundImagePath, in: backup),
-               let data = Data(base64Encoded: b64) {
-                let fileName = URL(fileURLWithPath: backgroundImagePath).lastPathComponent
-                let newPath = Self.wallpaperDirectory().appendingPathComponent(fileName).path
-                if (try? data.write(to: URL(fileURLWithPath: newPath), options: .atomic)) != nil {
-                    backgroundImagePath = newPath
-                    UserDefaults.standard.set(newPath, forKey: backgroundImageKey)
-                    backup[newPath] = b64
-                }
-            }
-            if !FileManager.default.fileExists(atPath: backgroundImagePath) {
-                backgroundImagePath = wallpaperPaths.first ?? ""
-                UserDefaults.standard.set(backgroundImagePath, forKey: backgroundImageKey)
+        backgroundImagePathLight = restoreWallpaperPath(backgroundImagePathLight, backup: &backup, deleted: deleted)
+        backgroundImagePathDark = restoreWallpaperPath(backgroundImagePathDark, backup: &backup, deleted: deleted)
+        persistSplitBackgroundImages()
+        for path in [backgroundImagePathLight, backgroundImagePathDark] where !path.isEmpty {
+            if !wallpaperPaths.contains(path), FileManager.default.fileExists(atPath: path), !deleted.contains(path) {
+                wallpaperPaths.insert(path, at: 0)
             }
         }
-        if !backgroundImagePath.isEmpty,
-           FileManager.default.fileExists(atPath: backgroundImagePath),
-           !wallpaperPaths.contains(backgroundImagePath),
-           !deleted.contains(backgroundImagePath) {
-            wallpaperPaths.insert(backgroundImagePath, at: 0)
-            saveWallpaperList()
-        }
+        saveWallpaperList()
         UserDefaults.standard.set(backup, forKey: wallpaperDataKey)
         invalidateBackgroundCache()
     }
@@ -408,7 +450,7 @@ final class ThemeStore: ObservableObject {
     /// 导出配置备份前调用：把当前壁纸文件内容补进 UserDefaults，避免只备份到旧沙盒路径。
     func refreshWallpaperBackupForExport() {
         var backup = UserDefaults.standard.dictionary(forKey: wallpaperDataKey) as? [String: String] ?? [:]
-        let candidates = ([backgroundImagePath] + wallpaperPaths).filter { !$0.isEmpty }
+        let candidates = ([backgroundImagePathLight, backgroundImagePathDark] + wallpaperPaths).filter { !$0.isEmpty }
         for path in candidates {
             guard FileManager.default.fileExists(atPath: path),
                   let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { continue }
@@ -440,15 +482,53 @@ final class ThemeStore: ObservableObject {
         setCustomAccent(nil)
     }
 
-    /// 自定义背景色
+    /// 自定义背景色（兼容旧调用：写入当前系统外观）
     func setBackground(_ hex: String) {
-        backgroundHex = hex
+        setBackground(hex, for: Self.currentColorScheme)
+    }
+
+    /// 为指定外观设置背景色；另一侧为空时会自动回退到这一侧。
+    func setBackground(_ hex: String, for colorScheme: ColorScheme) {
+        if colorScheme == .dark {
+            backgroundHexDark = hex
+            UserDefaults.standard.set(hex, forKey: backgroundDarkKey)
+        } else {
+            backgroundHexLight = hex
+            UserDefaults.standard.set(hex, forKey: backgroundLightKey)
+        }
         UserDefaults.standard.set(hex, forKey: backgroundKey)
     }
 
     func setBackgroundSyncAll(_ on: Bool) {
         backgroundSyncAll = on
         UserDefaults.standard.set(on, forKey: syncAllKey)
+    }
+
+    /// 配置备份恢复后重新读取浅色/深色背景设置。
+    func reloadBackgroundSettings() {
+        let defaults = UserDefaults.standard
+        let legacyBackground = defaults.string(forKey: backgroundKey) ?? ""
+        let hasSplitBackground = defaults.object(forKey: backgroundLightKey) != nil
+            || defaults.object(forKey: backgroundDarkKey) != nil
+        if hasSplitBackground {
+            backgroundHexLight = defaults.string(forKey: backgroundLightKey) ?? ""
+            backgroundHexDark = defaults.string(forKey: backgroundDarkKey) ?? ""
+        } else {
+            backgroundHexLight = legacyBackground
+            backgroundHexDark = legacyBackground
+        }
+
+        let legacyImage = defaults.string(forKey: backgroundImageKey) ?? ""
+        let hasSplitImage = defaults.object(forKey: backgroundImageLightKey) != nil
+            || defaults.object(forKey: backgroundImageDarkKey) != nil
+        if hasSplitImage {
+            backgroundImagePathLight = defaults.string(forKey: backgroundImageLightKey) ?? ""
+            backgroundImagePathDark = defaults.string(forKey: backgroundImageDarkKey) ?? ""
+        } else {
+            backgroundImagePathLight = legacyImage
+            backgroundImagePathDark = legacyImage
+        }
+        invalidateBackgroundCache()
     }
 
     /// 自定义强调色 Color
@@ -459,26 +539,46 @@ final class ThemeStore: ObservableObject {
 
     /// 自定义背景色 Color
     var customBackground: Color? {
-        guard !backgroundHex.isEmpty else { return nil }
-        return Color(hex: backgroundHex)
+        customBackground(for: Self.currentColorScheme)
+    }
+
+    /// 指定外观下的有效背景色，未设置时回退到另一侧。
+    func customBackground(for colorScheme: ColorScheme) -> Color? {
+        let hex = effectiveBackgroundHex(for: colorScheme)
+        guard !hex.isEmpty else { return nil }
+        return Color(hex: hex)
     }
 
     /// 上传的背景图片（按路径加载，解码结果缓存，避免大图每次重复解码导致卡顿/布局抖动）
     private var cachedBackgroundImage: UIImage?
+    private var cachedBackgroundImagePath: String?
     var customBackgroundImage: UIImage? {
-        if let cached = cachedBackgroundImage { return cached }
-        guard !backgroundImagePath.isEmpty else { return nil }
-        let image = BeansImageFileCache.image(at: backgroundImagePath)
+        customBackgroundImage(for: Self.currentColorScheme)
+    }
+
+    /// 指定外观下的有效壁纸，未设置时回退到另一侧。
+    func customBackgroundImage(for colorScheme: ColorScheme) -> UIImage? {
+        let path = backgroundImagePath(for: colorScheme)
+        guard !path.isEmpty else { return nil }
+        if let cached = cachedBackgroundImage, cachedBackgroundImagePath == path { return cached }
+        let image = BeansImageFileCache.image(at: path)
         cachedBackgroundImage = image
+        cachedBackgroundImagePath = path
         return image
     }
 
     private func invalidateBackgroundCache() {
         cachedBackgroundImage = nil
+        cachedBackgroundImagePath = nil
     }
 
     /// 上传新壁纸：归一化后保存到壁纸库，并直接设为当前背景（覆盖保存当前壁纸）
     func addWallpaper(_ data: Data) {
+        addWallpaper(data, for: Self.currentColorScheme)
+    }
+
+    /// 上传新壁纸并应用到指定外观。
+    func addWallpaper(_ data: Data, for colorScheme: ColorScheme) {
         let normalized = Self.normalizedWallpaperJPEG(from: data)
         let imageData: Data
         if let normalized, !normalized.isEmpty {
@@ -495,8 +595,7 @@ final class ThemeStore: ObservableObject {
             try imageData.write(to: url, options: .atomic)
             wallpaperPaths.append(url.path)
             saveWallpaperList()
-            backgroundImagePath = url.path
-            UserDefaults.standard.set(url.path, forKey: backgroundImageKey)
+            setBackgroundImagePath(url.path, for: colorScheme)
             saveWallpaperBackup(url.path, data: imageData)
             invalidateBackgroundCache()
             BeansImageFileCache.remove(url.path)
@@ -507,9 +606,13 @@ final class ThemeStore: ObservableObject {
 
     /// 从壁纸库选择壁纸应用为当前背景（无需再去相册）
     func applyWallpaper(at path: String) {
+        applyWallpaper(at: path, for: Self.currentColorScheme)
+    }
+
+    /// 从壁纸库选择壁纸应用到指定外观。
+    func applyWallpaper(at path: String, for colorScheme: ColorScheme) {
         guard FileManager.default.fileExists(atPath: path) else { return }
-        backgroundImagePath = path
-        UserDefaults.standard.set(path, forKey: backgroundImageKey)
+        setBackgroundImagePath(path, for: colorScheme)
         invalidateBackgroundCache()
     }
 
@@ -521,17 +624,19 @@ final class ThemeStore: ObservableObject {
         removeWallpaperBackup(path)
         saveDeletedWallpaper(path)
         saveWallpaperList()
-        if backgroundImagePath == path {
-            backgroundImagePath = wallpaperPaths.first ?? ""
-            UserDefaults.standard.set(backgroundImagePath, forKey: backgroundImageKey)
-            invalidateBackgroundCache()
-        }
+        if backgroundImagePathLight == path { setBackgroundImagePath(wallpaperPaths.first ?? "", for: .light) }
+        if backgroundImagePathDark == path { setBackgroundImagePath(wallpaperPaths.first ?? "", for: .dark) }
+        invalidateBackgroundCache()
     }
 
     /// 清除当前背景（保留壁纸库，可随时重新选择）
     func clearBackgroundImage() {
-        backgroundImagePath = ""
-        UserDefaults.standard.set("", forKey: backgroundImageKey)
+        clearBackgroundImage(for: Self.currentColorScheme)
+    }
+
+    /// 清除指定外观的壁纸；若另一侧有壁纸，该外观会自动回退到另一侧。
+    func clearBackgroundImage(for colorScheme: ColorScheme) {
+        setBackgroundImagePath("", for: colorScheme)
         invalidateBackgroundCache()
     }
 
@@ -541,18 +646,85 @@ final class ThemeStore: ObservableObject {
             try? FileManager.default.removeItem(atPath: path)
             BeansImageFileCache.remove(path)
         }
-        if !backgroundImagePath.isEmpty {
-            try? FileManager.default.removeItem(atPath: backgroundImagePath)
-            BeansImageFileCache.remove(backgroundImagePath)
+        for path in Set([backgroundImagePathLight, backgroundImagePathDark].filter { !$0.isEmpty }) {
+            try? FileManager.default.removeItem(atPath: path)
+            BeansImageFileCache.remove(path)
         }
         wallpaperPaths = []
-        backgroundImagePath = ""
+        backgroundImagePathLight = ""
+        backgroundImagePathDark = ""
+        backgroundHexLight = ""
+        backgroundHexDark = ""
         UserDefaults.standard.removeObject(forKey: wallpaperListKey)
         UserDefaults.standard.removeObject(forKey: wallpaperDataKey)
         UserDefaults.standard.removeObject(forKey: deletedKey)
         UserDefaults.standard.set("", forKey: backgroundImageKey)
+        UserDefaults.standard.set("", forKey: backgroundImageLightKey)
+        UserDefaults.standard.set("", forKey: backgroundImageDarkKey)
+        UserDefaults.standard.set("", forKey: backgroundKey)
+        UserDefaults.standard.set("", forKey: backgroundLightKey)
+        UserDefaults.standard.set("", forKey: backgroundDarkKey)
         invalidateBackgroundCache()
         BeansImageFileCache.removeAll()
+    }
+
+    private func effectiveBackgroundHex(for colorScheme: ColorScheme) -> String {
+        let primary = colorScheme == .dark ? backgroundHexDark : backgroundHexLight
+        if !primary.isEmpty { return primary }
+        return colorScheme == .dark ? backgroundHexLight : backgroundHexDark
+    }
+
+    func backgroundImagePath(for colorScheme: ColorScheme) -> String {
+        let primary = colorScheme == .dark ? backgroundImagePathDark : backgroundImagePathLight
+        if !primary.isEmpty { return primary }
+        return colorScheme == .dark ? backgroundImagePathLight : backgroundImagePathDark
+    }
+
+    private func setBackgroundImagePath(_ path: String, for colorScheme: ColorScheme) {
+        if colorScheme == .dark {
+            backgroundImagePathDark = path
+            UserDefaults.standard.set(path, forKey: backgroundImageDarkKey)
+        } else {
+            backgroundImagePathLight = path
+            UserDefaults.standard.set(path, forKey: backgroundImageLightKey)
+        }
+        UserDefaults.standard.set(path, forKey: backgroundImageKey)
+    }
+
+    private func persistSplitBackgroundImages() {
+        UserDefaults.standard.set(backgroundImagePathLight, forKey: backgroundImageLightKey)
+        UserDefaults.standard.set(backgroundImagePathDark, forKey: backgroundImageDarkKey)
+        UserDefaults.standard.set(backgroundImagePath, forKey: backgroundImageKey)
+    }
+
+    private func restoreWallpaperPath(
+        _ path: String,
+        backup: inout [String: String],
+        deleted: Set<String>
+    ) -> String {
+        guard !path.isEmpty, !deleted.contains(path) else { return "" }
+        var resolved = path
+        if !FileManager.default.fileExists(atPath: resolved),
+           let b64 = Self.wallpaperBackupValue(for: resolved, in: backup),
+           let data = Data(base64Encoded: b64) {
+            let fileName = URL(fileURLWithPath: resolved).lastPathComponent
+            let newPath = Self.wallpaperDirectory().appendingPathComponent(fileName).path
+            if (try? data.write(to: URL(fileURLWithPath: newPath), options: .atomic)) != nil {
+                resolved = newPath
+                backup[newPath] = b64
+            }
+        }
+        if !FileManager.default.fileExists(atPath: resolved) {
+            return wallpaperPaths.first ?? ""
+        }
+        return resolved
+    }
+
+    private static var currentColorScheme: ColorScheme {
+        let mode = UserDefaults.standard.string(forKey: "beans.themeMode") ?? BeansThemeMode.system.rawValue
+        if mode == BeansThemeMode.dark.rawValue { return .dark }
+        if mode == BeansThemeMode.light.rawValue { return .light }
+        return UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
     }
 
     private static func wallpaperDirectory() -> URL {

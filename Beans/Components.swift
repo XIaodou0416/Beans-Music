@@ -104,15 +104,17 @@ struct GlassBackdrop: View {
 
     var body: some View {
         let _ = theme.accent
+        let activeBackgroundColor = theme.customBackground(for: colorScheme) ?? customColor
+        let activeBackgroundImage = theme.customBackgroundImage(for: colorScheme)
         ZStack {
-            if uiStyle == .nativeClean, !showCustomBackground {
+            if uiStyle == .nativeClean, !showCustomBackground || (activeBackgroundImage == nil && activeBackgroundColor == nil) {
                 Color(UIColor.systemBackground)
-            } else if let image = theme.customBackgroundImage, showCustomBackground {
+            } else if let image = activeBackgroundImage, showCustomBackground {
                 WallpaperImage(image: image, blurRadius: wallpaperBlur)
                 LinearGradient(colors: wallpaperOverlay, startPoint: .top, endPoint: .bottom)
-            } else if showCustomBackground, let customColor {
+            } else if showCustomBackground, let activeBackgroundColor {
                 LinearGradient(
-                    colors: [customColor.opacity(0.9), customColor.opacity(0.55)],
+                    colors: [activeBackgroundColor.opacity(0.9), activeBackgroundColor.opacity(0.55)],
                     startPoint: .top, endPoint: .bottom
                 )
             } else {

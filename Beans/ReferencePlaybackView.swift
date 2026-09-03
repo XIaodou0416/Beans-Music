@@ -99,13 +99,13 @@ struct ReferencePlaybackView: View {
             Color(uiColor: .systemBackground)
                 .ignoresSafeArea()
 
-            if syncWallpaper, let image = theme.customBackgroundImage {
+            if syncWallpaper, let image = theme.customBackgroundImage(for: colorScheme) {
                 WallpaperImage(image: image)
                     .blur(radius: CGFloat(wallpaperBlur))
                     .scaleEffect(wallpaperBlur > 0 ? 1.08 : 1)
                     .overlay(Color.black.opacity(colorScheme == .dark ? 0.44 : 0.16))
                     .ignoresSafeArea()
-            } else if syncWallpaper, let color = theme.customBackground {
+            } else if syncWallpaper, let color = theme.customBackground(for: colorScheme) {
                 LinearGradient(
                     colors: [color.opacity(0.92), color.opacity(0.58), colorScheme == .dark ? .black.opacity(0.88) : .white.opacity(0.70)],
                     startPoint: .top,

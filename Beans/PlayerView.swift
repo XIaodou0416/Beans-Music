@@ -679,7 +679,7 @@ struct PlayerView: View {
             )
             if !lyricBackgroundImagePath.isEmpty && (showLyrics || lyricBackgroundSyncCover) {
                 lyricPlayerBackgroundLayer
-            } else if theme.backgroundSyncAll, let image = theme.customBackgroundImage {
+            } else if theme.backgroundSyncAll, let image = theme.customBackgroundImage(for: colorScheme) {
                 WallpaperImage(image: image)
                 LinearGradient(
                     colors: colorScheme == .dark
