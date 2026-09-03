@@ -443,6 +443,7 @@ struct PlayerView: View {
                                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
                         }
                     }
+                    .simultaneousGesture(vinylCloseGesture)
                 }
                 .offset(y: vinylDismissDragOffset)
             } else {
@@ -1049,6 +1050,7 @@ struct PlayerView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
                 .modifier(Layoutable(part: .vinylLyricsHeader, enabled: layoutMode, data: $layoutData))
+                .zIndex(3)
 
             Group {
                 if lyrics.isEmpty {
@@ -1056,8 +1058,8 @@ struct PlayerView: View {
                 } else {
                     ScrollViewReader { proxy in
                         ScrollView(showsIndicators: false) {
-                            LazyVStack(alignment: .leading, spacing: 26) {
-                                Color.clear.frame(height: max(88, vinylLyricsViewportHeight * 0.30))
+                            LazyVStack(alignment: .leading, spacing: 34) {
+                                Color.clear.frame(height: max(120, vinylLyricsViewportHeight * 0.38))
                                 ForEach(lyrics.indices, id: \.self) { index in
                                     vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
                                         .id(index)
@@ -1070,7 +1072,7 @@ struct PlayerView: View {
                                             }
                                         }
                                 }
-                                Color.clear.frame(height: max(110, vinylLyricsViewportHeight * 0.34))
+                                Color.clear.frame(height: max(135, vinylLyricsViewportHeight * 0.38))
                             }
                             .padding(.horizontal, 28)
                         }
@@ -1120,6 +1122,7 @@ struct PlayerView: View {
                 }
             }
             .modifier(Layoutable(part: .vinylLyricsText, enabled: layoutMode, data: $layoutData))
+            .zIndex(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onDisappear {
