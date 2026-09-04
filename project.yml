@@ -19,6 +19,8 @@ targets:
       - Beans/CeruMusicBuiltinSource.js
       - Beans/QuanDouYaoBuiltinSource.js
       - Beans/CRMusicSpecialBuiltinSource.js
+      - Beans/LXMusicBuiltinSource.js
+      - Beans/QTMusicBuiltinSource.js
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app

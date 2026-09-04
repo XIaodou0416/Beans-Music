@@ -34,7 +34,9 @@ enum UnblockService {
         kugouID: String? = nil,
         quality: ThirdPartyAudioQuality = .current,
         strict: Bool = false,
-        excludedHosts: Set<String> = []
+        excludedHosts: Set<String> = [],
+        allowLegacyQQFallback: Bool = false,
+        onlyLegacyQQFallback: Bool = false
     ) async -> Resolved? {
         let hasSongIdentity = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !artists.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -45,6 +47,19 @@ enum UnblockService {
         let sources = UnblockSourceStore.shared.sources
             .filter { source in
                 guard source.enabled else { return false }
+                if onlyLegacyQQFallback {
+                    return songSource == .qq
+                        && source.id == "beans.preset.legacy.guoyue.qq.v1"
+                        && allowLegacyQQFallback
+                        && usePaidAudioSource
+                        && hasPaidAudioSourceUsage
+                }
+                // guoyue2010 是 QQ 的最后备用源：普通解析阶段始终排除，
+                // 只有 qqFallback 在已付费源全部失败后以 onlyLegacyQQFallback
+                // 再次进入这里，避免免费用户或并发竞速时提前调用。
+                if source.id == "beans.preset.legacy.guoyue.qq.v1" {
+                    return false
+                }
                 if UnblockSourceStore.singleSourceMode {
                     return source.id == UnblockSourceStore.singleSourceID
                 }

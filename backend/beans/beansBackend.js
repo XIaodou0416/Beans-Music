@@ -30,6 +30,13 @@ function createBeansRouter(options = {}) {
   const browserAdmin = typeof options.adminMiddleware === 'function'
     ? options.adminMiddleware
     : requireBrowserAdmin(adminPassword);
+  const releaseImagePath = typeof options.releaseImagePath === 'string' && options.releaseImagePath.trim()
+    ? path.resolve(options.releaseImagePath.trim())
+    : '';
+  const releaseImageURL = text(options.releaseImageURL, 2000);
+  const clearReleaseImageHandler = typeof options.clearReleaseImage === 'function'
+    ? options.clearReleaseImage
+    : null;
 
   ensureDirectory(storageDir);
   ensureDirectory(uploadDir);
@@ -121,11 +128,27 @@ function createBeansRouter(options = {}) {
 
   router.get('/users', requireApiAdmin(adminPassword), (_request, response) => {
     const database = loadDatabase();
-    const users = Object.values(database.users)
-      .sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))
-      .slice(0, 1000)
-      .map((user) => ({ ...user, online: isUserOnline(user) }));
-    response.json({ ok: true, total_users: Object.keys(database.users).length, online_users: countOnlineUsers(database), users });
+    const users = sortedUsers(database).slice(0, 1000);
+    response.json({
+      ok: true,
+      total_users: Object.keys(database.users).length,
+      online_users: countOnlineUsers(database),
+      blacklisted_users: usersCount(database, 'blacklist'),
+      download_unlocked_users: usersCount(database, 'download-unlocked'),
+      users,
+    });
+  });
+
+  router.get('/blacklist', requireApiAdmin(adminPassword), (_request, response) => {
+    const database = loadDatabase();
+    const users = sortedUsers(database, 'blacklist');
+    response.json({ ok: true, total_blacklisted: users.length, users: users.slice(0, 1000) });
+  });
+
+  router.get('/download-unlocked', requireApiAdmin(adminPassword), (_request, response) => {
+    const database = loadDatabase();
+    const users = sortedUsers(database, 'download-unlocked');
+    response.json({ ok: true, total_download_unlocked: users.length, users: users.slice(0, 1000) });
   });
 
   router.get('/feedback', requireApiAdmin(adminPassword), (_request, response) => {
@@ -185,6 +208,21 @@ function createBeansRouter(options = {}) {
     response.type('html').send(renderAdminPage(loadDatabase(), 'users'));
   });
 
+  router.get('/admin/blacklist', browserAdmin, (_request, response) => {
+    response.type('html').send(renderAdminPage(loadDatabase(), 'blacklist'));
+  });
+
+  router.get('/admin/download-unlocked', browserAdmin, (_request, response) => {
+    response.type('html').send(renderAdminPage(loadDatabase(), 'download-unlocked'));
+  });
+
+  router.get('/admin/release', browserAdmin, (request, response) => {
+    const notice = request.query.cleared === '1'
+      ? '当前上传图片已清除。'
+      : '';
+    response.type('html').send(renderAdminPage(loadDatabase(), 'release', notice, releaseImageState()));
+  });
+
   router.get('/admin/feedback', browserAdmin, (_request, response) => {
     response.type('html').send(renderAdminPage(loadDatabase(), 'feedback'));
   });
@@ -204,9 +242,23 @@ function createBeansRouter(options = {}) {
         user.download_unlocked = request.body.download_unlocked === 'on';
         user.action_note = text(request.body.action_note, 500);
       });
-      response.redirect('/beans/admin/users');
+      response.redirect(safeAdminReturnPath(request.body.return_to));
     }
   );
+
+  router.post('/admin/release/clear-image', browserAdmin, async (_request, response) => {
+    try {
+      await clearConfiguredReleaseImage();
+      return response.redirect('/beans/admin/release?cleared=1');
+    } catch (error) {
+      const message = error?.message === 'release_image_not_configured'
+        ? '当前服务没有配置发布版本图片存储路径或清理回调。'
+        : '清除发布版本图片失败，请检查服务器权限和存储配置。';
+      return response.status(error?.message === 'release_image_not_configured' ? 501 : 500)
+        .type('html')
+        .send(renderAdminPage(loadDatabase(), 'release', message, releaseImageState()));
+    }
+  });
 
   router.post(
     '/admin/feedback/:id/delete',
@@ -243,6 +295,41 @@ function createBeansRouter(options = {}) {
   });
 
   return router;
+
+  function sortedUsers(database, section = 'users') {
+    return Object.values(database.users)
+      .filter((user) => {
+        if (section === 'blacklist') return Boolean(user.is_blacklisted);
+        if (section === 'download-unlocked') return Boolean(user.download_unlocked);
+        return true;
+      })
+      .sort((left, right) => String(right.last_seen_at).localeCompare(String(left.last_seen_at)))
+      .map((user) => ({ ...user, online: isUserOnline(user) }));
+  }
+
+  function usersCount(database, section) {
+    return sortedUsers(database, section).length;
+  }
+
+  async function clearConfiguredReleaseImage() {
+    if (clearReleaseImageHandler) {
+      await clearReleaseImageHandler();
+      return;
+    }
+    if (!releaseImagePath) {
+      throw new Error('release_image_not_configured');
+    }
+    await fs.promises.rm(releaseImagePath, { force: true });
+  }
+
+  function releaseImageState() {
+    const fileAvailable = !releaseImagePath || fs.existsSync(releaseImagePath);
+    return {
+      releaseImagePath: fileAvailable ? releaseImagePath : '',
+      releaseImageURL: fileAvailable ? releaseImageURL : '',
+      hasClearReleaseImage: fileAvailable && Boolean(releaseImagePath || clearReleaseImageHandler),
+    };
+  }
 
   function upsertUser(payload, ip, options = {}) {
     const userID = text(payload?.user_id, 80);
@@ -498,29 +585,53 @@ function countOnlineUsers(database, timestamp = Date.now()) {
   return Object.values(database.users).filter((user) => isUserOnline(user, timestamp)).length;
 }
 
+function safeAdminReturnPath(value) {
+  const allowedPaths = new Set([
+    '/beans/admin/users',
+    '/beans/admin/blacklist',
+    '/beans/admin/download-unlocked',
+  ]);
+  const candidate = String(value || '');
+  return allowedPaths.has(candidate) ? candidate : '/beans/admin/users';
+}
+
 function statsFor(database) {
+  const users = Object.values(database.users);
   return {
-    total_users: Object.keys(database.users).length,
+    total_users: users.length,
     access_count: database.stats.access_count,
     total_feedback: database.feedback.length,
     online_users: countOnlineUsers(database),
+    blacklisted_users: users.filter((user) => Boolean(user.is_blacklisted)).length,
+    download_unlocked_users: users.filter((user) => Boolean(user.download_unlocked)).length,
     online_window_seconds: ONLINE_WINDOW_MS / 1000,
     last_access_at: database.stats.last_access_at || null,
   };
 }
 
-function renderAdminPage(database, section = 'overview') {
+function renderAdminPage(database, section = 'overview', notice = '', releaseOptions = {}) {
+  const {
+    releaseImagePath = '',
+    releaseImageURL = '',
+    hasClearReleaseImage = false,
+  } = releaseOptions;
   const stats = statsFor(database);
   const users = Object.values(database.users)
-    .sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))
+    .filter((user) => {
+      if (section === 'blacklist') return Boolean(user.is_blacklisted);
+      if (section === 'download-unlocked') return Boolean(user.download_unlocked);
+      return section === 'users';
+    })
+    .sort((left, right) => String(right.last_seen_at).localeCompare(String(left.last_seen_at)))
     .slice(0, 500);
+  const returnTo = safeAdminReturnPath(`/beans/admin/${section === 'users' ? 'users' : section}`);
   const userRows = users.map((user) => `
     <tr>
       <td class="id">${escapeHtml(user.user_id)}<br><small>${escapeHtml(user.location || '位置获取中')}</small></td>
       <td>${escapeHtml(user.device_model || user.device_name)}<br><small>${escapeHtml(`${user.system_name} ${user.system_version}`)}</small></td>
       <td><span class="status ${isUserOnline(user) ? 'online' : 'offline'}">${isUserOnline(user) ? '在线' : '离线'}</span><br><small>${escapeHtml(user.last_seen_at)}</small></td>
       <td>${escapeHtml(`${user.app_version} (${user.app_build})`)}<br><small>首次：${escapeHtml(user.first_seen_at)}</small></td>
-      <td><form method="post" action="/beans/admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> 拉黑</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> 下载已解锁</label><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>
+      <td><form method="post" action="/beans/admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> ${user.is_blacklisted ? '取消拉黑' : '拉黑'}</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> ${user.download_unlocked ? '取消下载解锁' : '解锁下载'}</label><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>
     </tr>
   `).join('');
   const feedbackRows = database.feedback.slice(0, 500).map((item) => {
@@ -538,13 +649,20 @@ function renderAdminPage(database, section = 'overview') {
     return `<tr><td>${escapeHtml(item.submitted_at)}</td><td class="id">${escapeHtml(item.user_id)}</td><td>${escapeHtml(item.phone_model)}<br><small>${escapeHtml(item.phone_system)}</small></td><td class="problem">${escapeHtml(item.problem)}<div class="media">${attachments}</div></td><td>${deleteButton}</td></tr>`;
   }).join('');
 
-  const body = section === 'users'
-    ? `<section class="panel"><h2>用户列表 <small>在线状态按最近 ${ONLINE_WINDOW_MS / 60000} 分钟心跳计算</small></h2><table><thead><tr><th>设备 ID / 位置</th><th>设备 / 系统</th><th>在线状态</th><th>版本 / 时间</th><th>管理</th></tr></thead><tbody>${userRows || emptyRow('暂无用户')}</tbody></table></section>`
+  const userSectionTitles = {
+    users: '用户列表',
+    blacklist: '拉黑列表',
+    'download-unlocked': '下载已解锁用户',
+  };
+  const body = ['users', 'blacklist', 'download-unlocked'].includes(section)
+    ? `<section class="panel"><h2>${userSectionTitles[section]} <small>在线状态按最近 ${ONLINE_WINDOW_MS / 60000} 分钟心跳计算</small></h2><table><thead><tr><th>设备 ID / 位置</th><th>设备 / 系统</th><th>在线状态</th><th>版本 / 时间</th><th>管理</th></tr></thead><tbody>${userRows || emptyRow('暂无用户')}</tbody></table></section>`
     : section === 'feedback'
       ? `<section class="panel"><h2>反馈列表</h2><table><thead><tr><th>时间</th><th>用户</th><th>填写设备</th><th>反馈内容与附件</th><th>操作</th></tr></thead><tbody>${feedbackRows || emptyRow('暂无反馈')}</tbody></table></section>`
-      : `<section class="metrics"><article class="metric"><small>总用户</small><b>${stats.total_users}</b></article><article class="metric"><small>软件访问量</small><b>${stats.access_count}</b></article><article class="metric"><small>当前在线</small><b>${stats.online_users}</b><small>最近 ${ONLINE_WINDOW_MS / 60000} 分钟有心跳</small></article><article class="metric"><small>反馈数量</small><b>${stats.total_feedback}</b></article></section><section class="panel overview"><h2>使用情况</h2><p>最近一次访问：${escapeHtml(stats.last_access_at || '暂无记录')}</p><p>在线用户通过应用每分钟心跳更新，离开超过 ${ONLINE_WINDOW_MS / 60000} 分钟后自动视为离线。</p></section>`;
+      : section === 'release'
+        ? `<section class="panel release-panel"><h2>发布版本</h2>${notice ? `<p class="notice">${escapeHtml(notice)}</p>` : ''}<p>管理发布版本时使用的当前图片。清除后不会删除版本文字或其他发布信息。</p><p class="release-state">${releaseImageURL ? `当前图片：<a href="${escapeHtml(releaseImageURL)}" target="_blank" rel="noopener">${escapeHtml(releaseImageURL)}</a>` : '当前没有可预览的图片地址。'}${releaseImagePath ? ` <small>存储文件：${escapeHtml(releaseImagePath)}</small>` : ''}</p><form method="post" action="/beans/admin/release/clear-image" onsubmit="return confirm('确定清除当前上传的图片？')"><button class="danger" ${hasClearReleaseImage ? '' : 'disabled'}>清除当前上传的图片</button></form></section>`
+      : `<section class="metrics"><article class="metric"><small>总用户</small><b>${stats.total_users}</b></article><article class="metric"><small>软件访问量</small><b>${stats.access_count}</b></article><article class="metric"><small>当前在线</small><b>${stats.online_users}</b><small>最近 ${ONLINE_WINDOW_MS / 60000} 分钟有心跳</small></article><article class="metric"><small>反馈数量</small><b>${stats.total_feedback}</b></article><article class="metric"><small>已拉黑</small><b>${stats.blacklisted_users}</b></article><article class="metric"><small>下载已解锁</small><b>${stats.download_unlocked_users}</b></article></section><section class="panel overview"><h2>使用情况</h2><p>最近一次访问：${escapeHtml(stats.last_access_at || '暂无记录')}</p><p>在线用户通过应用每分钟心跳更新，离开超过 ${ONLINE_WINDOW_MS / 60000} 分钟后自动视为离线。</p></section>`;
 
-  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beans 后台</title><style>:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#182230;background:#f8fafc}body{margin:0}.page{max-width:1500px;margin:0 auto;padding:28px}.bar{margin-bottom:24px}.bar h1{font-size:25px;margin:0}.bar p,small{color:#667085}.nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.nav a{color:#344054;text-decoration:none;background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:8px 12px}.nav a.active{color:#fff;background:#182230;border-color:#182230}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.metric,.panel{background:#fff;border:1px solid #eaecf0;border-radius:12px}.metric{padding:18px}.metric b{display:block;font-size:30px;margin-top:8px}.panel{overflow:auto;margin-top:20px}.panel h2{font-size:17px;padding:18px 18px 0;margin:0}.overview{padding-bottom:18px}.overview p{padding:0 18px;color:#667085}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:12px 14px;border-bottom:1px solid #eaecf0;vertical-align:top;text-align:left}th{color:#667085;background:#fcfcfd}.id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}.problem{max-width:500px;white-space:pre-wrap;word-break:break-word}.media{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap}.media a{color:#175cd3;text-decoration:none}.feedback-media{display:inline-flex;flex-direction:column;gap:5px;margin:6px 8px 0 0;vertical-align:top}.feedback-media img,.feedback-media video{display:block;width:min(240px,40vw);max-height:220px;object-fit:cover;border-radius:8px;background:#101828}.status{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px}.status.online{color:#067647;background:#ecfdf3}.status.offline{color:#667085;background:#f2f4f7}input[name=action_note]{width:150px;box-sizing:border-box;padding:6px;border:1px solid #d0d5dd;border-radius:6px}button{border:0;border-radius:7px;padding:7px 10px;background:#182230;color:#fff;cursor:pointer}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.page{padding:16px}.metrics{grid-template-columns:1fr}.feedback-media img,.feedback-media video{width:min(260px,70vw)}}</style><body><main class="page"><header class="bar"><h1>Beans 后台</h1><p>用户、反馈与访问情况</p><nav class="nav"><a class="${section === 'overview' ? 'active' : ''}" href="/beans/admin">概览</a><a class="${section === 'users' ? 'active' : ''}" href="/beans/admin/users">用户</a><a class="${section === 'feedback' ? 'active' : ''}" href="/beans/admin/feedback">反馈</a></nav></header>${body}</main></body></html>`;
+  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beans 后台</title><style>:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#182230;background:#f8fafc}body{margin:0}.page{max-width:1500px;margin:0 auto;padding:28px}.bar{margin-bottom:24px}.bar h1{font-size:25px;margin:0}.bar p,small{color:#667085}.nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.nav a{color:#344054;text-decoration:none;background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:8px 12px}.nav a.active{color:#fff;background:#182230;border-color:#182230}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.metric,.panel{background:#fff;border:1px solid #eaecf0;border-radius:12px}.metric{padding:18px}.metric b{display:block;font-size:30px;margin-top:8px}.panel{overflow:auto;margin-top:20px}.panel h2{font-size:17px;padding:18px 18px 0;margin:0}.overview{padding-bottom:18px}.overview p,.release-panel>p{padding:0 18px;color:#667085}.notice{color:#067647!important;background:#ecfdf3;border-radius:8px;padding:10px 12px!important;margin:12px 18px 0}.release-state{word-break:break-word}.release-state a{color:#175cd3}.release-panel form{padding:0 18px 18px}.release-panel button.danger,.danger{background:#b42318}.release-panel button:disabled{background:#98a2b3;cursor:not-allowed}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:12px 14px;border-bottom:1px solid #eaecf0;vertical-align:top;text-align:left}th{color:#667085;background:#fcfcfd}.id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}.problem{max-width:500px;white-space:pre-wrap;word-break:break-word}.media{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap}.media a{color:#175cd3;text-decoration:none}.feedback-media{display:inline-flex;flex-direction:column;gap:5px;margin:6px 8px 0 0;vertical-align:top}.feedback-media img,.feedback-media video{display:block;width:min(240px,40vw);max-height:220px;object-fit:cover;border-radius:8px;background:#101828}.status{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px}.status.online{color:#067647;background:#ecfdf3}.status.offline{color:#667085;background:#f2f4f7}input[name=action_note]{width:150px;box-sizing:border-box;padding:6px;border:1px solid #d0d5dd;border-radius:6px}button{border:0;border-radius:7px;padding:7px 10px;background:#182230;color:#fff;cursor:pointer}button:disabled{cursor:not-allowed}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.page{padding:16px}.metrics{grid-template-columns:1fr}.feedback-media img,.feedback-media video{width:min(260px,70vw)}}</style><body><main class="page"><header class="bar"><h1>Beans 后台</h1><p>用户、反馈与访问情况</p><nav class="nav"><a class="${section === 'overview' ? 'active' : ''}" href="/beans/admin">概览</a><a class="${section === 'users' ? 'active' : ''}" href="/beans/admin/users">用户</a><a class="${section === 'blacklist' ? 'active' : ''}" href="/beans/admin/blacklist">拉黑列表</a><a class="${section === 'download-unlocked' ? 'active' : ''}" href="/beans/admin/download-unlocked">下载解锁</a><a class="${section === 'feedback' ? 'active' : ''}" href="/beans/admin/feedback">反馈</a><a class="${section === 'release' ? 'active' : ''}" href="/beans/admin/release">发布版本</a></nav></header>${body}</main></body></html>`;
 
   function emptyRow(label) {
     const columnCount = section === 'feedback' ? 5 : 5;

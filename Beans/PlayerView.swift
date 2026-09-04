@@ -2913,6 +2913,7 @@ struct PlayerView: View {
         }
     }
 
+    @MainActor
     private func loadLyrics() async {
         lyrics = []
         guard let song else { return }
@@ -2936,6 +2937,7 @@ struct PlayerView: View {
     }
 
     /// 一次性提取当前封面主色，带动整个播放器配色动态变化（失败时保持主题回退色，不影响任何功能）
+    @MainActor
     private func extractCoverPalette() async {
         guard let url = song?.coverURL else { return }
         do {
@@ -3694,6 +3696,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.lyricBackground.blur") private var lyricBackgroundBlur = 12.0
     @AppStorage("beans.lyricBackground.syncCover") private var lyricBackgroundSyncCover = false
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
+    @AppStorage("beans.playback.resumeAfterInterruption") private var resumeAfterInterruption = false
     @AppStorage("beans.playerButtonStyle") private var playerButtonStyleRaw = BeansPlayerButtonStyle.glass.rawValue
     @AppStorage("beans.albumTitleColorHex") private var albumTitleColorHex = ""
     @AppStorage("beans.albumArtistColorHex") private var albumArtistColorHex = ""
@@ -4185,6 +4188,9 @@ struct PlayerSettingsSheet: View {
                     .onChange(of: mixesWithOthers) { value in
                         PlayerManager.applyAudioMixPreference(value)
                     }
+                Divider().opacity(0.35)
+                settingToggle("其他音频结束后继续播放", isOn: $resumeAfterInterruption,
+                              caption: "其他音频打断后，结束时恢复当前歌曲")
             }
         }
     }

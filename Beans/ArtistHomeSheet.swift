@@ -69,6 +69,7 @@ struct ArtistHomeSheet: View {
         }
         .task { await load() }
         .modifier(BeansSheetModifier(detents: [.large], dragIndicator: true))
+        .beansDetailMiniPlayer()
     }
 
     private var artistHeader: some View {

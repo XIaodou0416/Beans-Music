@@ -566,6 +566,7 @@ struct LocalPlaylistDetailSheet: View {
             Text("已选歌曲会复制到目标歌单，当前歌单中的歌曲不会被移除。")
         }
         .modifier(BeansSheetModifier(detents: [.medium, .large], dragIndicator: true))
+        .beansDetailMiniPlayer()
     }
 
     private var hasOtherPlaylist: Bool {

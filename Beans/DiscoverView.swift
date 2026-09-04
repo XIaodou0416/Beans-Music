@@ -1657,6 +1657,7 @@ struct DailySongsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索每日推荐", "Search daily recommendations"))
         }
+        .beansDetailMiniPlayer()
     }
 
     private var filteredSongs: [Song] {

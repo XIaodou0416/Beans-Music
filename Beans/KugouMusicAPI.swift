@@ -1371,15 +1371,62 @@ final class KugouMusicAPI {
 
     /// 酷狗官方移动评论接口。评论读取不依赖会员权限。
     func comments(mixSongID: String, hash: String?, page: Int = 1, limit: Int = 30) async throws -> KugouCommentPage {
-        var commentID = mixSongID.trimmingCharacters(in: .whitespacesAndNewlines)
-        if commentID.isEmpty || Int(commentID) == nil {
-            commentID = try await commentAudioID(hash: hash) ?? commentID
+        var commentIDs: [String] = []
+        if let hash,
+           !hash.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let resolvedID = try? await commentAudioID(hash: hash),
+           !resolvedID.isEmpty {
+            commentIDs.append(resolvedID)
         }
-        guard !commentID.isEmpty else {
+        let suppliedID = mixSongID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if Self.isValidCommentID(suppliedID) {
+            commentIDs.append(suppliedID)
+        }
+        var seenIDs = Set<String>()
+        commentIDs = commentIDs.filter { seenIDs.insert($0).inserted }
+        guard !commentIDs.isEmpty else {
             throw NetEaseError.unknown("酷狗评论缺少歌曲 ID")
         }
+
+        var lastError: Error?
+        var emptyPage: KugouCommentPage?
+        for commentID in commentIDs {
+            do {
+                let json = try await kugouCommentJSON(
+                    mixSongID: commentID,
+                    page: page,
+                    limit: limit
+                )
+                let parsed = Self.parseComments(json: json, page: page, songName: commentID)
+                if !parsed.comments.isEmpty || parsed.total > 0 {
+                    return parsed
+                }
+                emptyPage = parsed
+            } catch {
+                lastError = error
+                BeansLogger.shared.log(
+                    "酷狗评论请求失败：mixsongid=\(commentID) \(error.localizedDescription)",
+                    level: .debug
+                )
+            }
+        }
+
+        for commentID in commentIDs {
+            if let legacy = try? await legacyCommentJSON(childrenID: commentID, page: page, limit: limit) {
+                let parsed = Self.parseComments(json: legacy, page: page, songName: commentID)
+                if !parsed.comments.isEmpty || parsed.total > 0 {
+                    return parsed
+                }
+                emptyPage = parsed
+            }
+        }
+        if let emptyPage { return emptyPage }
+        throw lastError ?? NetEaseError.unknown("酷狗评论暂时不可用")
+    }
+
+    private func kugouCommentJSON(mixSongID: String, page: Int, limit: Int) async throws -> [String: Any] {
         let params = [
-            "mixsongid": commentID,
+            "mixsongid": mixSongID,
             "need_show_image": "1",
             "p": "\(max(page, 1))",
             "pagesize": "\(min(max(limit, 1), 30))",
@@ -1388,48 +1435,19 @@ final class KugouMusicAPI {
             "extdata": "0",
             "code": "fc4be23b4e972707f36b8a828a93ba8a",
         ]
-        let json: [String: Any]
         do {
-            let response = try await gatewayRequest(
+            let response = try await upstreamRequest(
                 "/mcomment/v1/cmtlist",
-                baseURL: gateway,
                 method: "POST",
-                params: params,
-                headers: ["x-router": "mcomment.service.kugou.com"]
-            )
-            json = response.json
-        } catch {
-            BeansLogger.shared.log("酷狗评论 POST 失败：\(error.localizedDescription)，尝试 GET 兜底", level: .debug)
-            do {
-                json = try await gatewayCommentJSON(params: params)
-            } catch {
-                BeansLogger.shared.log("酷狗评论 gateway 全部失败：\(error.localizedDescription)，尝试旧版评论接口", level: .debug)
-                json = try await legacyCommentJSON(childrenID: commentID, page: page, limit: limit)
-            }
-        }
-        let parsed = Self.parseComments(json: json, page: page, songName: commentID)
-        if parsed.comments.isEmpty, let legacy = try? await legacyCommentJSON(childrenID: commentID, page: page, limit: limit) {
-            return Self.parseComments(json: legacy, page: page, songName: commentID)
-        }
-        return parsed
-    }
-
-    private func gatewayCommentJSON(params: [String: String]) async throws -> [String: Any] {
-        do {
-            let response = try await gatewayRequest(
-                "/mcomment/v1/cmtlist",
-                baseURL: gateway,
-                method: "GET",
                 params: params,
                 headers: ["x-router": "mcomment.service.kugou.com"]
             )
             return response.json
         } catch {
-            BeansLogger.shared.log("酷狗评论 GET 失败：\(error.localizedDescription)，尝试备用路由", level: .debug)
-            let response = try await gatewayRequest(
+            BeansLogger.shared.log("酷狗评论主路由失败：\(error.localizedDescription)，尝试备用路由", level: .debug)
+            let response = try await upstreamRequest(
                 "/m.comment.service/v1/cmtlist",
-                baseURL: gateway,
-                method: "GET",
+                method: "POST",
                 params: params,
                 headers: ["x-router": "m.comment.service.kugou.com"]
             )
@@ -1462,14 +1480,22 @@ final class KugouMusicAPI {
         ]
         guard let url = components.url else { return nil }
         let json = try await getJSON(url, ua: Self.browserUA)
-        let value = Self.deepString(json, names: ["album_audio_id", "audio_id", "mixsongid", "songid", "id"])
+        // Prefer the comment-specific audio ID. A generic recursive lookup can
+        // encounter an unrelated `id` field before `album_audio_id`.
+        let value = Self.preferredDeepString(
+            json,
+            names: ["album_audio_id", "audio_id", "mixsongid", "songid", "id"]
+        )
         return value.isEmpty ? nil : value
     }
 
     private static func parseComments(json: [String: Any], page: Int, songName: String) -> KugouCommentPage {
         let rows = Self.deepArrays(
             json,
-            names: ["commentlist", "comments", "list", "comment", "hot_comment", "hot_comments"]
+            names: [
+                "commentlist", "comment_list", "comments", "list", "listdata",
+                "comment", "hot_comment", "hot_comments"
+            ]
         )
         var seen = Set<Int>()
         let comments = rows.compactMap { raw -> SongComment? in
@@ -1500,9 +1526,20 @@ final class KugouMusicAPI {
                 isHot: page == 1
             )
         }
-        let total = Self.deepInt(json, names: ["total", "commenttotal", "comment_total", "count"])
+        let total = Self.deepInt(
+            json,
+            names: [
+                "total", "commenttotal", "comment_total", "comment_num",
+                "commentnum", "comment_count", "commentcount", "total_count", "count"
+            ]
+        )
         BeansLogger.shared.log("酷狗评论：mixsongid=\(songName) page=\(page) 返回 \(comments.count) 条", level: .debug)
         return KugouCommentPage(comments: comments, total: total)
+    }
+
+    private static func isValidCommentID(_ value: String) -> Bool {
+        guard let number = Int(value), number > 0 else { return false }
+        return true
     }
 
     private func registerDevice() async {
@@ -2080,6 +2117,14 @@ final class KugouMusicAPI {
             return array.first.map { string($0) } ?? ""
         }
         return string(deepValue(obj, names: names))
+    }
+
+    private static func preferredDeepString(_ obj: Any, names: [String]) -> String {
+        for name in names {
+            let value = deepString(obj, names: [name])
+            if !value.isEmpty { return value }
+        }
+        return ""
     }
 
     private static func deepInt(_ obj: Any, names: [String]) -> Int { int(deepValue(obj, names: names)) }

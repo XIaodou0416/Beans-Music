@@ -12,6 +12,8 @@ final class KugouMusicAuth: ObservableObject {
 
     private let defaults = UserDefaults.standard
     private let key = "beans.kugou.auth.v2"
+    /// 网络请求会在非主线程读取登录快照，和登录回调写入状态并发时需要串行化。
+    private let stateLock = NSLock()
     private var auth: [String: String] = [:]
 
     private init() {
@@ -21,23 +23,25 @@ final class KugouMusicAuth: ObservableObject {
         }
     }
 
-    var token: String { auth["token"] ?? "" }
-    var mid: String { auth["KUGOU_API_MID"] ?? auth["mid"] ?? Self.defaultMid }
-    var dfid: String { auth["dfid"] ?? auth["DFID"] ?? "-" }
-    var guid: String { auth["KUGOU_API_GUID"] ?? "" }
-    var vipType: Int { Int(auth["vipType"] ?? auth["vip_type"] ?? "0") ?? 0 }
+    var token: String { authSnapshot["token"] ?? "" }
+    var mid: String { authSnapshot["KUGOU_API_MID"] ?? authSnapshot["mid"] ?? Self.defaultMid }
+    var dfid: String { authSnapshot["dfid"] ?? authSnapshot["DFID"] ?? "-" }
+    var guid: String { authSnapshot["KUGOU_API_GUID"] ?? "" }
+    var vipType: Int { Int(authSnapshot["vipType"] ?? authSnapshot["vip_type"] ?? "0") ?? 0 }
     var hasMembership: Bool { vipType > 0 }
 
     var cookieHeader: String {
+        let snapshot = authSnapshot
         var items = [
-            ("userid", userId),
-            ("token", token),
-            ("KUGOU_API_MID", mid),
-            ("dfid", dfid),
+            ("userid", snapshot["userid"] ?? snapshot["user_id"] ?? ""),
+            ("token", snapshot["token"] ?? ""),
+            ("KUGOU_API_MID", snapshot["KUGOU_API_MID"] ?? snapshot["mid"] ?? Self.defaultMid),
+            ("dfid", snapshot["dfid"] ?? snapshot["DFID"] ?? "-"),
         ]
-        if vipType > 0 {
-            items.append(("vipType", "\(vipType)"))
-            items.append(("viptype", "\(vipType)"))
+        let savedVIPType = Int(snapshot["vipType"] ?? snapshot["vip_type"] ?? "0") ?? 0
+        if savedVIPType > 0 {
+            items.append(("vipType", "\(savedVIPType)"))
+            items.append(("viptype", "\(savedVIPType)"))
         }
         return items
             .filter { !$0.1.isEmpty }
@@ -46,14 +50,15 @@ final class KugouMusicAuth: ObservableObject {
     }
 
     func prepareDevice() {
-        var next = auth
+        let current = authSnapshot
+        var next = current
         _ = Self.ensureDevice(&next)
-        guard next != auth else { return }
+        guard next != current else { return }
         save(next)
     }
 
     func saveLogin(userId: String, token: String, nickname: String, avatar: String, vipType: Int) {
-        var next = auth
+        var next = authSnapshot
         _ = Self.ensureDevice(&next)
         next["userid"] = userId
         next["token"] = token
@@ -65,21 +70,22 @@ final class KugouMusicAuth: ObservableObject {
 
     func saveDeviceDFID(_ dfid: String) {
         guard !dfid.isEmpty else { return }
-        guard auth["dfid"] != dfid else { return }
-        var next = auth
+        let current = authSnapshot
+        guard current["dfid"] != dfid else { return }
+        var next = current
         next["dfid"] = dfid
         save(next)
     }
 
     func updateVIPType(_ vipType: Int) {
         guard vipType > self.vipType else { return }
-        var next = auth
+        var next = authSnapshot
         next["vipType"] = "\(vipType)"
         save(next)
     }
 
     func logout() {
-        auth = [:]
+        replaceAuth([:])
         defaults.removeObject(forKey: key)
         updatePublishedState {
             self.isLoggedIn = false
@@ -92,7 +98,7 @@ final class KugouMusicAuth: ObservableObject {
     }
 
     private func save(_ value: [String: String]) {
-        auth = value
+        replaceAuth(value)
         defaults.set(value, forKey: key)
         apply(value)
         updatePublishedState {
@@ -130,6 +136,18 @@ final class KugouMusicAuth: ObservableObject {
         } else {
             DispatchQueue.main.sync(execute: update)
         }
+    }
+
+    private var authSnapshot: [String: String] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return auth
+    }
+
+    private func replaceAuth(_ value: [String: String]) {
+        stateLock.lock()
+        auth = value
+        stateLock.unlock()
     }
 
     @discardableResult
