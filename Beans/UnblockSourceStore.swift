@@ -80,6 +80,10 @@ final class UnblockSourceStore: ObservableObject {
             "quality": "320k",
         ]
     }
+    /// 1.5.2 中验证过的旧版源。QQ 源的密钥使用设置页现有的用户密钥池，
+    /// 不再把旧版 IPA 中的密钥重新写回源码。
+    private static let legacyQQURLTemplate = "https://cyapi.top/API/qq_music.php?apikey={apiKey}&type=json&mid={id}"
+    private static let legacyNeteaseURLTemplate = "https://music-api.gdstudio.xyz/api.php?types=url&source=netease&id={id}&br=999"
 
     static let paidPresetSources: [ThirdPartySource] = [
         ThirdPartySource(
@@ -106,6 +110,31 @@ final class UnblockSourceStore: ObservableObject {
             kind: "paid-qt",
             template: paidURLTemplate,
             headers: paidHeaders,
+            quality: "320k",
+            isPreset: true
+        ),
+        ThirdPartySource(
+            id: "beans.preset.legacy.guoyue.qq.v1",
+            name: "guoyue2010 · QQ 稳定源（1.5.2）",
+            kind: "legacy-template",
+            template: legacyQQURLTemplate,
+            headers: [
+                "source": "tx",
+                "qualities": "320k",
+                "apiKeyQuery": "apikey",
+            ],
+            quality: "320k",
+            isPreset: true
+        ),
+        ThirdPartySource(
+            id: "beans.preset.legacy.guoyue.netease.v1",
+            name: "guoyue2010 · 网易云统一源（1.5.2）",
+            kind: "legacy-template",
+            template: legacyNeteaseURLTemplate,
+            headers: [
+                "source": "wy",
+                "qualities": "320k",
+            ],
             quality: "320k",
             isPreset: true
         ),

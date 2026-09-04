@@ -161,6 +161,14 @@ enum UnblockService {
             return nil
         }
         let apiKeys = orderedAPIKeys(for: source)
+        let requiresAPIKey = source.template.contains("{apiKey}")
+        if requiresAPIKey && apiKeys.isEmpty {
+            BeansLogger.shared.log(
+                "旧版第三方音源缺少用户密钥：\(source.name)，已跳过请求",
+                level: .debug
+            )
+            return nil
+        }
         for (idIndex, songID) in songIDs.enumerated() {
             var baseURLString = source.template
             baseURLString = baseURLString.replacingOccurrences(of: "{id}", with: songID)
@@ -175,10 +183,14 @@ enum UnblockService {
                     BeansLogger.shared.log("第三方音源自动降级：\(source.name) 音质=\(quality)", level: .debug)
                 }
                 let urlString = replacingQualityPlaceholders(in: baseURLString, with: quality)
-                guard let url = URL(string: urlString) else { continue }
                 let idLabel = songSource == .qq && songIDs.count > 1 ? " ID=\(idIndex + 1)/\(songIDs.count)" : ""
                 if !apiKeys.isEmpty {
                     for (originalIndex, apiKey) in apiKeys {
+                        let keyedURLString = urlString.replacingOccurrences(
+                            of: "{apiKey}",
+                            with: urlEncoded(apiKey)
+                        )
+                        guard let url = URL(string: keyedURLString) else { continue }
                         if let resolved = await presetSourceRequestOnce(
                             source: source,
                             url: url,
@@ -193,7 +205,9 @@ enum UnblockService {
                             return resolved
                         }
                     }
-                } else if let resolved = await presetSourceRequestOnce(
+                } else if !requiresAPIKey,
+                          let url = URL(string: urlString),
+                          let resolved = await presetSourceRequestOnce(
                     source: source,
                     url: url,
                     apiKey: nil,
@@ -285,7 +299,7 @@ enum UnblockService {
         let keyLabel = idLabel + (keyTotal > 1 ? " 密钥=\(keyIndex)/\(keyTotal)" : "") + " 音质=\(quality)"
         let metadataKeys: Set<String> = [
             "source", "quality", "qualities", "qualityOptions", "qualitys",
-            "br", "level", "apiKey", "apiKeys"
+            "br", "level", "apiKey", "apiKeys", "apiKeyQuery"
         ]
         for (key, value) in source.headers where !metadataKeys.contains(key) {
             let resolvedValue = value
