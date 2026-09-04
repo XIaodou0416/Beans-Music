@@ -122,15 +122,15 @@ struct SongCell: View {
 
     @MainActor
     private func downloadSong() async {
-        let quality = DownloadQuality(sourceValue: downloadQualityRaw) ?? .kb320
-        let supported = DownloadQuality.supported(for: song.source)
-        let effectiveQuality = supported.contains(quality) ? quality : (supported.last ?? .kb320)
-        if effectiveQuality.rawValue != downloadQualityRaw {
-            downloadQualityRaw = effectiveQuality.rawValue
+        let quality: DownloadQuality
+        if UserDefaults.standard.object(forKey: ThirdPartyAudioQuality.downloadStorageKey) == nil {
+            quality = ThirdPartyAudioQuality.current
+        } else {
+            quality = DownloadQuality(sourceValue: downloadQualityRaw) ?? ThirdPartyAudioQuality.current
         }
         BeansHaptics.medium()
-        ToastCenter.shared.show("开始下载：\(song.name)（\(effectiveQuality.displayName)）")
-        let result = await DownloadManager.shared.download(song: song, quality: effectiveQuality)
+        ToastCenter.shared.show("开始下载：\(song.name)（\(quality.displayName)）")
+        let result = await DownloadManager.shared.download(song: song, quality: quality)
         switch result {
         case .success(let downloaded):
             if downloaded.downgraded {

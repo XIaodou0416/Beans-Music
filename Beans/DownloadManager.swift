@@ -94,10 +94,20 @@ final class DownloadManager {
             let tempURL: URL
             let response: URLResponse
             do {
-                let (downloaded, downloadResponse) = try await URLSession.shared.download(from: resolved.url)
+                let request = downloadRequest(for: resolved.url, song: song)
+                let (downloaded, downloadResponse) = try await URLSession.shared.download(for: request)
                 response = downloadResponse
                 if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
                     lastError = NetEaseError.unknown("下载失败（HTTP \(http.statusCode)）")
+                    continue
+                }
+                guard isUsableAudioFile(at: downloaded, response: response) else {
+                    lastError = NetEaseError.unknown("返回内容不是有效音频")
+                    BeansLogger.shared.log(
+                        "下载音频校验失败，继续尝试降级：\(song.name) 平台=\(song.source.rawValue) 音质=\(current.rawValue) MIME=\(response.mimeType ?? "未知")",
+                        level: .debug
+                    )
+                    try? FileManager.default.removeItem(at: downloaded)
                     continue
                 }
                 tempURL = downloaded
@@ -175,9 +185,17 @@ final class DownloadManager {
         }
 
         if song.source == .qq, let mid = song.qqMid {
-            guard let urlString = try? await QQMusicAPI.shared.songURL(songmid: mid, mediaMid: song.qqMediaMid, br: quality.qqBR),
-                  let url = URL(string: urlString) else { return nil }
-            return ResolvedDownloadURL(url: url, actualQuality: quality, sourceName: nil)
+            guard let result = try? await QQMusicAPI.shared.songURLResult(
+                songmid: mid,
+                mediaMid: song.qqMediaMid,
+                quality: quality.beansQuality
+            ),
+            let url = URL(string: result.url) else { return nil }
+            return ResolvedDownloadURL(
+                url: url,
+                actualQuality: Self.downloadQuality(forQQBR: result.br),
+                sourceName: nil
+            )
         } else if song.source == .kugou {
             guard let urlString = try? await KugouMusicAPI.shared.songURL(song: song, quality: quality.beansQuality),
                   let url = URL(string: urlString) else { return nil }
@@ -186,6 +204,46 @@ final class DownloadManager {
             let urls = try? await NetEaseAPI.shared.songURLs(ids: [song.id], level: quality.neteaseLevel)
             guard let urlString = urls?[song.id], let url = URL(string: urlString) else { return nil }
             return ResolvedDownloadURL(url: url, actualQuality: quality, sourceName: nil)
+        }
+    }
+
+    private func downloadRequest(for url: URL, song: Song) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+        request.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0", forHTTPHeaderField: "User-Agent")
+
+        if isQQHost(url.host) {
+            request.setValue("https://y.qq.com/", forHTTPHeaderField: "Referer")
+            let cookie = QQMusicAuth.shared.cookieHeader
+            if !cookie.isEmpty {
+                request.setValue(cookie, forHTTPHeaderField: "Cookie")
+            }
+        } else if url.host?.lowercased().contains("kugou") == true
+                    || url.host?.lowercased().contains("kgimg.com") == true {
+            request.setValue("https://www.kugou.com/", forHTTPHeaderField: "Referer")
+            let cookie = KugouMusicAuth.shared.cookieHeader
+            if !cookie.isEmpty {
+                request.setValue(cookie, forHTTPHeaderField: "Cookie")
+            }
+        }
+        return request
+    }
+
+    private func isQQHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return host.contains("qq.com")
+            || host.contains("qqmusic")
+            || host.contains("ptqqmusic")
+            || host.contains("gitv.tv")
+    }
+
+    private static func downloadQuality(forQQBR br: String) -> DownloadQuality {
+        switch br.uppercased() {
+        case "M500": return .kb128
+        case "M800": return .kb320
+        case "C400": return .kb320
+        case "F000": return .flac
+        default: return .kb128
         }
     }
 
@@ -210,6 +268,32 @@ final class DownloadManager {
             return responseExtension
         }
         return quality.defaultFileExtension
+    }
+
+    /// 防止接口返回 HTTP 200 的 JSON/HTML 错误页被保存为歌曲，并阻断音质降级。
+    private func isUsableAudioFile(at url: URL, response: URLResponse) -> Bool {
+        if let mimeType = response.mimeType?.lowercased(),
+           mimeType.contains("text/") || mimeType.contains("json") || mimeType.contains("html") {
+            return false
+        }
+
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let fileSize = attributes[.size] as? NSNumber,
+              fileSize.int64Value > 1024 else {
+            return false
+        }
+
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return true }
+        defer { try? handle.close() }
+        let prefix = (try? handle.read(upToCount: 64)) ?? Data()
+        guard !prefix.isEmpty else { return false }
+        let text = String(data: prefix, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        return !text.hasPrefix("{")
+            && !text.hasPrefix("[")
+            && !text.hasPrefix("<html")
+            && !text.hasPrefix("<!doctype")
     }
 
     private func safeURLSummary(_ url: URL) -> String {

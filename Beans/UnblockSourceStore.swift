@@ -291,20 +291,36 @@ final class UnblockSourceStore: ObservableObject {
 }
 
 extension UnblockSourceStore {
-    func availableThirdPartyQualities(usingFreeSources: Bool) -> [ThirdPartyAudioQuality] {
-        let activeSources = Self.activeSources(from: sources, useFreeSources: usingFreeSources)
+    func availableThirdPartyQualities(
+        usingFreeSources: Bool,
+        usingPaidSources: Bool? = nil
+    ) -> [ThirdPartyAudioQuality] {
+        let includePaid = usingPaidSources ?? !usingFreeSources
+        let activeSources = Self.activeSources(
+            from: sources,
+            useFreeSources: usingFreeSources,
+            includePaidSources: includePaid
+        )
         let options = activeSources
             .flatMap { Self.supportedQualities(for: $0) }
             .uniquePreservingOrder()
         return options.isEmpty ? ThirdPartyAudioQuality.allCases : options
     }
 
-    static func activeSources(from allSources: [ThirdPartySource], useFreeSources: Bool) -> [ThirdPartySource] {
+    static func activeSources(
+        from allSources: [ThirdPartySource],
+        useFreeSources: Bool,
+        includePaidSources: Bool = false
+    ) -> [ThirdPartySource] {
         if singleSourceMode {
             return [singlePresetSource]
         }
         return allSources.filter { source in
-            source.enabled && source.isFree == useFreeSources
+            guard source.enabled else { return false }
+            if source.isFree {
+                return useFreeSources
+            }
+            return includePaidSources
         }
     }
 

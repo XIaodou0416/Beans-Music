@@ -677,21 +677,71 @@ final class QQMusicAPI {
         return try await vkeyURL(songmid: songmid, mediaMid: resolvedMediaMid, br: br, uin: uin, loginKey: loginKey, guid: guid, qqAuth: qqAuth)
     }
 
-    /// 通过 vkey 获取 QQ 音乐播放地址（对齐 wp_MusicApi：GET + data JSON + filename + CDN 分发）
-    /// 登录后携带 uin/loginKey/Cookie；先试 320kbps(M800)，拿不到再退 128kbps(M500)
-    func songURL(songmid: String, mediaMid: String? = nil) async throws -> String? {
+    struct SongURLResult {
+        let url: String
+        let br: String
+        let attemptedBRs: [String]
+    }
+
+    /// 通过 vkey 获取 QQ 音乐播放地址（对齐 wp_MusicApi：GET + data JSON + filename + CDN 分发）。
+    /// 优先请求当前官方音质；会员歌曲在目标档位不可用时，继续尝试兼容档位。
+    func songURL(
+        songmid: String,
+        mediaMid: String? = nil,
+        quality: BeansAudioQuality = .current
+    ) async throws -> String? {
         let qqAuth = QQMusicAuth.shared
         let uin = qqAuth.isLoggedIn ? qqAuth.uin : "0"
         let loginKey = qqAuth.isLoggedIn ? qqAuth.loginKey : ""
         let guid = Self.deviceGuid
         let resolvedMediaMid = await resolveMediaMid(songmid: songmid, provided: mediaMid, qqAuth: qqAuth)
-        // 独家 VIP 曲库并不保证所有 MP3 档位都存在；按 320K、128K、M4A 依次验证回退。
-        for br in ["M800", "M500", "C400"] {
+        let preferredBR = Self.qqBR(for: quality)
+        let fallbackBRs = [preferredBR, "F000", "M800", "M500", "C400"]
+        var seenBRs = Set<String>()
+        // 独家 VIP 曲库并不保证所有档位都存在；避免同一 BR 因不同显示音质重复请求。
+        for br in fallbackBRs where seenBRs.insert(br).inserted {
             if let url = try await vkeyURL(songmid: songmid, mediaMid: resolvedMediaMid, br: br, uin: uin, loginKey: loginKey, guid: guid, qqAuth: qqAuth) {
                 return url
             }
         }
         return nil
+    }
+
+    /// 返回 QQ 实际命中的 BR，供播放器在 AVPlayer 真正失败时继续向下切换。
+    func songURLResult(
+        songmid: String,
+        mediaMid: String? = nil,
+        quality: BeansAudioQuality = .current
+    ) async throws -> SongURLResult? {
+        let qqAuth = QQMusicAuth.shared
+        let uin = qqAuth.isLoggedIn ? qqAuth.uin : "0"
+        let loginKey = qqAuth.isLoggedIn ? qqAuth.loginKey : ""
+        let guid = Self.deviceGuid
+        let resolvedMediaMid = await resolveMediaMid(songmid: songmid, provided: mediaMid, qqAuth: qqAuth)
+        let preferredBR = Self.qqBR(for: quality)
+        let fallbackBRs = [preferredBR, "F000", "M800", "M500", "C400"]
+        var seenBRs = Set<String>()
+        var attemptedBRs: [String] = []
+        for br in fallbackBRs where seenBRs.insert(br).inserted {
+            attemptedBRs.append(br)
+            if let url = try await vkeyURL(
+                songmid: songmid,
+                mediaMid: resolvedMediaMid,
+                br: br,
+                uin: uin,
+                loginKey: loginKey,
+                guid: guid,
+                qqAuth: qqAuth
+            ) {
+                return SongURLResult(url: url, br: br, attemptedBRs: attemptedBRs)
+            }
+        }
+        return nil
+    }
+
+    /// 兼容旧调用方：使用当前官方播放音质。
+    func songURL(songmid: String, mediaMid: String? = nil) async throws -> String? {
+        try await songURL(songmid: songmid, mediaMid: mediaMid, quality: .current)
     }
 
     /// 搜索接口经常不返回 file.media_mid；独家 VIP 歌曲的 media_mid 又常与 songmid 不同，必须补拉详情。
@@ -746,10 +796,16 @@ final class QQMusicAPI {
             "songmid": Array(repeating: songmid, count: filenames.count),
             "songtype": Array(repeating: 0, count: filenames.count),
             "uin": uin,
-            "loginflag": 1,
+            "loginflag": qqAuth.isLoggedIn ? 1 : 0,
             "platform": "20",
         ]
-        var comm: [String: Any] = ["uin": Int(uin) ?? 0, "format": "json", "ct": loginKey.isEmpty ? 24 : 19, "cv": 0]
+        var comm: [String: Any] = [
+            "uin": Int(uin) ?? 0,
+            "format": "json",
+            "ct": loginKey.isEmpty ? 24 : 19,
+            "cv": 0,
+            "g_tk": qqAuth.gtk,
+        ]
         if !loginKey.isEmpty { comm["authst"] = loginKey }
         let payload: [String: Any] = [
             "comm": comm,
@@ -775,6 +831,7 @@ final class QQMusicAPI {
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0", forHTTPHeaderField: "User-Agent")
         request.setValue("https://y.qq.com/", forHTTPHeaderField: "Referer")
+        request.setValue("https://y.qq.com", forHTTPHeaderField: "Origin")
         request.setValue(qqAuth.isLoggedIn ? qqAuth.cookieHeader : "uin=0; qqmusic_fromtag=66", forHTTPHeaderField: "Cookie")
         let (responseData, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200,
@@ -789,7 +846,8 @@ final class QQMusicAPI {
             return nil
         }
         let sips = reqData["sip"] as? [String] ?? []
-        let cdnBases = sips.isEmpty ? ["https://isure.stream.qqmusic.qq.com/"] : sips
+        let cdnBases = Self.qqCDNBases(from: sips)
+        var unverifiedCandidate: String?
         for info in playableInfos {
             guard let purl = info["purl"] as? String, !purl.isEmpty else { continue }
             let candidateURLs: [String]
@@ -798,36 +856,67 @@ final class QQMusicAPI {
             } else {
                 candidateURLs = cdnBases.map { base in
                     let secureBase = base.hasPrefix("http://") ? "https://" + String(base.dropFirst("http://".count)) : base
-                    return secureBase + purl
+                    let suffix = purl.hasPrefix("/") ? String(purl.dropFirst()) : purl
+                    return secureBase + suffix
                 }
             }
             for candidate in candidateURLs {
                 guard let url = URL(string: candidate) else { continue }
-                if await probeAudioURL(url, cookie: qqAuth.isLoggedIn ? qqAuth.cookieHeader : "") {
+                unverifiedCandidate = unverifiedCandidate ?? candidate
+                switch await probeAudioURL(url, cookie: qqAuth.isLoggedIn ? qqAuth.cookieHeader : "") {
+                case .playable:
                     let filename = info["filename"] as? String ?? "unknown"
                     BeansLogger.shared.log("QQ 音频地址验证成功：音质=\(br) 文件=\(filename)", level: .debug)
                     return candidate
+                case .forbidden:
+                    continue
+                case .indeterminate:
+                    unverifiedCandidate = unverifiedCandidate ?? candidate
                 }
             }
+        }
+        // 某些 QQ CDN 不支持 Range 探测，但 AVPlayer 携带 Referer/Cookie 仍可播放。
+        // 不要把“探测被拒绝”误判成会员没有播放权限，交给播放器继续验证。
+        if let unverifiedCandidate {
+            BeansLogger.shared.log("QQ CDN 拒绝预探测，保留地址交给 AVPlayer：音质=\(br)", level: .debug)
+            return unverifiedCandidate
         }
         BeansLogger.shared.log("QQ vkey 返回地址但 CDN 验证失败：音质=\(br) 候选=\(playableInfos.count)", level: .debug)
         return nil
     }
 
+    private enum AudioProbeResult {
+        case playable
+        case forbidden
+        case indeterminate
+    }
+
     /// 在交给 AVPlayer 前验证 CDN，避免 purl 非空但实际 404 的假成功地址。
-    private func probeAudioURL(_ url: URL, cookie: String) async -> Bool {
+    private func probeAudioURL(_ url: URL, cookie: String) async -> AudioProbeResult {
         var request = URLRequest(url: url)
         request.timeoutInterval = 6
         request.setValue("bytes=0-2047", forHTTPHeaderField: "Range")
         request.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:80.0) Gecko/20100101 Firefox/80.0", forHTTPHeaderField: "User-Agent")
         request.setValue("https://y.qq.com/", forHTTPHeaderField: "Referer")
+        request.setValue("https://y.qq.com", forHTTPHeaderField: "Origin")
         if !cookie.isEmpty { request.setValue(cookie, forHTTPHeaderField: "Cookie") }
         guard let (data, response) = try? await session.data(for: request),
-              let http = response as? HTTPURLResponse,
-              http.statusCode == 200 || http.statusCode == 206,
-              !data.isEmpty else { return false }
+              let http = response as? HTTPURLResponse else {
+            // 超时、TLS/CDN 节点暂时不支持 Range 等情况不能证明会员地址失效，
+            // 交给 AVPlayer 继续尝试，避免把有效地址错误降级到最低音质。
+            return .indeterminate
+        }
+        if [403, 404, 410, 451].contains(http.statusCode) {
+            return .forbidden
+        }
+        guard http.statusCode == 200 || http.statusCode == 206, !data.isEmpty else {
+            return .indeterminate
+        }
         let contentType = (http.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
-        return !contentType.contains("text/html") && !contentType.contains("application/json")
+        if contentType.contains("text/html") || contentType.contains("application/json") {
+            return .forbidden
+        }
+        return .playable
     }
 
     /// 固定设备 GUID（持久化）：vkey 与 guid 强相关，随机 guid 会导致播放地址失效
@@ -839,6 +928,42 @@ final class QQMusicAPI {
         let guid = String(format: "%09d", Int.random(in: 100000000...999999999))
         UserDefaults.standard.set(guid, forKey: key)
         return guid
+    }
+
+    private static func qqBR(for quality: BeansAudioQuality) -> String {
+        switch quality {
+        case .standard: return "M500"
+        case .higher, .exhigh: return "M800"
+        case .lossless, .hires: return "F000"
+        }
+    }
+
+    /// QQ 返回的 SIP 可能只包含当前分配到的节点。保留官方节点的同时补充
+    /// 常见备用 CDN，避免会员地址只落到一个临时失效节点。
+    private static func qqCDNBases(from sips: [String]) -> [String] {
+        let fallbacks = [
+            "https://isure.stream.qqmusic.qq.com/",
+            "https://dl.stream.qqmusic.qq.com/",
+            "https://ws.stream.qqmusic.qq.com/",
+            "https://streamoc.music.tc.qq.com/",
+        ]
+        var result: [String] = []
+        var seen = Set<String>()
+        for raw in sips + fallbacks {
+            var base = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !base.isEmpty else { continue }
+            if !base.hasPrefix("http://") && !base.hasPrefix("https://") {
+                base = "https://" + base
+            }
+            if !base.hasSuffix("/") {
+                base += "/"
+            }
+            let key = base.lowercased()
+            if seen.insert(key).inserted {
+                result.append(base)
+            }
+        }
+        return result
     }
 
     /// QQ 音乐歌词（LRC 文本）

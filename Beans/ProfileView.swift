@@ -1228,7 +1228,7 @@ struct SettingsView: View {
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     /// 官方地址不可用时，是否尝试第三方音源
     @AppStorage("beans.enableUnblock") private var enableBuiltInSources = true
-    /// 免费音源和付费音源只能选择一个模式
+    /// 免费音源与付费音源可以同时启用，解析时会合并尝试两类音源。
     @AppStorage("beans.useFreeAudioSource") private var enableFreeSources = false
     /// 第三方音源播放会员歌成功时提醒，默认开启
     @AppStorage("beans.showThirdPartyVIPNotice") private var showThirdPartyVIPNotice = true
@@ -1310,28 +1310,15 @@ struct SettingsView: View {
     private var paidSourceBinding: Binding<Bool> {
         Binding(
             get: { enableBuiltInSources },
-            set: { enabled in
-                enableBuiltInSources = enabled
-                if enabled { enableFreeSources = false }
-            }
+            set: { enableBuiltInSources = $0 }
         )
     }
 
     private var freeSourceBinding: Binding<Bool> {
         Binding(
             get: { enableFreeSources },
-            set: { enabled in
-                enableFreeSources = enabled
-                if enabled { enableBuiltInSources = false }
-            }
+            set: { enableFreeSources = $0 }
         )
-    }
-
-    private func normalizeSourceMode() {
-        // 兼容旧版本可能同时保存为 true 的异常状态，优先保留付费音源模式。
-        if enableBuiltInSources && enableFreeSources {
-            enableFreeSources = false
-        }
     }
 
     private var presetSourceCount: Int {
@@ -1339,7 +1326,10 @@ struct SettingsView: View {
     }
 
     private var thirdPartyAudioQualityOptions: [ThirdPartyAudioQuality] {
-        let options = sourceStore.availableThirdPartyQualities(usingFreeSources: enableFreeSources)
+        let options = sourceStore.availableThirdPartyQualities(
+            usingFreeSources: enableFreeSources,
+            usingPaidSources: enableBuiltInSources
+        )
         return options.isEmpty ? ThirdPartyAudioQuality.allCases : options
     }
 
@@ -1599,7 +1589,6 @@ struct SettingsView: View {
         }
         .preferredColorScheme(themeMode.colorScheme)
         .onAppear {
-            normalizeSourceMode()
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
         }
         .sheet(isPresented: $showWallpaperPicker) {
@@ -2549,7 +2538,7 @@ struct SettingsView: View {
                             Text("使用第三方音源")
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text(beansLocalized("开启后会自动关闭免费音源", "Enabling this automatically turns off free sources."))
+                            Text(beansLocalized("官方地址不可用时尝试已启用的付费音源。", "Use enabled paid sources when the official address is unavailable."))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -2568,7 +2557,7 @@ struct SettingsView: View {
                             Text(beansLocalized("使用免费音源", "Use free sources"))
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
-                            Text(beansLocalized("开启后会自动关闭付费音源", "Enabling this automatically turns off paid sources."))
+                            Text(beansLocalized("使用已启用的免费音源作为解析来源。", "Use enabled free sources as an alternate resolver."))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
