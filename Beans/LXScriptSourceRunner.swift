@@ -220,7 +220,7 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
 
     init(runtimeQueue: DispatchQueue, source: ThirdPartySource, script: String) {
         self.runtimeQueue = runtimeQueue
-        self.version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.6.4"
+        self.version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.6.5"
         self.currentScriptInfo = [
             "name": source.name,
             "version": source.headers["version"] ?? "",
