@@ -114,8 +114,6 @@ final class PlayerManager: NSObject, ObservableObject {
     private var finalizedFailureSongKey: String?
     /// QQ 官方地址返回成功但实际不可播放时，只切换到第三方一次，避免官方/第三方之间循环。
     private var qqThirdPartyFallbackSongKey: String?
-    /// QQ 普通第三方链路全部失败后，guoyue2010 旧源只允许再尝试一次。
-    private var qqLegacyFallbackSongKey: String?
     private var playbackConfirmationWorkItem: DispatchWorkItem?
     private var playbackStallWorkItem: DispatchWorkItem?
     private static let nowPlayingArtworkCache = NSCache<NSURL, UIImage>()
@@ -124,7 +122,6 @@ final class PlayerManager: NSObject, ObservableObject {
     private let countsKey = "beans.playcounts"
     private let playbackStateKey = "beans.player.playbackState.v1"
     private let audioMixKey = "beans.audio.mixothers.v1"
-    private let resumeAfterInterruptionKey = "beans.playback.resumeAfterInterruption"
     private let playModeKey = "beans.player.playMode"
     private let autoSkipOnFailureKey = "beans.playback.autoSkipOnFailure"
     private let autoResumeLastPlaybackKey = "beans.playback.autoResumeLast"
@@ -493,7 +490,6 @@ final class PlayerManager: NSObject, ObservableObject {
         playbackStallWorkItem?.cancel()
         playbackStallWorkItem = nil
         qqThirdPartyFallbackSongKey = nil
-        qqLegacyFallbackSongKey = nil
         let initialProgress = max(0, min(resumeAt ?? 0, max(song.duration, 0)))
         // 切歌立即暂停旧音频，避免新歌加载期间旧歌继续播放造成“切歌卡住”感
         player?.pause()
@@ -552,8 +548,7 @@ final class PlayerManager: NSObject, ObservableObject {
                         quality: quality,
                         thirdPartyQuality: thirdPartyQuality,
                         enableUnblock: enableUnblock,
-                        strict: strictUnlock,
-                        allowLegacyQQFallback: true
+                        strict: strictUnlock
                     )
                 }
             } else {
@@ -652,9 +647,7 @@ final class PlayerManager: NSObject, ObservableObject {
         thirdPartyQuality: ThirdPartyAudioQuality = .current,
         enableUnblock: Bool,
         strict: Bool = false,
-        excludedHosts: Set<String> = [],
-        allowLegacyQQFallback: Bool = false,
-        onlyLegacyQQFallback: Bool = false
+        excludedHosts: Set<String> = []
     ) async -> (String?, UnblockService.Resolved?) {
         guard enableUnblock else {
             BeansLogger.shared.log("QQ兜底：\(song.name) 第三方=未启用", level: .debug)
@@ -670,37 +663,10 @@ final class PlayerManager: NSObject, ObservableObject {
             qqMediaMid: song.qqMediaMid,
             quality: thirdPartyQuality,
             strict: strict,
-            excludedHosts: excludedHosts,
-            allowLegacyQQFallback: allowLegacyQQFallback,
-            onlyLegacyQQFallback: onlyLegacyQQFallback
+            excludedHosts: excludedHosts
         )
-        if let resolved {
-            BeansLogger.shared.log("QQ兜底：\(song.name) QQ第三方=\(resolved.sourceTitle) 命中", level: .debug)
-            return (nil, resolved)
-        }
-        guard allowLegacyQQFallback, !onlyLegacyQQFallback else {
-            BeansLogger.shared.log("QQ兜底：\(song.name) QQ第三方=未命中", level: .debug)
-            return (nil, nil)
-        }
-        let legacy = await UnblockService.resolve(
-            name: song.name,
-            artists: song.artists,
-            neteaseID: song.id,
-            songSource: .qq,
-            qqMid: song.qqMid,
-            qqMediaMid: song.qqMediaMid,
-            quality: thirdPartyQuality,
-            strict: strict,
-            excludedHosts: excludedHosts,
-            allowLegacyQQFallback: true,
-            onlyLegacyQQFallback: true
-        )
-        if let legacy {
-            BeansLogger.shared.log("QQ兜底：\(song.name) guoyue2010 备用源命中（仅付费源失败后）", level: .info)
-            return (nil, legacy)
-        }
-        BeansLogger.shared.log("QQ兜底：\(song.name) QQ第三方与 guoyue2010 备用源均未命中", level: .debug)
-        return (nil, nil)
+        BeansLogger.shared.log("QQ兜底：\(song.name) QQ第三方=\(resolved != nil ? "命中" : "未命中")", level: .debug)
+        return (nil, resolved)
     }
 
     /// 酷狗兜底：官方播放失败后使用内置音源作为备选。
@@ -818,9 +784,6 @@ final class PlayerManager: NSObject, ObservableObject {
                 "第三方播放地址重试停止：歌曲=\(song.name)｜已无更低可用音质｜当前=\(currentQuality.rawValue)",
                 level: .debug
             )
-            if song.source == .qq, fallbackQQLegacyIfNeeded() {
-                return true
-            }
             return false
         }
         attemptedThirdPartyQualitiesBySong[song.identityKey, default: []].insert(thirdPartyQuality.rawValue)
@@ -833,9 +796,6 @@ final class PlayerManager: NSObject, ObservableObject {
                 "第三方播放地址重试停止：歌曲=\(song.name)｜已排除域名=\(excludedHosts.sorted().joined(separator: ","))",
                 level: .debug
             )
-            if song.source == .qq, fallbackQQLegacyIfNeeded() {
-                return true
-            }
             return false
         }
         thirdPartyRetryExcludedHostsBySong[song.identityKey] = excludedHosts
@@ -941,67 +901,6 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     @discardableResult
-    private func fallbackQQLegacyIfNeeded() -> Bool {
-        guard let song = currentSong,
-              song.source == .qq,
-              externalSourcesEnabled,
-              defaults.object(forKey: "beans.enableUnblock") as? Bool ?? true,
-              UnblockSourceStore.hasPaidAudioSourceUsageRecord,
-              qqLegacyFallbackSongKey != song.identityKey else { return false }
-        if playbackRecoveryInFlightSongKey == song.identityKey {
-            return true
-        }
-
-        qqLegacyFallbackSongKey = song.identityKey
-        playbackRecoveryInFlightSongKey = song.identityKey
-        let generation = loadGeneration
-        let resume = progress
-        let strict = shouldLockOfficialOnly(song)
-        let thirdPartyQuality = activeThirdPartyQuality ?? ThirdPartyAudioQuality.current
-        BeansLogger.shared.log(
-            "QQ 普通第三方链路全部失败，尝试 guoyue2010 备用源：歌曲=\(song.name)",
-            level: .debug
-        )
-        Task {
-            let (_, resolved) = await self.qqFallback(
-                song: song,
-                quality: BeansAudioQuality.current,
-                thirdPartyQuality: thirdPartyQuality,
-                enableUnblock: true,
-                strict: strict,
-                allowLegacyQQFallback: true,
-                onlyLegacyQQFallback: true
-            )
-            await MainActor.run {
-                guard generation == self.loadGeneration,
-                      self.currentSong?.identityKey == song.identityKey else {
-                    if self.playbackRecoveryInFlightSongKey == song.identityKey {
-                        self.playbackRecoveryInFlightSongKey = nil
-                    }
-                    return
-                }
-                self.playbackRecoveryInFlightSongKey = nil
-                if let resolved {
-                    self.setupPlayer(
-                        url: resolved.url,
-                        thirdPartyVIPNotice: self.thirdPartyVIPNotice(for: song, sourceTitle: resolved.sourceTitle),
-                        resumeAt: resume,
-                        isThirdParty: true,
-                        thirdPartyQuality: resolved.quality
-                    )
-                    BeansLogger.shared.log(
-                        "QQ guoyue2010 备用源播放地址命中：\(song.name)｜域名=\(resolved.url.host ?? "?")",
-                        level: .info
-                    )
-                } else {
-                    self.finishUnrecoverablePlaybackFailure(song: song, reason: "QQ 第三方与备用源均解析失败")
-                }
-            }
-        }
-        return true
-    }
-
-    @discardableResult
     private func fallbackQQToThirdPartyIfNeeded() -> Bool {
         guard let song = currentSong,
               song.source == .qq,
@@ -1029,8 +928,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 quality: BeansAudioQuality.current,
                 thirdPartyQuality: thirdPartyQuality,
                 enableUnblock: true,
-                strict: strict,
-                allowLegacyQQFallback: true
+                strict: strict
             )
             await MainActor.run {
                 guard generation == self.loadGeneration,
@@ -1658,26 +1556,17 @@ final class PlayerManager: NSObject, ObservableObject {
               let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
         switch type {
         case .began:
-            // 开启「与其他音频同时播放」时，不被其他 App 音频中断，保持继续播放
-            guard !mixesWithOthers else {
-                wasPlayingBeforeInterruption = false
-                return
-            }
             wasPlayingBeforeInterruption = isPlaying
+            // 开启「与其他音频同时播放」时，不被其他 App 音频中断，保持继续播放
+            guard !mixesWithOthers else { return }
             player?.pause()
             isPlaying = false
         case .ended:
             // 中断结束后系统可能停用了音频会话，重新激活避免无声
-            let shouldResume = wasPlayingBeforeInterruption && resumeAfterInterruption && currentSong != nil
             sessionConfigured = false
             configureAudioSession()
             wasPlayingBeforeInterruption = false
-            if shouldResume {
-                player?.playImmediately(atRate: Float(rate))
-                isPlaying = true
-            } else {
-                isPlaying = false
-            }
+            isPlaying = false
             updateNowPlaying()
         @unknown default:
             break
@@ -1851,12 +1740,6 @@ final class PlayerManager: NSObject, ObservableObject {
             sessionConfigured = false
             configureAudioSession()
         }
-    }
-
-    /// 音频中断结束后，按用户选择恢复中断前正在播放的歌曲。
-    var resumeAfterInterruption: Bool {
-        get { defaults.object(forKey: resumeAfterInterruptionKey) as? Bool ?? false }
-        set { defaults.set(newValue, forKey: resumeAfterInterruptionKey) }
     }
 
 }

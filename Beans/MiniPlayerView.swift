@@ -158,7 +158,6 @@ struct MiniPlayerView: View {
         }
     }
 
-    @MainActor
     private func loadMiniLyrics() async {
         miniLyrics = []
         guard let song = player.currentSong else { return }

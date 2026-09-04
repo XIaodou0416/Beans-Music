@@ -44,6 +44,5 @@ struct HistoryView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
-        .beansDetailMiniPlayer()
     }
 }

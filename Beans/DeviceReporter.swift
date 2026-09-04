@@ -203,8 +203,8 @@ final class DeviceReporter {
                 NotificationCenter.default.post(name: .beansBackendBlockStateDidChange, object: nil)
             }
         }
-        if let downloadUnlocked = response.downloadUnlocked {
-            UserDefaults.standard.set(downloadUnlocked, forKey: BeansBackendSettings.downloadUnlockKey)
+        if response.downloadUnlocked == true {
+            UserDefaults.standard.set(true, forKey: BeansBackendSettings.downloadUnlockKey)
         }
     }
 

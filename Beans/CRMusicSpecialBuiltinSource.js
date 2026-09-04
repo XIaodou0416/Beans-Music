@@ -1,19 +1,19 @@
 /*!
- * @name 聆澜音源(赞助版)[过期: 26-09-11 16:31:05]
+ * @name 聆澜音源(赞助版)[过期: 26-09-04 19:56:38]
  * @description 澜音插件 支持所有主流平台全音质
- * @version v8.2
+ * @version v8.1
  * @author 时迁酱&guoyue2010
  * @homepage https://source.shiqianjiang.cn
  */
 
 // 插件信息
 const pluginInfo = {
-  name: "聆澜音源(赞助版)[过期: 26-09-11 16:31:05]",
-  version: "v8.2",
+  name: "聆澜音源(赞助版)[过期: 26-09-04 19:56:38]",
+  version: "v8.1",
   author: "时迁酱&guoyue2010",
   description: "澜音插件 支持所有主流平台全音质",
-  updateMd5: "8942c20110260dfdca5efd0f4f19ea1a",
-  apiKey: "CERU_KEY-F987A290-4602-45C4-B049-AC5CC834526A",
+  updateMd5: "8b90aa0565db383348891653396e2fb2",
+  apiKey: "CERU_KEY-009D12E5-95CF-42FE-A518-9525F2A0D74A",
   type:'cr'
 };
 
@@ -28,14 +28,6 @@ const sources = {
 };
 // api 地址
 const apiUrl = 'https://source.shiqianjiang.cn';
-let requestSequence = 0;
-
-// 客户端生成的 requestId 会通过请求头传给服务端，便于两端日志精确关联。
-function createRequestId(prefix = 'cr') {
-  requestSequence += 1;
-  return `${prefix}-${Date.now()}-${requestSequence}`;
-}
-
 // 获取工具函数
 const { request, NoticeCenter, version } = cerumusic;
 
@@ -46,9 +38,7 @@ function pluginName(source) {
 
 // 获取音乐链接的主要方法
 async function musicUrl(source, musicInfo, quality) {
-  const requestId = createRequestId();
-  const requestLabel = `[request:${requestId}]`;
-  console.log(requestLabel, '收到解析请求', { source, quality });
+  console.log('收到解析请求', '-------------不优雅的分割线-------------');
   try {
     // 检查source是否有效
     if (!sources[source]) {
@@ -68,7 +58,7 @@ async function musicUrl(source, musicInfo, quality) {
       throw new Error('音乐ID不存在');
     }
     console.log(
-      `${pluginName(source)} ${requestLabel} 请求音乐链接: 歌曲ID: ${songId}, 音质: ${quality}`,
+      `${pluginName(source)} 请求音乐链接: 歌曲ID: ${songId}, 音质: ${quality}`,
     );
     // 使用 cerumusic API 发送 HTTP 请求
     const result = await request(
@@ -78,33 +68,25 @@ async function musicUrl(source, musicInfo, quality) {
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': pluginInfo.apiKey,
-          'X-Request-ID': requestId,
           'User-Agent': `CeruMusic-Plugin/${pluginInfo.version}`,
         },
         timeout: 15000,
       },
     );
-    console.info(
-      `${pluginName(source)} ${requestLabel} 请求响应数据:`,
-      result.body,
-    );
+    console.info(`${pluginName(source)} 请求响应数据:`, result.body);
     console.log(
-      `${pluginName(source)} ${requestLabel} 请求结束，响应状态码: ${result.statusCode}`,
+      `${pluginName(source)} 请求结束，响应状态码: ${result.statusCode}`,
     );
-    if (
-      result.statusCode === 200 &&
-      result.body &&
-      (result.body.code === 0 || result.body.code === 200)
-    ) {
+    if (result.statusCode === 200 && result.body && result.body.code === 200) {
       if (result.body.url) {
         console.log(
-          `${pluginName(source)} ${requestLabel} 获取音乐链接成功: ${songId}, 音质: ${quality}, 链接: ${result.body.url}`,
+          `${pluginName(source)} 获取音乐链接成功: ${songId}, 音质: ${quality}, 链接: ${result.body.url}`,
         );
         return result.body.url;
       } else {
         throw new Error('返回数据中没有音乐链接');
       }
-    } else if (result.body && result.body.code != null) {
+    } else if (result.body && result.body.code) {
       switch (result.body.code) {
         case 403:
           // 发送错误通知
@@ -134,14 +116,12 @@ async function musicUrl(source, musicInfo, quality) {
       throw new Error(`HTTP请求失败: ${result.statusCode}`);
     }
   } catch (error) {
-    const name = sources[source] ? pluginName(source) : `[${pluginInfo.name}]`;
-    console.error(`${name} ${requestLabel} 获取音乐链接失败:`, error.message);
+    console.error(`${pluginName(source)} 获取音乐链接失败:`, error.message);
     throw new Error(error.message ?? error);
   }
 }
 
 const checkUpdate = async () => {
-  const requestId = createRequestId('cr-update');
   try {
     const { body } = await request(
       `${apiUrl}/script?checkUpdate=${pluginInfo.updateMd5}&key=${pluginInfo.apiKey}&type=${pluginInfo.type}`,
@@ -149,17 +129,13 @@ const checkUpdate = async () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'X-Request-ID': requestId,
           'User-Agent': `CeruMusic-Plugin/${pluginInfo.version}`,
         },
       },
     );
-    console.log(`[update:${requestId}] 版本更新检测响应:`, body);
+    console.log('版本更新检测响应:', body);
     if (!body || body.code !== 200) {
-      console.error(
-        `[update:${requestId}] 版本更新检测失败:`,
-        body.message || '未知错误',
-      );
+      console.error('版本更新检测失败:', body.message || '未知错误');
     } else {
       if (body.data != null) {
         NoticeCenter('update', {
@@ -173,14 +149,16 @@ const checkUpdate = async () => {
           }, // 当通知为update 版本跟新可传
         });
       } else {
-        console.log(`[update:${requestId}] ${pluginInfo.name} 没有新的版本`);
+        console.log(`${pluginInfo.name} 没有新的版本`);
       }
     }
   } catch (error) {
-    console.error(`[update:${requestId}] checkUpdate error:`, error);
+    console.error('checkUpdate error:', error);
   }
 };
-checkUpdate();
+checkUpdate().then(() => {
+  console.log('版本更新检测完成');
+});
 // LocalParsedVersion >= 1.0.4
 const parseVersion = (v) => {
   return v

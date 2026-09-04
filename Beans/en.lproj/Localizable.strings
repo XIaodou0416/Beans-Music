@@ -784,8 +784,6 @@
 "有" = "Yes";
 "右倾 \\(lyricTiltY)°" = "\\(lyricTiltY)°";
 "与其他音频同时播放" = "Play Alongside Other Audio";
-"其他音频结束后继续播放" = "Resume Playback When Other Audio Ends";
-"其他音频打断后，结束时恢复当前歌曲" = "Resume the Current Song After the Interrupting Audio Ends.";
 "语言" = "Language";
 "预览歌词" = "Preview Lyrics";
 "预览歌词颜色" = "Preview Lyrics Color";
@@ -1035,6 +1033,9 @@
 "已同步 %d 首，新增 %d 首到本地歌单“%@”" = "Synced %d songs and added %d new songs to local playlist %@";
 "最近播放 %d 首" = "Recently Played %d Songs";
 "排行榜封面" = "Chart Covers";
+"搜索榜单歌曲" = "Search chart songs";
+"搜索歌单内歌曲" = "Search songs in this playlist";
+"搜索每日推荐" = "Search daily recommendations";
 "每天 6:00 更新" = "Refreshes at 6:00 daily";
 "%d 首 · 每天 6:00 更新" = "%d songs · refreshes at 6:00 daily";
 "推荐歌单" = "Recommended Playlists";

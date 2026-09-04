@@ -98,7 +98,6 @@ final class UnblockSourceStore: ObservableObject {
             template: paidURLTemplate,
             headers: paidHeaders,
             quality: "320k",
-            script: LXMusicBuiltinSource.script,
             isPreset: true
         ),
         ThirdPartySource(
@@ -108,7 +107,6 @@ final class UnblockSourceStore: ObservableObject {
             template: paidURLTemplate,
             headers: paidHeaders,
             quality: "320k",
-            script: CRMusicSpecialBuiltinSource.script,
             isPreset: true
         ),
         ThirdPartySource(
@@ -118,7 +116,6 @@ final class UnblockSourceStore: ObservableObject {
             template: paidURLTemplate,
             headers: paidHeaders,
             quality: "320k",
-            script: QTMusicBuiltinSource.script,
             isPreset: true
         ),
         ThirdPartySource(

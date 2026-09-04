@@ -927,7 +927,6 @@ struct AlbumDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .task { await load() }
-        .beansDetailMiniPlayer()
     }
 
     private func load() async {

@@ -113,7 +113,6 @@ struct CommentsSheet: View {
         .beansScrollContentBackgroundHidden()
     }
 
-    @MainActor
     private func load(reset: Bool) async {
         if reset {
             offset = 0
