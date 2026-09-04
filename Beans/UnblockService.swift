@@ -41,21 +41,11 @@ enum UnblockService {
         guard hasSongIdentity else { return nil }
         let usePaidAudioSource = UserDefaults.standard.object(forKey: "beans.enableUnblock") as? Bool ?? true
         let useFreeAudioSource = UserDefaults.standard.object(forKey: "beans.useFreeAudioSource") as? Bool ?? true
-        let hasPaidAudioSourceUsage = UnblockSourceStore.hasPaidAudioSourceUsageRecord
         let sources = UnblockSourceStore.shared.sources
             .filter { source in
                 guard source.enabled else { return false }
                 if UnblockSourceStore.singleSourceMode {
                     return source.id == UnblockSourceStore.singleSourceID
-                }
-                // The paid-source usage gate is for bundled paid presets. An explicitly
-                // imported source must remain usable so importing an LX/Baka script works
-                // independently of the bundled-source entitlement state.
-                if songSource == .qq,
-                   !hasPaidAudioSourceUsage,
-                   source.isPreset,
-                   !source.isFree {
-                    return false
                 }
                 let sourceModeEnabled = source.isFree ? useFreeAudioSource : usePaidAudioSource
                 return sourceModeEnabled && (
@@ -73,6 +63,91 @@ enum UnblockService {
             )
             return nil
         }
+
+        // QQ 必须先尝试内置付费源；只有本次确实存在并尝试了付费源仍未命中时，
+        // 才允许调用 guoyue2010 稳定源。历史上是否播放过 VIP 歌曲不再参与判断。
+        if songSource == .qq {
+            let builtInPaidSources = sources.filter {
+                $0.isPreset
+                    && !$0.isFree
+                    && $0.id != UnblockSourceStore.legacyQQFallbackSourceID
+            }
+            if let resolved = await resolveSources(
+                builtInPaidSources,
+                name: name,
+                artists: artists,
+                neteaseID: neteaseID,
+                songSource: songSource,
+                qqMid: qqMid,
+                qqMediaMid: qqMediaMid,
+                kugouID: kugouID,
+                quality: quality,
+                excludedHosts: excludedHosts
+            ) {
+                return resolved
+            }
+
+            if !builtInPaidSources.isEmpty,
+               let legacyQQSource = sources.first(where: {
+                   $0.id == UnblockSourceStore.legacyQQFallbackSourceID
+               }),
+               let resolved = await resolveSources(
+                   [legacyQQSource],
+                   name: name,
+                   artists: artists,
+                   neteaseID: neteaseID,
+                   songSource: songSource,
+                   qqMid: qqMid,
+                   qqMediaMid: qqMediaMid,
+                   kugouID: kugouID,
+                   quality: quality,
+                   excludedHosts: excludedHosts
+               ) {
+                BeansLogger.shared.log("QQ 内置付费源失败，切换 guoyue2010 备选源：\(name)", level: .info)
+                return resolved
+            }
+
+            return await resolveSources(
+                sources.filter(\.isFree),
+                name: name,
+                artists: artists,
+                neteaseID: neteaseID,
+                songSource: songSource,
+                qqMid: qqMid,
+                qqMediaMid: qqMediaMid,
+                kugouID: kugouID,
+                quality: quality,
+                excludedHosts: excludedHosts
+            )
+        }
+
+        return await resolveSources(
+            sources,
+            name: name,
+            artists: artists,
+            neteaseID: neteaseID,
+            songSource: songSource,
+            qqMid: qqMid,
+            qqMediaMid: qqMediaMid,
+            kugouID: kugouID,
+            quality: quality,
+            excludedHosts: excludedHosts
+        )
+    }
+
+    private static func resolveSources(
+        _ sources: [ThirdPartySource],
+        name: String,
+        artists: String,
+        neteaseID: Int,
+        songSource: SongSource,
+        qqMid: String?,
+        qqMediaMid: String?,
+        kugouID: String?,
+        quality: ThirdPartyAudioQuality,
+        excludedHosts: Set<String>
+    ) async -> Resolved? {
+        guard !sources.isEmpty else { return nil }
 
         // LX、CR、QT 三个预设最终访问同一个接口，只保留每个请求指纹的第一个，
         // 避免同一首歌重复请求同一个服务，尤其避免酷狗回退时触发请求风暴。

@@ -74,8 +74,9 @@ final class UnblockSourceStore: ObservableObject {
     static let singleSourceMode = false
     static let singleSourceID = "beans.special.cr.v1"
     /// 仅从音源管理列表隐藏的内置源。播放解析仍保留这些源。
+    static let legacyQQFallbackSourceID = "beans.preset.legacy.guoyue.qq.v1"
     static let managementHiddenSourceIDs: Set<String> = [
-        "beans.preset.legacy.guoyue.qq.v1"
+        legacyQQFallbackSourceID
     ]
 
     private static let paidAPIURL = "https://source.shiqianjiang.cn/api/music"

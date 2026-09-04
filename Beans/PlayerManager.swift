@@ -112,6 +112,8 @@ final class PlayerManager: NSObject, ObservableObject {
     private var playbackRecoveryInFlightSongKey: String?
     /// 同一首歌的多个 AVFoundation 失败回调只允许弹一次提示并自动切歌一次。
     private var finalizedFailureSongKey: String?
+    /// 播放失败后延迟自动切歌，避免失败回调刚到就立刻跳过歌曲。
+    private var failureAutoSkipWorkItem: DispatchWorkItem?
     /// QQ 官方地址返回成功但实际不可播放时，只切换到第三方一次，避免官方/第三方之间循环。
     private var qqThirdPartyFallbackSongKey: String?
     private var playbackConfirmationWorkItem: DispatchWorkItem?
@@ -487,6 +489,8 @@ final class PlayerManager: NSObject, ObservableObject {
         activeQQOfficialBR = nil
         playbackRecoveryInFlightSongKey = nil
         finalizedFailureSongKey = nil
+        failureAutoSkipWorkItem?.cancel()
+        failureAutoSkipWorkItem = nil
         playbackStallWorkItem?.cancel()
         playbackStallWorkItem = nil
         qqThirdPartyFallbackSongKey = nil
@@ -1212,8 +1216,8 @@ final class PlayerManager: NSObject, ObservableObject {
         let failureMessage: String
         if shouldAutoSkip && queue.count > 1 {
             failureMessage = beansLocalized(
-                "播放失败，已自动切换到下一首",
-                "Playback failed. Automatically switched to the next song."
+                "播放失败，10秒后自动切换到下一首",
+                "Playback failed. The next song will start in 10 seconds."
             )
         } else {
             failureMessage = message ?? beansLocalized(
@@ -1226,7 +1230,21 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         guard shouldAutoSkip, queue.count > 1 else { return }
         BeansLogger.shared.log("播放失败自动下一首：\(failedSong.name)｜原因=\(reason)", level: .info)
-        next(manual: false)
+        let failedSongKey = failedSong.identityKey
+        let failedGeneration = loadGeneration
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.loadGeneration == failedGeneration,
+                  self.currentSong?.identityKey == failedSongKey,
+                  self.finalizedFailureSongKey == failedSongKey else {
+                return
+            }
+            self.failureAutoSkipWorkItem = nil
+            self.next(manual: false)
+        }
+        failureAutoSkipWorkItem?.cancel()
+        failureAutoSkipWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: workItem)
     }
 
     private func ensurePlaybackAllowed() -> Bool {
@@ -1283,6 +1301,8 @@ final class PlayerManager: NSObject, ObservableObject {
         guard defaults.bool(forKey: BeansBackendSettings.blockedKey) else { return }
         loadGeneration += 1
         playbackConfirmationWorkItem?.cancel()
+        failureAutoSkipWorkItem?.cancel()
+        failureAutoSkipWorkItem = nil
         player?.pause()
         removeCurrentObservers()
         player = nil
@@ -1386,6 +1406,8 @@ final class PlayerManager: NSObject, ObservableObject {
         timeControlStatusObserver = nil
         playbackConfirmationWorkItem?.cancel()
         playbackConfirmationWorkItem = nil
+        failureAutoSkipWorkItem?.cancel()
+        failureAutoSkipWorkItem = nil
         playbackStallWorkItem?.cancel()
         playbackStallWorkItem = nil
         playbackConfirmed = false
