@@ -30,7 +30,7 @@ struct BeansApp: App {
             PlatformPreferenceStore.hidePickerKey: true,
             "beans.homeWallpaperBlur": 0.0,
             "beans.haptics.enabled": true,
-            "beans.useFreeAudioSource": false,
+            "beans.useFreeAudioSource": true,
             "beans.playback.autoResumeLast": false
         ])
     }

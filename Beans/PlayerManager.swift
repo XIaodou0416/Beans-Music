@@ -133,7 +133,7 @@ final class PlayerManager: NSObject, ObservableObject {
             return true
         }
         let paid = defaults.object(forKey: "beans.enableUnblock") as? Bool ?? true
-        let free = defaults.object(forKey: "beans.useFreeAudioSource") as? Bool ?? false
+        let free = defaults.object(forKey: "beans.useFreeAudioSource") as? Bool ?? true
         return paid || free
     }
 

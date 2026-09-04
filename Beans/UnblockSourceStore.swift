@@ -69,6 +69,7 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
 final class UnblockSourceStore: ObservableObject {
     static let shared = UnblockSourceStore()
     static let userAPIKeysKey = "beans.thirdPartyAPIKeys"
+    static let paidAudioSourceUsageRecordedKey = "beans.paidAudioSource.usageRecorded"
     /// 普通版本使用平台原生播放，并按用户设置启用第三方兜底。
     static let singleSourceMode = false
     static let singleSourceID = "beans.special.cr.v1"
@@ -126,9 +127,12 @@ final class UnblockSourceStore: ObservableObject {
             quality: "320k",
             isPreset: true
         ),
+    ]
+
+    static let freePresetSources: [ThirdPartySource] = [
         ThirdPartySource(
             id: "beans.preset.legacy.guoyue.netease.v1",
-            name: "guoyue2010 · 网易云统一源（1.5.2）",
+            name: "guoyue2010 · 网易云统一源（免费）",
             kind: "legacy-template",
             template: legacyNeteaseURLTemplate,
             headers: [
@@ -136,11 +140,9 @@ final class UnblockSourceStore: ObservableObject {
                 "qualities": "320k",
             ],
             quality: "320k",
-            isPreset: true
+            isPreset: true,
+            isFree: true
         ),
-    ]
-
-    static let freePresetSources: [ThirdPartySource] = [
         ThirdPartySource(
             id: "beans.preset.cerumusic.free.v1",
             name: "CeruMusic · 免费音源",
@@ -248,6 +250,14 @@ final class UnblockSourceStore: ObservableObject {
         if let data = try? JSONEncoder().encode(sources) {
             defaults.set(data, forKey: presetsKey)
         }
+    }
+
+    static var hasPaidAudioSourceUsageRecord: Bool {
+        UserDefaults.standard.bool(forKey: paidAudioSourceUsageRecordedKey)
+    }
+
+    static func recordPaidAudioSourceUsage() {
+        UserDefaults.standard.set(true, forKey: paidAudioSourceUsageRecordedKey)
     }
 
     func isProtectedPreset(_ source: ThirdPartySource) -> Bool {

@@ -1228,8 +1228,8 @@ struct SettingsView: View {
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     /// 官方地址不可用时，是否尝试第三方音源
     @AppStorage("beans.enableUnblock") private var enableBuiltInSources = true
-    /// 免费音源与付费音源可以同时启用，解析时会合并尝试两类音源。
-    @AppStorage("beans.useFreeAudioSource") private var enableFreeSources = false
+    /// 免费音源默认开启；付费音源与免费音源可以同时启用。
+    @AppStorage("beans.useFreeAudioSource") private var enableFreeSources = true
     /// 第三方音源播放会员歌成功时提醒，默认开启
     @AppStorage("beans.showThirdPartyVIPNotice") private var showThirdPartyVIPNotice = true
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true

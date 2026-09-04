@@ -40,7 +40,16 @@ enum UnblockService {
             || !artists.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasSongIdentity else { return nil }
         let usePaidAudioSource = UserDefaults.standard.object(forKey: "beans.enableUnblock") as? Bool ?? true
-        let useFreeAudioSource = UserDefaults.standard.object(forKey: "beans.useFreeAudioSource") as? Bool ?? false
+        let useFreeAudioSource = UserDefaults.standard.object(forKey: "beans.useFreeAudioSource") as? Bool ?? true
+        // QQ 的第三方链路只在本机记录过一次付费音源成功使用后开放。
+        // QQ 官方接口不经过这里，不受此限制。
+        if songSource == .qq && !UnblockSourceStore.hasPaidAudioSourceUsageRecord {
+            BeansLogger.shared.log(
+                "QQ第三方音源暂未开放：本机尚无付费音源成功使用记录",
+                level: .debug
+            )
+            return nil
+        }
         let sources = UnblockSourceStore.shared.sources
             .filter { source in
                 guard source.enabled else { return false }
@@ -272,6 +281,7 @@ enum UnblockService {
                     excludedHosts: excludedHosts
                 ) {
                     BeansLogger.shared.log("脚本音源命中：\(source.name) 音质=\(quality)", level: .info)
+                    recordPaidSourceUsageIfNeeded(for: source)
                     return resolved
                 }
             }
@@ -351,6 +361,7 @@ enum UnblockService {
             return nil
         }
         BeansLogger.shared.log("第三方音源命中：\(source.name)\(keyLabel)", level: .info)
+        recordPaidSourceUsageIfNeeded(for: source)
         return Resolved(
             url: playURL,
             source: source.name,
@@ -497,6 +508,11 @@ enum UnblockService {
             .split(whereSeparator: { $0 == "\n" || $0 == "," || $0 == ";" })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty } ?? []
+    }
+
+    private static func recordPaidSourceUsageIfNeeded(for source: ThirdPartySource) {
+        guard !source.isFree else { return }
+        UnblockSourceStore.recordPaidAudioSourceUsage()
     }
 
     private static func sourceAPIKeys(for source: ThirdPartySource) -> [String] {
