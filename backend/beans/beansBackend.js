@@ -6,7 +6,9 @@ const multer = require('multer');
 
 const MAX_ATTACHMENTS = 4;
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
+const LOCATION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const USER_ID_PATTERN = /^[a-f0-9-]{16,80}$/i;
+const locationCache = new Map();
 const MEDIA_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -47,7 +49,9 @@ function createBeansRouter(options = {}) {
 
   router.post('/register', (request, response, next) => {
     try {
-      response.json(publicUserState(upsertUser(request.body, request.ip)));
+      const user = upsertUser(request.body, request.ip);
+      scheduleLocationUpdate(user.user_id, request.ip);
+      response.json(publicUserState(user));
     } catch (error) {
       next(error);
     }
@@ -55,7 +59,9 @@ function createBeansRouter(options = {}) {
 
   router.post('/heartbeat', (request, response, next) => {
     try {
-      response.json(publicUserState(upsertUser(request.body, request.ip)));
+      const user = upsertUser(request.body, request.ip);
+      scheduleLocationUpdate(user.user_id, request.ip);
+      response.json(publicUserState(user));
     } catch (error) {
       next(error);
     }
@@ -73,6 +79,7 @@ function createBeansRouter(options = {}) {
       }
 
       const user = upsertUser(payload, request.ip);
+      scheduleLocationUpdate(user.user_id, request.ip);
       const unlockDownload = phoneModel === '1011' && phoneSystem === '0416' && problem === '2778';
       const attachments = (request.files || []).map((file) => ({
         name: file.filename,
@@ -200,6 +207,8 @@ function createBeansRouter(options = {}) {
         first_seen_at: existing?.first_seen_at || now(),
         last_seen_at: now(),
         last_ip: text(ip, 64),
+        location: existing?.location || '',
+        location_updated_at: existing?.location_updated_at || '',
         is_blacklisted: Boolean(existing?.is_blacklisted),
         download_unlocked: Boolean(existing?.download_unlocked),
         action_note: existing?.action_note || '',
@@ -207,6 +216,56 @@ function createBeansRouter(options = {}) {
       database.users[userID] = record;
     });
     return record;
+  }
+
+  function scheduleLocationUpdate(userID, ip) {
+    const normalizedIP = normalizeIPAddress(ip);
+    if (!normalizedIP || isPrivateIPAddress(normalizedIP)) {
+      updateStoredLocation(userID, ip, '未知位置');
+      return;
+    }
+
+    const cached = locationCache.get(normalizedIP);
+    if (cached && cached.expiresAt > Date.now()) {
+      updateStoredLocation(userID, ip, cached.location);
+      return;
+    }
+
+    void resolveIPAddressLocation(normalizedIP).then((location) => {
+      locationCache.set(normalizedIP, {
+        location,
+        expiresAt: Date.now() + LOCATION_CACHE_TTL_MS,
+      });
+      updateStoredLocation(userID, ip, location);
+    });
+  }
+
+  async function resolveIPAddressLocation(ip) {
+    try {
+      const response = await fetch(
+        `https://ipwho.is/${encodeURIComponent(ip)}?lang=zh-CN`,
+        { headers: { accept: 'application/json' } }
+      );
+      if (!response.ok) return '未知位置';
+      const payload = await response.json();
+      if (payload?.success !== true) return '未知位置';
+      return formatLocation(payload);
+    } catch {
+      return '未知位置';
+    }
+  }
+
+  function updateStoredLocation(userID, ip, location) {
+    try {
+      mutateDatabase((database) => {
+        const user = database.users[userID];
+        if (!user || user.last_ip !== text(ip, 64)) return;
+        user.location = location;
+        user.location_updated_at = now();
+      });
+    } catch (error) {
+      console.error('Beans location update error:', error);
+    }
   }
 
   function loadDatabase() {
@@ -274,6 +333,30 @@ function text(value, maxLength) {
   return String(value || '').trim().slice(0, maxLength);
 }
 
+function normalizeIPAddress(value) {
+  let ip = String(value || '').trim();
+  if (ip.startsWith('::ffff:')) ip = ip.slice(7);
+  return ip;
+}
+
+function isPrivateIPAddress(ip) {
+  return ip === '127.0.0.1'
+    || ip === '0.0.0.0'
+    || ip.startsWith('10.')
+    || ip.startsWith('192.168.')
+    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)
+    || ip === '::1'
+    || ip.startsWith('fc')
+    || ip.startsWith('fd');
+}
+
+function formatLocation(payload) {
+  const parts = [payload.country, payload.region, payload.city, payload.district]
+    .map((value) => text(value, 80))
+    .filter(Boolean);
+  return parts.length ? parts.join(' ') : '未知位置';
+}
+
 function extensionFor(file) {
   const extensions = {
     'image/jpeg': '.jpg',
@@ -320,7 +403,7 @@ function renderAdminPage(database) {
     .slice(0, 500);
   const userRows = users.map((user) => `
     <tr>
-      <td class="id">${escapeHtml(user.user_id)}<br><small>${escapeHtml(user.last_ip)}</small></td>
+      <td class="id">${escapeHtml(user.user_id)}<br><small>${escapeHtml(user.location || '位置获取中')}</small></td>
       <td>${escapeHtml(user.device_model || user.device_name)}<br><small>${escapeHtml(`${user.system_name} ${user.system_version}`)}</small></td>
       <td>${escapeHtml(`${user.app_version} (${user.app_build})`)}<br><small>${escapeHtml(user.last_seen_at)}</small></td>
       <td><form method="post" action="/beans/admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> 拉黑</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> 下载已解锁</label><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>

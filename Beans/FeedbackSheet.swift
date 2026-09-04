@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import UniformTypeIdentifiers
 
 private struct FeedbackAttachment: Identifiable, Hashable {
@@ -29,7 +30,8 @@ struct FeedbackSheet: View {
     @State private var phoneSystem = ""
     @State private var problem = ""
     @State private var attachments: [FeedbackAttachment] = []
-    @State private var showImporter = false
+    @State private var showPhotoPicker = false
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var isSubmitting = false
     @State private var errorMessage: String?
 
@@ -102,7 +104,7 @@ struct FeedbackSheet: View {
                                 }
                                 Spacer()
                                 Button {
-                                    showImporter = true
+                                    showPhotoPicker = true
                                 } label: {
                                     Image(systemName: "plus")
                                         .font(.system(size: 14, weight: .bold))
@@ -189,16 +191,19 @@ struct FeedbackSheet: View {
                 }
             }
         }
-        .fileImporter(
-            isPresented: $showImporter,
-            allowedContentTypes: [.image, .movie],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
-                urls.forEach(addAttachment)
-            case .failure(let error):
-                errorMessage = error.localizedDescription
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $selectedPhotoItems,
+            maxSelectionCount: 4,
+            matching: .any(of: [.images, .videos])
+        )
+        .onChange(of: selectedPhotoItems) { items in
+            guard !items.isEmpty else { return }
+            Task {
+                await importPhotoItems(items)
+                await MainActor.run {
+                    selectedPhotoItems = []
+                }
             }
         }
         .alert(beansLocalized("提交失败", "Submission failed"), isPresented: Binding(
@@ -247,6 +252,48 @@ struct FeedbackSheet: View {
             return
         }
         attachments.append(FeedbackAttachment(url: copyURL, contentType: contentType))
+    }
+
+    private func importPhotoItems(_ items: [PhotosPickerItem]) async {
+        for item in items {
+            let contentType = item.supportedContentTypes.first(where: {
+                $0.conforms(to: .image) || $0.conforms(to: .movie)
+            }) ?? .data
+            guard contentType.conforms(to: .image) || contentType.conforms(to: .movie) else {
+                await MainActor.run {
+                    errorMessage = beansLocalized("只能添加图片或视频附件。", "Only image and video attachments are supported.")
+                }
+                continue
+            }
+
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let data else {
+                await MainActor.run {
+                    errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
+                }
+                continue
+            }
+
+            let fileExtension = contentType.preferredFilenameExtension
+                ?? (contentType.conforms(to: .movie) ? "mov" : "jpg")
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("BeansFeedbackUploads", isDirectory: true)
+            let destination = directory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension(fileExtension)
+
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try data.write(to: destination, options: .atomic)
+                await MainActor.run {
+                    attachments.append(FeedbackAttachment(url: destination, contentType: contentType))
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = beansLocalized("附件保存失败，请重新选择。", "The attachment could not be saved. Please choose it again.")
+                }
+            }
+        }
     }
 
     private func removeAttachment(_ attachment: FeedbackAttachment) {
