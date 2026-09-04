@@ -41,8 +41,7 @@ struct PlaylistView: View {
 
     var body: some View {
         let _ = theme.accent
-        BeansNavigationStack {
-            ZStack {
+        ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
@@ -75,7 +74,6 @@ struct PlaylistView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .task { await load() }
-        .beansDetailMiniPlayer()
     }
 
     private var header: some View {

@@ -339,6 +339,35 @@ struct BeansNavigationStack<Content: View>: View {
     }
 }
 
+/// 带可编程路径的导航堆栈，用于从卡片点击进入统一的详情页。
+struct BeansNavigationStackWithPath<Route: Hashable, Content: View>: View {
+    @Binding var path: [Route]
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        if #available(iOS 16, *) {
+            NavigationStack(path: $path) { content() }
+        } else {
+            NavigationView { content() }.navigationViewStyle(.stack)
+        }
+    }
+}
+
+extension View {
+    /// iOS 16+ 的类型化导航目的地，低版本保持原有页面结构。
+    @ViewBuilder
+    func beansNavigationDestination<Route: Hashable, Destination: View>(
+        for route: Route.Type,
+        @ViewBuilder destination: @escaping (Route) -> Destination
+    ) -> some View {
+        if #available(iOS 16, *) {
+            navigationDestination(for: route, destination: destination)
+        } else {
+            self
+        }
+    }
+}
+
 /// 弹窗尺寸（自定义枚举，避免在低版本引用 iOS 16 类型）
 enum BeansDetent {
     case medium

@@ -1,6 +1,14 @@
 import SwiftUI
 import UIKit
 
+private enum DiscoverRoute: Hashable {
+    case topList(TopList)
+    case playlist(Playlist)
+    case qqTopList(QQTopInfo)
+    case kugouTopList(KugouTopInfo)
+    case dailySongs([Song])
+}
+
 struct DiscoverView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
@@ -13,9 +21,7 @@ struct DiscoverView: View {
 
     @State private var loading = true
     @State private var errorMessage: String?
-    @State private var selectedTopList: TopList?
-    @State private var selectedPlaylist: Playlist?
-    @State private var showDailyList = false
+    @State private var navigationPath: [DiscoverRoute] = []
     @State private var recommendationActionLoading: String?
     @State private var showHomePlatformMenu = false
     @State private var showSectionSort = false
@@ -78,10 +84,7 @@ struct DiscoverView: View {
     private var isNativeClean: Bool { BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean }
 
     @State private var qqTopLists: [QQTopInfo] = []
-    @State private var selectedQQTopList: QQTopInfo?
     @State private var kugouTopLists: [KugouTopInfo] = []
-    @State private var selectedKugouTopList: KugouTopInfo?
-    @State private var selectedQQPlaylist: Playlist?
     /// 排行榜展开状态：收起显示前 3，展开显示前 10
     @State private var ranksExpanded = false
     /// 歌单广场展开状态：收起显示前 6，展开显示全部
@@ -99,6 +102,7 @@ struct DiscoverView: View {
 
     var body: some View {
         let _ = theme.accent
+        BeansNavigationStackWithPath(path: $navigationPath) {
         ZStack {
             // 主页背景：壁纸/背景色永远在发现页生效（homeMode），同步开启时其他页面也生效
             GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(homeWallpaperBlur))
@@ -203,36 +207,6 @@ struct DiscoverView: View {
                 guard platformPrefs.isEnabled(SearchProvider.kugou) else { return }
                 reloadAfterLoginUpdate(.kugou)
             }
-            .sheet(item: $selectedTopList) { topList in
-                TopListDetailView(topList: topList)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            }
-            .sheet(item: $selectedPlaylist) { playlist in
-                PlaylistView(playlist: playlist)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            }
-            .sheet(item: $selectedQQTopList) { info in
-                QQTopListDetailView(topID: info.id, name: info.name)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            }
-            .sheet(item: $selectedKugouTopList) { info in
-                KugouTopListDetailView(topList: info)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            }
-            .sheet(item: $selectedQQPlaylist) { playlist in
-                PlaylistView(playlist: playlist)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            }
-            .sheet(isPresented: $showDailyList) {
-                DailySongsSheet(songs: dailySongs)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            }
             .sheet(isPresented: $showSectionSort) {
                 SectionOrderSheet(
                     title: "主页板块排序",
@@ -244,6 +218,31 @@ struct DiscoverView: View {
                     )
                 )
                     .onDisappear { SectionOrderStore.save(SectionOrderStore.homeKey, homeOrder) }
+            }
+        }
+        }
+        .beansNavigationDestination(for: DiscoverRoute.self) { route in
+            switch route {
+            case .topList(let topList):
+                TopListDetailView(topList: topList)
+                    .environmentObject(player)
+                    .environmentObject(auth)
+            case .playlist(let playlist):
+                PlaylistView(playlist: playlist)
+                    .environmentObject(player)
+                    .environmentObject(auth)
+            case .qqTopList(let info):
+                QQTopListDetailView(topID: info.id, name: info.name)
+                    .environmentObject(player)
+                    .environmentObject(auth)
+            case .kugouTopList(let info):
+                KugouTopListDetailView(topList: info)
+                    .environmentObject(player)
+                    .environmentObject(auth)
+            case .dailySongs(let songs):
+                DailySongsSheet(songs: songs)
+                    .environmentObject(player)
+                    .environmentObject(auth)
             }
         }
     }
@@ -559,19 +558,19 @@ struct DiscoverView: View {
                     if source == .netease {
                         ForEach(Array(neteaseTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, topList in
                             nativeRankCard(index: index, name: beansChartName(topList.name), subtitle: beansChartSubtitle(topList.updateFrequency), coverURL: topList.coverURL) {
-                                selectedTopList = topList
+                                navigationPath.append(DiscoverRoute.topList(topList))
                             }
                         }
                     } else if source == .qq {
                         ForEach(Array(qqTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
                             nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.subTitle), coverURL: info.coverURL) {
-                                selectedQQTopList = info
+                                navigationPath.append(DiscoverRoute.qqTopList(info))
                             }
                         }
                     } else {
                         ForEach(Array(kugouTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
                             nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.updateFrequency), coverURL: info.coverURL) {
-                                selectedKugouTopList = info
+                                navigationPath.append(DiscoverRoute.kugouTopList(info))
                             }
                         }
                     }
@@ -626,7 +625,7 @@ struct DiscoverView: View {
             ForEach(Array(neteaseTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, topList in
                 rankRow(index: index, name: beansChartName(topList.name), subtitle: beansChartSubtitle(topList.updateFrequency), coverURL: topList.coverURL) {
                     BeansHaptics.tap()
-                    selectedTopList = topList
+                    navigationPath.append(DiscoverRoute.topList(topList))
                 }
                 Divider().overlay(Color.beansComment.opacity(0.12))
             }
@@ -634,7 +633,7 @@ struct DiscoverView: View {
             ForEach(Array(qqTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
                 rankRow(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.subTitle), coverURL: info.coverURL) {
                     BeansHaptics.tap()
-                    selectedQQTopList = info
+                    navigationPath.append(DiscoverRoute.qqTopList(info))
                 }
                 Divider().overlay(Color.beansComment.opacity(0.12))
             }
@@ -642,7 +641,7 @@ struct DiscoverView: View {
             ForEach(Array(kugouTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
                 rankRow(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.updateFrequency), coverURL: info.coverURL) {
                     BeansHaptics.tap()
-                    selectedKugouTopList = info
+                    navigationPath.append(DiscoverRoute.kugouTopList(info))
                 }
                 Divider().overlay(Color.beansComment.opacity(0.12))
             }
@@ -743,7 +742,7 @@ struct DiscoverView: View {
                         loadingKey: nil
                     ) {
                         BeansHaptics.tap()
-                        showDailyList = true
+                        navigationPath.append(DiscoverRoute.dailySongs(dailySongs))
                     }
 
                     neteaseRecommendationCard(
@@ -777,7 +776,7 @@ struct DiscoverView: View {
                         loadingKey: nil
                     ) {
                         BeansHaptics.tap()
-                        showDailyList = true
+                        navigationPath.append(DiscoverRoute.dailySongs(dailySongs))
                     }
 
                     neteaseRecommendationCard(
@@ -851,7 +850,7 @@ struct DiscoverView: View {
                     }
                     Button {
                         BeansHaptics.tap()
-                        showDailyList = true
+                        navigationPath.append(DiscoverRoute.dailySongs(dailySongs))
                     } label: {
                         VStack(spacing: 5) {
                             Image(systemName: "chevron.right")
@@ -1085,11 +1084,7 @@ struct DiscoverView: View {
                         ForEach(visiblePersonalizedPlaylists, id: \.id) { (playlist: Playlist) in
                             Button {
                                 BeansHaptics.tap()
-                                if source == .qq {
-                                    selectedQQPlaylist = playlist
-                                } else {
-                                    selectedPlaylist = playlist
-                                }
+                                navigationPath.append(DiscoverRoute.playlist(playlist))
                             } label: {
                                 VStack(alignment: .leading, spacing: 8) {
                                     CoverImage(url: playlist.coverURL, size: 166, cornerRadius: 16)
@@ -1117,11 +1112,7 @@ struct DiscoverView: View {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     ForEach(visiblePersonalizedPlaylists) { playlist in
                         Button {
-                            if source == .qq {
-                                selectedQQPlaylist = playlist
-                            } else {
-                                selectedPlaylist = playlist
-                            }
+                            navigationPath.append(DiscoverRoute.playlist(playlist))
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
                                 CoverImage(url: playlist.coverURL, size: 144, cornerRadius: 18)
@@ -1436,8 +1427,7 @@ struct QQTopListDetailView: View {
 
     var body: some View {
         let _ = theme.accent
-        BeansNavigationStack {
-            ZStack {
+        ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
@@ -1482,9 +1472,7 @@ struct QQTopListDetailView: View {
             .navigationTitle(beansChartName(name))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
-        }
         .task { await load() }
-        .beansDetailMiniPlayer()
     }
 
     private var filteredTracks: [Song] {
@@ -1526,8 +1514,7 @@ struct QQPlaylistSongsSheet: View {
 
     var body: some View {
         let _ = theme.accent
-        BeansNavigationStack {
-            ZStack {
+        ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
@@ -1572,9 +1559,7 @@ struct QQPlaylistSongsSheet: View {
             .navigationTitle(playlist.name)
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索歌单内歌曲", "Search playlist songs"))
-        }
         .task { await load() }
-        .beansDetailMiniPlayer()
     }
 
     private var filteredTracks: [Song] {
@@ -1613,8 +1598,7 @@ struct DailySongsSheet: View {
 
     var body: some View {
         let _ = theme.accent
-        BeansNavigationStack {
-            ZStack {
+        ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if songs.isEmpty {
@@ -1656,7 +1640,6 @@ struct DailySongsSheet: View {
             .navigationTitle("今日推荐")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索每日推荐", "Search daily recommendations"))
-        }
     }
 
     private var filteredSongs: [Song] {
@@ -1688,8 +1671,7 @@ struct TopListDetailView: View {
 
     var body: some View {
         let _ = theme.accent
-        BeansNavigationStack {
-            ZStack {
+        ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
@@ -1735,9 +1717,7 @@ struct TopListDetailView: View {
             .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
-        }
         .task { await load() }
-        .beansDetailMiniPlayer()
     }
 
     private var header: some View {
@@ -1809,8 +1789,7 @@ struct KugouTopListDetailView: View {
 
     var body: some View {
         let _ = theme.accent
-        BeansNavigationStack {
-            ZStack {
+        ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
@@ -1858,9 +1837,7 @@ struct KugouTopListDetailView: View {
             .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
-        }
         .task { await load() }
-        .beansDetailMiniPlayer()
     }
 
     private var header: some View {

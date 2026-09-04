@@ -132,13 +132,10 @@ struct RootView: View {
                     )
             } else {
                 rootTabs
-            }
-
-            if !usesSystemFloatingTabBar {
-                legacyFloatingTabBar
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(8)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        legacyFloatingTabBar
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
             }
         }
         .background {

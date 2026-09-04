@@ -1,5 +1,9 @@
 import SwiftUI
 
+private enum LibraryRoute: Hashable {
+    case playlist(Playlist)
+}
+
 enum LibraryProvider: String, CaseIterable, Identifiable {
     case netease = "网易云音乐"
     case qq = "QQ音乐"
@@ -59,7 +63,7 @@ struct LibraryView: View {
     @State private var showSyncedPlaylistSort = false
     /// 音乐库板块顺序（本地音乐库 / 我的歌单 / 最近播放，可自定义）
     @State private var libraryOrder = SectionOrderStore.load(SectionOrderStore.libraryKey, defaults: SectionOrderStore.libraryDefaults)
-    @State private var selectedPlaylist: Playlist?
+    @State private var navigationPath: [LibraryRoute] = []
     @State private var showCreatePlaylist = false
     @State private var newPlaylistName = ""
     @State private var pendingDelete: Playlist?
@@ -123,6 +127,7 @@ struct LibraryView: View {
 
     var body: some View {
         let _ = theme.accent
+        BeansNavigationStackWithPath(path: $navigationPath) {
         ZStack {
             // 页面背景：同步开启时显示壁纸/背景色，否则默认氛围渐变
             GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
@@ -221,12 +226,6 @@ struct LibraryView: View {
             )
             .environmentObject(theme)
         }
-        .sheet(item: $selectedPlaylist) { playlist in
-            PlaylistView(playlist: playlist)
-                .environmentObject(player)
-                .environmentObject(auth)
-                .environmentObject(theme)
-        }
         .alert("新建歌单", isPresented: $showCreatePlaylist) {
             TextField("歌单名称", text: $newPlaylistName)
             Button("创建") { createPlaylist() }
@@ -237,6 +236,16 @@ struct LibraryView: View {
         .confirmationDialog("确定删除歌单「\(pendingDelete?.name ?? "")」吗？", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("删除", role: .destructive) { confirmDeletePlaylist() }
             Button("取消", role: .cancel) {}
+        }
+        }
+        .beansNavigationDestination(for: LibraryRoute.self) { route in
+            switch route {
+            case .playlist(let playlist):
+                PlaylistView(playlist: playlist)
+                    .environmentObject(player)
+                    .environmentObject(auth)
+                    .environmentObject(theme)
+            }
         }
     }
 
@@ -344,7 +353,7 @@ struct LibraryView: View {
                 VStack(spacing: 0) {
                     ForEach(orderedNeteasePlaylists) { playlist in
                         Button {
-                            selectedPlaylist = playlist
+                            navigationPath.append(LibraryRoute.playlist(playlist))
                         } label: {
                             HStack(spacing: 12) {
                                 CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)
@@ -555,7 +564,7 @@ struct LibraryView: View {
                 VStack(spacing: 0) {
                     ForEach(orderedQQPlaylists) { playlist in
                         Button {
-                            selectedPlaylist = playlist
+                            navigationPath.append(LibraryRoute.playlist(playlist))
                         } label: {
                             HStack(spacing: 12) {
                                 CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)
@@ -612,7 +621,7 @@ struct LibraryView: View {
                 VStack(spacing: 0) {
                     ForEach(orderedKugouPlaylists) { playlist in
                         Button {
-                            selectedPlaylist = playlist
+                            navigationPath.append(LibraryRoute.playlist(playlist))
                         } label: {
                             HStack(spacing: 12) {
                                 CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)
