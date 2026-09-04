@@ -36,6 +36,7 @@ struct FeedbackSheet: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var feedbackToDelete: FeedbackHistoryEntry?
+    @State private var showDeleteConfirmation = false
     @State private var deletingFeedbackID: String?
 
     private var canSubmit: Bool {
@@ -215,13 +216,16 @@ struct FeedbackSheet: View {
         }
         .confirmationDialog(
             beansLocalized("删除这条反馈工单？", "Delete this feedback ticket?"),
-            item: $feedbackToDelete
-        ) { entry in
-            Button(beansLocalized("删除工单", "Delete ticket"), role: .destructive) {
-                deleteFeedback(entry)
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            if let entry = feedbackToDelete {
+                Button(beansLocalized("删除工单", "Delete ticket"), role: .destructive) {
+                    deleteFeedback(entry)
+                }
             }
             Button(beansLocalized("取消", "Cancel"), role: .cancel) {}
-        } message: { _ in
+        } message: {
             Text(beansLocalized("删除后无法恢复。", "This cannot be undone."))
         }
         .task {
@@ -264,6 +268,7 @@ struct FeedbackSheet: View {
                                  : beansLocalized("附件 \(entry.attachmentCount)", "\(entry.attachmentCount) attachments"))
                             Button {
                                 feedbackToDelete = entry
+                                showDeleteConfirmation = true
                             } label: {
                                 if deletingFeedbackID == entry.feedbackID {
                                     ProgressView()
