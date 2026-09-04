@@ -16,9 +16,6 @@ targets:
     resources:
       - Beans/en.lproj
       - Beans/zh-Hans.lproj
-      - Beans/CeruMusicBuiltinSource.js
-      - Beans/QuanDouYaoBuiltinSource.js
-      - Beans/CRMusicSpecialBuiltinSource.js
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app

@@ -39,86 +39,18 @@ enum UnblockService {
         let hasSongIdentity = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !artists.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasSongIdentity else { return nil }
-        let usePaidAudioSource = UserDefaults.standard.object(forKey: "beans.enableUnblock") as? Bool ?? true
-        let useFreeAudioSource = UserDefaults.standard.object(forKey: "beans.useFreeAudioSource") as? Bool ?? true
         let sources = UnblockSourceStore.shared.sources
             .filter { source in
                 guard source.enabled else { return false }
-                if UnblockSourceStore.singleSourceMode {
-                    return source.id == UnblockSourceStore.singleSourceID
-                }
-                let sourceModeEnabled = source.isFree ? useFreeAudioSource : usePaidAudioSource
-                return sourceModeEnabled && (
-                    isScriptSource(source) ||
-                    canUse(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
-                )
+                return isScriptSource(source)
+                    || canUse(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
             }
         guard !sources.isEmpty else {
-            let mode = UnblockSourceStore.singleSourceMode
-                ? "CR专用"
-                : (usePaidAudioSource && useFreeAudioSource ? "付费+免费" : (useFreeAudioSource ? "免费" : "付费"))
             BeansLogger.shared.log(
-                "第三方音源未启用可用源：模式=\(mode) 平台=\(songSource.rawValue)",
+                "没有启用的自定义音源：平台=\(songSource.rawValue)",
                 level: .debug
             )
             return nil
-        }
-
-        // QQ 必须先尝试内置付费源；只有本次确实存在并尝试了付费源仍未命中时，
-        // 才允许调用 guoyue2010 稳定源。历史上是否播放过 VIP 歌曲不再参与判断。
-        if songSource == .qq {
-            let builtInPaidSources = sources.filter {
-                $0.isPreset
-                    && !$0.isFree
-                    && $0.id != UnblockSourceStore.legacyQQFallbackSourceID
-            }
-            if let resolved = await resolveSources(
-                builtInPaidSources,
-                name: name,
-                artists: artists,
-                neteaseID: neteaseID,
-                songSource: songSource,
-                qqMid: qqMid,
-                qqMediaMid: qqMediaMid,
-                kugouID: kugouID,
-                quality: quality,
-                excludedHosts: excludedHosts
-            ) {
-                return resolved
-            }
-
-            if !builtInPaidSources.isEmpty,
-               let legacyQQSource = sources.first(where: {
-                   $0.id == UnblockSourceStore.legacyQQFallbackSourceID
-               }),
-               let resolved = await resolveSources(
-                   [legacyQQSource],
-                   name: name,
-                   artists: artists,
-                   neteaseID: neteaseID,
-                   songSource: songSource,
-                   qqMid: qqMid,
-                   qqMediaMid: qqMediaMid,
-                   kugouID: kugouID,
-                   quality: quality,
-                   excludedHosts: excludedHosts
-               ) {
-                BeansLogger.shared.log("QQ 内置付费源失败，切换 guoyue2010 备选源：\(name)", level: .info)
-                return resolved
-            }
-
-            return await resolveSources(
-                sources.filter(\.isFree),
-                name: name,
-                artists: artists,
-                neteaseID: neteaseID,
-                songSource: songSource,
-                qqMid: qqMid,
-                qqMediaMid: qqMediaMid,
-                kugouID: kugouID,
-                quality: quality,
-                excludedHosts: excludedHosts
-            )
         }
 
         return await resolveSources(
@@ -149,8 +81,7 @@ enum UnblockService {
     ) async -> Resolved? {
         guard !sources.isEmpty else { return nil }
 
-        // LX、CR、QT 三个预设最终访问同一个接口，只保留每个请求指纹的第一个，
-        // 避免同一首歌重复请求同一个服务，尤其避免酷狗回退时触发请求风暴。
+        // 相同配置只保留每个请求指纹的第一个，避免重复请求同一个服务。
         var seen = Set<String>()
         let uniqueSources = sources.filter { seen.insert(requestFingerprint(for: $0)).inserted }
 
@@ -250,7 +181,7 @@ enum UnblockService {
         let requiresAPIKey = apiKeyPlaceholders.contains { source.template.contains($0) }
         if requiresAPIKey && apiKeys.isEmpty {
             BeansLogger.shared.log(
-                "旧版第三方音源缺少用户密钥：\(source.name)，已跳过请求",
+                "自定义音源缺少请求密钥：\(source.name)，已跳过请求",
                 level: .debug
             )
             return nil
@@ -379,7 +310,6 @@ enum UnblockService {
                     excludedHosts: excludedHosts
                 ) {
                     BeansLogger.shared.log("脚本音源命中：\(source.name) 音质=\(quality)", level: .info)
-                    recordPaidSourceUsageIfNeeded(for: source)
                     return resolved
                 }
             }
@@ -459,7 +389,6 @@ enum UnblockService {
             return nil
         }
         BeansLogger.shared.log("第三方音源命中：\(source.name)\(keyLabel)", level: .info)
-        recordPaidSourceUsageIfNeeded(for: source)
         return Resolved(
             url: playURL,
             source: source.name,
@@ -601,20 +530,7 @@ enum UnblockService {
         return "\(source.template)|\(source.urlPath)|\(headers)|\(source.quality)|\(scriptFingerprint)"
     }
 
-    private static func userAPIKeys() -> [String] {
-        UserDefaults.standard.string(forKey: UnblockSourceStore.userAPIKeysKey)?
-            .split(whereSeparator: { $0 == "\n" || $0 == "," || $0 == ";" })
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty } ?? []
-    }
-
-    private static func recordPaidSourceUsageIfNeeded(for source: ThirdPartySource) {
-        guard !source.isFree else { return }
-        UnblockSourceStore.recordPaidAudioSourceUsage()
-    }
-
     private static func sourceAPIKeys(for source: ThirdPartySource) -> [String] {
-        if isScriptSource(source) { return userAPIKeys() }
         var keys: [String] = []
         if let raw = source.headers["apiKeys"], !raw.isEmpty {
             keys.append(contentsOf: raw
@@ -625,8 +541,8 @@ enum UnblockService {
         if let raw = source.headers["apiKey"]?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
             keys.append(raw)
         }
-        keys.append(contentsOf: userAPIKeys())
-        return keys
+        var seen = Set<String>()
+        return keys.filter { seen.insert($0).inserted }
     }
 
     private static func orderedAPIKeys(for source: ThirdPartySource) -> [(Int, String)] {

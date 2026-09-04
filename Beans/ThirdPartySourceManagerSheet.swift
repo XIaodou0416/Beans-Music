@@ -310,7 +310,6 @@ struct ThirdPartySourceManagerSheet: View {
         let normalized = sources.map { source in
             var updated = source
             updated.id = UUID().uuidString
-            updated.isPreset = false
             return updated
         }
         guard !normalized.isEmpty else {
@@ -382,14 +381,6 @@ private struct SourceRow: View {
                             .font(BeansFont.appFont(14, .semibold))
                             .foregroundStyle(Color.beansLabel)
                             .lineLimit(1)
-                        if source.isPreset {
-                            Text(source.isFree ? beansLocalized("免费", "Free") : beansLocalized("预设", "Preset"))
-                                .font(BeansFont.appFont(10, .medium))
-                                .foregroundStyle(source.isFree ? Color.green : Color.beansAmber)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background((source.isFree ? Color.green : Color.beansAmber).opacity(0.12), in: Capsule())
-                        }
                     }
                     Text(subtitle)
                         .font(BeansFont.appFont(11))
@@ -432,19 +423,13 @@ private struct SourceRow: View {
 
                 Spacer()
 
-                if source.isPreset {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.beansComment)
-                } else {
-                    Button {
-                        onRemove()
-                    } label: {
-                        Image(systemName: "trash")
-                            .foregroundStyle(Color.red.opacity(0.9))
-                    }
-                    .buttonStyle(.plain)
+                Button {
+                    onRemove()
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundStyle(Color.red.opacity(0.9))
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(14)
@@ -464,7 +449,6 @@ private struct ThirdPartySourceDraft: Identifiable {
     var quality: String = "320k"
     var scriptText: String = ""
     var enabled: Bool = true
-    var isPreset: Bool = false
     var platform: ThirdPartySourcePlatform = .all
 
     init() {}
@@ -478,7 +462,6 @@ private struct ThirdPartySourceDraft: Identifiable {
         quality = source.quality.isEmpty ? "320k" : source.quality
         scriptText = source.script ?? ""
         enabled = source.enabled
-        isPreset = source.isPreset
         if let code = source.headers["source"] {
             platform = ThirdPartySourcePlatform(code: code)
         }
@@ -504,8 +487,7 @@ private struct ThirdPartySourceDraft: Identifiable {
             headers: headers,
             quality: quality.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "320k" : quality,
             script: scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : scriptText,
-            enabled: enabled,
-            isPreset: isPreset
+            enabled: enabled
         )
     }
 
@@ -712,11 +694,6 @@ private struct SourceEditorSheet: View {
             }
             .tint(Color.beansAmber)
 
-            if draft.isPreset {
-                Text(beansLocalized("这是预设音源。你可以编辑它，但不能从管理页直接删除。", "This is a preset source. You can edit it, but it cannot be deleted from the manager."))
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(Color.beansComment)
-            }
         }
         .padding(16)
         .background {

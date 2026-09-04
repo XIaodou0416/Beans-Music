@@ -124,8 +124,6 @@ enum ThirdPartySourceImportParser {
         }
 
         let enabled = bool(in: dict, keys: ["enabled"], defaultValue: true)
-        let isPreset = bool(in: dict, keys: ["isPreset"], defaultValue: false)
-        let isFree = bool(in: dict, keys: ["isFree", "free"], defaultValue: false)
         return ThirdPartySource(
             name: name,
             kind: kind,
@@ -134,9 +132,7 @@ enum ThirdPartySourceImportParser {
             headers: headers,
             quality: quality,
             script: script,
-            enabled: enabled,
-            isPreset: isPreset,
-            isFree: isFree
+            enabled: enabled
         )
     }
 
@@ -222,7 +218,6 @@ enum ThirdPartySourceImportParser {
             headers["source"] = platform
         }
         let enabled = boolString(values["enabled"], defaultValue: true)
-        let isPreset = boolString(values["ispreset"], defaultValue: false)
         return [ThirdPartySource(
             name: name,
             kind: kind,
@@ -230,8 +225,7 @@ enum ThirdPartySourceImportParser {
             urlPath: urlPath,
             headers: headers,
             quality: quality,
-            enabled: enabled,
-            isPreset: isPreset
+            enabled: enabled
         )]
     }
 
@@ -248,8 +242,7 @@ enum ThirdPartySourceImportParser {
             headers: headers,
             quality: quality,
             script: text,
-            enabled: true,
-            isPreset: false
+            enabled: true
         )
         return [source]
     }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// 第三方解锁源配置。
-/// kind：paid-lx、paid-cr、paid-qt 分别对应三种插件运行时格式。
+/// kind：音源类型标识，用于兼容不同导入格式。
 /// template：请求 URL 模板，支持 {id}、{source}、{quality} 占位符。
 /// headers：可选的请求头与内置元数据。
 /// quality：默认音质选择。
@@ -16,11 +16,9 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
     var quality: String = "320k"
     var script: String?
     var enabled: Bool = true
-    var isPreset: Bool = false
-    var isFree: Bool = false
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, template, urlPath, headers, quality, script, enabled, isPreset, isFree
+        case id, name, kind, template, urlPath, headers, quality, script, enabled
     }
 
     init(
@@ -32,9 +30,7 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         headers: [String: String] = [:],
         quality: String = "320k",
         script: String? = nil,
-        enabled: Bool = true,
-        isPreset: Bool = false,
-        isFree: Bool = false
+        enabled: Bool = true
     ) {
         self.id = id
         self.name = name
@@ -45,8 +41,6 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         self.quality = quality
         self.script = script
         self.enabled = enabled
-        self.isPreset = isPreset
-        self.isFree = isFree
     }
 
     init(from decoder: Decoder) throws {
@@ -60,140 +54,28 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         quality = try container.decodeIfPresent(String.self, forKey: .quality) ?? headers["quality"] ?? "320k"
         script = try container.decodeIfPresent(String.self, forKey: .script)
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
-        isPreset = try container.decodeIfPresent(Bool.self, forKey: .isPreset) ?? false
-        isFree = try container.decodeIfPresent(Bool.self, forKey: .isFree) ?? false
     }
 }
 
-/// 第三方音源管理：保留内置预设接口，密钥只使用用户自己填写或导入的内容。
+/// 第三方音源管理：只保存用户导入的音源配置。
 final class UnblockSourceStore: ObservableObject {
     static let shared = UnblockSourceStore()
-    static let userAPIKeysKey = "beans.thirdPartyAPIKeys"
-    static let paidAudioSourceUsageRecordedKey = "beans.paidAudioSource.usageRecorded"
-    /// 普通版本使用平台原生播放，并按用户设置启用第三方兜底。
-    static let singleSourceMode = false
-    static let singleSourceID = "beans.special.cr.v1"
-    /// 仅从音源管理列表隐藏的内置源。播放解析仍保留这些源。
-    static let legacyQQFallbackSourceID = "beans.preset.legacy.guoyue.qq.v1"
-    static let managementHiddenSourceIDs: Set<String> = [
-        legacyQQFallbackSourceID
+    private static let removedBuiltInSourceIDs: Set<String> = [
+        "beans.preset.shiqianjiang.lx.v7",
+        "beans.preset.shiqianjiang.cr.v7",
+        "beans.preset.shiqianjiang.qt.v7",
+        "beans.preset.legacy.guoyue.qq.v1",
+        "beans.preset.legacy.guoyue.netease.v1",
+        "beans.preset.cerumusic.free.v1",
+        "beans.preset.quandouyao.free.v1",
+        "beans.special.cr.v1"
     ]
-
-    private static let paidAPIURL = "https://source.shiqianjiang.cn/api/music"
-    private static let paidURLTemplate = "\(paidAPIURL)/url?source={source}&songId={id}&quality={quality}"
-    private static var paidHeaders: [String: String] {
-        [
-            "quality": "320k",
-        ]
-    }
-    /// 1.5.2 中验证过的旧版源。QQ 源的密钥使用设置页现有的用户密钥池，
-    /// 不再把旧版 IPA 中的密钥重新写回源码。
-    private static let legacyQQURLTemplate = "https://cyapi.top/API/qq_music.php?apikey={apiKey}&type=json&mid={id}"
-    private static let legacyNeteaseURLTemplate = "https://music-api.gdstudio.xyz/api.php?types=url&source=netease&id={id}&br=999"
-
-    static let paidPresetSources: [ThirdPartySource] = [
-        ThirdPartySource(
-            id: "beans.preset.shiqianjiang.lx.v7",
-            name: "聆澜音源 · LX",
-            kind: "paid-lx",
-            template: paidURLTemplate,
-            headers: paidHeaders,
-            quality: "320k",
-            isPreset: true
-        ),
-        ThirdPartySource(
-            id: "beans.preset.shiqianjiang.cr.v7",
-            name: "聆澜音源 · CR",
-            kind: "paid-cr",
-            template: paidURLTemplate,
-            headers: paidHeaders,
-            quality: "320k",
-            isPreset: true
-        ),
-        ThirdPartySource(
-            id: "beans.preset.shiqianjiang.qt.v7",
-            name: "聆澜音源 · QT",
-            kind: "paid-qt",
-            template: paidURLTemplate,
-            headers: paidHeaders,
-            quality: "320k",
-            isPreset: true
-        ),
-        ThirdPartySource(
-            id: "beans.preset.legacy.guoyue.qq.v1",
-            name: "guoyue2010 · QQ 稳定源（1.5.2）",
-            kind: "legacy-template",
-            template: legacyQQURLTemplate,
-            headers: [
-                "source": "tx",
-                "qualities": "320k",
-                "apiKeyQuery": "apikey",
-            ],
-            quality: "320k",
-            isPreset: true
-        ),
-    ]
-
-    static let freePresetSources: [ThirdPartySource] = [
-        ThirdPartySource(
-            id: "beans.preset.legacy.guoyue.netease.v1",
-            name: "guoyue2010 · 网易云统一源（免费）",
-            kind: "legacy-template",
-            template: legacyNeteaseURLTemplate,
-            headers: [
-                "source": "wy",
-                "qualities": "320k",
-            ],
-            quality: "320k",
-            isPreset: true,
-            isFree: true
-        ),
-        ThirdPartySource(
-            id: "beans.preset.cerumusic.free.v1",
-            name: "CeruMusic · 免费音源",
-            kind: "script-free",
-            template: "",
-            headers: ["qualities": "128k,320k,flac,flac24bit"],
-            quality: "320k",
-            script: CeruMusicBuiltinSource.script,
-            isPreset: true,
-            isFree: true
-        ),
-        ThirdPartySource(
-            id: "beans.preset.quandouyao.free.v1",
-            name: "全豆要 · 免费音源",
-            kind: "script-free",
-            template: "",
-            headers: ["qualities": "128k,320k,flac,flac24bit"],
-            quality: "320k",
-            script: QuanDouYaoBuiltinSource.script,
-            isPreset: true,
-            isFree: true
-        )
-    ]
-
-    static let singlePresetSource = ThirdPartySource(
-        id: singleSourceID,
-        name: "CR 专属音源",
-        kind: "script-exclusive",
-        template: "",
-        quality: "hires",
-        script: CRMusicSpecialBuiltinSource.script,
-        isPreset: true,
-        isFree: false
-    )
-
-    static let presetSources: [ThirdPartySource] = singleSourceMode
-        ? [singlePresetSource]
-        : paidPresetSources + freePresetSources
-    static let protectedPresetSourceIDs = Set(presetSources.map(\.id))
-
     @Published var sources: [ThirdPartySource] {
         didSet { save() }
     }
 
     var managementVisibleSources: [ThirdPartySource] {
-        sources.filter { !Self.managementHiddenSourceIDs.contains($0.id) }
+        sources
     }
 
     private let defaults = UserDefaults.standard
@@ -202,14 +84,6 @@ final class UnblockSourceStore: ObservableObject {
     private let legacyLXKey = "beans.unblock.lxScripts"
 
     private init() {
-        if Self.singleSourceMode {
-            sources = [Self.singlePresetSource]
-            defaults.removeObject(forKey: legacyCustomKey)
-            defaults.removeObject(forKey: legacyLXKey)
-            save()
-            return
-        }
-
         let savedSources: [ThirdPartySource]
         if let data = defaults.data(forKey: presetsKey),
            let list = try? JSONDecoder().decode([ThirdPartySource].self, from: data) {
@@ -221,37 +95,20 @@ final class UnblockSourceStore: ObservableObject {
             savedSources = []
         }
 
-        // 既保留当前支持的预设，也保留用户导入/创建的自定义音源。
-        // 预设项按内置模板更新字段，自定义项保持原样。
-        let supportedPresetIDs = Set(Self.presetSources.map(\.id))
-        var normalized: [ThirdPartySource] = []
+        // 旧版本的内置预设全部丢弃，只保留用户导入的配置。
         var seen = Set<String>()
-        for source in savedSources {
-            if source.isPreset {
-                guard supportedPresetIDs.contains(source.id) else { continue }
-                guard let preset = Self.presetSources.first(where: { $0.id == source.id }) else { continue }
-                var updated = preset
-                updated.name = source.name.isEmpty ? preset.name : source.name
-                updated.kind = source.kind.isEmpty ? preset.kind : source.kind
-                updated.template = source.template.isEmpty ? preset.template : source.template
-                updated.urlPath = source.urlPath.isEmpty ? preset.urlPath : source.urlPath
-                updated.headers = source.headers.isEmpty ? preset.headers : source.headers
-                updated.enabled = source.enabled
-                updated.isPreset = true
-                updated.isFree = preset.isFree
-                if seen.insert(updated.id).inserted {
-                    normalized.append(updated)
-                }
-            } else if seen.insert(source.id).inserted {
-                normalized.append(source)
-            }
+        sources = savedSources.compactMap { source in
+            guard !Self.removedBuiltInSourceIDs.contains(source.id),
+                  seen.insert(source.id).inserted else { return nil }
+            return source
         }
-        for preset in Self.presetSources where !seen.contains(preset.id) {
-            normalized.append(preset)
-        }
-        sources = normalized
         defaults.removeObject(forKey: legacyCustomKey)
         defaults.removeObject(forKey: legacyLXKey)
+        defaults.removeObject(forKey: "beans.thirdPartyAPIKeys")
+        defaults.removeObject(forKey: "beans.paidAudioSource.usageRecorded")
+        defaults.removeObject(forKey: "beans.enableUnblock")
+        defaults.removeObject(forKey: "beans.useFreeAudioSource")
+        defaults.removeObject(forKey: "beans.showThirdPartyKeys")
         save()
     }
 
@@ -261,25 +118,11 @@ final class UnblockSourceStore: ObservableObject {
         }
     }
 
-    static var hasPaidAudioSourceUsageRecord: Bool {
-        UserDefaults.standard.bool(forKey: paidAudioSourceUsageRecordedKey)
-    }
-
-    static func recordPaidAudioSourceUsage() {
-        UserDefaults.standard.set(true, forKey: paidAudioSourceUsageRecordedKey)
-    }
-
-    func isProtectedPreset(_ source: ThirdPartySource) -> Bool {
-        source.isPreset || Self.protectedPresetSourceIDs.contains(source.id)
-    }
-
     func addSource(_ source: ThirdPartySource) {
-        guard !Self.singleSourceMode else { return }
         upsert(source)
     }
 
     func addSources(_ newSources: [ThirdPartySource]) {
-        guard !Self.singleSourceMode else { return }
         guard !newSources.isEmpty else { return }
         var merged = sources
         for source in newSources {
@@ -294,7 +137,6 @@ final class UnblockSourceStore: ObservableObject {
     }
 
     func upsert(_ source: ThirdPartySource) {
-        guard !Self.singleSourceMode else { return }
         var merged = sources
         if let index = merged.firstIndex(where: { $0.id == source.id }) {
             merged[index] = source
@@ -306,7 +148,6 @@ final class UnblockSourceStore: ObservableObject {
     }
 
     func moveSource(id: String, by offset: Int) {
-        guard !Self.singleSourceMode else { return }
         guard let index = sources.firstIndex(where: { $0.id == id }) else { return }
         let target = min(max(0, index + offset), max(0, sources.count - 1))
         guard target != index else { return }
@@ -318,7 +159,6 @@ final class UnblockSourceStore: ObservableObject {
     }
 
     func moveManagementSource(id: String, by offset: Int) {
-        guard !Self.singleSourceMode else { return }
         let visibleIDs = managementVisibleSources.map(\.id)
         guard let visibleIndex = visibleIDs.firstIndex(of: id) else { return }
         let targetVisibleIndex = visibleIndex + offset
@@ -338,7 +178,6 @@ final class UnblockSourceStore: ObservableObject {
     }
 
     func updateEnabled(id: String, enabled: Bool) {
-        guard !Self.singleSourceMode else { return }
         guard let index = sources.firstIndex(where: { $0.id == id }) else { return }
         var updated = sources
         updated[index].enabled = enabled
@@ -348,8 +187,6 @@ final class UnblockSourceStore: ObservableObject {
 
     @discardableResult
     func removeSource(id: String) -> Bool {
-        guard !Self.singleSourceMode else { return false }
-        guard !Self.protectedPresetSourceIDs.contains(id) else { return false }
         let originalCount = sources.count
         sources.removeAll { $0.id == id }
         save()
@@ -359,37 +196,12 @@ final class UnblockSourceStore: ObservableObject {
 }
 
 extension UnblockSourceStore {
-    func availableThirdPartyQualities(
-        usingFreeSources: Bool,
-        usingPaidSources: Bool? = nil
-    ) -> [ThirdPartyAudioQuality] {
-        let includePaid = usingPaidSources ?? !usingFreeSources
-        let activeSources = Self.activeSources(
-            from: sources,
-            useFreeSources: usingFreeSources,
-            includePaidSources: includePaid
-        )
-        let options = activeSources
+    func availableThirdPartyQualities() -> [ThirdPartyAudioQuality] {
+        let options = sources
+            .filter(\.enabled)
             .flatMap { Self.supportedQualities(for: $0) }
             .uniquePreservingOrder()
         return options.isEmpty ? ThirdPartyAudioQuality.allCases : options
-    }
-
-    static func activeSources(
-        from allSources: [ThirdPartySource],
-        useFreeSources: Bool,
-        includePaidSources: Bool = false
-    ) -> [ThirdPartySource] {
-        if singleSourceMode {
-            return [singlePresetSource]
-        }
-        return allSources.filter { source in
-            guard source.enabled else { return false }
-            if source.isFree {
-                return useFreeSources
-            }
-            return includePaidSources
-        }
     }
 
     static func supportedQualities(
@@ -425,10 +237,6 @@ extension UnblockSourceStore {
             return ThirdPartyAudioQuality.supported(providerCode: sourceProvider)
         }
 
-        let kind = source.kind.lowercased()
-        if source.isFree || kind.contains("free") {
-            return [.kb128, .kb320, .flac, .flac24bit]
-        }
         return ThirdPartyAudioQuality.allCases
     }
 

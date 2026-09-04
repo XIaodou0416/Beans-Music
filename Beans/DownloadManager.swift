@@ -180,10 +180,6 @@ final class DownloadManager {
             )
         }
 
-        if UnblockSourceStore.singleSourceMode {
-            return nil
-        }
-
         if song.source == .qq, let mid = song.qqMid {
             guard let result = try? await QQMusicAPI.shared.songURLResult(
                 songmid: mid,
