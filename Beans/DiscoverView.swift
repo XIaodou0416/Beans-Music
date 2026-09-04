@@ -1513,13 +1513,35 @@ struct QQTopListDetailView: View {
 
     @MainActor
     private func load() async {
-        loading = true
-        errorMessage = nil
+        let cache = DetailSongsCache.shared
+        let cacheKey = "qq-top-\(topID)"
+        if let cached = cache.cachedSongs(for: cacheKey) {
+            tracks = cached.songs
+            loading = false
+            errorMessage = nil
+            if cache.isFresh(cached) {
+                return
+            }
+        } else {
+            loading = true
+            errorMessage = nil
+        }
         do {
-            tracks = try await QQMusicAPI.shared.topListSongs(topid: topID)
+            let songs = try await QQMusicAPI.shared.topListSongs(topid: topID)
+            if !songs.isEmpty {
+                tracks = songs
+                cache.save(songs, for: cacheKey)
+            }
             loading = false
         } catch {
-            errorMessage = error.localizedDescription
+            if tracks.isEmpty {
+                errorMessage = error.localizedDescription
+            } else {
+                BeansLogger.shared.log(
+                    "QQ 排行榜详情后台刷新失败，继续使用缓存 topID=\(topID) error=\(error.localizedDescription)",
+                    level: .warn
+                )
+            }
             loading = false
         }
     }
@@ -1784,13 +1806,35 @@ struct TopListDetailView: View {
 
     @MainActor
     private func load() async {
-        loading = true
-        errorMessage = nil
+        let cache = DetailSongsCache.shared
+        let cacheKey = "netease-top-\(topList.id)"
+        if let cached = cache.cachedSongs(for: cacheKey) {
+            tracks = cached.songs
+            loading = false
+            errorMessage = nil
+            if cache.isFresh(cached) {
+                return
+            }
+        } else {
+            loading = true
+            errorMessage = nil
+        }
         do {
-            tracks = try await NetEaseAPI.shared.playlistTracks(id: topList.id)
+            let songs = try await NetEaseAPI.shared.playlistTracks(id: topList.id)
+            if !songs.isEmpty {
+                tracks = songs
+                cache.save(songs, for: cacheKey)
+            }
             loading = false
         } catch {
-            errorMessage = error.localizedDescription
+            if tracks.isEmpty {
+                errorMessage = error.localizedDescription
+            } else {
+                BeansLogger.shared.log(
+                    "网易云排行榜详情后台刷新失败，继续使用缓存 id=\(topList.id) error=\(error.localizedDescription)",
+                    level: .warn
+                )
+            }
             loading = false
         }
     }
@@ -1907,13 +1951,35 @@ struct KugouTopListDetailView: View {
 
     @MainActor
     private func load() async {
-        loading = true
-        errorMessage = nil
+        let cache = DetailSongsCache.shared
+        let cacheKey = "kugou-top-\(topList.id)"
+        if let cached = cache.cachedSongs(for: cacheKey) {
+            tracks = cached.songs
+            loading = false
+            errorMessage = nil
+            if cache.isFresh(cached) {
+                return
+            }
+        } else {
+            loading = true
+            errorMessage = nil
+        }
         do {
-            tracks = try await KugouMusicAPI.shared.rankSongs(rankID: topList.id)
+            let songs = try await KugouMusicAPI.shared.rankSongs(rankID: topList.id)
+            if !songs.isEmpty {
+                tracks = songs
+                cache.save(songs, for: cacheKey)
+            }
             loading = false
         } catch {
-            errorMessage = error.localizedDescription
+            if tracks.isEmpty {
+                errorMessage = error.localizedDescription
+            } else {
+                BeansLogger.shared.log(
+                    "酷狗排行榜详情后台刷新失败，继续使用缓存 id=\(topList.id) error=\(error.localizedDescription)",
+                    level: .warn
+                )
+            }
             loading = false
         }
     }

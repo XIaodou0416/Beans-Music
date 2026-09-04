@@ -930,8 +930,22 @@ struct AlbumDetailView: View {
     }
 
     private func load() async {
+        let cache = DetailSongsCache.shared
+        let cacheKey = "album-\(album.source.rawValue)-\(album.id)"
+        if let cached = cache.cachedSongs(for: cacheKey) {
+            await MainActor.run {
+                tracks = cached.songs
+                isLoading = false
+                errorMessage = nil
+            }
+            if cache.isFresh(cached) {
+                return
+            }
+        }
         await MainActor.run {
-            isLoading = true
+            if tracks.isEmpty {
+                isLoading = true
+            }
             errorMessage = nil
         }
         do {
@@ -967,6 +981,9 @@ struct AlbumDetailView: View {
                     }
                 )
             }
+            if !result.isEmpty {
+                cache.save(result, for: cacheKey)
+            }
             await MainActor.run {
                 tracks = result
                 isLoading = false
@@ -974,7 +991,14 @@ struct AlbumDetailView: View {
             }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                if tracks.isEmpty {
+                    errorMessage = error.localizedDescription
+                } else {
+                    BeansLogger.shared.log(
+                        "专辑详情后台刷新失败，继续使用缓存 album=\(album.id) error=\(error.localizedDescription)",
+                        level: .warn
+                    )
+                }
                 isLoading = false
             }
         }
