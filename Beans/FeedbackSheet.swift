@@ -249,24 +249,24 @@ struct FeedbackSheet: View {
         for result in results {
             let provider = result.itemProvider
             let contentType = provider.registeredTypeIdentifiers
-                .compactMap { UTType(identifier: $0) }
+                .compactMap { UTType($0) }
                 .first(where: {
-                $0.conforms(to: .image) || $0.conforms(to: .movie)
+                $0.conforms(to: UTType.image) || $0.conforms(to: UTType.movie)
                 }) ?? .data
-            guard contentType.conforms(to: .image) || contentType.conforms(to: .movie) else {
+            guard contentType.conforms(to: UTType.image) || contentType.conforms(to: UTType.movie) else {
                 errorMessage = beansLocalized("只能添加图片或视频附件。", "Only image and video attachments are supported.")
                 continue
             }
 
             guard let typeIdentifier = provider.registeredTypeIdentifiers.first(where: {
-                UTType(identifier: $0)?.conforms(to: contentType) == true
+                UTType($0)?.conforms(to: contentType) == true
             }), let data = try? await loadPhotoData(from: provider, typeIdentifier: typeIdentifier) else {
                 errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
                 continue
             }
 
             let fileExtension = contentType.preferredFilenameExtension
-                ?? (contentType.conforms(to: .movie) ? "mov" : "jpg")
+                ?? (contentType.conforms(to: UTType.movie) ? "mov" : "jpg")
             let directory = FileManager.default.temporaryDirectory
                 .appendingPathComponent("BeansFeedbackUploads", isDirectory: true)
             let destination = directory
@@ -275,7 +275,7 @@ struct FeedbackSheet: View {
 
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                try data.write(to: destination, options: .atomic)
+                try data.write(to: destination, options: Data.WritingOptions.atomic)
                 attachments.append(FeedbackAttachment(url: destination, contentType: contentType))
             } catch {
                 errorMessage = beansLocalized("附件保存失败，请重新选择。", "The attachment could not be saved. Please choose it again.")
