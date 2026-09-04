@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
 
       - name: Bump build number (版本号由维护者在 project.yml 手动改，CI 只递增内部构建号)
         id: bump
