@@ -432,12 +432,18 @@ private struct BeansDetailMiniPlayerModifier: ViewModifier {
                 }
             }
             .fullScreenCover(isPresented: $showPlayer) {
-                PlayerView(isPresented: $showPlayer)
-                    .environmentObject(auth)
-                    .environmentObject(player)
-                    .environmentObject(player.clock)
-                    .environmentObject(theme)
-                    .environmentObject(favorites)
+                // 详情页使用与主页相同的播放页容器，确保顶部下拉手势可以关闭播放器。
+                BeansNowPlayingPresentation(
+                    isPresented: $showPlayer,
+                    usesSystemInteractiveDismissal: false
+                ) {
+                    PlayerView(isPresented: $showPlayer)
+                        .environmentObject(auth)
+                        .environmentObject(player)
+                        .environmentObject(player.clock)
+                        .environmentObject(theme)
+                        .environmentObject(favorites)
+                }
             }
     }
 }
