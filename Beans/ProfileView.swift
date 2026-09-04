@@ -45,6 +45,7 @@ struct ProfileView: View {
     @State private var loadingRemoteDonors = false
     @State private var showWeChatOpenError = false
     @State private var showFeedback = false
+    @ObservedObject private var feedbackHistory = FeedbackHistoryStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
@@ -714,9 +715,14 @@ struct ProfileView: View {
                     Text(beansLocalized("问题反馈", "Feedback"))
                         .font(BeansFont.appFont(14, .semibold))
                         .foregroundStyle(Color.beansLabel)
-                    Text(beansLocalized("提交设备信息与遇到的问题", "Send your device details and issue"))
+                    Text(feedbackHistory.unreadReplyCount > 0
+                         ? beansLocalized(
+                             "有 \(feedbackHistory.unreadReplyCount) 条新回复",
+                             "\(feedbackHistory.unreadReplyCount) new repl\(feedbackHistory.unreadReplyCount == 1 ? "y" : "ies")"
+                         )
+                         : beansLocalized("提交设备信息与遇到的问题", "Send your device details and issue"))
                         .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
+                        .foregroundStyle(feedbackHistory.unreadReplyCount > 0 ? Color.beansAmber : Color.beansComment)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")

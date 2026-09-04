@@ -109,6 +109,62 @@ final class DeviceReporter {
         )
     }
 
+    func fetchFeedbackHistory() async throws -> [FeedbackServerRecord] {
+        guard var components = URLComponents(
+            url: endpoint(for: "feedback").appendingPathComponent("mine"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw BackendRequestError.invalidResponse
+        }
+        components.queryItems = [
+            URLQueryItem(name: "user_id", value: DeviceIdentity.userID)
+        ]
+        guard let url = components.url else {
+            throw BackendRequestError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+        request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response)
+        let result = try JSONDecoder().decode(FeedbackListResponse.self, from: data)
+        guard result.ok != false else {
+            throw BackendRequestError.server(result.message ?? "获取反馈记录失败")
+        }
+        return result.feedback
+    }
+
+    func deleteMyFeedback(feedbackID: String) async throws {
+        let url = endpoint(for: "feedback")
+            .appendingPathComponent("mine")
+            .appendingPathComponent(feedbackID)
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.timeoutInterval = 8
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(DeviceIdentity.userID, forHTTPHeaderField: "X-Beans-User-ID")
+        request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "user_id": DeviceIdentity.userID
+        ])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response)
+        let result = try decodeResponse(data)
+        guard result.ok != false else {
+            throw BackendRequestError.server(result.message ?? "删除反馈失败")
+        }
+    }
+
+    func backendURL(for rawValue: String) -> URL? {
+        if let absoluteURL = URL(string: rawValue), absoluteURL.scheme != nil {
+            return absoluteURL
+        }
+        let root = apiEndpoint.deletingLastPathComponent()
+        return URL(string: rawValue, relativeTo: root)?.absoluteURL
+    }
+
     private func endpoint(for action: String) -> URL {
         apiEndpoint.appendingPathComponent(action)
     }
@@ -206,6 +262,7 @@ final class DeviceReporter {
         if response.downloadUnlocked == true {
             UserDefaults.standard.set(true, forKey: BeansBackendSettings.downloadUnlockKey)
         }
+        FeedbackHistoryStore.shared.receiveServerReplies(response.feedbackReplies)
     }
 
     private func decodeResponse(_ data: Data) throws -> BackendResponse {
@@ -225,12 +282,28 @@ private struct BackendResponse: Decodable {
     let downloadUnlocked: Bool?
     let feedbackID: String?
     let submittedAt: String?
+    let feedbackReplies: [FeedbackReply]
 
     enum CodingKeys: String, CodingKey {
         case ok, message, blocked
         case downloadUnlocked = "download_unlocked"
         case feedbackID = "feedback_id"
         case submittedAt = "submitted_at"
+        case feedbackReplies = "feedback_replies"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try container.decodeIfPresent(Bool.self, forKey: .ok)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        blocked = try container.decodeIfPresent(Bool.self, forKey: .blocked)
+        downloadUnlocked = try container.decodeIfPresent(Bool.self, forKey: .downloadUnlocked)
+        feedbackID = try container.decodeIfPresent(String.self, forKey: .feedbackID)
+        submittedAt = try container.decodeIfPresent(String.self, forKey: .submittedAt)
+        feedbackReplies = try container.decodeIfPresent(
+            [FeedbackReply].self,
+            forKey: .feedbackReplies
+        ) ?? []
     }
 
     init() {
@@ -240,6 +313,24 @@ private struct BackendResponse: Decodable {
         downloadUnlocked = nil
         feedbackID = nil
         submittedAt = nil
+        feedbackReplies = []
+    }
+}
+
+private struct FeedbackListResponse: Decodable {
+    let ok: Bool?
+    let message: String?
+    let feedback: [FeedbackServerRecord]
+
+    enum CodingKeys: String, CodingKey {
+        case ok, message, feedback
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try container.decodeIfPresent(Bool.self, forKey: .ok)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        feedback = try container.decodeIfPresent([FeedbackServerRecord].self, forKey: .feedback) ?? []
     }
 }
 

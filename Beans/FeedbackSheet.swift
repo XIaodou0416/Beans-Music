@@ -35,6 +35,8 @@ struct FeedbackSheet: View {
     @State private var showPhotoPicker = false
     @State private var isSubmitting = false
     @State private var errorMessage: String?
+    @State private var feedbackToDelete: FeedbackHistoryEntry?
+    @State private var deletingFeedbackID: String?
 
     private var canSubmit: Bool {
         !phoneModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -211,6 +213,21 @@ struct FeedbackSheet: View {
         } message: {
             Text(errorMessage ?? "")
         }
+        .confirmationDialog(
+            beansLocalized("删除这条反馈工单？", "Delete this feedback ticket?"),
+            item: $feedbackToDelete
+        ) { entry in
+            Button(beansLocalized("删除工单", "Delete ticket"), role: .destructive) {
+                deleteFeedback(entry)
+            }
+            Button(beansLocalized("取消", "Cancel"), role: .cancel) {}
+        } message: { _ in
+            Text(beansLocalized("删除后无法恢复。", "This cannot be undone."))
+        }
+        .task {
+            await history.refreshFromServer()
+            history.markRepliesRead()
+        }
     }
 
     private func feedbackField(title: String, prompt: String, text: Binding<String>) -> some View {
@@ -245,6 +262,20 @@ struct FeedbackSheet: View {
                             Text(entry.attachmentCount == 0
                                  ? beansLocalized("无附件", "No attachments")
                                  : beansLocalized("附件 \(entry.attachmentCount)", "\(entry.attachmentCount) attachments"))
+                            Button {
+                                feedbackToDelete = entry
+                            } label: {
+                                if deletingFeedbackID == entry.feedbackID {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "trash")
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Color.beansComment)
+                            .disabled(deletingFeedbackID != nil)
+                            .accessibilityLabel(beansLocalized("删除工单", "Delete ticket"))
                         }
                         .font(BeansFont.appFont(11))
                         .foregroundStyle(Color.beansComment)
@@ -252,6 +283,9 @@ struct FeedbackSheet: View {
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansLabel)
                             .lineLimit(2)
+                        ForEach(entry.replies) { reply in
+                            feedbackReplyView(reply)
+                        }
                     }
                     .padding(.vertical, 10)
                     if entry.id != history.entries.last?.id {
@@ -262,6 +296,97 @@ struct FeedbackSheet: View {
             .padding(.horizontal, 12)
             .background {
                 BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
+    }
+
+    private func feedbackReplyView(_ reply: FeedbackReply) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrowshape.turn.up.left.fill")
+                Text(beansLocalized("后台回复", "Admin reply"))
+                Spacer()
+                if !reply.sentAt.isEmpty {
+                    Text(reply.sentAt)
+                }
+            }
+            .font(BeansFont.appFont(11, .semibold))
+            .foregroundStyle(Color.beansAmber)
+
+            if !reply.text.isEmpty {
+                Text(reply.text)
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !reply.attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(reply.attachments) { attachment in
+                            feedbackAttachmentView(attachment)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background {
+            BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .padding(.top, 5)
+    }
+
+    @ViewBuilder
+    private func feedbackAttachmentView(_ attachment: FeedbackRemoteAttachment) -> some View {
+        if let url = DeviceReporter.shared.backendURL(for: attachment.url) {
+            if attachment.isVideo {
+                Link(destination: url) {
+                    Label(
+                        attachment.originalName.isEmpty
+                            ? beansLocalized("打开视频", "Open video")
+                            : attachment.originalName,
+                        systemImage: "video.fill"
+                    )
+                    .font(BeansFont.appFont(11, .medium))
+                    .foregroundStyle(Color.beansLabel)
+                    .padding(.horizontal, 10)
+                    .frame(height: 34)
+                    .background {
+                        BeansGlass(shape: Capsule())
+                    }
+                }
+            } else {
+                Link(destination: url) {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else if phase.error == nil {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "photo")
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                    .frame(width: 74, height: 54)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+            }
+        }
+    }
+
+    private func deleteFeedback(_ entry: FeedbackHistoryEntry) {
+        guard deletingFeedbackID == nil else { return }
+        deletingFeedbackID = entry.feedbackID
+        Task {
+            do {
+                try await DeviceReporter.shared.deleteMyFeedback(feedbackID: entry.feedbackID)
+                history.remove(entry)
+                deletingFeedbackID = nil
+                ToastCenter.shared.show(beansLocalized("反馈工单已删除", "Feedback ticket deleted"))
+            } catch {
+                deletingFeedbackID = nil
+                errorMessage = error.localizedDescription
             }
         }
     }
