@@ -414,6 +414,7 @@ private struct BeansDetailMiniPlayerModifier: ViewModifier {
     @EnvironmentObject private var theme: ThemeStore
     @ObservedObject private var favorites = FavoritesStore.shared
     @State private var showPlayer = false
+    @Namespace private var nowPlayingTransition
 
     func body(content: Content) -> some View {
         content
@@ -421,7 +422,8 @@ private struct BeansDetailMiniPlayerModifier: ViewModifier {
                 if player.currentSong != nil {
                     MiniPlayerView(
                         showPlayer: $showPlayer,
-                        presentation: .dock
+                        presentation: .dock,
+                        transitionNamespace: nowPlayingTransition
                     )
                     .environmentObject(player.clock)
                     .environmentObject(theme)
@@ -432,18 +434,37 @@ private struct BeansDetailMiniPlayerModifier: ViewModifier {
                 }
             }
             .fullScreenCover(isPresented: $showPlayer) {
-                BeansNowPlayingPresentation(
-                    isPresented: $showPlayer,
-                    usesSystemInteractiveDismissal: false
-                ) {
-                    PlayerView(isPresented: $showPlayer)
-                        .environmentObject(auth)
-                        .environmentObject(player)
-                        .environmentObject(player.clock)
-                        .environmentObject(theme)
-                        .environmentObject(favorites)
+                if #available(iOS 18.0, *) {
+                    detailPlayerPresentation
+                        .presentationBackground(.clear)
+                        .navigationTransition(
+                            .zoom(
+                                sourceID: BeansNowPlayingTransitionID.surface,
+                                in: nowPlayingTransition
+                            )
+                        )
+                } else if #available(iOS 16.4, *) {
+                    detailPlayerPresentation
+                        .presentationBackground(.clear)
+                } else {
+                    detailPlayerPresentation
                 }
             }
+    }
+
+    private var detailPlayerPresentation: some View {
+        BeansNowPlayingPresentation(
+            isPresented: $showPlayer,
+            usesSystemInteractiveDismissal: true
+        ) {
+            PlayerView(isPresented: $showPlayer)
+                .environmentObject(auth)
+                .environmentObject(player)
+                .environmentObject(player.clock)
+                .environmentObject(theme)
+                .environmentObject(favorites)
+                .ignoresSafeArea()
+        }
     }
 }
 
