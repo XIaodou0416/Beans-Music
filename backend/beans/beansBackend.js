@@ -90,6 +90,7 @@ function createBeansRouter(options = {}) {
         url: `/beans/uploads/${encodeURIComponent(file.filename)}`,
       }));
       const feedbackID = crypto.randomUUID();
+      const submittedAt = now();
 
       mutateDatabase((database) => {
         const storedUser = database.users[user.user_id];
@@ -103,12 +104,13 @@ function createBeansRouter(options = {}) {
           phone_system: phoneSystem,
           problem,
           attachments,
-          submitted_at: now(),
+          submitted_at: submittedAt,
         });
       });
 
       return response.json({
         feedback_id: feedbackID,
+        submitted_at: submittedAt,
         ...publicUserState(loadDatabase().users[user.user_id]),
       });
     } catch (error) {
@@ -522,9 +524,16 @@ function renderAdminPage(database, section = 'overview') {
     </tr>
   `).join('');
   const feedbackRows = database.feedback.slice(0, 500).map((item) => {
-    const attachments = (item.attachments || []).map((attachment) =>
-      `<a href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener">${escapeHtml(attachment.mime_type?.startsWith('video/') ? '视频' : '图片')}</a>`
-    ).join(' ');
+    const attachments = (item.attachments || []).map((attachment) => {
+      const url = escapeHtml(attachment.url);
+      if (attachment.mime_type?.startsWith('video/')) {
+        return `<div class="feedback-media"><video controls preload="metadata" src="${url}"></video><a href="${url}" target="_blank" rel="noopener">打开视频</a></div>`;
+      }
+      if (attachment.mime_type?.startsWith('image/')) {
+        return `<div class="feedback-media"><a href="${url}" target="_blank" rel="noopener"><img src="${url}" loading="lazy" alt="反馈图片"></a></div>`;
+      }
+      return `<a href="${url}" target="_blank" rel="noopener">打开附件</a>`;
+    }).join('');
     const deleteButton = `<form method="post" action="/beans/admin/feedback/${encodeURIComponent(item.id)}/delete" onsubmit="return confirm('确定删除这条反馈工单？')"><button class="danger">删除工单</button></form>`;
     return `<tr><td>${escapeHtml(item.submitted_at)}</td><td class="id">${escapeHtml(item.user_id)}</td><td>${escapeHtml(item.phone_model)}<br><small>${escapeHtml(item.phone_system)}</small></td><td class="problem">${escapeHtml(item.problem)}<div class="media">${attachments}</div></td><td>${deleteButton}</td></tr>`;
   }).join('');
@@ -535,7 +544,7 @@ function renderAdminPage(database, section = 'overview') {
       ? `<section class="panel"><h2>反馈列表</h2><table><thead><tr><th>时间</th><th>用户</th><th>填写设备</th><th>反馈内容与附件</th><th>操作</th></tr></thead><tbody>${feedbackRows || emptyRow('暂无反馈')}</tbody></table></section>`
       : `<section class="metrics"><article class="metric"><small>总用户</small><b>${stats.total_users}</b></article><article class="metric"><small>软件访问量</small><b>${stats.access_count}</b></article><article class="metric"><small>当前在线</small><b>${stats.online_users}</b><small>最近 ${ONLINE_WINDOW_MS / 60000} 分钟有心跳</small></article><article class="metric"><small>反馈数量</small><b>${stats.total_feedback}</b></article></section><section class="panel overview"><h2>使用情况</h2><p>最近一次访问：${escapeHtml(stats.last_access_at || '暂无记录')}</p><p>在线用户通过应用每分钟心跳更新，离开超过 ${ONLINE_WINDOW_MS / 60000} 分钟后自动视为离线。</p></section>`;
 
-  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beans 后台</title><style>:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#182230;background:#f8fafc}body{margin:0}.page{max-width:1500px;margin:0 auto;padding:28px}.bar{margin-bottom:24px}.bar h1{font-size:25px;margin:0}.bar p,small{color:#667085}.nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.nav a{color:#344054;text-decoration:none;background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:8px 12px}.nav a.active{color:#fff;background:#182230;border-color:#182230}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.metric,.panel{background:#fff;border:1px solid #eaecf0;border-radius:12px}.metric{padding:18px}.metric b{display:block;font-size:30px;margin-top:8px}.panel{overflow:auto;margin-top:20px}.panel h2{font-size:17px;padding:18px 18px 0;margin:0}.overview{padding-bottom:18px}.overview p{padding:0 18px;color:#667085}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:12px 14px;border-bottom:1px solid #eaecf0;vertical-align:top;text-align:left}th{color:#667085;background:#fcfcfd}.id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}.problem{max-width:500px;white-space:pre-wrap;word-break:break-word}.media{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap}.media a{color:#175cd3;text-decoration:none}.status{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px}.status.online{color:#067647;background:#ecfdf3}.status.offline{color:#667085;background:#f2f4f7}input[name=action_note]{width:150px;box-sizing:border-box;padding:6px;border:1px solid #d0d5dd;border-radius:6px}button{border:0;border-radius:7px;padding:7px 10px;background:#182230;color:#fff;cursor:pointer}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.page{padding:16px}.metrics{grid-template-columns:1fr}}</style><body><main class="page"><header class="bar"><h1>Beans 后台</h1><p>用户、反馈与访问情况</p><nav class="nav"><a class="${section === 'overview' ? 'active' : ''}" href="/beans/admin">概览</a><a class="${section === 'users' ? 'active' : ''}" href="/beans/admin/users">用户</a><a class="${section === 'feedback' ? 'active' : ''}" href="/beans/admin/feedback">反馈</a></nav></header>${body}</main></body></html>`;
+  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beans 后台</title><style>:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#182230;background:#f8fafc}body{margin:0}.page{max-width:1500px;margin:0 auto;padding:28px}.bar{margin-bottom:24px}.bar h1{font-size:25px;margin:0}.bar p,small{color:#667085}.nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.nav a{color:#344054;text-decoration:none;background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:8px 12px}.nav a.active{color:#fff;background:#182230;border-color:#182230}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.metric,.panel{background:#fff;border:1px solid #eaecf0;border-radius:12px}.metric{padding:18px}.metric b{display:block;font-size:30px;margin-top:8px}.panel{overflow:auto;margin-top:20px}.panel h2{font-size:17px;padding:18px 18px 0;margin:0}.overview{padding-bottom:18px}.overview p{padding:0 18px;color:#667085}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:12px 14px;border-bottom:1px solid #eaecf0;vertical-align:top;text-align:left}th{color:#667085;background:#fcfcfd}.id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}.problem{max-width:500px;white-space:pre-wrap;word-break:break-word}.media{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap}.media a{color:#175cd3;text-decoration:none}.feedback-media{display:inline-flex;flex-direction:column;gap:5px;margin:6px 8px 0 0;vertical-align:top}.feedback-media img,.feedback-media video{display:block;width:min(240px,40vw);max-height:220px;object-fit:cover;border-radius:8px;background:#101828}.status{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px}.status.online{color:#067647;background:#ecfdf3}.status.offline{color:#667085;background:#f2f4f7}input[name=action_note]{width:150px;box-sizing:border-box;padding:6px;border:1px solid #d0d5dd;border-radius:6px}button{border:0;border-radius:7px;padding:7px 10px;background:#182230;color:#fff;cursor:pointer}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.page{padding:16px}.metrics{grid-template-columns:1fr}.feedback-media img,.feedback-media video{width:min(260px,70vw)}}</style><body><main class="page"><header class="bar"><h1>Beans 后台</h1><p>用户、反馈与访问情况</p><nav class="nav"><a class="${section === 'overview' ? 'active' : ''}" href="/beans/admin">概览</a><a class="${section === 'users' ? 'active' : ''}" href="/beans/admin/users">用户</a><a class="${section === 'feedback' ? 'active' : ''}" href="/beans/admin/feedback">反馈</a></nav></header>${body}</main></body></html>`;
 
   function emptyRow(label) {
     const columnCount = section === 'feedback' ? 5 : 5;

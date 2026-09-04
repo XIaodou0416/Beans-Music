@@ -22,7 +22,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app
-        MARKETING_VERSION: "1.6.3"
+        MARKETING_VERSION: "1.6.4"
         CURRENT_PROJECT_VERSION: "36"
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_OBJC_BRIDGING_HEADER: Beans/Beans-Bridging-Header.h

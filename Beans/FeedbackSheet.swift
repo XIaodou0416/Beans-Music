@@ -22,9 +22,11 @@ private struct FeedbackAttachment: Identifiable, Hashable {
     }
 }
 
+@MainActor
 struct FeedbackSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var theme: ThemeStore
+    @ObservedObject private var history = FeedbackHistoryStore.shared
 
     @State private var phoneModel = ""
     @State private var phoneSystem = ""
@@ -54,6 +56,10 @@ struct FeedbackSheet: View {
                             Text(beansLocalized("请填写设备信息和遇到的问题；图片与视频可选。", "Device details and an issue description are required. Images and videos are optional."))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
+                        }
+
+                        if !history.entries.isEmpty {
+                            feedbackHistorySection
                         }
 
                         feedbackField(
@@ -225,6 +231,41 @@ struct FeedbackSheet: View {
         }
     }
 
+    private var feedbackHistorySection: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(beansLocalized("反馈记录", "Feedback history"))
+                .font(BeansFont.appFont(13, .semibold))
+                .foregroundStyle(Color.beansLabel)
+            VStack(spacing: 0) {
+                ForEach(history.entries) { entry in
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 8) {
+                            Text(entry.submittedAt, style: .date)
+                            Spacer()
+                            Text(entry.attachmentCount == 0
+                                 ? beansLocalized("无附件", "No attachments")
+                                 : beansLocalized("附件 \(entry.attachmentCount)", "\(entry.attachmentCount) attachments"))
+                        }
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                        Text(entry.problem)
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansLabel)
+                            .lineLimit(2)
+                    }
+                    .padding(.vertical, 10)
+                    if entry.id != history.entries.last?.id {
+                        Divider().overlay(Color.beansComment.opacity(0.14))
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .background {
+                BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
+    }
+
     private func addAttachment(_ sourceURL: URL) {
         let shouldStop = sourceURL.startAccessingSecurityScopedResource()
         defer {
@@ -320,6 +361,12 @@ struct FeedbackSheet: View {
                     if result.downloadUnlocked {
                         UserDefaults.standard.set(true, forKey: BeansBackendSettings.downloadUnlockKey)
                     }
+                    history.record(
+                        feedbackID: result.feedbackID,
+                        submittedAt: result.submittedAt,
+                        problem: problem,
+                        attachmentCount: currentAttachments.count
+                    )
                     currentAttachments.forEach { try? FileManager.default.removeItem(at: $0) }
                     ToastCenter.shared.show(
                         result.downloadUnlocked

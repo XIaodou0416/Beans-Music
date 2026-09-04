@@ -3,6 +3,8 @@ import UIKit
 
 struct FeedbackSubmissionResult: Sendable {
     let downloadUnlocked: Bool
+    let feedbackID: String
+    let submittedAt: String?
 }
 
 enum BeansBackendSettings {
@@ -100,7 +102,11 @@ final class DeviceReporter {
             throw BackendRequestError.server(response.message ?? "提交失败")
         }
         applyServerState(response)
-        return FeedbackSubmissionResult(downloadUnlocked: response.downloadUnlocked == true)
+        return FeedbackSubmissionResult(
+            downloadUnlocked: response.downloadUnlocked == true,
+            feedbackID: response.feedbackID ?? UUID().uuidString,
+            submittedAt: response.submittedAt
+        )
     }
 
     private func endpoint(for action: String) -> URL {
@@ -217,10 +223,14 @@ private struct BackendResponse: Decodable {
     let message: String?
     let blocked: Bool?
     let downloadUnlocked: Bool?
+    let feedbackID: String?
+    let submittedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case ok, message, blocked
         case downloadUnlocked = "download_unlocked"
+        case feedbackID = "feedback_id"
+        case submittedAt = "submitted_at"
     }
 
     init() {
@@ -228,6 +238,8 @@ private struct BackendResponse: Decodable {
         message = nil
         blocked = nil
         downloadUnlocked = nil
+        feedbackID = nil
+        submittedAt = nil
     }
 }
 
