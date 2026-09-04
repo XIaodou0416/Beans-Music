@@ -304,7 +304,7 @@ struct Album: Identifiable, Hashable {
     var trackCount: Int?
 }
 
-struct Playlist: Identifiable, Hashable {
+struct Playlist: Identifiable, Hashable, Codable {
     let id: Int
     let name: String
     var coverURL: URL?

@@ -10,6 +10,8 @@ enum BeansEqualizerPreset: String, CaseIterable, Identifiable {
     case pop
     case rock
     case classical
+    case jazz
+    case electronic
     case custom
 
     var id: String { rawValue }
@@ -22,20 +24,38 @@ enum BeansEqualizerPreset: String, CaseIterable, Identifiable {
         case .pop: return beansLocalized("流行", "Pop")
         case .rock: return beansLocalized("摇滚", "Rock")
         case .classical: return beansLocalized("古典", "Classical")
+        case .jazz: return beansLocalized("爵士", "Jazz")
+        case .electronic: return beansLocalized("电子", "Electronic")
         case .custom: return beansLocalized("自定义", "Custom")
         }
     }
 
     var gains: [Double]? {
         switch self {
-        case .flat: return [0, 0, 0, 0, 0]
-        case .bass: return [5, 3, 0, -1, 0]
-        case .vocal: return [-1, 0, 3, 2, -1]
-        case .pop: return [2, 1, 3, 1, 2]
-        case .rock: return [4, 2, -1, 2, 4]
-        case .classical: return [2, 1, 0, 2, 3]
+        case .flat: return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        case .bass: return [6, 5, 3, 1, 0, 0, -1, -1, 0, 0]
+        case .vocal: return [-2, -1, 0, 2, 4, 4, 3, 2, 0, -1]
+        case .pop: return [2, 2, 1, 0, 2, 3, 2, 1, 2, 2]
+        case .rock: return [5, 4, 2, -1, -2, 1, 3, 4, 5, 4]
+        case .classical: return [3, 2, 1, 0, 0, 1, 2, 3, 4, 4]
+        case .jazz: return [3, 2, 1, 2, -1, -1, 0, 2, 3, 3]
+        case .electronic: return [5, 4, 1, -2, -1, 2, 4, 3, 5, 4]
         case .custom: return nil
         }
+    }
+}
+
+struct BeansEqualizerCustomPreset: Identifiable, Codable, Hashable {
+    let id: String
+    var name: String
+    var gains: [Double]
+    var preampGain: Double
+
+    init(id: String = UUID().uuidString, name: String, gains: [Double], preampGain: Double) {
+        self.id = id
+        self.name = name
+        self.gains = gains
+        self.preampGain = preampGain
     }
 }
 
@@ -45,26 +65,33 @@ final class BeansEqualizer: ObservableObject {
     static let shared = BeansEqualizer()
     static let settingsDidChange = Notification.Name("beans.equalizer.settingsDidChange")
 
-    static let bandFrequencies: [Double] = [60, 230, 910, 3_600, 14_000]
+    static let bandFrequencies: [Double] = [31, 62, 125, 250, 500, 1_000, 2_000, 4_000, 8_000, 16_000]
     static let maximumGain: Double = 12
 
     @Published private(set) var isEnabled: Bool
     @Published private(set) var bandGains: [Double]
     @Published private(set) var selectedPreset: BeansEqualizerPreset
+    @Published private(set) var selectedCustomPresetName: String?
+    @Published private(set) var preampGain: Double
+    @Published private(set) var customPresets: [BeansEqualizerCustomPreset]
 
     private let defaults = UserDefaults.standard
     private let configurationLock = NSLock()
     private var processingEnabled = false
-    private var processingGains: [Double] = [0, 0, 0, 0, 0]
+    private var processingGains: [Double] = Array(repeating: 0, count: 10)
+    private var processingPreampLinear: Float = 1
     private var processingFormatIsFloat32 = false
     private var sampleRate: Double = 44_100
-    private var coefficients: [BiquadCoefficients] = Array(repeating: .identity, count: 5)
-    private var filterStates: [BiquadState] = Array(repeating: .zero, count: 40)
+    private var coefficients: [BiquadCoefficients] = Array(repeating: .identity, count: 10)
+    private var filterStates: [BiquadState] = Array(repeating: .zero, count: 80)
     private var pendingPersistWorkItem: DispatchWorkItem?
 
     private static let enabledKey = "beans.equalizer.enabled"
     private static let gainsKey = "beans.equalizer.bandGains"
     private static let presetKey = "beans.equalizer.preset"
+    private static let customPresetNameKey = "beans.equalizer.customPresetName"
+    private static let customPresetsKey = "beans.equalizer.customPresets"
+    private static let preampKey = "beans.equalizer.preampGain"
     private static let maximumChannels = 8
 
     private init() {
@@ -73,12 +100,28 @@ final class BeansEqualizer: ObservableObject {
         let normalizedGains = Self.normalizedGains(storedGains)
         let storedPreset = defaults.string(forKey: Self.presetKey)
             .flatMap(BeansEqualizerPreset.init(rawValue:)) ?? .flat
+        let storedCustomPresets = defaults.data(forKey: Self.customPresetsKey)
+            .flatMap { try? JSONDecoder().decode([BeansEqualizerCustomPreset].self, from: $0) } ?? []
+        let normalizedCustomPresets = storedCustomPresets.compactMap { preset -> BeansEqualizerCustomPreset? in
+            let name = preset.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+            return BeansEqualizerCustomPreset(
+                id: preset.id,
+                name: name,
+                gains: Self.normalizedGains(preset.gains),
+                preampGain: Self.normalizedGain(preset.preampGain)
+            )
+        }
 
         isEnabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? false
         bandGains = normalizedGains
         selectedPreset = storedPreset
+        selectedCustomPresetName = defaults.string(forKey: Self.customPresetNameKey)
+        preampGain = Self.normalizedGain((defaults.object(forKey: Self.preampKey) as? NSNumber)?.doubleValue ?? 0)
+        customPresets = normalizedCustomPresets
         processingEnabled = isEnabled
         processingGains = normalizedGains
+        processingPreampLinear = Self.linearGain(for: preampGain)
         rebuildCoefficientsLocked(using: normalizedGains)
     }
 
@@ -89,22 +132,37 @@ final class BeansEqualizer: ObservableObject {
         processingEnabled = enabled
         configurationLock.unlock()
         defaults.set(enabled, forKey: Self.enabledKey)
-        NotificationCenter.default.post(name: Self.settingsDidChange, object: self)
+        notifySettingsChanged()
     }
 
     func setBandGain(at index: Int, to gain: Double) {
         guard bandGains.indices.contains(index) else { return }
         let normalized = Self.normalizedGain(gain)
-        guard bandGains[index] != normalized || selectedPreset != .custom else { return }
+        guard bandGains[index] != normalized else { return }
         var updatedGains = bandGains
         updatedGains[index] = normalized
         bandGains = updatedGains
         selectedPreset = .custom
+        selectedCustomPresetName = nil
         configurationLock.lock()
         processingGains = updatedGains
         rebuildCoefficientsLocked(using: updatedGains)
         configurationLock.unlock()
         schedulePersist()
+        notifySettingsChanged()
+    }
+
+    func setPreampGain(_ gain: Double) {
+        let normalized = Self.normalizedGain(gain)
+        guard preampGain != normalized else { return }
+        preampGain = normalized
+        selectedPreset = .custom
+        selectedCustomPresetName = nil
+        configurationLock.lock()
+        processingPreampLinear = Self.linearGain(for: normalized)
+        configurationLock.unlock()
+        schedulePersist()
+        notifySettingsChanged()
     }
 
     func applyPreset(_ preset: BeansEqualizerPreset) {
@@ -112,10 +170,65 @@ final class BeansEqualizer: ObservableObject {
         let normalized = Self.normalizedGains(gains)
         bandGains = normalized
         selectedPreset = preset
+        selectedCustomPresetName = nil
+        preampGain = 0
         configurationLock.lock()
         processingGains = normalized
+        processingPreampLinear = 1
         rebuildCoefficientsLocked(using: normalized)
         configurationLock.unlock()
+        persistNow()
+        notifySettingsChanged()
+    }
+
+    func applyCustomPreset(_ preset: BeansEqualizerCustomPreset) {
+        let normalized = Self.normalizedGains(preset.gains)
+        let normalizedPreamp = Self.normalizedGain(preset.preampGain)
+        bandGains = normalized
+        selectedPreset = .custom
+        selectedCustomPresetName = preset.name
+        preampGain = normalizedPreamp
+        configurationLock.lock()
+        processingGains = normalized
+        processingPreampLinear = Self.linearGain(for: normalizedPreamp)
+        rebuildCoefficientsLocked(using: normalized)
+        configurationLock.unlock()
+        persistNow()
+        notifySettingsChanged()
+    }
+
+    @discardableResult
+    func saveCustomPreset(name: String) -> Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return false }
+        let current = BeansEqualizerCustomPreset(
+            name: trimmedName,
+            gains: bandGains,
+            preampGain: preampGain
+        )
+        if let index = customPresets.firstIndex(where: {
+            $0.name.caseInsensitiveCompare(trimmedName) == .orderedSame
+        }) {
+            customPresets[index] = BeansEqualizerCustomPreset(
+                id: customPresets[index].id,
+                name: trimmedName,
+                gains: current.gains,
+                preampGain: current.preampGain
+            )
+        } else {
+            customPresets.append(current)
+        }
+        selectedPreset = .custom
+        selectedCustomPresetName = trimmedName
+        persistNow()
+        return true
+    }
+
+    func deleteCustomPreset(_ preset: BeansEqualizerCustomPreset) {
+        customPresets.removeAll { $0.id == preset.id }
+        if selectedCustomPresetName == preset.name {
+            selectedCustomPresetName = nil
+        }
         persistNow()
     }
 
@@ -173,10 +286,29 @@ final class BeansEqualizer: ObservableObject {
         pendingPersistWorkItem = nil
         defaults.set(bandGains, forKey: Self.gainsKey)
         defaults.set(selectedPreset.rawValue, forKey: Self.presetKey)
+        if let selectedCustomPresetName {
+            defaults.set(selectedCustomPresetName, forKey: Self.customPresetNameKey)
+        } else {
+            defaults.removeObject(forKey: Self.customPresetNameKey)
+        }
+        defaults.set(preampGain, forKey: Self.preampKey)
+        if let data = try? JSONEncoder().encode(customPresets) {
+            defaults.set(data, forKey: Self.customPresetsKey)
+        }
     }
 
     private static func normalizedGains(_ values: [Double]?) -> [Double] {
         let values = values ?? []
+        if values.count == 5 {
+            // Migrate the original five-band layout to the nearest bands in the
+            // new ten-band studio layout without discarding user adjustments.
+            let legacyIndexes = [0, 2, 4, 7, 9]
+            var migrated = Array(repeating: 0.0, count: bandFrequencies.count)
+            for (legacyIndex, newIndex) in legacyIndexes.enumerated() where legacyIndex < values.count {
+                migrated[newIndex] = values[legacyIndex]
+            }
+            return migrated.map(normalizedGain)
+        }
         return bandFrequencies.indices.map { index in
             normalizedGain(index < values.count ? values[index] : 0)
         }
@@ -185,6 +317,14 @@ final class BeansEqualizer: ObservableObject {
     private static func normalizedGain(_ value: Double) -> Double {
         let clamped = min(max(value, -maximumGain), maximumGain)
         return (clamped * 2).rounded() / 2
+    }
+
+    private static func linearGain(for gain: Double) -> Float {
+        Float(pow(10, gain / 20))
+    }
+
+    private func notifySettingsChanged() {
+        NotificationCenter.default.post(name: Self.settingsDidChange, object: self)
     }
 
     private func rebuildCoefficientsLocked(using gains: [Double]) {
@@ -227,7 +367,7 @@ final class BeansEqualizer: ObservableObject {
                 let stateOffset = channel * Self.bandFrequencies.count
                 for frame in 0..<framesToProcess {
                     let sampleIndex = frame * channelCount + channelOffset
-                    var sample = samples[sampleIndex]
+                    var sample = samples[sampleIndex] * processingPreampLinear
                     for bandIndex in coefficients.indices {
                         let stateIndex = stateOffset + bandIndex
                         let coefficient = coefficients[bandIndex]

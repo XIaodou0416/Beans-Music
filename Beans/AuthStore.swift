@@ -13,6 +13,10 @@ final class AuthStore: ObservableObject {
            let saved = try? JSONDecoder().decode(NetEaseUser.self, from: data) {
             user = saved
             isLoggedIn = true
+            playlists = SyncedPlaylistCache.shared
+                .cachedPlaylists(source: .netease, accountID: "\(saved.uid)")?
+                .playlists
+                .filter { $0.name != "我喜欢的音乐" } ?? []
         }
     }
 
@@ -32,6 +36,13 @@ final class AuthStore: ObservableObject {
         let playlists = (try? await NetEaseAPI.shared.userPlaylists(uid: account.uid)) ?? []
         user = account
         self.playlists = playlists.filter { $0.name != "我喜欢的音乐" }
+        if !self.playlists.isEmpty {
+            SyncedPlaylistCache.shared.savePlaylists(
+                self.playlists,
+                source: .netease,
+                accountID: "\(account.uid)"
+            )
+        }
         isLoggedIn = true
         if let data = try? JSONEncoder().encode(account) {
             defaults.set(data, forKey: userKey)
@@ -55,10 +66,21 @@ final class AuthStore: ObservableObject {
     }
 
     @MainActor
-    func loadLibrary() async {
+    func loadLibrary(force: Bool = false) async {
         guard let user else { return }
+        let accountID = "\(user.uid)"
+        if let cached = SyncedPlaylistCache.shared.cachedPlaylists(source: .netease, accountID: accountID) {
+            playlists = cached.playlists.filter { $0.name != "我喜欢的音乐" }
+            if !force, SyncedPlaylistCache.shared.isFresh(cached) {
+                return
+            }
+        }
         if let cached = try? await NetEaseAPI.shared.userPlaylists(uid: user.uid) {
-            playlists = cached.filter { $0.name != "我喜欢的音乐" }
+            let filtered = cached.filter { $0.name != "我喜欢的音乐" }
+            if !filtered.isEmpty {
+                playlists = filtered
+                SyncedPlaylistCache.shared.savePlaylists(filtered, source: .netease, accountID: accountID)
+            }
         }
     }
 

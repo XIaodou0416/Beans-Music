@@ -27,6 +27,18 @@ struct PlaylistView: View {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
 
+    private var cacheAccountID: String {
+        switch playlist.source {
+        case .netease:
+            return "\(auth.user?.uid ?? 0)"
+        case .qq:
+            let qqAuth = QQMusicAuth.shared
+            return qqAuth.rawUin.isEmpty ? qqAuth.playlistUin : qqAuth.rawUin
+        case .kugou:
+            return KugouMusicAuth.shared.userId
+        }
+    }
+
     var body: some View {
         let _ = theme.accent
         BeansNavigationStack {
@@ -37,7 +49,7 @@ struct PlaylistView: View {
                     LoadingStateView()
                 } else if let errorMessage {
                     ErrorStateView(message: errorMessage) {
-                        Task { await load() }
+                        Task { await load(force: true) }
                     }
                 } else {
                     List {
@@ -162,8 +174,17 @@ struct PlaylistView: View {
         return list
     }
 
-    private func load() async {
-        loading = true
+    private func load(force: Bool = false) async {
+        let cache = SyncedPlaylistCache.shared
+        if let cached = cache.cachedSongs(playlist: playlist, accountID: cacheAccountID) {
+            tracks = cached.songs
+            loading = false
+            if !force, cache.isFresh(cached) {
+                return
+            }
+        } else {
+            loading = true
+        }
         errorMessage = nil
         BeansLogger.shared.log("歌单页面打开 source=\(playlist.source.rawValue) id=\(playlist.id) name=\(playlist.name) advertisedCount=\(playlist.trackCount)", level: .info)
         do {
@@ -180,10 +201,17 @@ struct PlaylistView: View {
             } else {
                 tracks = try await NetEaseAPI.shared.playlistTracks(id: playlist.id)
             }
+            if !tracks.isEmpty {
+                cache.saveSongs(tracks, playlist: playlist, accountID: cacheAccountID)
+            }
             BeansLogger.shared.log("歌单页面加载完成 source=\(playlist.source.rawValue) id=\(playlist.id) name=\(playlist.name) count=\(tracks.count) error=无", level: tracks.isEmpty ? .warn : .info)
             loading = false
         } catch {
-            errorMessage = error.localizedDescription
+            if tracks.isEmpty {
+                errorMessage = error.localizedDescription
+            } else {
+                BeansLogger.shared.log("歌单页面刷新失败，继续使用缓存 source=\(playlist.source.rawValue) id=\(playlist.id) error=\(error.localizedDescription)", level: .warn)
+            }
             BeansLogger.shared.log("歌单页面加载失败 source=\(playlist.source.rawValue) id=\(playlist.id) name=\(playlist.name) error=\(error.localizedDescription)", level: .error)
             loading = false
         }

@@ -88,6 +88,15 @@ struct LibraryView: View {
         SyncedPlaylistOrderStore.shared.ordered(kugouPlaylists, source: .kugou)
     }
 
+    private var qqCacheAccountID: String {
+        let raw = qqAuth.rawUin
+        return raw.isEmpty ? qqAuth.playlistUin : raw
+    }
+
+    private var kugouCacheAccountID: String {
+        kugouAuth.userId
+    }
+
     private var syncedPlaylistBinding: Binding<[Playlist]> {
         Binding(
             get: {
@@ -174,7 +183,7 @@ struct LibraryView: View {
         .onReceive(NotificationCenter.default.publisher(for: .beansNeteaseLoginDidUpdate)) { _ in
             guard platformPrefs.isEnabled(SearchProvider.netease) else { return }
             source = .netease
-            Task { await auth.loadLibrary() }
+            Task { await auth.loadLibrary(force: true) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .beansQQLoginDidUpdate)) { _ in
             guard platformPrefs.isEnabled(SearchProvider.qq) else { return }
@@ -504,7 +513,7 @@ struct LibraryView: View {
     private func refreshCurrentSource(force: Bool) async {
         switch source {
         case .netease:
-            await auth.loadLibrary()
+            await auth.loadLibrary(force: force)
         case .qq:
             await loadQQPlaylists(force: force)
         case .kugou:
@@ -647,16 +656,28 @@ struct LibraryView: View {
             qqLoading = false
             return
         }
-        // 会话内短缓存：5 分钟内不重复拉取，避免每次打开界面都重新加载（下拉可强制刷新）
-        if !force, !qqPlaylists.isEmpty, Date().timeIntervalSince(qqSavedAt) < 300 { return }
-        qqLoading = true
+        let cache = SyncedPlaylistCache.shared
+        if qqPlaylists.isEmpty,
+           let cached = cache.cachedPlaylists(source: .qq, accountID: qqCacheAccountID) {
+            qqPlaylists = cached.playlists
+            qqSavedAt = cached.savedAt
+        }
+        // 持久化缓存仍新鲜时直接展示；下拉刷新会跳过缓存。
+        if !force, !qqPlaylists.isEmpty, Date().timeIntervalSince(qqSavedAt) < cache.playlistTTL { return }
+        qqLoading = qqPlaylists.isEmpty
         let list = (try? await QQMusicAPI.shared.userPlaylists(uin: qqAuth.uin)) ?? []
-        qqPlaylists = list
+        if !list.isEmpty {
+            qqPlaylists = list
+            cache.savePlaylists(list, source: .qq, accountID: qqCacheAccountID)
+        }
         await favorites.syncQQFromCloud()
         if !list.isEmpty { qqSavedAt = Date() }
         qqLoading = false
         // 封面兜底：歌单封面缺失时默认取第一首歌曲封面（列表先展示，封面后台补齐）
         if !list.isEmpty { await fillQQPlaylistCovers(list) }
+        if !qqPlaylists.isEmpty {
+            cache.savePlaylists(qqPlaylists, source: .qq, accountID: qqCacheAccountID)
+        }
     }
 
     private func loadKugouPlaylists(force: Bool = false) async {
@@ -665,15 +686,24 @@ struct LibraryView: View {
             kugouLoading = false
             return
         }
-        if !force, !kugouPlaylists.isEmpty, Date().timeIntervalSince(kugouSavedAt) < 300 { return }
-        kugouLoading = true
+        let cache = SyncedPlaylistCache.shared
+        if kugouPlaylists.isEmpty,
+           let cached = cache.cachedPlaylists(source: .kugou, accountID: kugouCacheAccountID) {
+            kugouPlaylists = cached.playlists
+            kugouSavedAt = cached.savedAt
+        }
+        if !force, !kugouPlaylists.isEmpty, Date().timeIntervalSince(kugouSavedAt) < cache.playlistTTL { return }
+        kugouLoading = kugouPlaylists.isEmpty
         do {
             let list = try await KugouMusicAPI.shared.userPlaylists()
-            kugouPlaylists = list
-            if !list.isEmpty { kugouSavedAt = Date() }
+            if !list.isEmpty {
+                kugouPlaylists = list
+                kugouSavedAt = Date()
+                cache.savePlaylists(list, source: .kugou, accountID: kugouCacheAccountID)
+            }
         } catch {
             BeansLogger.shared.log("酷狗歌单同步失败：\(error.localizedDescription)", level: .error)
-            kugouPlaylists = []
+            if kugouPlaylists.isEmpty { kugouPlaylists = [] }
         }
         kugouLoading = false
     }

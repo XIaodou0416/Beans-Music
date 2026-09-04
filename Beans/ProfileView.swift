@@ -3240,6 +3240,8 @@ struct EqualizerSettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var equalizer = BeansEqualizer.shared
+    @State private var newPresetName = ""
+    @State private var showPresetNamePrompt = false
 
     private var enabledBinding: Binding<Bool> {
         Binding(
@@ -3255,12 +3257,23 @@ struct EqualizerSettingsView: View {
         )
     }
 
+    private var preampBinding: Binding<Double> {
+        Binding(
+            get: { equalizer.preampGain },
+            set: { equalizer.setPreampGain($0) }
+        )
+    }
+
     var body: some View {
         BeansNavigationStack {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
+                        EqualizerResponseView(
+                            gains: equalizer.bandGains,
+                            preampGain: equalizer.preampGain
+                        )
                         controlCard
                         presetCard
                         bandsCard
@@ -3279,6 +3292,26 @@ struct EqualizerSettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(beansLocalized("完成", "Done")) { dismiss() }
                 }
+            }
+            .alert(
+                beansLocalized("保存自定义预设", "Save custom preset"),
+                isPresented: $showPresetNamePrompt
+            ) {
+                TextField(
+                    beansLocalized("预设名称", "Preset name"),
+                    text: $newPresetName
+                )
+                Button(beansLocalized("保存", "Save")) {
+                    if equalizer.saveCustomPreset(name: newPresetName) {
+                        BeansHaptics.select()
+                    }
+                    newPresetName = ""
+                }
+                Button(beansLocalized("取消", "Cancel"), role: .cancel) {
+                    newPresetName = ""
+                }
+            } message: {
+                Text(beansLocalized("保存当前频段和前级增益，之后可以一键恢复。", "Save the current bands and preamp for one-tap recall later."))
             }
         }
     }
@@ -3308,6 +3341,33 @@ struct EqualizerSettingsView: View {
                 .font(BeansFont.appFont(11))
                 .foregroundStyle(Color.beansComment)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            Divider().overlay(Color.beansComment.opacity(0.14))
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    Text(beansLocalized("前级增益", "Preamp"))
+                        .font(BeansFont.appFont(13, .medium))
+                        .foregroundStyle(Color.beansLabel)
+                    Spacer()
+                    Text(String(format: "%+.1f dB", equalizer.preampGain))
+                        .font(BeansFont.appFont(12, .semibold))
+                        .foregroundStyle(abs(equalizer.preampGain) > 0.01 ? Color.beansAmber : Color.beansComment)
+                        .monospacedDigit()
+                }
+                Slider(value: preampBinding, in: -BeansEqualizer.maximumGain...BeansEqualizer.maximumGain, step: 0.5)
+                    .tint(Color.beansAmber)
+                    .transaction { transaction in transaction.animation = nil }
+                HStack {
+                    Text("-12")
+                    Spacer()
+                    Text(beansLocalized("不增益", "Unity"))
+                    Spacer()
+                    Text("+12")
+                }
+                .font(BeansFont.appFont(10))
+                .foregroundStyle(Color.beansComment.opacity(0.75))
+            }
         }
         .padding(14)
         .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
@@ -3329,8 +3389,10 @@ struct EqualizerSettingsView: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Text(equalizer.selectedPreset.displayName)
+                        Text(equalizer.selectedCustomPresetName ?? equalizer.selectedPreset.displayName)
                             .font(BeansFont.appFont(13, .medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                         Image(systemName: "chevron.up.chevron.down")
                             .font(.system(size: 10, weight: .semibold))
                     }
@@ -3366,18 +3428,69 @@ struct EqualizerSettingsView: View {
                 }
             }
 
-            Button {
-                equalizer.reset()
-                BeansHaptics.select()
-            } label: {
-                Label(beansLocalized("重置调节", "Reset adjustments"), systemImage: "arrow.counterclockwise")
-                    .font(BeansFont.appFont(12.5, .medium))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 34)
-                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 10, style: .continuous)) }
+            if !equalizer.customPresets.isEmpty {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(beansLocalized("我的预设", "My presets"))
+                        .font(BeansFont.appFont(12, .semibold))
+                        .foregroundStyle(Color.beansComment)
+                    ForEach(equalizer.customPresets) { preset in
+                        HStack(spacing: 8) {
+                            Button {
+                                equalizer.applyCustomPreset(preset)
+                                BeansHaptics.select()
+                            } label: {
+                                HStack(spacing: 7) {
+                                    Image(systemName: equalizer.selectedCustomPresetName == preset.name ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(equalizer.selectedCustomPresetName == preset.name ? Color.beansAmber : Color.beansComment)
+                                    Text(preset.name)
+                                        .font(BeansFont.appFont(12.5, .medium))
+                                        .foregroundStyle(Color.beansLabel)
+                                        .lineLimit(1)
+                                    Spacer()
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            Button {
+                                equalizer.deleteCustomPreset(preset)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Color.beansComment)
+                                    .frame(width: 28, height: 28)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
-            .buttonStyle(.plain)
+
+            HStack(spacing: 8) {
+                Button {
+                    newPresetName = equalizer.selectedCustomPresetName ?? ""
+                    showPresetNamePrompt = true
+                } label: {
+                    Label(beansLocalized("保存当前预设", "Save current preset"), systemImage: "square.and.arrow.down")
+                        .font(BeansFont.appFont(12.5, .medium))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 34)
+                        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 10, style: .continuous)) }
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    equalizer.reset()
+                    BeansHaptics.select()
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.beansComment)
+                        .frame(width: 42, height: 34)
+                        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 10, style: .continuous)) }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(beansLocalized("重置调节", "Reset adjustments"))
+            }
         }
         .padding(14)
         .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
@@ -3442,6 +3555,110 @@ struct EqualizerSettingsView: View {
             return value.rounded() == value ? "\(Int(value)) kHz" : String(format: "%.1f kHz", value)
         }
         return "\(Int(frequency)) Hz"
+    }
+}
+
+private struct EqualizerResponseView: View {
+    let gains: [Double]
+    let preampGain: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(beansLocalized("频响预览", "Response preview"))
+                        .font(BeansFont.appFont(14, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(beansLocalized("拖动下方频段，实时塑造声音", "Shape the sound in real time by tuning each band below"))
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer()
+                Image(systemName: "waveform.path")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Color.beansAmber)
+            }
+
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let height = geometry.size.height
+                let values = responseValues
+                ZStack {
+                    VStack(spacing: 0) {
+                        ForEach(0..<5, id: \.self) { _ in
+                            Divider().overlay(Color.beansComment.opacity(0.12))
+                            Spacer()
+                        }
+                    }
+                    Path { path in
+                        guard let first = values.first else { return }
+                        path.move(to: CGPoint(x: 0, y: yPosition(first, height: height)))
+                        for index in values.indices.dropFirst() {
+                            let x = width * CGFloat(index) / CGFloat(max(values.count - 1, 1))
+                            path.addLine(to: CGPoint(x: x, y: yPosition(values[index], height: height)))
+                        }
+                    }
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.beansAmber.opacity(0.65), Color.beansAmber, Color.beansHighlight],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
+                    )
+                    Path { path in
+                        guard let first = values.first else { return }
+                        path.move(to: CGPoint(x: 0, y: height))
+                        path.addLine(to: CGPoint(x: 0, y: yPosition(first, height: height)))
+                        for index in values.indices.dropFirst() {
+                            let x = width * CGFloat(index) / CGFloat(max(values.count - 1, 1))
+                            path.addLine(to: CGPoint(x: x, y: yPosition(values[index], height: height)))
+                        }
+                        path.addLine(to: CGPoint(x: width, y: height))
+                        path.closeSubpath()
+                    }
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.beansAmber.opacity(0.22), Color.beansAmber.opacity(0.02)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                }
+            }
+            .frame(height: 108)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.primary.opacity(0.035))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.7)
+            }
+
+            HStack {
+                Text("31 Hz")
+                Spacer()
+                Text("1 kHz")
+                Spacer()
+                Text("16 kHz")
+            }
+            .font(BeansFont.appFont(10))
+            .foregroundStyle(Color.beansComment)
+        }
+        .padding(14)
+        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
+    }
+
+    private var responseValues: [Double] {
+        guard !gains.isEmpty else { return [preampGain] }
+        return gains.map { min(max($0 + preampGain * 0.35, -12), 12) }
+    }
+
+    private func yPosition(_ value: Double, height: CGFloat) -> CGFloat {
+        let normalized = (value + 12) / 24
+        return height * CGFloat(1 - normalized)
     }
 }
 
