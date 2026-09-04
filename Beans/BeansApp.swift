@@ -31,7 +31,8 @@ struct BeansApp: App {
             "beans.homeWallpaperBlur": 0.0,
             "beans.haptics.enabled": true,
             "beans.useFreeAudioSource": true,
-            "beans.playback.autoResumeLast": false
+            "beans.playback.autoResumeLast": false,
+            "beans.playback.autoSkipOnFailure": true
         ])
     }
 

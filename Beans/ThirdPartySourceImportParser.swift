@@ -26,6 +26,13 @@ enum ThirdPartySourceImportParser {
         if let jsonSources = parseJSON(trimmed, fallbackName: fallbackName), !jsonSources.isEmpty {
             return unique(jsonSources)
         }
+        // A full LX script can contain SERVER_SCRIPT_CONFIG or module.exports.
+        // Keep the executable script instead of importing only its embedded API config.
+        if isLXScript(trimmed),
+           let scriptSources = parseLooseScript(trimmed, fallbackName: fallbackName),
+           !scriptSources.isEmpty {
+            return unique(scriptSources)
+        }
         if let scriptSources = parseScript(trimmed, fallbackName: fallbackName), !scriptSources.isEmpty {
             return unique(scriptSources)
         }
@@ -94,10 +101,12 @@ enum ThirdPartySourceImportParser {
         let name = string(in: dict, keys: ["name", "title", "sourceName"])
             ?? fallbackName
             ?? beansLocalized("未命名音源", "Untitled source")
-        let kind = string(in: dict, keys: ["kind", "type"]) ?? "keyword"
+        let script = string(in: dict, keys: ["script", "scriptText", "code"])
+        let kind = string(in: dict, keys: ["kind", "type"])
+            ?? (script == nil ? "keyword" : "script")
         let urlPath = string(in: dict, keys: ["urlPath", "path"]) ?? "url"
         let template = templateString(from: dict)
-        guard !template.isEmpty else { return nil }
+        guard !template.isEmpty || script?.isEmpty == false else { return nil }
         let quality = string(in: dict, keys: ["quality", "br"]) ?? "320k"
 
         var headers = dictionary(in: dict, key: "headers")
@@ -116,6 +125,7 @@ enum ThirdPartySourceImportParser {
 
         let enabled = bool(in: dict, keys: ["enabled"], defaultValue: true)
         let isPreset = bool(in: dict, keys: ["isPreset"], defaultValue: false)
+        let isFree = bool(in: dict, keys: ["isFree", "free"], defaultValue: false)
         return ThirdPartySource(
             name: name,
             kind: kind,
@@ -123,8 +133,10 @@ enum ThirdPartySourceImportParser {
             urlPath: urlPath,
             headers: headers,
             quality: quality,
+            script: script,
             enabled: enabled,
-            isPreset: isPreset
+            isPreset: isPreset,
+            isFree: isFree
         )
     }
 
@@ -250,11 +262,27 @@ enum ThirdPartySourceImportParser {
             "on(EVENT_NAMES.request",
             "module.exports",
             "export default",
+            "MusicPlugin",
+            "customFetch",
             "function",
             "const ",
             "let ",
             "var ",
             "=>"
+        ]
+        return markers.contains { text.contains($0) }
+    }
+
+    private static func isLXScript(_ text: String) -> Bool {
+        let markers = [
+            "globalThis.lx",
+            "globalThis['lx']",
+            "globalThis[\"lx\"]",
+            "EVENT_NAMES.request",
+            "EVENT_NAMES['request']",
+            "EVENT_NAMES[\"request\"]",
+            "on(EVENT_NAMES",
+            "lx.request"
         ]
         return markers.contains { text.contains($0) }
     }

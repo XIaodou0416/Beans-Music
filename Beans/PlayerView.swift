@@ -3663,7 +3663,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.playerPrimaryButtonColorHex") private var playerPrimaryButtonColorHex = ""
     @AppStorage("beans.progressBarStyle") private var progressBarStyle = 0
     @AppStorage("beans.progressAccentHex") private var progressAccentHex = ""
-    @AppStorage("beans.playback.autoSkipOnFailure") private var autoSkipOnFailure = false
+    @AppStorage("beans.playback.autoSkipOnFailure") private var autoSkipOnFailure = true
     @AppStorage("beans.lyricFontSize") private var fontSize = 17
     @AppStorage("beans.lyricSpacing") private var lineSpacing = 24
     @AppStorage("beans.lyricGlow") private var glowLevel = 1

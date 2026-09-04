@@ -221,26 +221,27 @@ struct ThirdPartySourceManagerSheet: View {
     }
 
     private var sourceListCard: some View {
+        let visibleSources = store.managementVisibleSources
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(beansLocalized("音源列表", "Source List"))
                     .font(BeansFont.appFont(15, .semibold))
                     .foregroundStyle(Color.beansLabel)
                 Spacer()
-                Text("\(store.sources.count)")
+                Text("\(visibleSources.count)")
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
             }
 
-            if store.sources.isEmpty {
+            if visibleSources.isEmpty {
                 EmptyStateView(icon: "shippingbox.fill", text: beansLocalized("还没有音源，先导入一个吧。", "No sources yet. Import one first."))
             } else {
                 VStack(spacing: 10) {
-                    ForEach(Array(store.sources.enumerated()), id: \.element.id) { index, source in
+                    ForEach(Array(visibleSources.enumerated()), id: \.element.id) { index, source in
                         SourceRow(
                             source: source,
                             canMoveUp: index > 0,
-                            canMoveDown: index < store.sources.count - 1,
+                            canMoveDown: index < visibleSources.count - 1,
                             onEdit: {
                                 editingDraft = ThirdPartySourceDraft(source: source)
                             },
@@ -250,10 +251,10 @@ struct ThirdPartySourceManagerSheet: View {
                                 }
                             },
                             onMoveUp: {
-                                store.moveSource(id: source.id, by: -1)
+                                store.moveManagementSource(id: source.id, by: -1)
                             },
                             onMoveDown: {
-                                store.moveSource(id: source.id, by: 1)
+                                store.moveManagementSource(id: source.id, by: 1)
                             },
                             onToggle: { enabled in
                                 store.updateEnabled(id: source.id, enabled: enabled)

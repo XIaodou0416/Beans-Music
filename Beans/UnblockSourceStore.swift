@@ -73,6 +73,10 @@ final class UnblockSourceStore: ObservableObject {
     /// 普通版本使用平台原生播放，并按用户设置启用第三方兜底。
     static let singleSourceMode = false
     static let singleSourceID = "beans.special.cr.v1"
+    /// 仅从音源管理列表隐藏的内置源。播放解析仍保留这些源。
+    static let managementHiddenSourceIDs: Set<String> = [
+        "beans.preset.legacy.guoyue.qq.v1"
+    ]
 
     private static let paidAPIURL = "https://source.shiqianjiang.cn/api/music"
     private static let paidURLTemplate = "\(paidAPIURL)/url?source={source}&songId={id}&quality={quality}"
@@ -185,6 +189,10 @@ final class UnblockSourceStore: ObservableObject {
 
     @Published var sources: [ThirdPartySource] {
         didSet { save() }
+    }
+
+    var managementVisibleSources: [ThirdPartySource] {
+        sources.filter { !Self.managementHiddenSourceIDs.contains($0.id) }
     }
 
     private let defaults = UserDefaults.standard
@@ -304,6 +312,26 @@ final class UnblockSourceStore: ObservableObject {
         var reordered = sources
         let item = reordered.remove(at: index)
         reordered.insert(item, at: target)
+        sources = reordered
+        save()
+    }
+
+    func moveManagementSource(id: String, by offset: Int) {
+        guard !Self.singleSourceMode else { return }
+        let visibleIDs = managementVisibleSources.map(\.id)
+        guard let visibleIndex = visibleIDs.firstIndex(of: id) else { return }
+        let targetVisibleIndex = visibleIndex + offset
+        guard visibleIDs.indices.contains(targetVisibleIndex) else { return }
+        let targetID = visibleIDs[targetVisibleIndex]
+        guard let sourceIndex = sources.firstIndex(where: { $0.id == id }) else { return }
+
+        var reordered = sources
+        let item = reordered.remove(at: sourceIndex)
+        guard let adjustedTargetIndex = reordered.firstIndex(where: { $0.id == targetID }) else { return }
+        let insertionIndex = targetVisibleIndex > visibleIndex
+            ? adjustedTargetIndex + 1
+            : adjustedTargetIndex
+        reordered.insert(item, at: min(insertionIndex, reordered.count))
         sources = reordered
         save()
     }

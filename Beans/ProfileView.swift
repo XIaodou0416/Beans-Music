@@ -1214,6 +1214,8 @@ struct AccountHubSheet: View {
 // MARK: - 设置页（外观 + 歌词翻译，从「我的」右上角齿轮进入）
 
 struct SettingsView: View {
+    private static let thirdPartyKeyPurchaseURL = URL(string: "https://xxd.shop.shiqianjiang.cn/products/4")!
+
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -1291,7 +1293,6 @@ struct SettingsView: View {
     @State private var showRestorePicker = false
     @State private var pendingRestore: [String: Any]?
     @State private var showRestoreConfirm = false
-    @State private var showSourceHelp = false
     @AppStorage("beans.showThirdPartyKeys") private var showThirdPartyKeys = true
     @State private var showSourceManager = false
     @State private var showEqualizer = false
@@ -1322,7 +1323,7 @@ struct SettingsView: View {
     }
 
     private var presetSourceCount: Int {
-        sourceStore.sources.count
+        sourceStore.managementVisibleSources.count
     }
 
     private var thirdPartyAudioQualityOptions: [ThirdPartyAudioQuality] {
@@ -1646,16 +1647,6 @@ struct SettingsView: View {
                 handleBackupImport(url)
             }
             .ignoresSafeArea()
-        }
-        .alert("密钥说明", isPresented: $showSourceHelp) {
-            Button("前往购买") {
-                if let url = URL(string: "https://xxd.shop.shiqianjiang.cn/products/4") {
-                    UIApplication.shared.open(url)
-                }
-            }
-            Button("知道了", role: .cancel) {}
-        } message: {
-            Text("音源购买渠道非 Beans Music 本人，价格便宜，可以自行前往支持。购买后获得的密钥仅属于你自己，请填写到上方输入框中使用。")
         }
         .confirmationDialog("导入备份将覆盖当前部分设置，是否继续？", isPresented: $showRestoreConfirm, titleVisibility: .visible) {
             Button("恢复", role: .destructive) {
@@ -2616,10 +2607,15 @@ struct SettingsView: View {
                         .font(BeansFont.appFont(13, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     Spacer()
-                    Button { showSourceHelp = true } label: {
-                        Image(systemName: "questionmark.circle")
-                            .font(.system(size: 18))
-                            .foregroundStyle(Color.beansAmber)
+                    Link(destination: Self.thirdPartyKeyPurchaseURL) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "questionmark.circle")
+                                .font(.system(size: 18))
+                                .foregroundStyle(Color.beansAmber)
+                            Text(beansLocalized("前往购买", "Purchase key"))
+                                .font(BeansFont.appFont(12, .medium))
+                                .foregroundStyle(Color.beansAmber)
+                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -2649,6 +2645,14 @@ struct SettingsView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
+
+                Text(beansLocalized(
+                    "如果QQ音乐不能播放，请先播放一首其他平台VIP歌曲再尝试",
+                    "If QQ Music cannot play, play one VIP song from another platform first, then try again."
+                ))
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(Color.beansComment)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {

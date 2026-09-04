@@ -41,20 +41,21 @@ enum UnblockService {
         guard hasSongIdentity else { return nil }
         let usePaidAudioSource = UserDefaults.standard.object(forKey: "beans.enableUnblock") as? Bool ?? true
         let useFreeAudioSource = UserDefaults.standard.object(forKey: "beans.useFreeAudioSource") as? Bool ?? true
-        // QQ 的第三方链路只在本机记录过一次付费音源成功使用后开放。
-        // QQ 官方接口不经过这里，不受此限制。
-        if songSource == .qq && !UnblockSourceStore.hasPaidAudioSourceUsageRecord {
-            BeansLogger.shared.log(
-                "QQ第三方音源暂未开放：本机尚无付费音源成功使用记录",
-                level: .debug
-            )
-            return nil
-        }
+        let hasPaidAudioSourceUsage = UnblockSourceStore.hasPaidAudioSourceUsageRecord
         let sources = UnblockSourceStore.shared.sources
             .filter { source in
                 guard source.enabled else { return false }
                 if UnblockSourceStore.singleSourceMode {
                     return source.id == UnblockSourceStore.singleSourceID
+                }
+                // The paid-source usage gate is for bundled paid presets. An explicitly
+                // imported source must remain usable so importing an LX/Baka script works
+                // independently of the bundled-source entitlement state.
+                if songSource == .qq,
+                   !hasPaidAudioSourceUsage,
+                   source.isPreset,
+                   !source.isFree {
+                    return false
                 }
                 let sourceModeEnabled = source.isFree ? useFreeAudioSource : usePaidAudioSource
                 return sourceModeEnabled && (
@@ -170,7 +171,8 @@ enum UnblockService {
             return nil
         }
         let apiKeys = orderedAPIKeys(for: source)
-        let requiresAPIKey = source.template.contains("{apiKey}")
+        let apiKeyPlaceholders = ["{apiKey}", "{apikey}", "{key}"]
+        let requiresAPIKey = apiKeyPlaceholders.contains { source.template.contains($0) }
         if requiresAPIKey && apiKeys.isEmpty {
             BeansLogger.shared.log(
                 "旧版第三方音源缺少用户密钥：\(source.name)，已跳过请求",
@@ -180,7 +182,18 @@ enum UnblockService {
         }
         for (idIndex, songID) in songIDs.enumerated() {
             var baseURLString = source.template
-            baseURLString = baseURLString.replacingOccurrences(of: "{id}", with: songID)
+            let idValues: [String: String] = [
+                "{id}": songID,
+                "{songId}": songID,
+                "{songid}": songID,
+                "{songID}": songID,
+                "{songmid}": qqMid ?? songID,
+                "{mid}": qqMid ?? songID,
+                "{hash}": kugouID ?? songID
+            ]
+            for (placeholder, value) in idValues {
+                baseURLString = baseURLString.replacingOccurrences(of: placeholder, with: value)
+            }
             baseURLString = baseURLString.replacingOccurrences(of: "{source}", with: expectedProvider)
             baseURLString = baseURLString.replacingOccurrences(of: "{name}", with: urlEncoded(name))
             let keyword = ([name, artists].filter { !$0.isEmpty }).joined(separator: " ")
@@ -195,10 +208,9 @@ enum UnblockService {
                 let idLabel = songSource == .qq && songIDs.count > 1 ? " ID=\(idIndex + 1)/\(songIDs.count)" : ""
                 if !apiKeys.isEmpty {
                     for (originalIndex, apiKey) in apiKeys {
-                        let keyedURLString = urlString.replacingOccurrences(
-                            of: "{apiKey}",
-                            with: urlEncoded(apiKey)
-                        )
+                        let keyedURLString = apiKeyPlaceholders.reduce(urlString) { result, placeholder in
+                            result.replacingOccurrences(of: placeholder, with: urlEncoded(apiKey))
+                        }
                         guard let url = URL(string: keyedURLString) else { continue }
                         if let resolved = await presetSourceRequestOnce(
                             source: source,
@@ -256,7 +268,15 @@ enum UnblockService {
             songIDs = [String(neteaseID)]
         case .qq:
             guard let qqMid, !qqMid.isEmpty else { return nil }
-            songIDs = qqIDCandidates(songID: neteaseID, songMid: qqMid, mediaMid: qqMediaMid)
+            var candidates: [String] = [qqMid]
+            if let qqMediaMid, !qqMediaMid.isEmpty {
+                candidates.append(qqMediaMid)
+            }
+            if neteaseID > 0 {
+                candidates.append(String(neteaseID))
+            }
+            var seen = Set<String>()
+            songIDs = candidates.filter { seen.insert($0).inserted }
         case .kugou:
             guard let kugouID, !kugouID.isEmpty else { return nil }
             songIDs = [kugouID]
@@ -275,6 +295,9 @@ enum UnblockService {
                     script: script,
                     songSource: songSource,
                     songID: songID,
+                    qqMid: qqMid,
+                    qqMediaMid: qqMediaMid,
+                    kugouID: kugouID,
                     name: name,
                     artists: artists,
                     quality: quality,
@@ -590,8 +613,13 @@ enum UnblockService {
     private static func valueAtPath(_ obj: Any, _ path: String) -> Any? {
         var current: Any = obj
         for key in path.split(separator: ".") {
-            guard let dict = current as? [String: Any], let next = dict[String(key)] else { return nil }
-            current = next
+            if let dict = current as? [String: Any], let next = dict[String(key)] {
+                current = next
+            } else if let dict = current as? NSDictionary, let next = dict[String(key)] {
+                current = next
+            } else {
+                return nil
+            }
         }
         return current
     }

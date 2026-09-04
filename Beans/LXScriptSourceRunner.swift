@@ -13,6 +13,7 @@ import JavaScriptCore
 
 @objc protocol BeansLXScriptCryptoExports: JSExport {
     func md5(_ value: String) -> String
+    func aesEncrypt(_ data: String, _ mode: String, _ key: String, _ iv: String) -> NSDictionary
 }
 
 @objc protocol BeansLXScriptBridgeExports: JSExport {
@@ -22,6 +23,8 @@ import JavaScriptCore
     var EVENT_NAMES: NSDictionary { get }
     var env: NSDictionary { get }
     var utils: BeansLXScriptUtilsBridge { get }
+    var version: String { get }
+    var currentScriptInfo: NSDictionary { get }
 }
 
 @objc protocol BeansLXScriptDoneExports: JSExport {
@@ -31,28 +34,90 @@ import JavaScriptCore
 
 final class BeansLXScriptBufferBridge: NSObject, BeansLXScriptBufferExports {
     func from(_ text: String, _ encoding: String) -> NSDictionary {
-        [
-            "text": text,
-            "encoding": encoding.lowercased()
-        ]
+        Self.dictionary(for: data(from: text, encoding: encoding))
     }
 
     func bufToString(_ buffer: JSValue?, _ encoding: String) -> String {
-        let targetEncoding = encoding.lowercased()
-        let text: String
-        if let dict = buffer?.toObject() as? [String: Any] {
-            text = dict["text"] as? String ?? String(describing: dict["text"] ?? "")
-        } else {
-            text = buffer?.toString() ?? ""
+        guard let data = data(from: buffer) else {
+            return buffer?.toString() ?? ""
         }
-        switch targetEncoding {
+        switch encoding.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "base64":
-            return Data(text.utf8).base64EncodedString()
+            return data.base64EncodedString()
+        case "hex":
+            return data.map { String(format: "%02x", $0) }.joined()
         case "utf-8", "utf8":
-            return text
+            return String(data: data, encoding: .utf8) ?? ""
         default:
-            return text
+            return String(data: data, encoding: .utf8) ?? ""
         }
+    }
+
+    static func dictionary(for data: Data) -> NSDictionary {
+        [
+            "__beansBuffer": true,
+            "base64": data.base64EncodedString(),
+            "hex": data.map { String(format: "%02x", $0) }.joined(),
+            "text": String(data: data, encoding: .utf8) ?? ""
+        ]
+    }
+
+    private func data(from text: String, encoding: String) -> Data {
+        switch encoding.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "base64":
+            return Data(base64Encoded: text, options: [.ignoreUnknownCharacters]) ?? Data()
+        case "hex":
+            var value = text
+                .replacingOccurrences(of: "0x", with: "")
+                .replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "\n", with: "")
+                .replacingOccurrences(of: "\r", with: "")
+            if !value.count.isMultiple(of: 2) {
+                value = "0" + value
+            }
+            var result = Data()
+            var index = value.startIndex
+            while index < value.endIndex {
+                let next = value.index(index, offsetBy: 2)
+                if let byte = UInt8(value[index..<next], radix: 16) {
+                    result.append(byte)
+                }
+                index = next
+            }
+            return result
+        default:
+            return Data(text.utf8)
+        }
+    }
+
+    private func data(from buffer: JSValue?) -> Data? {
+        guard let object = buffer?.toObject() else { return nil }
+        let dictionary: [String: Any]
+        if let value = object as? [String: Any] {
+            dictionary = value
+        } else if let value = object as? NSDictionary {
+            dictionary = value.reduce(into: [String: Any]()) { result, pair in
+                if let key = pair.key as? String {
+                    result[key] = pair.value
+                }
+            }
+        } else if let text = object as? String {
+            return Data(text.utf8)
+        } else {
+            return nil
+        }
+
+        if let base64 = dictionary["base64"] as? String,
+           let data = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters]) {
+            return data
+        }
+        if let hex = dictionary["hex"] as? String {
+            return data(from: hex, encoding: "hex")
+        }
+        if let text = dictionary["text"] as? String {
+            return Data(text.utf8)
+        }
+        return nil
     }
 }
 
@@ -64,6 +129,52 @@ final class BeansLXScriptUtilsBridge: NSObject, BeansLXScriptUtilsExports {
 final class BeansLXScriptCryptoBridge: NSObject, BeansLXScriptCryptoExports {
     func md5(_ value: String) -> String {
         Data(value.utf8).md5Hex()
+    }
+
+    func aesEncrypt(_ data: String, _ mode: String, _ key: String, _ iv: String) -> NSDictionary {
+        let input = Data(data.utf8)
+        let keyData = normalize(Data(key.utf8))
+        let ivData = normalize(Data(iv.utf8))
+        let usesECB = mode.lowercased().contains("ecb")
+        let options = usesECB
+            ? CCOptions(kCCOptionPKCS7Padding | kCCOptionECBMode)
+            : CCOptions(kCCOptionPKCS7Padding)
+
+        var output = [UInt8](repeating: 0, count: input.count + kCCBlockSizeAES128)
+        var outputLength: size_t = 0
+        let status = keyData.withUnsafeBytes { keyBytes in
+            ivData.withUnsafeBytes { ivBytes in
+                input.withUnsafeBytes { inputBytes in
+                    CCCrypt(
+                        CCOperation(kCCEncrypt),
+                        CCAlgorithm(kCCAlgorithmAES),
+                        options,
+                        keyBytes.baseAddress,
+                        keyData.count,
+                        usesECB ? nil : ivBytes.baseAddress,
+                        inputBytes.baseAddress,
+                        input.count,
+                        &output,
+                        output.count,
+                        &outputLength
+                    )
+                }
+            }
+        }
+        guard status == kCCSuccess else {
+            return BeansLXScriptBufferBridge.dictionary(for: Data())
+        }
+        return BeansLXScriptBufferBridge.dictionary(for: Data(output.prefix(outputLength)))
+    }
+
+    private func normalize(_ data: Data) -> Data {
+        if data.count == kCCKeySizeAES128 {
+            return data
+        }
+        if data.count > kCCKeySizeAES128 {
+            return data.prefix(kCCKeySizeAES128)
+        }
+        return data + Data(repeating: 0, count: kCCKeySizeAES128 - data.count)
     }
 }
 
@@ -99,13 +210,22 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
     let env: NSDictionary = [
         "platform": "ios",
         "os": "iOS",
-        "device": "iPhone"
+        "device": "iPhone",
+        "isMobile": true
     ]
 
     let utils = BeansLXScriptUtilsBridge()
+    let version: String
+    let currentScriptInfo: NSDictionary
 
-    init(runtimeQueue: DispatchQueue) {
+    init(runtimeQueue: DispatchQueue, source: ThirdPartySource, script: String) {
         self.runtimeQueue = runtimeQueue
+        self.version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.6.4"
+        self.currentScriptInfo = [
+            "name": source.name,
+            "version": source.headers["version"] ?? "",
+            "rawScript": script
+        ]
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 8
         config.timeoutIntervalForResource = 12
@@ -115,7 +235,7 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
 
     func request(_ url: String, _ options: JSValue?, _ callback: JSValue?) {
         guard let callback else { return }
-        let requestOptions = options?.toObject() as? [String: Any] ?? [:]
+        let requestOptions = dictionary(from: options?.toObject())
         guard let requestURL = URL(string: url) else {
             runtimeQueue.async {
                 callback.call(withArguments: [[ "message": "Invalid URL" ], NSNull()])
@@ -131,7 +251,8 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
             request.timeoutInterval = timeout > 0 ? timeout / 1000.0 : request.timeoutInterval
         }
 
-        if let headers = requestOptions["headers"] as? [String: Any] {
+        let headers = dictionary(from: requestOptions["headers"])
+        if !headers.isEmpty {
             for (key, value) in headers {
                 request.setValue(String(describing: value), forHTTPHeaderField: key)
             }
@@ -144,13 +265,12 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
                 request.httpBody = bodyData
             } else if let string = body as? String {
                 request.httpBody = string.data(using: .utf8)
-            } else if JSONSerialization.isValidJSONObject(body),
-                      let data = try? JSONSerialization.data(withJSONObject: body) {
-                request.httpBody = data
-                if request.value(forHTTPHeaderField: "Content-Type") == nil {
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                }
-            } else if let dict = body as? [String: Any],
+            } else if let dict = dictionary(from: body),
+                      dict["__beansBuffer"] as? Bool == true,
+                      let base64 = dict["base64"] as? String {
+                request.httpBody = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters])
+            } else if let dict = dictionary(from: body),
+                      JSONSerialization.isValidJSONObject(dict),
                       let data = try? JSONSerialization.data(withJSONObject: dict) {
                 request.httpBody = data
                 if request.value(forHTTPHeaderField: "Content-Type") == nil {
@@ -170,14 +290,18 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
                     callback.call(withArguments: [[ "message": "No HTTP response" ], NSNull()])
                     return
                 }
-                let body: Any = self.parseBody(data)
+                let parsed = self.parseBody(data)
+                let responseType = requestOptions["responseType"] as? String
+                let body: Any = responseType?.lowercased() == "text" ? parsed.text : parsed.value
                 let headers = http.allHeaderFields.reduce(into: [String: String]()) { result, pair in
                     result[String(describing: pair.key)] = String(describing: pair.value)
                 }
                 let responseObject: [String: Any] = [
                     "statusCode": http.statusCode,
                     "headers": headers,
-                    "body": body
+                    "body": body,
+                    "bodyText": parsed.text,
+                    "ok": (200..<300).contains(http.statusCode)
                 ]
                 if http.statusCode >= 400 {
                     callback.call(withArguments: [[ "message": "HTTP \(http.statusCode)" ], responseObject])
@@ -196,18 +320,29 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
         runtime?.receive(event: event, payload: payload?.toObject())
     }
 
-    private func parseBody(_ data: Data?) -> Any {
-        guard let data else { return NSNull() }
+    private func parseBody(_ data: Data?) -> (value: Any, text: String) {
+        guard let data else { return (NSNull(), "") }
+        let text = String(data: data, encoding: .utf8)
+            ?? String(data: data, encoding: .utf16)
+            ?? data.base64EncodedString()
         if let json = try? JSONSerialization.jsonObject(with: data) {
-            return json
+            return (json, text)
         }
-        if let string = String(data: data, encoding: .utf8) {
-            return string
+        return (text, text)
+    }
+
+    private func dictionary(from raw: Any?) -> [String: Any] {
+        if let value = raw as? [String: Any] {
+            return value
         }
-        if let string = String(data: data, encoding: .utf16) {
-            return string
+        if let value = raw as? NSDictionary {
+            return value.reduce(into: [String: Any]()) { result, pair in
+                if let key = pair.key as? String {
+                    result[key] = pair.value
+                }
+            }
         }
-        return data.base64EncodedString()
+        return [:]
     }
 }
 
@@ -222,7 +357,7 @@ final class BeansLXScriptRuntime {
         sourceID = source.id
         guard let context = JSContext() else { return nil }
         self.context = context
-        self.bridge = BeansLXScriptBridge(runtimeQueue: queue)
+        self.bridge = BeansLXScriptBridge(runtimeQueue: queue, source: source, script: script)
         self.bridge.runtime = self
 
         context.exceptionHandler = { _, exception in
@@ -235,14 +370,144 @@ final class BeansLXScriptRuntime {
         var initialized = false
         queue.sync {
             context.evaluateScript("if (typeof globalThis === 'undefined') { var globalThis = this; }")
+            context.evaluateScript("if (typeof global === 'undefined') { globalThis.global = globalThis; }")
+            context.evaluateScript("if (typeof self === 'undefined') { globalThis.self = globalThis; }")
             context.evaluateScript("if (typeof globalThis.lx === 'undefined') { globalThis.lx = lx; }")
             context.evaluateScript("if (typeof console === 'undefined') { globalThis.console = { log: function() {}, info: function() {}, debug: function() {}, warn: function() {}, error: function() {} }; }")
             context.evaluateScript("if (typeof module === 'undefined') { var module = { exports: {} }; var exports = module.exports; }")
-            let appVersion = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.6.4"
-            context.evaluateScript("globalThis.cerumusic = { request: function(url, options) { return new Promise(function(resolve, reject) { lx.request(url, options, function(error, response) { if (error && error.message) { reject(error); } else { resolve(response); } }); }); }, utils: lx.utils, version: \(String(reflecting: appVersion)), NoticeCenter: function() {}, stopRequests: function() {} }; ")
+            context.evaluateScript("""
+            (function() {
+                var nativeLX = globalThis.lx || lx;
+                var beansEnv = {
+                    platform: nativeLX.env && nativeLX.env.platform ? nativeLX.env.platform : 'ios',
+                    os: nativeLX.env && nativeLX.env.os ? nativeLX.env.os : 'iOS',
+                    device: nativeLX.env && nativeLX.env.device ? nativeLX.env.device : 'iPhone',
+                    isMobile: true
+                };
+                beansEnv.toString = function() {
+                    return String(this.platform || 'ios');
+                };
+                globalThis.lx = {
+                    EVENT_NAMES: nativeLX.EVENT_NAMES,
+                    env: beansEnv,
+                    utils: nativeLX.utils,
+                    version: nativeLX.version,
+                    currentScriptInfo: nativeLX.currentScriptInfo,
+                    on: function(event, handler) {
+                        return nativeLX.on(event, handler);
+                    },
+                    send: function(event, payload) {
+                        return nativeLX.send(event, payload);
+                    },
+                    request: function(url, options, callback) {
+                        if (typeof options === 'function') {
+                            callback = options;
+                            options = {};
+                        }
+                        if (typeof callback === 'function') {
+                            return nativeLX.request(url, options || {}, callback);
+                        }
+                        return new Promise(function(resolve, reject) {
+                            nativeLX.request(url, options || {}, function(error, response) {
+                                if (error && error.message) reject(error);
+                                else resolve(response);
+                            });
+                        });
+                    }
+                };
+                if (typeof globalThis.fetch !== 'function') {
+                    globalThis.fetch = function(url, options) {
+                        return globalThis.lx.request(url, options || {}).then(function(response) {
+                            return {
+                                ok: response.ok,
+                                status: response.statusCode,
+                                statusCode: response.statusCode,
+                                headers: response.headers,
+                                text: function() {
+                                    return Promise.resolve(response.bodyText || String(response.body || ''));
+                                },
+                                json: function() {
+                                    return Promise.resolve(
+                                        typeof response.body === 'string'
+                                            ? JSON.parse(response.body)
+                                            : response.body
+                                    );
+                                }
+                            };
+                        });
+                    };
+                }
+                if (typeof globalThis.customFetch !== 'function') {
+                    globalThis.customFetch = function(url, options) {
+                        return globalThis.lx.request(url, options || {}).then(function(response) {
+                            if (response && typeof response.bodyText === 'string') {
+                                return response.bodyText;
+                            }
+                            if (response && typeof response.body === 'string') {
+                                return response.body;
+                            }
+                            return JSON.stringify(response && response.body ? response.body : {});
+                        });
+                    };
+                }
+                if (typeof globalThis.Buffer === 'undefined') {
+                    var makeBeansBuffer = function(value, encoding) {
+                        if (value && value.__beansBuffer) {
+                            return value;
+                        }
+                        var text = value === null || typeof value === 'undefined'
+                            ? ''
+                            : String(value);
+                        var buffer = nativeLX.utils.buffer.from(text, encoding || 'utf8');
+                        buffer.toString = function(outputEncoding) {
+                            return nativeLX.utils.buffer.bufToString(buffer, outputEncoding || 'utf8');
+                        };
+                        return buffer;
+                    };
+                    globalThis.Buffer = {
+                        from: makeBeansBuffer,
+                        isBuffer: function(value) {
+                            return !!(value && value.__beansBuffer);
+                        }
+                    };
+                }
+                if (typeof Promise.any !== 'function') {
+                    Promise.any = function(iterable) {
+                        return new Promise(function(resolve, reject) {
+                            var values = Array.prototype.slice.call(iterable || []);
+                            if (!values.length) {
+                                reject(new Error('All promises were rejected'));
+                                return;
+                            }
+                            var pending = values.length;
+                            var errors = [];
+                            values.forEach(function(value, index) {
+                                Promise.resolve(value).then(resolve, function(error) {
+                                    errors[index] = error;
+                                    pending -= 1;
+                                    if (pending === 0) {
+                                        reject(new Error('All promises were rejected'));
+                                    }
+                                });
+                            });
+                        });
+                    };
+                }
+                if (!JSON.__beansOriginalParse) {
+                    JSON.__beansOriginalParse = JSON.parse;
+                    JSON.parse = function(value) {
+                        return value !== null && typeof value === 'object'
+                            ? value
+                            : JSON.__beansOriginalParse(value);
+                    };
+                }
+            })();
+            """)
+            context.evaluateScript("globalThis.cerumusic = { request: function(url, options, callback) { return globalThis.lx.request(url, options, callback); }, utils: globalThis.lx.utils, env: globalThis.lx.env, version: globalThis.lx.version, currentScriptInfo: globalThis.lx.currentScriptInfo, NoticeCenter: function() {}, stopRequests: function() {} }; ")
             _ = context.evaluateScript(script)
             if context.exception == nil {
                 _ = context.evaluateScript("globalThis.__beansPlugin = module.exports;")
+                _ = context.evaluateScript("globalThis.__beansMusicPlugin = globalThis.MusicPlugin || {};")
                 initialized = context.exception == nil
             }
         }
@@ -257,6 +522,10 @@ final class BeansLXScriptRuntime {
         guard event == "inited" else { return }
         if let dict = payload as? [String: Any], let sources = dict["sources"] as? [String: Any] {
             BeansLogger.shared.log("第三方脚本初始化：\(sourceID) sources=\(sources.keys.sorted().joined(separator: ","))", level: .debug)
+        } else if let dict = payload as? NSDictionary,
+                  let sources = dict["sources"] as? NSDictionary {
+            let names = sources.allKeys.compactMap { $0 as? String }.sorted().joined(separator: ",")
+            BeansLogger.shared.log("第三方脚本初始化：\(sourceID) sources=\(names)", level: .debug)
         }
     }
 
@@ -277,8 +546,22 @@ final class BeansLXScriptRuntime {
 
         queue.async {
             let handler = self.handlers["request"]
-            let hasPluginResolver = self.context.evaluateScript("typeof __beansPlugin.musicUrl === 'function'")?.toBool() == true
-            guard handler != nil || hasPluginResolver else {
+            let resolverKind = self.context.evaluateScript("""
+            (function() {
+                if (typeof __beansPlugin !== 'undefined' && typeof __beansPlugin.musicUrl === 'function') {
+                    return 'musicUrl';
+                }
+                if (typeof __beansMusicPlugin !== 'undefined' && typeof __beansMusicPlugin.getMusicUrl === 'function') {
+                    return 'musicPluginGetMusicUrl';
+                }
+                if (typeof __beansPlugin !== 'undefined' && typeof __beansPlugin.getMusicUrl === 'function') {
+                    return 'pluginGetMusicUrl';
+                }
+                return '';
+            })()
+            """)?.toString() ?? ""
+            guard handler != nil || !resolverKind.isEmpty else {
+                BeansLogger.shared.log("第三方脚本没有可用的音乐地址解析入口：\(self.sourceID)", level: .debug)
                 semaphore.signal()
                 return
             }
@@ -287,9 +570,19 @@ final class BeansLXScriptRuntime {
             }
             self.context.setObject(payload as NSDictionary, forKeyedSubscript: "__beansPayload" as NSString)
             self.context.setObject(done, forKeyedSubscript: "__beansDone" as NSString)
-            let invocation = handler != nil
-                ? "__beansHandler(__beansPayload)"
-                : "__beansPlugin.musicUrl(__beansPayload.source, __beansPayload.info.musicInfo, __beansPayload.info.type)"
+            let invocation: String
+            if handler != nil {
+                invocation = "__beansHandler(__beansPayload)"
+            } else {
+                switch resolverKind {
+                case "musicPluginGetMusicUrl":
+                    invocation = "__beansMusicPlugin.getMusicUrl(__beansPayload.source, __beansPayload.info.musicInfo.musicId || __beansPayload.info.musicInfo.songmid || __beansPayload.info.musicInfo.id, __beansPayload.info.type)"
+                case "pluginGetMusicUrl":
+                    invocation = "__beansPlugin.getMusicUrl(__beansPayload.source, __beansPayload.info.musicInfo.musicId || __beansPayload.info.musicInfo.songmid || __beansPayload.info.musicInfo.id, __beansPayload.info.type)"
+                default:
+                    invocation = "__beansPlugin.musicUrl(__beansPayload.source, __beansPayload.info.musicInfo, __beansPayload.info.type)"
+                }
+            }
             _ = self.context.evaluateScript("""
             (function() {
                 try {
@@ -305,12 +598,15 @@ final class BeansLXScriptRuntime {
             })();
             """)
             if self.context.exception != nil {
+                BeansLogger.shared.log("第三方脚本调用异常：\(self.sourceID)", level: .debug)
                 semaphore.signal()
             }
         }
 
         let deadline = DispatchTime.now() + timeout
-        _ = semaphore.wait(timeout: deadline)
+        if semaphore.wait(timeout: deadline) == .timedOut {
+            BeansLogger.shared.log("第三方脚本调用超时：\(sourceID) \(Int(timeout))s", level: .debug)
+        }
         resultLock.lock()
         let finalResult = result
         resultLock.unlock()
@@ -329,6 +625,9 @@ final class LXScriptSourceRunner {
         script: String,
         songSource: SongSource,
         songID: String,
+        qqMid: String? = nil,
+        qqMediaMid: String? = nil,
+        kugouID: String? = nil,
         name: String,
         artists: String,
         quality: String,
@@ -341,6 +640,9 @@ final class LXScriptSourceRunner {
                     script: script,
                     songSource: songSource,
                     songID: songID,
+                    qqMid: qqMid,
+                    qqMediaMid: qqMediaMid,
+                    kugouID: kugouID,
                     name: name,
                     artists: artists,
                     quality: quality,
@@ -355,6 +657,9 @@ final class LXScriptSourceRunner {
         script: String,
         songSource: SongSource,
         songID: String,
+        qqMid: String?,
+        qqMediaMid: String?,
+        kugouID: String?,
         name: String,
         artists: String,
         quality: String,
@@ -369,6 +674,9 @@ final class LXScriptSourceRunner {
                 "musicInfo": musicInfoPayload(
                     songSource: songSource,
                     songID: songID,
+                    qqMid: qqMid,
+                    qqMediaMid: qqMediaMid,
+                    kugouID: kugouID,
                     name: name,
                     artists: artists
                 )
@@ -395,23 +703,51 @@ final class LXScriptSourceRunner {
         return runtime
     }
 
-    private func musicInfoPayload(songSource: SongSource, songID: String, name: String, artists: String) -> [String: Any] {
+    private func musicInfoPayload(
+        songSource: SongSource,
+        songID: String,
+        qqMid: String?,
+        qqMediaMid: String?,
+        kugouID: String?,
+        name: String,
+        artists: String
+    ) -> [String: Any] {
+        let qqSongMid = qqMid?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let qqSongMediaMid = qqMediaMid?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let primaryID = (songSource == .qq ? qqSongMid : nil) ?? songID
+        let resolvedHash = (songSource == .kugou ? kugouID : nil) ?? songID
+        let artistList = artists
+            .split(whereSeparator: { $0 == "/" || $0 == "&" || $0 == "," })
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         var payload: [String: Any] = [
             "id": songID,
             "songId": songID,
-            "songmid": songID,
-            "mediaMid": songID,
-            "strMediaMid": songID,
-            "hash": songID,
+            "musicId": primaryID,
+            "musicrid": songID,
+            "mid": qqSongMid ?? primaryID,
+            "songmid": qqSongMid ?? primaryID,
+            "mediaId": qqSongMediaMid ?? primaryID,
+            "media_mid": qqSongMediaMid ?? primaryID,
+            "mediaMid": qqSongMediaMid ?? primaryID,
+            "strMediaMid": qqSongMediaMid ?? primaryID,
+            "copyrightId": songID,
+            "contentId": songID,
+            "hash": resolvedHash,
             "rid": songID,
             "name": name,
+            "songName": name,
             "singer": artists,
             "artist": artists,
+            "artists": artistList,
+            "source": providerCode(for: songSource),
             "album": "",
             "albumName": "",
             "albumId": "",
             "albumAudioId": "",
-            "interval": ""
+            "interval": "",
+            "_types": [String: Any](),
+            "meta": [String: Any]()
         ]
         return payload
     }
@@ -425,31 +761,92 @@ final class LXScriptSourceRunner {
     }
 
     private func extractURLString(from raw: Any) -> String? {
-        if let string = raw as? String, !string.isEmpty {
-            return string
+        if let string = raw as? String {
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+                return trimmed
+            }
+            if trimmed.hasPrefix("//") {
+                return "https:" + trimmed
+            }
+            if (trimmed.hasPrefix("{") || trimmed.hasPrefix("[")),
+               let data = trimmed.data(using: .utf8),
+               let object = try? JSONSerialization.jsonObject(with: data) {
+                return extractURLString(from: object)
+            }
+            return nil
+        }
+        if let array = raw as? [Any] {
+            for item in array {
+                if let url = extractURLString(from: item) {
+                    return url
+                }
+            }
+            return nil
+        }
+        if let nsArray = raw as? NSArray {
+            for item in nsArray {
+                if let url = extractURLString(from: item) {
+                    return url
+                }
+            }
+            return nil
         }
         if let dict = raw as? [String: Any] {
             let paths = [
+                "musicUrl",
+                "musicurl",
+                "music",
                 "url",
                 "play_url",
                 "playUrl",
                 "src",
                 "audioUrl",
+                "audio_url",
+                "link",
+                "purl",
                 "data.url",
+                "data.musicUrl",
+                "data.musicurl",
+                "data.music",
                 "data.play_url",
                 "data.playUrl",
                 "data.src",
                 "data.audioUrl",
+                "data.audio_url",
+                "data.link",
                 "result.url",
+                "result.musicUrl",
+                "result.musicurl",
+                "result.music",
                 "result.play_url",
                 "result.playUrl",
-                "result.src"
+                "result.src",
+                "result.audioUrl",
+                "result.link"
             ]
             for path in paths {
-                if let value = valueAtPath(dict, path) as? String, !value.isEmpty {
-                    return value
+                if let value = valueAtPath(dict, path),
+                   let url = extractURLString(from: value) {
+                    return url
                 }
             }
+            // Some sources return a wrapper with a provider-specific key.
+            // Recurse only through likely payload containers to avoid picking a cover URL.
+            for key in ["data", "result", "response", "body", "payload", "musicInfo"] {
+                if let value = dict[key],
+                   let url = extractURLString(from: value) {
+                    return url
+                }
+            }
+        }
+        if let nsDict = raw as? NSDictionary {
+            let dict = nsDict.reduce(into: [String: Any]()) { result, pair in
+                if let key = pair.key as? String {
+                    result[key] = pair.value
+                }
+            }
+            return extractURLString(from: dict)
         }
         return nil
     }
@@ -457,8 +854,13 @@ final class LXScriptSourceRunner {
     private func valueAtPath(_ obj: Any, _ path: String) -> Any? {
         var current: Any = obj
         for key in path.split(separator: ".") {
-            guard let dict = current as? [String: Any], let next = dict[String(key)] else { return nil }
-            current = next
+            if let dict = current as? [String: Any], let next = dict[String(key)] {
+                current = next
+            } else if let dict = current as? NSDictionary, let next = dict[String(key)] {
+                current = next
+            } else {
+                return nil
+            }
         }
         return current
     }
