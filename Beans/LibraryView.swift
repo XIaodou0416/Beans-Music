@@ -64,6 +64,7 @@ struct LibraryView: View {
     /// 音乐库板块顺序（本地音乐库 / 我的歌单 / 最近播放，可自定义）
     @State private var libraryOrder = SectionOrderStore.load(SectionOrderStore.libraryKey, defaults: SectionOrderStore.libraryDefaults)
     @State private var navigationPath: [LibraryRoute] = []
+    @State private var legacyRoute: LibraryRoute?
     @State private var showCreatePlaylist = false
     @State private var newPlaylistName = ""
     @State private var pendingDelete: Playlist?
@@ -133,6 +134,18 @@ struct LibraryView: View {
             GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
+            if #unavailable(iOS 16.0) {
+                NavigationLink(
+                    destination: libraryDestination(legacyRoute ?? .playlist(Playlist(id: 0, name: "", coverURL: nil))),
+                    isActive: Binding(
+                        get: { legacyRoute != nil },
+                        set: { if !$0 { legacyRoute = nil } }
+                    )
+                ) {
+                    EmptyView()
+                }
+                .hidden()
+            }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: isNativeClean ? 30 : 24) {
                     if isNativeClean {
@@ -239,13 +252,26 @@ struct LibraryView: View {
         }
         }
         .beansNavigationDestination(for: LibraryRoute.self) { route in
-            switch route {
-            case .playlist(let playlist):
-                PlaylistView(playlist: playlist)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-                    .environmentObject(theme)
-            }
+            libraryDestination(route)
+        }
+    }
+
+    @ViewBuilder
+    private func libraryDestination(_ route: LibraryRoute) -> some View {
+        switch route {
+        case .playlist(let playlist):
+            PlaylistView(playlist: playlist)
+                .environmentObject(player)
+                .environmentObject(auth)
+                .environmentObject(theme)
+        }
+    }
+
+    private func openRoute(_ route: LibraryRoute) {
+        if #available(iOS 16.0, *) {
+            navigationPath.append(route)
+        } else {
+            legacyRoute = route
         }
     }
 
@@ -353,7 +379,7 @@ struct LibraryView: View {
                 VStack(spacing: 0) {
                     ForEach(orderedNeteasePlaylists) { playlist in
                         Button {
-                            navigationPath.append(LibraryRoute.playlist(playlist))
+                            openRoute(LibraryRoute.playlist(playlist))
                         } label: {
                             HStack(spacing: 12) {
                                 CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)
@@ -564,7 +590,7 @@ struct LibraryView: View {
                 VStack(spacing: 0) {
                     ForEach(orderedQQPlaylists) { playlist in
                         Button {
-                            navigationPath.append(LibraryRoute.playlist(playlist))
+                            openRoute(LibraryRoute.playlist(playlist))
                         } label: {
                             HStack(spacing: 12) {
                                 CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)
@@ -621,7 +647,7 @@ struct LibraryView: View {
                 VStack(spacing: 0) {
                     ForEach(orderedKugouPlaylists) { playlist in
                         Button {
-                            navigationPath.append(LibraryRoute.playlist(playlist))
+                            openRoute(LibraryRoute.playlist(playlist))
                         } label: {
                             HStack(spacing: 12) {
                                 CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)

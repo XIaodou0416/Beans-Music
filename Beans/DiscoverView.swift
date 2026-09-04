@@ -22,6 +22,7 @@ struct DiscoverView: View {
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var navigationPath: [DiscoverRoute] = []
+    @State private var legacyRoute: DiscoverRoute?
     @State private var recommendationActionLoading: String?
     @State private var showHomePlatformMenu = false
     @State private var showSectionSort = false
@@ -108,6 +109,18 @@ struct DiscoverView: View {
             GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(homeWallpaperBlur))
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
+            if #unavailable(iOS 16.0) {
+                NavigationLink(
+                    destination: discoverDestination(legacyRoute ?? .dailySongs([])),
+                    isActive: Binding(
+                        get: { legacyRoute != nil },
+                        set: { if !$0 { legacyRoute = nil } }
+                    )
+                ) {
+                    EmptyView()
+                }
+                .hidden()
+            }
             ScrollView {
                 if !homeRenderingPaused {
                     ScrollViewReader { proxy in
@@ -222,28 +235,41 @@ struct DiscoverView: View {
         }
         }
         .beansNavigationDestination(for: DiscoverRoute.self) { route in
-            switch route {
-            case .topList(let topList):
-                TopListDetailView(topList: topList)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            case .playlist(let playlist):
-                PlaylistView(playlist: playlist)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            case .qqTopList(let info):
-                QQTopListDetailView(topID: info.id, name: info.name)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            case .kugouTopList(let info):
-                KugouTopListDetailView(topList: info)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            case .dailySongs(let songs):
-                DailySongsSheet(songs: songs)
-                    .environmentObject(player)
-                    .environmentObject(auth)
-            }
+            discoverDestination(route)
+        }
+    }
+
+    @ViewBuilder
+    private func discoverDestination(_ route: DiscoverRoute) -> some View {
+        switch route {
+        case .topList(let topList):
+            TopListDetailView(topList: topList)
+                .environmentObject(player)
+                .environmentObject(auth)
+        case .playlist(let playlist):
+            PlaylistView(playlist: playlist)
+                .environmentObject(player)
+                .environmentObject(auth)
+        case .qqTopList(let info):
+            QQTopListDetailView(topID: info.id, name: info.name)
+                .environmentObject(player)
+                .environmentObject(auth)
+        case .kugouTopList(let info):
+            KugouTopListDetailView(topList: info)
+                .environmentObject(player)
+                .environmentObject(auth)
+        case .dailySongs(let songs):
+            DailySongsSheet(songs: songs)
+                .environmentObject(player)
+                .environmentObject(auth)
+        }
+    }
+
+    private func openRoute(_ route: DiscoverRoute) {
+        if #available(iOS 16.0, *) {
+            navigationPath.append(route)
+        } else {
+            legacyRoute = route
         }
     }
 
@@ -558,19 +584,19 @@ struct DiscoverView: View {
                     if source == .netease {
                         ForEach(Array(neteaseTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, topList in
                             nativeRankCard(index: index, name: beansChartName(topList.name), subtitle: beansChartSubtitle(topList.updateFrequency), coverURL: topList.coverURL) {
-                                navigationPath.append(DiscoverRoute.topList(topList))
+                                openRoute(DiscoverRoute.topList(topList))
                             }
                         }
                     } else if source == .qq {
                         ForEach(Array(qqTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
                             nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.subTitle), coverURL: info.coverURL) {
-                                navigationPath.append(DiscoverRoute.qqTopList(info))
+                                openRoute(DiscoverRoute.qqTopList(info))
                             }
                         }
                     } else {
                         ForEach(Array(kugouTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, info in
                             nativeRankCard(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.updateFrequency), coverURL: info.coverURL) {
-                                navigationPath.append(DiscoverRoute.kugouTopList(info))
+                                openRoute(DiscoverRoute.kugouTopList(info))
                             }
                         }
                     }
@@ -625,7 +651,7 @@ struct DiscoverView: View {
             ForEach(Array(neteaseTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, topList in
                 rankRow(index: index, name: beansChartName(topList.name), subtitle: beansChartSubtitle(topList.updateFrequency), coverURL: topList.coverURL) {
                     BeansHaptics.tap()
-                    navigationPath.append(DiscoverRoute.topList(topList))
+                    openRoute(DiscoverRoute.topList(topList))
                 }
                 Divider().overlay(Color.beansComment.opacity(0.12))
             }
@@ -633,7 +659,7 @@ struct DiscoverView: View {
             ForEach(Array(qqTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
                 rankRow(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.subTitle), coverURL: info.coverURL) {
                     BeansHaptics.tap()
-                    navigationPath.append(DiscoverRoute.qqTopList(info))
+                    openRoute(DiscoverRoute.qqTopList(info))
                 }
                 Divider().overlay(Color.beansComment.opacity(0.12))
             }
@@ -641,7 +667,7 @@ struct DiscoverView: View {
             ForEach(Array(kugouTopLists.prefix(displayedRankCount).enumerated()), id: \.element.id) { index, info in
                 rankRow(index: index, name: beansChartName(info.name), subtitle: beansChartSubtitle(info.updateFrequency), coverURL: info.coverURL) {
                     BeansHaptics.tap()
-                    navigationPath.append(DiscoverRoute.kugouTopList(info))
+                    openRoute(DiscoverRoute.kugouTopList(info))
                 }
                 Divider().overlay(Color.beansComment.opacity(0.12))
             }
@@ -742,7 +768,7 @@ struct DiscoverView: View {
                         loadingKey: nil
                     ) {
                         BeansHaptics.tap()
-                        navigationPath.append(DiscoverRoute.dailySongs(dailySongs))
+                        openRoute(DiscoverRoute.dailySongs(dailySongs))
                     }
 
                     neteaseRecommendationCard(
@@ -776,7 +802,7 @@ struct DiscoverView: View {
                         loadingKey: nil
                     ) {
                         BeansHaptics.tap()
-                        navigationPath.append(DiscoverRoute.dailySongs(dailySongs))
+                        openRoute(DiscoverRoute.dailySongs(dailySongs))
                     }
 
                     neteaseRecommendationCard(
@@ -850,7 +876,7 @@ struct DiscoverView: View {
                     }
                     Button {
                         BeansHaptics.tap()
-                        navigationPath.append(DiscoverRoute.dailySongs(dailySongs))
+                        openRoute(DiscoverRoute.dailySongs(dailySongs))
                     } label: {
                         VStack(spacing: 5) {
                             Image(systemName: "chevron.right")
@@ -1084,7 +1110,7 @@ struct DiscoverView: View {
                         ForEach(visiblePersonalizedPlaylists, id: \.id) { (playlist: Playlist) in
                             Button {
                                 BeansHaptics.tap()
-                                navigationPath.append(DiscoverRoute.playlist(playlist))
+                                openRoute(DiscoverRoute.playlist(playlist))
                             } label: {
                                 VStack(alignment: .leading, spacing: 8) {
                                     CoverImage(url: playlist.coverURL, size: 166, cornerRadius: 16)
@@ -1112,7 +1138,7 @@ struct DiscoverView: View {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     ForEach(visiblePersonalizedPlaylists) { playlist in
                         Button {
-                            navigationPath.append(DiscoverRoute.playlist(playlist))
+                            openRoute(DiscoverRoute.playlist(playlist))
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
                                 CoverImage(url: playlist.coverURL, size: 144, cornerRadius: 18)
