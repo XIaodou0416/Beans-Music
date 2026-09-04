@@ -82,6 +82,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var itemStatusObserver: NSKeyValueObservation?
     private var timeControlStatusObserver: NSKeyValueObservation?
     private var equalizerSettingsObserver: NSObjectProtocol?
+    private var backendBlockObserver: NSObjectProtocol?
     private var playbackConfirmed = false
     private var pendingThirdPartyVIPNotice: ThirdPartyVIPNotice?
     private var sessionConfigured = false
@@ -160,11 +161,21 @@ final class PlayerManager: NSObject, ObservableObject {
         ) { [weak self] _ in
             self?.applyEqualizerToCurrentItem()
         }
+        backendBlockObserver = NotificationCenter.default.addObserver(
+            forName: .beansBackendBlockStateDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.stopPlaybackIfBackendBlocked()
+        }
     }
 
     deinit {
         if let equalizerSettingsObserver {
             NotificationCenter.default.removeObserver(equalizerSettingsObserver)
+        }
+        if let backendBlockObserver {
+            NotificationCenter.default.removeObserver(backendBlockObserver)
         }
     }
 
@@ -183,12 +194,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
     func play(songs: [Song], startAt index: Int = 0) {
         guard !songs.isEmpty else { return }
-        guard !defaults.bool(forKey: BeansBackendSettings.blockedKey) else {
-            Task { @MainActor in
-                ToastCenter.shared.show("当前设备暂不可播放")
-            }
-            return
-        }
+        guard ensurePlaybackAllowed() else { return }
         queue = songs
         buildPlayOrder()
         jumpToOrderPosition(min(max(index, 0), songs.count - 1))
@@ -230,6 +236,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     func togglePlayPause() {
+        guard ensurePlaybackAllowed() else { return }
         guard let player else {
             guard currentSong != nil else { return }
             loadCurrent(resumeAt: progress)
@@ -247,6 +254,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     func next(manual: Bool = true) {
+        guard ensurePlaybackAllowed() else { return }
         guard !queue.isEmpty else { return }
         if playMode == .repeatOne && manual {
             restartCurrent()
@@ -257,6 +265,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     func previous() {
+        guard ensurePlaybackAllowed() else { return }
         guard !queue.isEmpty else { return }
         // 直接切换到上一首（不再做“播放超过 3 秒先重头播放”的判断）
         if playMode == .shuffle {
@@ -312,6 +321,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     func playQueueIndex(_ index: Int) {
+        guard ensurePlaybackAllowed() else { return }
         guard queue.indices.contains(index) else { return }
         jumpToOrderPosition(index)
     }
@@ -331,6 +341,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     func retryCurrent() {
+        guard ensurePlaybackAllowed() else { return }
         loadFailed = false
         loadCurrent()
     }
@@ -446,6 +457,7 @@ final class PlayerManager: NSObject, ObservableObject {
     // MARK: - 播放
 
     private func restartCurrent() {
+        guard ensurePlaybackAllowed() else { return }
         seek(to: 0)
         player?.playImmediately(atRate: Float(rate))
         isPlaying = true
@@ -453,6 +465,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func loadCurrent(resumeAt: Double? = nil, forceKugouStandard: Bool = false) {
+        guard ensurePlaybackAllowed() else { return }
         guard let song = currentSong else { return }
         loadGeneration += 1
         let generation = loadGeneration
@@ -835,6 +848,7 @@ final class PlayerManager: NSObject, ObservableObject {
         resumeAt: Double = 0,
         isThirdParty: Bool = false
     ) {
+        guard ensurePlaybackAllowed() else { return }
         prepareForSystemPlayback()
         configureAudioSession()
         UIApplication.shared.beginReceivingRemoteControlEvents()
@@ -1015,6 +1029,32 @@ final class PlayerManager: NSObject, ObservableObject {
             ToastCenter.shared.show("当前歌曲播放失败，已自动切到下一首", duration: 2)
         }
         next(manual: false)
+    }
+
+    private func ensurePlaybackAllowed() -> Bool {
+        guard !defaults.bool(forKey: BeansBackendSettings.blockedKey) else {
+            stopPlaybackIfBackendBlocked(showToast: true)
+            return false
+        }
+        return true
+    }
+
+    private func stopPlaybackIfBackendBlocked(showToast: Bool = false) {
+        guard defaults.bool(forKey: BeansBackendSettings.blockedKey) else { return }
+        loadGeneration += 1
+        playbackConfirmationWorkItem?.cancel()
+        player?.pause()
+        removeCurrentObservers()
+        player = nil
+        isPlaying = false
+        isBuffering = false
+        loadFailed = true
+        updateNowPlaying()
+        if showToast {
+            Task { @MainActor in
+                ToastCenter.shared.show("当前设备暂不可播放")
+            }
+        }
     }
 
     private func isQQAudioHost(_ host: String?) -> Bool {
@@ -1412,6 +1452,7 @@ final class PlayerManager: NSObject, ObservableObject {
             guard let self else { return .commandFailed }
             self.performOnMain { [weak self] in
                 guard let self else { return }
+                guard self.ensurePlaybackAllowed() else { return }
                 self.player?.playImmediately(atRate: Float(self.rate))
                 self.isPlaying = true
                 self.updateNowPlaying()

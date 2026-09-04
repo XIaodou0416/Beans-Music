@@ -61,7 +61,10 @@ struct BeansApp: App {
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
-                Task { await RemoteControlStore.shared.refreshIfNeeded() }
+                Task {
+                    await DeviceReporter.shared.reportHeartbeat()
+                    await RemoteControlStore.shared.refreshIfNeeded()
+                }
             }
         }
     }

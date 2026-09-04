@@ -7,6 +7,7 @@ const multer = require('multer');
 const MAX_ATTACHMENTS = 4;
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
 const LOCATION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const ONLINE_WINDOW_MS = 3 * 60 * 1000;
 const USER_ID_PATTERN = /^[a-f0-9-]{16,80}$/i;
 const locationCache = new Map();
 const MEDIA_TYPES = new Set([
@@ -49,7 +50,7 @@ function createBeansRouter(options = {}) {
 
   router.post('/register', (request, response, next) => {
     try {
-      const user = upsertUser(request.body, request.ip);
+      const user = upsertUser(request.body, request.ip, { countAccess: true });
       scheduleLocationUpdate(user.user_id, request.ip);
       response.json(publicUserState(user));
     } catch (error) {
@@ -120,8 +121,35 @@ function createBeansRouter(options = {}) {
     const database = loadDatabase();
     const users = Object.values(database.users)
       .sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))
-      .slice(0, 1000);
-    response.json({ ok: true, total_users: Object.keys(database.users).length, users });
+      .slice(0, 1000)
+      .map((user) => ({ ...user, online: isUserOnline(user) }));
+    response.json({ ok: true, total_users: Object.keys(database.users).length, online_users: countOnlineUsers(database), users });
+  });
+
+  router.get('/feedback', requireApiAdmin(adminPassword), (_request, response) => {
+    const database = loadDatabase();
+    response.json({ ok: true, total_feedback: database.feedback.length, feedback: database.feedback.slice(0, 1000) });
+  });
+
+  router.delete('/feedback/:id', requireApiAdmin(adminPassword), (request, response) => {
+    const feedbackID = text(request.params.id, 80);
+    let removedFeedback;
+    mutateDatabase((database) => {
+      const index = database.feedback.findIndex((item) => item.id === feedbackID);
+      if (index < 0) {
+        return;
+      }
+      removedFeedback = database.feedback.splice(index, 1)[0];
+    });
+    if (!removedFeedback) {
+      return response.status(404).json({ ok: false, message: 'feedback_not_found' });
+    }
+    removeFeedbackAttachments(removedFeedback);
+    return response.json({ ok: true, feedback_id: feedbackID });
+  });
+
+  router.get('/stats', requireApiAdmin(adminPassword), (_request, response) => {
+    response.json({ ok: true, ...statsFor(loadDatabase()) });
   });
 
   router.post('/user-action', requireApiAdmin(adminPassword), (request, response) => {
@@ -148,7 +176,15 @@ function createBeansRouter(options = {}) {
   });
 
   router.get('/admin', browserAdmin, (_request, response) => {
-    response.type('html').send(renderAdminPage(loadDatabase()));
+    response.type('html').send(renderAdminPage(loadDatabase(), 'overview'));
+  });
+
+  router.get('/admin/users', browserAdmin, (_request, response) => {
+    response.type('html').send(renderAdminPage(loadDatabase(), 'users'));
+  });
+
+  router.get('/admin/feedback', browserAdmin, (_request, response) => {
+    response.type('html').send(renderAdminPage(loadDatabase(), 'feedback'));
   });
 
   router.post(
@@ -166,7 +202,27 @@ function createBeansRouter(options = {}) {
         user.download_unlocked = request.body.download_unlocked === 'on';
         user.action_note = text(request.body.action_note, 500);
       });
-      response.redirect('/beans/admin');
+      response.redirect('/beans/admin/users');
+    }
+  );
+
+  router.post(
+    '/admin/feedback/:id/delete',
+    browserAdmin,
+    (request, response) => {
+      const feedbackID = text(request.params.id, 80);
+      let removedFeedback;
+      mutateDatabase((database) => {
+        const index = database.feedback.findIndex((item) => item.id === feedbackID);
+        if (index < 0) {
+          return;
+        }
+        removedFeedback = database.feedback.splice(index, 1)[0];
+      });
+      if (removedFeedback) {
+        removeFeedbackAttachments(removedFeedback);
+      }
+      response.redirect('/beans/admin/feedback');
     }
   );
 
@@ -186,7 +242,7 @@ function createBeansRouter(options = {}) {
 
   return router;
 
-  function upsertUser(payload, ip) {
+  function upsertUser(payload, ip, options = {}) {
     const userID = text(payload?.user_id, 80);
     if (!USER_ID_PATTERN.test(userID)) {
       const error = new Error('invalid_user_id');
@@ -196,6 +252,11 @@ function createBeansRouter(options = {}) {
     let record;
     mutateDatabase((database) => {
       const existing = database.users[userID];
+      const timestamp = now();
+      if (options.countAccess) {
+        database.stats.access_count += 1;
+        database.stats.last_access_at = timestamp;
+      }
       record = {
         user_id: userID,
         device_model: text(payload.model, 128),
@@ -204,8 +265,8 @@ function createBeansRouter(options = {}) {
         system_version: text(payload.system_version, 64),
         app_version: text(payload.app_version, 64),
         app_build: text(payload.app_build, 64),
-        first_seen_at: existing?.first_seen_at || now(),
-        last_seen_at: now(),
+        first_seen_at: existing?.first_seen_at || timestamp,
+        last_seen_at: timestamp,
         last_ip: text(ip, 64),
         location: existing?.location || '',
         location_updated_at: existing?.location_updated_at || '',
@@ -268,16 +329,45 @@ function createBeansRouter(options = {}) {
     }
   }
 
+  function removeFeedbackAttachments(feedback) {
+    (feedback?.attachments || []).forEach((attachment) => {
+      const rawURL = String(attachment?.url || '');
+      const marker = '/beans/uploads/';
+      if (!rawURL.startsWith(marker)) {
+        return;
+      }
+      let filename;
+      try {
+        filename = path.basename(decodeURIComponent(rawURL.slice(marker.length)));
+      } catch {
+        return;
+      }
+      const filePath = path.join(uploadDir, filename);
+      if (!filename || !filePath.startsWith(uploadDir + path.sep)) {
+        return;
+      }
+      try {
+        fs.rmSync(filePath, { force: true });
+      } catch (error) {
+        console.error('Beans feedback attachment cleanup error:', error);
+      }
+    });
+  }
+
   function loadDatabase() {
     try {
       const parsed = JSON.parse(fs.readFileSync(databasePath, 'utf8'));
       return {
         users: parsed.users && typeof parsed.users === 'object' ? parsed.users : {},
         feedback: Array.isArray(parsed.feedback) ? parsed.feedback : [],
+        stats: {
+          access_count: Number.isFinite(parsed.stats?.access_count) ? parsed.stats.access_count : 0,
+          last_access_at: text(parsed.stats?.last_access_at, 64),
+        },
       };
     } catch (error) {
       if (error.code === 'ENOENT') {
-        return { users: {}, feedback: [] };
+        return { users: {}, feedback: [], stats: { access_count: 0, last_access_at: '' } };
       }
       throw error;
     }
@@ -397,7 +487,28 @@ function escapeHtml(value) {
   }[character]));
 }
 
-function renderAdminPage(database) {
+function isUserOnline(user, timestamp = Date.now()) {
+  const lastSeen = Date.parse(user?.last_seen_at || '');
+  return Number.isFinite(lastSeen) && timestamp - lastSeen <= ONLINE_WINDOW_MS;
+}
+
+function countOnlineUsers(database, timestamp = Date.now()) {
+  return Object.values(database.users).filter((user) => isUserOnline(user, timestamp)).length;
+}
+
+function statsFor(database) {
+  return {
+    total_users: Object.keys(database.users).length,
+    access_count: database.stats.access_count,
+    total_feedback: database.feedback.length,
+    online_users: countOnlineUsers(database),
+    online_window_seconds: ONLINE_WINDOW_MS / 1000,
+    last_access_at: database.stats.last_access_at || null,
+  };
+}
+
+function renderAdminPage(database, section = 'overview') {
+  const stats = statsFor(database);
   const users = Object.values(database.users)
     .sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))
     .slice(0, 500);
@@ -405,18 +516,31 @@ function renderAdminPage(database) {
     <tr>
       <td class="id">${escapeHtml(user.user_id)}<br><small>${escapeHtml(user.location || '位置获取中')}</small></td>
       <td>${escapeHtml(user.device_model || user.device_name)}<br><small>${escapeHtml(`${user.system_name} ${user.system_version}`)}</small></td>
-      <td>${escapeHtml(`${user.app_version} (${user.app_build})`)}<br><small>${escapeHtml(user.last_seen_at)}</small></td>
+      <td><span class="status ${isUserOnline(user) ? 'online' : 'offline'}">${isUserOnline(user) ? '在线' : '离线'}</span><br><small>${escapeHtml(user.last_seen_at)}</small></td>
+      <td>${escapeHtml(`${user.app_version} (${user.app_build})`)}<br><small>首次：${escapeHtml(user.first_seen_at)}</small></td>
       <td><form method="post" action="/beans/admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> 拉黑</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> 下载已解锁</label><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>
     </tr>
   `).join('');
-  const feedbackRows = database.feedback.slice(0, 300).map((item) => {
+  const feedbackRows = database.feedback.slice(0, 500).map((item) => {
     const attachments = (item.attachments || []).map((attachment) =>
-      `<a href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener">附件</a>`
+      `<a href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener">${escapeHtml(attachment.mime_type?.startsWith('video/') ? '视频' : '图片')}</a>`
     ).join(' ');
-    return `<tr><td>${escapeHtml(item.submitted_at)}</td><td class="id">${escapeHtml(item.user_id)}</td><td>${escapeHtml(item.phone_model)}<br><small>${escapeHtml(item.phone_system)}</small></td><td class="problem">${escapeHtml(item.problem)}<div class="media">${attachments}</div></td></tr>`;
+    const deleteButton = `<form method="post" action="/beans/admin/feedback/${encodeURIComponent(item.id)}/delete" onsubmit="return confirm('确定删除这条反馈工单？')"><button class="danger">删除工单</button></form>`;
+    return `<tr><td>${escapeHtml(item.submitted_at)}</td><td class="id">${escapeHtml(item.user_id)}</td><td>${escapeHtml(item.phone_model)}<br><small>${escapeHtml(item.phone_system)}</small></td><td class="problem">${escapeHtml(item.problem)}<div class="media">${attachments}</div></td><td>${deleteButton}</td></tr>`;
   }).join('');
 
-  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beans 后台</title><style>:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#182230;background:#f8fafc}body{margin:0}.page{max-width:1500px;margin:0 auto;padding:28px}.bar{margin-bottom:24px}.bar h1{font-size:25px;margin:0}.bar p,small{color:#667085}.metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.metric,.panel{background:#fff;border:1px solid #eaecf0;border-radius:12px}.metric{padding:18px}.metric b{display:block;font-size:30px;margin-top:8px}.panel{overflow:auto;margin-top:20px}.panel h2{font-size:17px;padding:18px 18px 0;margin:0}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:12px 14px;border-bottom:1px solid #eaecf0;vertical-align:top;text-align:left}th{color:#667085;background:#fcfcfd}.id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}.problem{max-width:380px;white-space:pre-wrap;word-break:break-word}.media{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap}.media a{color:#175cd3;text-decoration:none}input[name=action_note]{width:150px;box-sizing:border-box;padding:6px;border:1px solid #d0d5dd;border-radius:6px}button{border:0;border-radius:7px;padding:7px 10px;background:#182230;color:#fff;cursor:pointer}@media(max-width:800px){.page{padding:16px}.metrics{grid-template-columns:1fr}}</style><body><main class="page"><header class="bar"><h1>Beans 后台</h1><p>匿名设备、反馈与用户控制</p></header><section class="metrics"><article class="metric"><small>总用户</small><b>${Object.keys(database.users).length}</b></article><article class="metric"><small>反馈数量</small><b>${database.feedback.length}</b></article></section><section class="panel"><h2>用户</h2><table><thead><tr><th>设备 ID</th><th>设备 / 系统</th><th>版本 / 最近活跃</th><th>状态与操作</th></tr></thead><tbody>${userRows}</tbody></table></section><section class="panel"><h2>反馈</h2><table><thead><tr><th>时间</th><th>用户</th><th>填写设备</th><th>问题</th></tr></thead><tbody>${feedbackRows}</tbody></table></section></main></body></html>`;
+  const body = section === 'users'
+    ? `<section class="panel"><h2>用户列表 <small>在线状态按最近 ${ONLINE_WINDOW_MS / 60000} 分钟心跳计算</small></h2><table><thead><tr><th>设备 ID / 位置</th><th>设备 / 系统</th><th>在线状态</th><th>版本 / 时间</th><th>管理</th></tr></thead><tbody>${userRows || emptyRow('暂无用户')}</tbody></table></section>`
+    : section === 'feedback'
+      ? `<section class="panel"><h2>反馈列表</h2><table><thead><tr><th>时间</th><th>用户</th><th>填写设备</th><th>反馈内容与附件</th><th>操作</th></tr></thead><tbody>${feedbackRows || emptyRow('暂无反馈')}</tbody></table></section>`
+      : `<section class="metrics"><article class="metric"><small>总用户</small><b>${stats.total_users}</b></article><article class="metric"><small>软件访问量</small><b>${stats.access_count}</b></article><article class="metric"><small>当前在线</small><b>${stats.online_users}</b><small>最近 ${ONLINE_WINDOW_MS / 60000} 分钟有心跳</small></article><article class="metric"><small>反馈数量</small><b>${stats.total_feedback}</b></article></section><section class="panel overview"><h2>使用情况</h2><p>最近一次访问：${escapeHtml(stats.last_access_at || '暂无记录')}</p><p>在线用户通过应用每分钟心跳更新，离开超过 ${ONLINE_WINDOW_MS / 60000} 分钟后自动视为离线。</p></section>`;
+
+  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beans 后台</title><style>:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#182230;background:#f8fafc}body{margin:0}.page{max-width:1500px;margin:0 auto;padding:28px}.bar{margin-bottom:24px}.bar h1{font-size:25px;margin:0}.bar p,small{color:#667085}.nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.nav a{color:#344054;text-decoration:none;background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:8px 12px}.nav a.active{color:#fff;background:#182230;border-color:#182230}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.metric,.panel{background:#fff;border:1px solid #eaecf0;border-radius:12px}.metric{padding:18px}.metric b{display:block;font-size:30px;margin-top:8px}.panel{overflow:auto;margin-top:20px}.panel h2{font-size:17px;padding:18px 18px 0;margin:0}.overview{padding-bottom:18px}.overview p{padding:0 18px;color:#667085}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:12px 14px;border-bottom:1px solid #eaecf0;vertical-align:top;text-align:left}th{color:#667085;background:#fcfcfd}.id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}.problem{max-width:500px;white-space:pre-wrap;word-break:break-word}.media{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap}.media a{color:#175cd3;text-decoration:none}.status{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px}.status.online{color:#067647;background:#ecfdf3}.status.offline{color:#667085;background:#f2f4f7}input[name=action_note]{width:150px;box-sizing:border-box;padding:6px;border:1px solid #d0d5dd;border-radius:6px}button{border:0;border-radius:7px;padding:7px 10px;background:#182230;color:#fff;cursor:pointer}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.page{padding:16px}.metrics{grid-template-columns:1fr}}</style><body><main class="page"><header class="bar"><h1>Beans 后台</h1><p>用户、反馈与访问情况</p><nav class="nav"><a class="${section === 'overview' ? 'active' : ''}" href="/beans/admin">概览</a><a class="${section === 'users' ? 'active' : ''}" href="/beans/admin/users">用户</a><a class="${section === 'feedback' ? 'active' : ''}" href="/beans/admin/feedback">反馈</a></nav></header>${body}</main></body></html>`;
+
+  function emptyRow(label) {
+    const columnCount = section === 'feedback' ? 5 : 5;
+    return `<tr><td colspan="${columnCount}" style="color:#667085;text-align:center;padding:28px">${escapeHtml(label)}</td></tr>`;
+  }
 }
 
 module.exports = { createBeansRouter };

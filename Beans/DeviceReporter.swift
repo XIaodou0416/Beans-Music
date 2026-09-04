@@ -16,14 +16,21 @@ final class DeviceReporter {
     static let shared = DeviceReporter()
 
     private var reported = false
+    private var heartbeatTask: Task<Void, Never>?
+    private var heartbeatInFlight = false
     private let apiEndpoint = URL(string: "http://189.24.78.193/beans")!
     private let legacyHeartbeatEndpoint = URL(string: "http://189.24.78.193/beans/heartbeat")!
 
     private init() {}
 
+    deinit {
+        heartbeatTask?.cancel()
+    }
+
     func reportLaunch() async {
         guard !reported else { return }
         reported = true
+        defer { startHeartbeatLoop() }
         var payload = devicePayload()
         payload["event"] = "register"
 
@@ -37,6 +44,30 @@ final class DeviceReporter {
                 applyServerState(from: data)
             } catch {
                 BeansLogger.shared.log("设备启动信息上报失败：\(error.localizedDescription)", level: .debug)
+            }
+        }
+    }
+
+    /// 运行期间定时上报最后活跃时间，后台据此判断在线状态并实时刷新拉黑状态。
+    func reportHeartbeat() async {
+        guard !heartbeatInFlight else { return }
+        heartbeatInFlight = true
+        defer { heartbeatInFlight = false }
+        do {
+            let data = try await postJSON(to: endpoint(for: "heartbeat"), payload: devicePayload())
+            applyServerState(from: data)
+        } catch {
+            BeansLogger.shared.log("在线心跳上报失败：\(error.localizedDescription)", level: .debug)
+        }
+    }
+
+    private func startHeartbeatLoop() {
+        guard heartbeatTask == nil else { return }
+        heartbeatTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+                guard !Task.isCancelled, let self else { return }
+                await self.reportHeartbeat()
             }
         }
     }
@@ -160,7 +191,11 @@ final class DeviceReporter {
 
     private func applyServerState(_ response: BackendResponse) {
         if let blocked = response.blocked {
+            let previous = UserDefaults.standard.bool(forKey: BeansBackendSettings.blockedKey)
             UserDefaults.standard.set(blocked, forKey: BeansBackendSettings.blockedKey)
+            if previous != blocked {
+                NotificationCenter.default.post(name: .beansBackendBlockStateDidChange, object: nil)
+            }
         }
         if response.downloadUnlocked == true {
             UserDefaults.standard.set(true, forKey: BeansBackendSettings.downloadUnlockKey)
