@@ -31,7 +31,6 @@ struct FeedbackSheet: View {
     @State private var problem = ""
     @State private var attachments: [FeedbackAttachment] = []
     @State private var showPhotoPicker = false
-    @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var isSubmitting = false
     @State private var errorMessage: String?
 
@@ -191,18 +190,10 @@ struct FeedbackSheet: View {
                 }
             }
         }
-        .photosPicker(
-            isPresented: $showPhotoPicker,
-            selection: $selectedPhotoItems,
-            maxSelectionCount: 4,
-            matching: .any(of: [.images, .videos])
-        )
-        .onChange(of: selectedPhotoItems) { items in
-            guard !items.isEmpty else { return }
-            Task {
-                await importPhotoItems(items)
-                await MainActor.run {
-                    selectedPhotoItems = []
+        .sheet(isPresented: $showPhotoPicker) {
+            FeedbackPhotoPicker { results in
+                Task { @MainActor in
+                    await importPhotoResults(results)
                 }
             }
         }
@@ -254,23 +245,23 @@ struct FeedbackSheet: View {
         attachments.append(FeedbackAttachment(url: copyURL, contentType: contentType))
     }
 
-    private func importPhotoItems(_ items: [PhotosPickerItem]) async {
-        for item in items {
-            let contentType = item.supportedContentTypes.first(where: {
+    private func importPhotoResults(_ results: [PHPickerResult]) async {
+        for result in results {
+            let provider = result.itemProvider
+            let contentType = provider.registeredTypeIdentifiers
+                .compactMap { UTType(identifier: $0) }
+                .first(where: {
                 $0.conforms(to: .image) || $0.conforms(to: .movie)
-            }) ?? .data
+                }) ?? .data
             guard contentType.conforms(to: .image) || contentType.conforms(to: .movie) else {
-                await MainActor.run {
-                    errorMessage = beansLocalized("只能添加图片或视频附件。", "Only image and video attachments are supported.")
-                }
+                errorMessage = beansLocalized("只能添加图片或视频附件。", "Only image and video attachments are supported.")
                 continue
             }
 
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let data else {
-                await MainActor.run {
-                    errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
-                }
+            guard let typeIdentifier = provider.registeredTypeIdentifiers.first(where: {
+                UTType(identifier: $0)?.conforms(to: contentType) == true
+            }), let data = try? await loadPhotoData(from: provider, typeIdentifier: typeIdentifier) else {
+                errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
                 continue
             }
 
@@ -285,12 +276,23 @@ struct FeedbackSheet: View {
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                 try data.write(to: destination, options: .atomic)
-                await MainActor.run {
-                    attachments.append(FeedbackAttachment(url: destination, contentType: contentType))
-                }
+                attachments.append(FeedbackAttachment(url: destination, contentType: contentType))
             } catch {
-                await MainActor.run {
-                    errorMessage = beansLocalized("附件保存失败，请重新选择。", "The attachment could not be saved. Please choose it again.")
+                errorMessage = beansLocalized("附件保存失败，请重新选择。", "The attachment could not be saved. Please choose it again.")
+            }
+        }
+    }
+
+    private func loadPhotoData(
+        from provider: NSItemProvider,
+        typeIdentifier: String
+    ) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, error in
+                if let data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(throwing: error ?? CocoaError(.fileReadUnknown))
                 }
             }
         }
@@ -332,6 +334,38 @@ struct FeedbackSheet: View {
                     errorMessage = error.localizedDescription
                 }
             }
+        }
+    }
+}
+
+private struct FeedbackPhotoPicker: UIViewControllerRepresentable {
+    let onPick: ([PHPickerResult]) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onPick: onPick)
+    }
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var configuration = PHPickerConfiguration(photoLibrary: .shared())
+        configuration.filter = .any(of: [.images, .videos])
+        configuration.selectionLimit = 4
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ picker: PHPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let onPick: ([PHPickerResult]) -> Void
+
+        init(onPick: @escaping ([PHPickerResult]) -> Void) {
+            self.onPick = onPick
+        }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            onPick(results)
+            picker.dismiss(animated: true)
         }
     }
 }
