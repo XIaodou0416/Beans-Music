@@ -222,7 +222,7 @@ struct ThirdPartySourceManagerSheet: View {
 
     private var sourceListCard: some View {
         let visibleSources = store.managementVisibleSources
-        VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(beansLocalized("音源列表", "Source List"))
                     .font(BeansFont.appFont(15, .semibold))

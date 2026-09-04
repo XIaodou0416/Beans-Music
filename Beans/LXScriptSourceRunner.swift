@@ -265,16 +265,17 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
                 request.httpBody = bodyData
             } else if let string = body as? String {
                 request.httpBody = string.data(using: .utf8)
-            } else if let dict = dictionary(from: body),
-                      dict["__beansBuffer"] as? Bool == true,
-                      let base64 = dict["base64"] as? String {
-                request.httpBody = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters])
-            } else if let dict = dictionary(from: body),
-                      JSONSerialization.isValidJSONObject(dict),
-                      let data = try? JSONSerialization.data(withJSONObject: dict) {
-                request.httpBody = data
-                if request.value(forHTTPHeaderField: "Content-Type") == nil {
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            } else {
+                let dict = dictionary(from: body)
+                if dict["__beansBuffer"] as? Bool == true,
+                   let base64 = dict["base64"] as? String {
+                    request.httpBody = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters])
+                } else if JSONSerialization.isValidJSONObject(dict),
+                          let data = try? JSONSerialization.data(withJSONObject: dict) {
+                    request.httpBody = data
+                    if request.value(forHTTPHeaderField: "Content-Type") == nil {
+                        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    }
                 }
             }
         }

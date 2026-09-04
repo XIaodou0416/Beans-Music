@@ -1221,7 +1221,9 @@ final class PlayerManager: NSObject, ObservableObject {
                 "Playback failed. Please try again later or switch songs."
             )
         }
-        ToastCenter.shared.show(failureMessage, duration: 3)
+        Task { @MainActor in
+            ToastCenter.shared.show(failureMessage, duration: 3)
+        }
         guard shouldAutoSkip, queue.count > 1 else { return }
         BeansLogger.shared.log("播放失败自动下一首：\(failedSong.name)｜原因=\(reason)", level: .info)
         next(manual: false)
