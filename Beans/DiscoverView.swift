@@ -233,9 +233,9 @@ struct DiscoverView: View {
                     .onDisappear { SectionOrderStore.save(SectionOrderStore.homeKey, homeOrder) }
             }
         }
-        }
-        .beansNavigationDestination(for: DiscoverRoute.self) { route in
-            discoverDestination(route)
+            .beansNavigationDestination(for: DiscoverRoute.self) { route in
+                discoverDestination(route)
+            }
         }
     }
 

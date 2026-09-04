@@ -250,10 +250,10 @@ struct LibraryView: View {
             Button("删除", role: .destructive) { confirmDeletePlaylist() }
             Button("取消", role: .cancel) {}
         }
-        }
         .beansNavigationDestination(for: LibraryRoute.self) { route in
             libraryDestination(route)
         }
+    }
     }
 
     @ViewBuilder
