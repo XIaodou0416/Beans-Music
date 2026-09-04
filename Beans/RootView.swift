@@ -419,7 +419,7 @@ private enum BeansNowPlayingPresentationMetrics {
     )
 }
 
-private struct BeansNowPlayingPresentation<Content: View>: View {
+struct BeansNowPlayingPresentation<Content: View>: View {
     @Binding var isPresented: Bool
     let usesSystemInteractiveDismissal: Bool
     let content: Content
