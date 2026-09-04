@@ -23,7 +23,7 @@ enum BeansAudioQuality: String, CaseIterable, Identifiable {
     /// 网易云 songURL 的 level 参数
     var level: String { rawValue }
 
-    /// 当前官方播放音质（默认 Hi-Res；服务端不可用时由各平台接口自行降级）。
+    /// 当前官方播放音质（默认 Hi-Res；不可用时由各平台接口自行降级）。
     static var current: BeansAudioQuality {
         let raw = UserDefaults.standard.string(forKey: "beans.audioQuality") ?? Self.hires.rawValue
         return BeansAudioQuality(rawValue: raw) ?? .hires

@@ -82,7 +82,6 @@ final class PlayerManager: NSObject, ObservableObject {
     private var itemStatusObserver: NSKeyValueObservation?
     private var timeControlStatusObserver: NSKeyValueObservation?
     private var equalizerSettingsObserver: NSObjectProtocol?
-    private var backendBlockObserver: NSObjectProtocol?
     private var playbackConfirmed = false
     private var pendingThirdPartyVIPNotice: ThirdPartyVIPNotice?
     private var sessionConfigured = false
@@ -169,21 +168,11 @@ final class PlayerManager: NSObject, ObservableObject {
         ) { [weak self] _ in
             self?.applyEqualizerToCurrentItem()
         }
-        backendBlockObserver = NotificationCenter.default.addObserver(
-            forName: .beansBackendBlockStateDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.stopPlaybackIfBackendBlocked()
-        }
     }
 
     deinit {
         if let equalizerSettingsObserver {
             NotificationCenter.default.removeObserver(equalizerSettingsObserver)
-        }
-        if let backendBlockObserver {
-            NotificationCenter.default.removeObserver(backendBlockObserver)
         }
     }
 
@@ -1231,10 +1220,6 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func ensurePlaybackAllowed() -> Bool {
-        guard !defaults.bool(forKey: BeansBackendSettings.blockedKey) else {
-            stopPlaybackIfBackendBlocked(showToast: true)
-            return false
-        }
         return true
     }
 
@@ -1277,26 +1262,6 @@ final class PlayerManager: NSObject, ObservableObject {
                 quality: quality,
                 excludedHosts: excludedHosts
             )
-        }
-    }
-
-    private func stopPlaybackIfBackendBlocked(showToast: Bool = false) {
-        guard defaults.bool(forKey: BeansBackendSettings.blockedKey) else { return }
-        loadGeneration += 1
-        playbackConfirmationWorkItem?.cancel()
-        failureAutoSkipWorkItem?.cancel()
-        failureAutoSkipWorkItem = nil
-        player?.pause()
-        removeCurrentObservers()
-        player = nil
-        isPlaying = false
-        isBuffering = false
-        loadFailed = true
-        updateNowPlaying()
-        if showToast {
-            Task { @MainActor in
-                ToastCenter.shared.show("当前设备暂不可播放")
-            }
         }
     }
 

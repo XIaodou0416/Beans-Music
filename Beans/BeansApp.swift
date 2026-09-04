@@ -56,15 +56,9 @@ struct BeansApp: App {
                 player.resumePersistedPlaybackIfEnabled()
                 FontManager.reinstallIfNeeded()
                 theme.restoreWallpapersIfNeeded()
-                await DeviceReporter.shared.reportLaunch()
-                await RemoteControlStore.shared.refreshIfNeeded(force: true)
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
-                Task {
-                    await DeviceReporter.shared.reportHeartbeat()
-                    await RemoteControlStore.shared.refreshIfNeeded()
-                }
             }
         }
     }

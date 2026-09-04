@@ -42,7 +42,7 @@ struct ReferencePlaybackView: View {
     @AppStorage("beans.appleMusic.wallpaperBlur") private var wallpaperBlur = 14.0
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
     @AppStorage("beans.appleMusic.showLyricPreview") private var showLyricPreview = true
-    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
+    private let downloadFeatureUnlocked = true
     @State private var lyricCenters: [UUID: CGFloat] = [:]
     @State private var focusedLyricID: UUID?
     @State private var lyricsViewportHeight: CGFloat = 0

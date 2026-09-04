@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import AVKit
 
 enum RootTab: String, CaseIterable, Identifiable {
     case discover
@@ -28,7 +27,6 @@ enum RootTab: String, CaseIterable, Identifiable {
         }
     }
 }
-
 struct RootView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
@@ -52,14 +50,6 @@ struct RootView: View {
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
-    @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
-    @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
-    @AppStorage("beans.remoteAnnouncement.imageURL") private var remoteAnnouncementImageURL = ""
-    @AppStorage("beans.remoteAnnouncement.mediaURL") private var remoteAnnouncementMediaURL = ""
-    @AppStorage("beans.remoteAnnouncement.mediaType") private var remoteAnnouncementMediaType = ""
-    @AppStorage("beans.remoteAnnouncement.textColor") private var remoteAnnouncementTextColor = ""
-    @AppStorage("beans.remoteAnnouncement.updatedAt") private var remoteAnnouncementUpdatedAt = ""
-    @AppStorage("beans.remoteAnnouncement.seenKey") private var remoteAnnouncementSeenKey = ""
     @State private var showWhatsNew = false
     @State private var updateInfo: UpdateChecker.ReleaseInfo?
     @State private var showUpdateAlert = false
@@ -69,7 +59,6 @@ struct RootView: View {
     @State private var updateShareFileURL: URL?
     @State private var updateDownloadError = ""
     @State private var showUpdateDownloadError = false
-    @State private var showRemoteAnnouncement = false
     @State private var showHomePlatformMenu = false
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -196,8 +185,6 @@ struct RootView: View {
                 updateInfo = info
                 showUpdateAlert = true
             }
-            await RemoteControlStore.shared.refreshIfNeeded(force: true)
-            presentRemoteAnnouncementIfNeeded()
         }
         .overlay {
             if showUpdateAlert, let info = updateInfo {
@@ -240,36 +227,6 @@ struct RootView: View {
         } message: {
             Text(updateDownloadError)
         }
-        .overlay {
-            if showRemoteAnnouncement {
-                RemoteAnnouncementOverlay(
-                    text: remoteAnnouncementText,
-                    mediaURL: remoteAnnouncementMediaURL.isEmpty ? remoteAnnouncementImageURL : remoteAnnouncementMediaURL,
-                    mediaType: remoteAnnouncementMediaType,
-                    textColor: remoteAnnouncementColor,
-                    onDismiss: {
-                        remoteAnnouncementSeenKey = remoteAnnouncementKey
-                        showRemoteAnnouncement = false
-                    }
-                )
-                .zIndex(22)
-            }
-        }
-    }
-
-    private var remoteAnnouncementColor: Color {
-        Color(hex: remoteAnnouncementTextColor) ?? Color.beansLabel
-    }
-
-    private var remoteAnnouncementKey: String {
-        "\(remoteAnnouncementUpdatedAt)|\(remoteAnnouncementText)|\(remoteAnnouncementMediaURL)|\(remoteAnnouncementMediaType)"
-    }
-
-    private func presentRemoteAnnouncementIfNeeded() {
-        guard remoteAnnouncementEnabled,
-              !remoteAnnouncementText.isEmpty || !remoteAnnouncementMediaURL.isEmpty || !remoteAnnouncementImageURL.isEmpty else { return }
-        guard remoteAnnouncementSeenKey != remoteAnnouncementKey else { return }
-        showRemoteAnnouncement = true
     }
 
     private func startUpdateDownload(info: UpdateChecker.ReleaseInfo, assetURL: URL) {
@@ -322,7 +279,7 @@ struct RootView: View {
                 } else {
                     ProgressView()
                         .tint(Color.beansAmber)
-                    Text("正在连接下载服务器…")
+                    Text("正在获取更新…")
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -400,7 +357,6 @@ struct RootView: View {
         }
     }
 }
-
 private enum BeansNowPlayingPresentationMetrics {
     static let indicatorTopSpacing: CGFloat = 6
     static let indicatorWidth: CGFloat = 52
@@ -931,91 +887,3 @@ struct TabBarAppearanceConfigurator: UIViewControllerRepresentable {
     }
 }
 
-private struct RemoteAnnouncementOverlay: View {
-    let text: String
-    let mediaURL: String
-    let mediaType: String
-    let textColor: Color
-    let onDismiss: () -> Void
-
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.38)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onDismiss)
-
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    Image(systemName: "megaphone.fill")
-                        .foregroundStyle(Color.beansAmber)
-                    Text("Beans Music 公告")
-                        .font(BeansFont.appFont(19, .bold))
-                        .foregroundStyle(Color.beansLabel)
-                    Spacer()
-                    Button(action: onDismiss) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.beansComment)
-                            .frame(width: 30, height: 30)
-                            .background(Color.beansGlassFill, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if let url = URL(string: mediaURL), !mediaURL.isEmpty {
-                    if mediaType.lowercased() == "video" {
-                        AnnouncementVideoView(url: url)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 190)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    } else {
-                        AsyncImage(url: url) { phase in
-                            if let image = phase.image {
-                                image.resizable().scaledToFit()
-                            } else if phase.error == nil {
-                                ProgressView().frame(maxWidth: .infinity, minHeight: 80)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: 220)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                }
-
-                Text(text)
-                    .font(BeansFont.appFont(14, .medium))
-                    .foregroundStyle(textColor)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Button("知道了", action: onDismiss)
-                    .font(BeansFont.appFont(14, .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(Capsule().fill(Color.beansAmber))
-                    .buttonStyle(.plain)
-            }
-            .padding(20)
-            .frame(maxWidth: 370)
-            .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 24, style: .continuous)) }
-            .beansCardShadow(radius: 16, y: 8)
-            .padding(.horizontal, 22)
-        }
-    }
-}
-
-struct AnnouncementVideoView: View {
-    let url: URL
-    @State private var player: AVPlayer
-
-    init(url: URL) {
-        self.url = url
-        _player = State(initialValue: AVPlayer(url: url))
-    }
-
-    var body: some View {
-        VideoPlayer(player: player)
-            .onAppear { player.play() }
-            .onDisappear { player.pause() }
-    }
-}

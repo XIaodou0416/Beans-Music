@@ -24,7 +24,7 @@ struct PlayerView: View {
     @State private var showNativeMoreActions = false
     @State private var showMoreSettingsHint = false
     @AppStorage("beans.playerMoreSettingsHintSeen") private var playerMoreSettingsHintSeen = false
-    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
+    private let downloadFeatureUnlocked = true
     /// 下载完成后直接弹原生分享（用户自行选择保存或转发）
     @State private var shareFile: ShareFileItem?
     @State private var sharedFileURL: URL?

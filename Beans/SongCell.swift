@@ -7,7 +7,7 @@ struct SongCell: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
     @AppStorage(ThirdPartyAudioQuality.downloadStorageKey) private var downloadQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
-    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
+    private let downloadFeatureUnlocked = true
 
     let song: Song
     var showCover = true

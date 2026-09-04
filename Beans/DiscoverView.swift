@@ -67,12 +67,6 @@ struct DiscoverView: View {
     @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
-    @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
-    @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
-    @AppStorage("beans.remoteAnnouncement.imageURL") private var remoteAnnouncementImageURL = ""
-    @AppStorage("beans.remoteAnnouncement.mediaURL") private var remoteAnnouncementMediaURL = ""
-    @AppStorage("beans.remoteAnnouncement.mediaType") private var remoteAnnouncementMediaType = ""
-    @AppStorage("beans.remoteAnnouncement.textColor") private var remoteAnnouncementTextColor = ""
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
     private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
     /// 首页数据源：网易云 / QQ音乐（与搜索页同一控件样式）
@@ -126,10 +120,6 @@ struct DiscoverView: View {
                     ScrollViewReader { proxy in
                     VStack(alignment: .leading, spacing: isNativeClean ? 34 : 26) {
                         header
-                        if remoteAnnouncementEnabled,
-                           !remoteAnnouncementText.isEmpty || !remoteAnnouncementMediaURL.isEmpty || !remoteAnnouncementImageURL.isEmpty {
-                            remoteAnnouncementBanner
-                        }
                         if !hidePlatformPicker {
                             providerPicker
                         }
@@ -271,50 +261,6 @@ struct DiscoverView: View {
         } else {
             legacyRoute = route
         }
-    }
-
-    private var remoteAnnouncementBanner: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "megaphone.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.beansAmber)
-                .padding(.top, 2)
-            VStack(alignment: .leading, spacing: 8) {
-                let mediaURL = remoteAnnouncementMediaURL.isEmpty ? remoteAnnouncementImageURL : remoteAnnouncementMediaURL
-                if let url = URL(string: mediaURL), !mediaURL.isEmpty {
-                    if remoteAnnouncementMediaType.lowercased() == "video" {
-                        AnnouncementVideoView(url: url)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 160)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    } else {
-                        AsyncImage(url: url) { phase in
-                            if let image = phase.image {
-                                image.resizable().scaledToFit()
-                            } else if phase.error == nil {
-                                ProgressView().frame(maxWidth: .infinity, minHeight: 60)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                }
-                Text(remoteAnnouncementText)
-                    .foregroundStyle(remoteAnnouncementColor)
-            }
-                .font(BeansFont.appFont(13, .medium))
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .background {
-            BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .beansCardShadow(radius: 8, y: 3)
-    }
-
-    private var remoteAnnouncementColor: Color {
-        Color(hex: remoteAnnouncementTextColor) ?? Color.beansLabel
     }
 
     /// 顶部问候区：大标题 + 刷新按钮

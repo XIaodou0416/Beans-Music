@@ -41,11 +41,7 @@ struct ProfileView: View {
     @State private var updateShareFileURL: URL?
     @State private var didRefreshProfileAccount = false
     @State private var donationExpanded = false
-    @State private var remoteDonors: [Donor] = []
-    @State private var loadingRemoteDonors = false
     @State private var showWeChatOpenError = false
-    @State private var showFeedback = false
-    @ObservedObject private var feedbackHistory = FeedbackHistoryStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
@@ -195,7 +191,6 @@ struct ProfileView: View {
                     updateLinkCard
                     communityCard
                     donationCard
-                    feedbackCard
                     profileVersionFooter
                 }
                 .padding(.horizontal, isNativeClean ? 24 : 16)
@@ -233,10 +228,6 @@ struct ProfileView: View {
         .sheet(isPresented: $showAccountHub) {
             AccountHubSheet()
                 .environmentObject(auth)
-                .environmentObject(theme)
-        }
-        .sheet(isPresented: $showFeedback) {
-            FeedbackSheet()
                 .environmentObject(theme)
         }
         .fullScreenCover(isPresented: $showSettings) {
@@ -328,7 +319,7 @@ struct ProfileView: View {
                 } else {
                     ProgressView()
                         .tint(Color.beansAmber)
-                    Text("正在连接下载服务器…")
+                    Text("正在获取更新…")
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -701,52 +692,12 @@ struct ProfileView: View {
             .padding(.top, 2)
     }
 
-    private var feedbackCard: some View {
-        Button {
-            BeansHaptics.tap()
-            showFeedback = true
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "bubble.left.and.exclamationmark.bubble.right.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.beansHighlight)
-                    .frame(width: 28)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(beansLocalized("问题反馈", "Feedback"))
-                        .font(BeansFont.appFont(14, .semibold))
-                        .foregroundStyle(Color.beansLabel)
-                    Text(feedbackHistory.unreadReplyCount > 0
-                         ? beansLocalized(
-                             "有 \(feedbackHistory.unreadReplyCount) 条新回复",
-                             "\(feedbackHistory.unreadReplyCount) new repl\(feedbackHistory.unreadReplyCount == 1 ? "y" : "ies")"
-                         )
-                         : beansLocalized("提交设备信息与遇到的问题", "Send your device details and issue"))
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(feedbackHistory.unreadReplyCount > 0 ? Color.beansAmber : Color.beansComment)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.beansComment)
-            }
-            .padding(16)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            }
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
-        .beansCardShadow(radius: 9, y: 3)
-    }
-
     /// 我的页底部赞助入口与赞助排行榜
     private var donationCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             Button {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                     donationExpanded.toggle()
-                }
-                if donationExpanded {
-                    Task { await refreshRemoteDonorsIfNeeded() }
                 }
             } label: {
                 HStack(spacing: 10) {
@@ -799,7 +750,7 @@ struct ProfileView: View {
                         .font(BeansFont.appFont(15, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     Spacer()
-                    Text(loadingRemoteDonors ? "同步中" : "按金额排序")
+                    Text("按金额排序")
                         .font(BeansFont.appFont(11))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -854,56 +805,12 @@ struct ProfileView: View {
     }
 
     private var displayedDonors: [Donor] {
-        remoteDonors.isEmpty ? Self.donors : remoteDonors
-    }
-
-    @MainActor
-    private func refreshRemoteDonorsIfNeeded() async {
-        guard !loadingRemoteDonors else { return }
-        loadingRemoteDonors = true
-        defer { loadingRemoteDonors = false }
-        guard let url = URL(string: "http://189.24.78.193/beans/sponsors.json") else { return }
-        do {
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 8
-            request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
-            let payload = try JSONDecoder().decode(RemoteSponsorPayload.self, from: data)
-            guard payload.enabled else {
-                remoteDonors = []
-                return
-            }
-            let donors = payload.items
-                .filter { $0.visible != false && !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                .sorted { lhs, rhs in
-                    if lhs.sort != rhs.sort { return lhs.sort < rhs.sort }
-                    return lhs.amount > rhs.amount
-                }
-                .map { Donor(name: $0.name, amount: $0.amount) }
-            if !donors.isEmpty {
-                remoteDonors = donors
-            }
-        } catch {
-            // 网络失败时继续显示内置赞助名单，不打断用户浏览。
-        }
+        Self.donors
     }
 
     private struct Donor {
         let name: String
         let amount: Double
-    }
-
-    private struct RemoteSponsorPayload: Decodable {
-        let enabled: Bool
-        let items: [RemoteSponsorItem]
-    }
-
-    private struct RemoteSponsorItem: Decodable {
-        let name: String
-        let amount: Double
-        let sort: Int
-        let visible: Bool?
     }
 
     private static let donors: [Donor] = [
