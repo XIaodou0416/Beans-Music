@@ -12,7 +12,9 @@ targets:
   Beans:
     type: application
     platform: iOS
-    sources: [Beans]
+    sources:
+      - Beans
+      - BeansLiveActivityShared
     resources:
       - Beans/en.lproj
       - Beans/zh-Hans.lproj
@@ -41,12 +43,36 @@ targets:
         CADisableMinimumFrameDurationOnPhone: true
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        NSSupportsLiveActivities: true
+    dependencies:
+      - target: BeansLiveActivity
+        embed: true
+  BeansLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - BeansLiveActivity
+      - BeansLiveActivityShared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.liveactivity
+        IPHONEOS_DEPLOYMENT_TARGET: "16.1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+    info:
+      path: BeansLiveActivity/Info.plist
+      properties:
+        CFBundleDisplayName: Beans Live Activity
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).BeansLiveActivity
 
 schemes:
   Beans:
     build:
       targets:
         Beans: all
+        BeansLiveActivity: all
     run:
       config: Debug
     archive:
