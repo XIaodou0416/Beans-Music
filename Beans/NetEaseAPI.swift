@@ -18,6 +18,9 @@ final class NetEaseAPI {
     private let wnMcid: String
     private let cookiesKey = "beans.netease.cookies"
     private var storedCookies: [String: String] = [:]
+    private var personalFMCache: [Song] = []
+    private var personalFMCacheDate = Date.distantPast
+    private let personalFMCacheTTL: TimeInterval = 5 * 60
 
     init() {
         let config = URLSessionConfiguration.default
@@ -622,21 +625,35 @@ final class NetEaseAPI {
         }
     }
 
-    /// 网易云私人漫游：一次预取 30 首，避免只有 12 首时很快播放完。
-    func personalFM(limit: Int = 30) async throws -> [Song] {
+    /// 网易云私人漫游：先把首批歌曲交给播放器，再在后台继续追加，避免点击后必须等待完整列表。
+    /// 结果缓存 5 分钟，重复进入时直接使用已加载的列表。
+    func personalFM(limit: Int = 60, onBatch: (@MainActor ([Song]) -> Void)? = nil) async throws -> [Song] {
+        let target = max(limit, 1)
+        if !personalFMCache.isEmpty,
+           Date().timeIntervalSince(personalFMCacheDate) < personalFMCacheTTL {
+            let cached = Array(personalFMCache.prefix(target))
+            await onBatch?(cached)
+            return cached
+        }
+
         var songs: [Song] = []
         var seen = Set<String>()
-        let batchCount = max(1, Int(ceil(Double(limit) / 3.0)))
+        let batchCount = max(1, Int(ceil(Double(target) / 3.0)))
         for _ in 0..<batchCount {
             let json = try await request("/api/v1/radio/get", payload: [:], crypto: "weapi")
             let list = json["data"] as? [[String: Any]] ?? []
             let batch = list.compactMap(Song.init(json:))
+            var uniqueBatch: [Song] = []
             for song in batch where seen.insert(song.identityKey).inserted {
                 songs.append(song)
-                if songs.count >= limit { return songs }
+                uniqueBatch.append(song)
             }
+            if !uniqueBatch.isEmpty { await onBatch?(uniqueBatch) }
+            if songs.count >= target { break }
             if batch.isEmpty { break }
         }
+        personalFMCache = songs
+        personalFMCacheDate = Date()
         return songs
     }
 

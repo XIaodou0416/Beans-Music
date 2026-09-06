@@ -978,6 +978,7 @@ struct DiscoverView: View {
         .disabled(loadingKey != nil && recommendationActionLoading != nil)
     }
 
+    @MainActor
     private func startPersonalFM() {
         guard auth.isLoggedIn else {
             ToastCenter.shared.show("请先登录网易云音乐")
@@ -985,23 +986,26 @@ struct DiscoverView: View {
         }
         guard recommendationActionLoading == nil else { return }
         recommendationActionLoading = "fm"
-        Task {
-            defer { Task { @MainActor in recommendationActionLoading = nil } }
+        Task { @MainActor in
+            var didStartPlayback = false
             do {
-                let songs = try await NetEaseAPI.shared.personalFM()
-                await MainActor.run {
-                    if songs.isEmpty {
-                        ToastCenter.shared.show("私人漫游暂时没有推荐")
+                _ = try await NetEaseAPI.shared.personalFM(limit: 60) { batch in
+                    guard !batch.isEmpty else { return }
+                    if didStartPlayback {
+                        player.append(songs: batch)
                     } else {
-                        player.play(songs: songs, startAt: 0)
+                        didStartPlayback = true
+                        player.play(songs: batch, startAt: 0)
+                        recommendationActionLoading = nil
                         ToastCenter.shared.show("已开启私人漫游")
                     }
                 }
+                recommendationActionLoading = nil
+                if !didStartPlayback { ToastCenter.shared.show("私人漫游暂时没有推荐") }
             } catch {
-                await MainActor.run {
-                    BeansLogger.shared.log("私人漫游加载失败：\(error.localizedDescription)", level: .error)
-                    ToastCenter.shared.show("私人漫游加载失败")
-                }
+                recommendationActionLoading = nil
+                BeansLogger.shared.log("私人漫游加载失败：\(error.localizedDescription)", level: .error)
+                if !didStartPlayback { ToastCenter.shared.show("私人漫游加载失败") }
             }
         }
     }
@@ -1105,7 +1109,9 @@ struct DiscoverView: View {
     private var personalizedSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: playlistSectionTitle)
-            playlistSearchField
+            if source != .kugou {
+                playlistSearchField
+            }
             if playlistSearchLoading && visiblePersonalizedPlaylists.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 88)
@@ -1330,7 +1336,7 @@ struct DiscoverView: View {
                 case .qq:
                     results = try await QQMusicAPI.shared.searchPlaylists(keyword: keyword, limit: 30)
                 case .kugou:
-                    results = try await KugouMusicAPI.shared.searchPlaylists(keyword: keyword, limit: 30)
+                    results = []
                 }
                 guard !Task.isCancelled else { return }
                 playlistSearchResults = results
@@ -1349,7 +1355,7 @@ struct DiscoverView: View {
         case .qq:
             return beansLocalized("搜索 QQ 音乐歌单", "Search QQ Music playlists")
         case .kugou:
-            return beansLocalized("搜索酷狗歌单", "Search Kugou playlists")
+            return ""
         }
     }
 

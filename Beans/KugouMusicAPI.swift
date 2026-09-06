@@ -842,29 +842,6 @@ final class KugouMusicAPI {
         }
     }
 
-    /// 酷狗歌单搜索，使用移动端公开搜索接口。
-    func searchPlaylists(keyword: String, limit: Int = 30) async throws -> [Playlist] {
-        var components = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/search/special")!
-        components.queryItems = [
-            URLQueryItem(name: "format", value: "json"),
-            URLQueryItem(name: "keyword", value: keyword),
-            URLQueryItem(name: "page", value: "1"),
-            URLQueryItem(name: "pagesize", value: "\(min(max(limit, 1), 100))"),
-        ]
-        if let url = components.url,
-           let json = try? await getJSON(url, ua: Self.browserUA) {
-            let rows = Self.deepArrays(json, names: ["info", "special", "playlist", "list", "data"])
-            var seen = Set<Int>()
-            let playlists = rows.compactMap { item -> Playlist? in
-                guard let playlist = Self.mapPlaylist(item), seen.insert(playlist.id).inserted else { return nil }
-                return playlist
-            }
-            if !playlists.isEmpty { return Array(playlists.prefix(max(limit, 1))) }
-        }
-
-        return []
-    }
-
     private func upstreamRecommendPlaylists(limit: Int) async throws -> [Playlist] {
         let auth = KugouMusicAuth.shared
         let clientTime = Int(Date().timeIntervalSince1970)

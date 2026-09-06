@@ -217,6 +217,17 @@ final class PlayerManager: NSObject, ObservableObject {
         jumpToOrderPosition(min(max(index, 0), songs.count - 1))
     }
 
+    /// 追加后台继续加载的私人漫游歌曲，不打断当前歌曲或重置播放位置。
+    func append(songs newSongs: [Song]) {
+        guard !newSongs.isEmpty else { return }
+        let existing = Set(queue.map(\.identityKey))
+        let additions = newSongs.filter { !existing.contains($0.identityKey) }
+        guard !additions.isEmpty else { return }
+        queue.append(contentsOf: additions)
+        buildPlayOrder()
+        savePersistedPlaybackState()
+    }
+
     func playSong(_ song: Song, in context: [Song]) {
         play(songs: context, startAt: context.firstIndex(of: song) ?? 0)
     }
