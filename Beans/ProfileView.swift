@@ -1221,6 +1221,7 @@ struct AccountHubSheet: View {
 
 struct SettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
+    @EnvironmentObject private var player: PlayerManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
