@@ -779,34 +779,37 @@ struct DiscoverView: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    qqRecommendationCard(
-                        title: "每日推荐新歌",
+                    neteaseRecommendationCard(
+                        title: "每日推荐",
                         subtitle: qqNewSongs.isEmpty ? "暂无推荐内容" : "\(qqNewSongs.count) 首新歌",
                         icon: "calendar",
                         coverURL: qqNewSongs.first?.coverURL,
-                        gradient: [Color(red: 0.95, green: 0.36, blue: 0.28), Color(red: 0.96, green: 0.68, blue: 0.30)]
+                        gradient: [Color(red: 0.95, green: 0.36, blue: 0.28), Color(red: 0.96, green: 0.68, blue: 0.30)],
+                        loadingKey: nil
                     ) {
                         guard !qqNewSongs.isEmpty else { return }
                         BeansHaptics.tap()
                         player.play(songs: qqNewSongs, startAt: 0)
                     }
-                    qqRecommendationCard(
+                    neteaseRecommendationCard(
                         title: "猜你喜欢",
                         subtitle: qqGuessSongs.isEmpty ? "暂无推荐内容" : "\(qqGuessSongs.count) 首为你推荐",
                         icon: "sparkles",
                         coverURL: qqGuessSongs.first?.coverURL,
-                        gradient: [Color(red: 0.16, green: 0.38, blue: 0.82), Color(red: 0.28, green: 0.70, blue: 0.76)]
+                        gradient: [Color(red: 0.16, green: 0.38, blue: 0.82), Color(red: 0.28, green: 0.70, blue: 0.76)],
+                        loadingKey: nil
                     ) {
                         guard !qqGuessSongs.isEmpty else { return }
                         BeansHaptics.tap()
                         player.play(songs: qqGuessSongs, startAt: 0)
                     }
-                    qqRecommendationCard(
+                    neteaseRecommendationCard(
                         title: "私人雷达",
                         subtitle: qqRadarSongs.isEmpty ? "暂无推荐内容" : "\(qqRadarSongs.count) 首私人推荐",
                         icon: "dot.radiowaves.left.and.right",
                         coverURL: qqRadarSongs.first?.coverURL,
-                        gradient: [Color(red: 0.55, green: 0.22, blue: 0.76), Color(red: 0.88, green: 0.30, blue: 0.48)]
+                        gradient: [Color(red: 0.55, green: 0.22, blue: 0.76), Color(red: 0.88, green: 0.30, blue: 0.48)],
+                        loadingKey: nil
                     ) {
                         guard !qqRadarSongs.isEmpty else { return }
                         BeansHaptics.tap()
@@ -833,60 +836,13 @@ struct DiscoverView: View {
         }
     }
 
-    private func qqRecommendationCard(
-        title: String,
-        subtitle: String,
-        icon: String,
-        coverURL: URL?,
-        gradient: [Color],
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            ZStack(alignment: .bottomLeading) {
-                if let coverURL {
-                    CoverImage(url: coverURL, size: isNativeClean ? 184 : 168, cornerRadius: isNativeClean ? 16 : 18)
-                        .overlay {
-                            LinearGradient(
-                                colors: [.black.opacity(0.04), .black.opacity(0.64)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        }
-                } else {
-                    RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous)
-                        .fill(LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
-                VStack(alignment: .leading, spacing: 7) {
-                    Image(systemName: icon)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.92))
-                    Spacer(minLength: 0)
-                    Text(LocalizedStringKey(title))
-                        .font(BeansFont.appFont(isNativeClean ? 20 : 18, .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(BeansFont.appFont(12, .semibold))
-                        .foregroundStyle(.white.opacity(0.78))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
-                }
-                .padding(14)
-            }
-            .frame(width: isNativeClean ? 184 : 168, height: isNativeClean ? 184 : 168)
-            .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
-            .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 16, x: 0, y: 8)
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.95))
-    }
-
     @MainActor
     private func loadMoreQQRadar() async {
         guard source == .qq, !qqRecommendationLoading, qqRadarHasMore else { return }
         qqRecommendationLoading = true
         defer { qqRecommendationLoading = false }
         do {
-            let page = try await RecommendationService.shared.fetchRadarRecommendations(page: qqRadarPage + 1, limit: 30)
+            let page = try await RecommendationService.shared.fetchRadarRecommendations(page: qqRadarPage + 1, limit: 30, loggedIn: QQMusicAuth.shared.isLoggedIn)
             qqRadarSongs.append(contentsOf: page.songs.filter { song in
                 !qqRadarSongs.contains { $0.identityKey == song.identityKey }
             })
@@ -1642,10 +1598,11 @@ struct DiscoverView: View {
         snapshot.savedAt = Date()
         switch source {
         case .qq:
-            async let newSongs = try? await RecommendationService.shared.fetchNewSongs(limit: 30)
-            async let guessSongs = try? await RecommendationService.shared.fetchGuessRecommendations(limit: 30)
-            async let radarSongs = try? await RecommendationService.shared.fetchRadarRecommendations(page: 1, limit: 30)
-            async let recommendedPlaylists = try? await RecommendationService.shared.fetchPlaylists(page: 1, limit: 25)
+            let qqLoggedIn = QQMusicAuth.shared.isLoggedIn
+            async let newSongs = try? await RecommendationService.shared.fetchNewSongs(limit: 30, loggedIn: qqLoggedIn)
+            async let guessSongs = try? await RecommendationService.shared.fetchGuessRecommendations(limit: 30, loggedIn: qqLoggedIn)
+            async let radarSongs = try? await RecommendationService.shared.fetchRadarRecommendations(page: 1, limit: 30, loggedIn: qqLoggedIn)
+            async let recommendedPlaylists = try? await RecommendationService.shared.fetchPlaylists(page: 1, limit: 25, loggedIn: qqLoggedIn)
             async let b: [QQTopInfo] = (try? await QQMusicAPI.shared.topLists()) ?? []
             let (newPage, guessPage, radarPage, playlistPage, tl) = await (newSongs, guessSongs, radarSongs, recommendedPlaylists, b)
             let dr = newPage?.songs ?? []

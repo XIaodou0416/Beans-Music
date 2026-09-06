@@ -53,20 +53,20 @@ actor RecommendationService {
         session = URLSession(configuration: configuration)
     }
 
-    func fetchNewSongs(limit: Int = 30) async throws -> QQRecommendationPage {
-        try await fetch(.newSongs, page: 1, limit: limit)
+    func fetchNewSongs(limit: Int = 30, loggedIn: Bool = false) async throws -> QQRecommendationPage {
+        try await fetch(.newSongs, page: 1, limit: limit, loggedIn: loggedIn)
     }
 
-    func fetchGuessRecommendations(limit: Int = 30) async throws -> QQRecommendationPage {
-        try await fetch(.guess, page: 1, limit: limit)
+    func fetchGuessRecommendations(limit: Int = 30, loggedIn: Bool = false) async throws -> QQRecommendationPage {
+        try await fetch(.guess, page: 1, limit: limit, loggedIn: loggedIn)
     }
 
-    func fetchRadarRecommendations(page: Int = 1, limit: Int = 30) async throws -> QQRecommendationPage {
-        let result = try await fetch(.radar, page: max(1, page), limit: limit)
+    func fetchRadarRecommendations(page: Int = 1, limit: Int = 30, loggedIn: Bool = false) async throws -> QQRecommendationPage {
+        let result = try await fetch(.radar, page: max(1, page), limit: limit, loggedIn: loggedIn)
         guard result.songs.isEmpty, page <= 1 else { return result }
 
         // 私人雷达为空时自动回退到猜你喜欢，再回退到每日推荐。
-        let guess = try? await fetchGuessRecommendations(limit: limit)
+        let guess = try? await fetchGuessRecommendations(limit: limit, loggedIn: loggedIn)
         if let guess, !guess.songs.isEmpty {
             return QQRecommendationPage(
                 songs: guess.songs,
@@ -77,7 +77,7 @@ actor RecommendationService {
                 usedFallback: true
             )
         }
-        let daily = try? await fetchNewSongs(limit: limit)
+        let daily = try? await fetchNewSongs(limit: limit, loggedIn: loggedIn)
         return QQRecommendationPage(
             songs: daily?.songs ?? [],
             playlists: [],
@@ -88,8 +88,8 @@ actor RecommendationService {
         )
     }
 
-    func fetchPlaylists(page: Int = 1, limit: Int = 25) async throws -> QQRecommendationPage {
-        try await fetch(.playlists, page: max(1, page), limit: limit)
+    func fetchPlaylists(page: Int = 1, limit: Int = 25, loggedIn: Bool = false) async throws -> QQRecommendationPage {
+        try await fetch(.playlists, page: max(1, page), limit: limit, loggedIn: loggedIn)
     }
 
     func fetchPlaylistDetail(id: Int) async throws -> QQRecommendationPage {
@@ -126,8 +126,10 @@ actor RecommendationService {
         case playlists
     }
 
-    private func fetch(_ endpoint: Endpoint, page: Int, limit: Int) async throws -> QQRecommendationPage {
-        let key = "\(endpoint.rawValue)-\(page)-\(limit)"
+    private func fetch(_ endpoint: Endpoint, page: Int, limit: Int, loggedIn: Bool) async throws -> QQRecommendationPage {
+        // 登录前后的推荐必须使用不同缓存分区，否则登录通知触发刷新时会命中访客内容。
+        let mode = loggedIn ? "member" : "guest"
+        let key = "\(mode)-\(endpoint.rawValue)-\(page)-\(limit)"
         if let cached = freshCache(for: key) { return cached }
 
         let pageResult: QQRecommendationPage
@@ -136,23 +138,23 @@ actor RecommendationService {
             switch endpoint {
             case .newSongs:
                 requests = [
-                    ("/recommend/get_recommend_newsong", ["limit": String(limit)]),
-                    ("/getRecommend", ["limit": String(limit)])
+                    ("/recommend/get_recommend_newsong", ["limit": String(limit), "loggedIn": loggedIn ? "1" : "0", "personalized": loggedIn ? "1" : "0"]),
+                    ("/getRecommend", ["limit": String(limit), "loggedIn": loggedIn ? "1" : "0", "personalized": loggedIn ? "1" : "0"])
                 ]
             case .guess:
                 requests = [
-                    ("/recommend/get_guess_recommend", ["limit": String(limit)]),
-                    ("/getRecommend", ["limit": String(limit)])
+                    ("/recommend/get_guess_recommend", ["limit": String(limit), "loggedIn": loggedIn ? "1" : "0", "personalized": loggedIn ? "1" : "0"]),
+                    ("/getRecommend", ["limit": String(limit), "loggedIn": loggedIn ? "1" : "0", "personalized": loggedIn ? "1" : "0"])
                 ]
             case .radar:
                 requests = [
-                    ("/recommend/get_radar_recommend", ["page": String(page), "limit": String(limit)]),
-                    ("/getRadioLists", ["page": String(max(0, page - 1)), "limit": String(limit)])
+                    ("/recommend/get_radar_recommend", ["page": String(page), "limit": String(limit), "loggedIn": loggedIn ? "1" : "0", "personalized": loggedIn ? "1" : "0"]),
+                    ("/getRadioLists", ["page": String(max(0, page - 1)), "limit": String(limit), "loggedIn": loggedIn ? "1" : "0", "personalized": loggedIn ? "1" : "0"])
                 ]
             case .playlists:
                 requests = [
-                    ("/recommend/get_recommend_songlist", ["page": String(page), "num": String(limit)]),
-                    ("/getSongLists", ["page": String(max(0, page - 1)), "limit": String(limit), "categoryId": "10000000", "sortId": "5"])
+                    ("/recommend/get_recommend_songlist", ["page": String(page), "num": String(limit), "loggedIn": loggedIn ? "1" : "0", "personalized": loggedIn ? "1" : "0"]),
+                    ("/getSongLists", ["page": String(max(0, page - 1)), "limit": String(limit), "categoryId": "10000000", "sortId": "5", "loggedIn": loggedIn ? "1" : "0", "personalized": loggedIn ? "1" : "0"])
                 ]
             }
             let json = try await requestFirst(requests)
@@ -167,13 +169,13 @@ actor RecommendationService {
         } else {
             switch endpoint {
             case .newSongs:
-                let songs = try await QQMusicAPI.shared.topListSongs(topid: 27, limit: limit)
+                let songs = try await localSongs(loggedIn: loggedIn, limit: limit, fallbackTopID: 27)
                 pageResult = QQRecommendationPage(songs: songs, playlists: [], artists: [], page: page, hasMore: false, usedFallback: true)
             case .guess:
-                let songs = try await QQMusicAPI.shared.topListSongs(topid: 26, limit: limit)
+                let songs = try await localSongs(loggedIn: loggedIn, limit: limit, fallbackTopID: 26)
                 pageResult = QQRecommendationPage(songs: songs, playlists: [], artists: [], page: page, hasMore: false, usedFallback: true)
             case .radar:
-                let songs = try await QQMusicAPI.shared.topListSongs(topid: 62, limit: limit)
+                let songs = try await localSongs(loggedIn: loggedIn, limit: limit, fallbackTopID: 62)
                 pageResult = QQRecommendationPage(songs: songs, playlists: [], artists: [], page: page, hasMore: false, usedFallback: true)
             case .playlists:
                 let playlists = try await QQMusicAPI.shared.hotPlaylists(limit: limit)
@@ -186,6 +188,21 @@ actor RecommendationService {
         }
         save(pageResult, for: key)
         return pageResult
+    }
+
+    private func localSongs(loggedIn: Bool, limit: Int, fallbackTopID: Int) async throws -> [Song] {
+        if loggedIn,
+           let personalized = try? await QQMusicAPI.shared.personalizedRecommendSongs(limit: limit),
+           !personalized.isEmpty {
+            return personalized
+        }
+        // 个性化 Feed 波动时优先使用账号自己的喜欢列表，避免登录后仍展示访客榜单。
+        if loggedIn,
+           let favorites = try? await QQMusicAPI.shared.favoriteSongs(limit: limit),
+           !favorites.isEmpty {
+            return favorites
+        }
+        return try await QQMusicAPI.shared.topListSongs(topid: fallbackTopID, limit: limit)
     }
 
     private var configuredBaseURL: URL? {

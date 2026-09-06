@@ -1171,6 +1171,49 @@ final class QQMusicAPI {
         return Array(songs.prefix(limit))
     }
 
+    /// 登录后的个性化推荐。QQ 的推荐 Feed 在不同版本返回的数组路径不固定，
+    /// 因此递归寻找可识别的歌曲对象，避免把登录后的首页再次降级成固定榜单。
+    func personalizedRecommendSongs(limit: Int = 30) async throws -> [Song] {
+        let auth = QQMusicAuth.shared
+        guard auth.isLoggedIn else { return [] }
+        let payload: [String: Any] = [
+            "comm": ["ct": 24, "cv": 4747474, "uin": Int(auth.uin) ?? 0],
+            "req_0": [
+                "module": "music.recommend.RecommendFeed",
+                "method": "get_recommend_feed",
+                "param": [
+                    "page": 0,
+                    "num": max(1, limit),
+                    "scene": 0,
+                    "v_strategy": 1,
+                    "v_refresh": 1
+                ]
+            ]
+        ]
+        let json = try await musicu(payload, cookie: auth.cookieHeader, timeout: 10)
+        func songDictionaries(_ value: Any, depth: Int = 0) -> [[String: Any]] {
+            guard depth < 8 else { return [] }
+            if let dict = value as? [String: Any] {
+                var result = self.song(from: dict) == nil ? [] : [dict]
+                for child in dict.values {
+                    result.append(contentsOf: songDictionaries(child, depth: depth + 1))
+                }
+                return result
+            }
+            if let array = value as? [Any] {
+                return array.flatMap { songDictionaries($0, depth: depth + 1) }
+            }
+            return []
+        }
+        var seen = Set<String>()
+        let songs = songDictionaries(json).compactMap { song(from: $0) }.filter {
+            seen.insert($0.identityKey).inserted
+        }
+        BeansLogger.shared.log("QQ 个性化推荐解析完成 loggedIn=true count=\(songs.count)", level: songs.isEmpty ? .warn : .info)
+        guard !songs.isEmpty else { throw NetEaseError.unknown("QQ 个性化推荐为空") }
+        return Array(songs.prefix(max(1, limit)))
+    }
+
     /// 用户歌单（创建 + 收藏合并）。
     /// 微信网页登录可能没有 QQ uin，优先使用带微信 Cookie 的官方 GetUserPlaylist 接口，
     /// 同时保留旧版 fcg 接口作为 QQ 登录和部分旧账号的快速通道。
