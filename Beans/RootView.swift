@@ -125,9 +125,10 @@ struct RootView: View {
         }
 
         ZStack {
-            // iOS 26 用系统 tab accessory，把迷你播放器缩进底栏槽位；旧系统走自绘胶囊底栏。
+            // iOS 26 必须使用 Kumone 同款的 Tab API，系统才会提供同款
+            // Liquid Glass 底栏、搜索槽位和下滑收缩行为。旧系统保留兼容底栏。
             if #available(iOS 26.0, *) {
-                rootTabs
+                kumoneNativeTabs
                     .tabBarMinimizeBehavior(.onScrollDown)
                     .modifier(
                         MiniPlayerAccessoryModifier(
@@ -409,6 +410,30 @@ struct RootView: View {
                 .environmentObject(auth)
         }
     }
+
+    /// Kumone 使用的新式 Tab 容器。旧式 `.tabItem` 虽然外观相近，
+    /// 但不会触发 iOS 26 的原生 Liquid Glass 底栏布局。
+    @available(iOS 26.0, *)
+    private var kumoneNativeTabs: some View {
+        TabView(selection: $selection) {
+            Tab("主页", systemImage: "house", value: .discover) {
+                DiscoverView()
+            }
+
+            Tab("搜索", systemImage: "magnifyingglass", value: .search) {
+                SearchView()
+            }
+
+            Tab("音乐库", systemImage: "music.note.list", value: .library) {
+                LibraryView()
+            }
+
+            Tab("我的", systemImage: "person.crop.circle", value: .profile) {
+                ProfileView()
+            }
+        }
+        .tint(Color.beansAmber)
+    }
 }
 
 private enum BeansNowPlayingPresentationMetrics {
@@ -613,6 +638,7 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
             content
         }
     }
+
 }
 
 /// Mirrors Kumone's accessory layout: the system switches to the compact
