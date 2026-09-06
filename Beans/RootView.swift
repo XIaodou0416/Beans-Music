@@ -454,7 +454,7 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             // iOS 26 以下的 fullScreenCover 不稳定提供完整的下拉返回区域，
             // 用新的兼容性手势覆盖播放器表面；iOS 26+ 保留 1.6.5.1 的系统交互。
             if !usesSystemInteractiveDismissal {
-                playerSurface.highPriorityGesture(dismissGesture)
+                playerSurface.simultaneousGesture(dismissGesture)
             } else {
                 playerSurface
             }
@@ -499,11 +499,11 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             .onChanged { value in
                 let vertical = value.translation.height
                 let horizontal = value.translation.width
-                // 旧系统没有系统级下拉返回手势，因此整张播放器表面都接收下拉，
-                // 同时支持从屏幕左侧向右滑动返回，避免顶部小区域拦截触摸。
-                if abs(horizontal) > abs(vertical) && value.startLocation.x < 72 {
-                    dragOffset = max(horizontal, 0) * 0.72
-                } else if value.startLocation.y <= BeansNowPlayingPresentationMetrics.verticalStartZone {
+                let isDownwardSwipe = vertical > 0 && vertical > abs(horizontal) * 1.25
+                // 旧系统只响应顶部开始的明确下拉。播放器内禁用左侧右滑返回，
+                // 避免进度条及其他横向控件触发播放器关闭。
+                if value.startLocation.y <= BeansNowPlayingPresentationMetrics.verticalStartZone,
+                   isDownwardSwipe {
                     dragOffset = max(vertical, 0)
                 } else {
                     dragOffset = 0
@@ -512,16 +512,12 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             .onEnded { value in
                 let horizontal = value.translation.width
                 let vertical = value.translation.height
-                let isEdgeSwipe = value.startLocation.x < 72 && horizontal > abs(vertical)
                 let isTopSwipe = value.startLocation.y <= BeansNowPlayingPresentationMetrics.verticalStartZone
-                let translation = isEdgeSwipe
-                    ? max(horizontal, 0)
-                    : (isTopSwipe ? max(vertical, 0) : 0)
-                let predictedHorizontal = value.predictedEndTranslation.width
+                    && vertical > 0
+                    && vertical > abs(horizontal) * 1.25
+                let translation = isTopSwipe ? max(vertical, 0) : 0
                 let predictedVertical = value.predictedEndTranslation.height
-                let prediction = isEdgeSwipe
-                    ? max(predictedHorizontal, 0)
-                    : (isTopSwipe ? max(predictedVertical, 0) : 0)
+                let prediction = isTopSwipe ? max(predictedVertical, 0) : 0
                 if translation > BeansNowPlayingPresentationMetrics.dismissDistance
                     || prediction > BeansNowPlayingPresentationMetrics.dismissPrediction {
                     BeansHaptics.medium()

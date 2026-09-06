@@ -573,7 +573,7 @@ struct ProfileView: View {
         updateShareFileURL = nil
     }
 
-    /// 更新地址 + 检查更新（GitHub 项目，可点击交互）
+    /// 开源地址 + 检查更新（GitHub 项目，可点击交互）
     private var updateLinkCard: some View {
         VStack(spacing: 0) {
             Button {
@@ -588,7 +588,7 @@ struct ProfileView: View {
                         .foregroundStyle(Color.beansHighlight)
                         .frame(width: 26)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("更新地址")
+                        Text(beansLocalized("开源地址", "Open Source"))
                             .font(BeansFont.appFont(14, .semibold))
                             .foregroundStyle(Color.beansLabel)
                         Text("GitHub：XIaodou0416/Beans-Music")
@@ -715,14 +715,14 @@ struct ProfileView: View {
                     Text(beansLocalized("问题反馈", "Feedback"))
                         .font(BeansFont.appFont(14, .semibold))
                         .foregroundStyle(Color.beansLabel)
-                    Text(feedbackHistory.unreadReplyCount > 0
-                         ? beansLocalized(
-                             "有 \(feedbackHistory.unreadReplyCount) 条新回复",
-                             "\(feedbackHistory.unreadReplyCount) new repl\(feedbackHistory.unreadReplyCount == 1 ? "y" : "ies")"
-                         )
-                         : beansLocalized("提交设备信息与遇到的问题", "Send your device details and issue"))
+                    if feedbackHistory.unreadReplyCount > 0 {
+                        Text(beansLocalized(
+                            "有 \(feedbackHistory.unreadReplyCount) 条新回复",
+                            "\(feedbackHistory.unreadReplyCount) new repl\(feedbackHistory.unreadReplyCount == 1 ? "y" : "ies")"
+                        ))
                         .font(BeansFont.appFont(11))
-                        .foregroundStyle(feedbackHistory.unreadReplyCount > 0 ? Color.beansAmber : Color.beansComment)
+                        .foregroundStyle(Color.beansAmber)
+                    }
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
