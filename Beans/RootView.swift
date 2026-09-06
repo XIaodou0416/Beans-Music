@@ -89,7 +89,8 @@ struct RootView: View {
     }
 
     private var usesSystemPlayerDismissal: Bool {
-        if #available(iOS 18.0, *) { return true }
+        // iOS 26+ 使用 1.6.5.1 的系统播放器下拉交互；旧系统使用兼容性手势。
+        if #available(iOS 26.0, *) { return true }
         return false
     }
 
@@ -450,12 +451,12 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             .offset(y: usesSystemInteractiveDismissal ? 0 : dragOffset)
             .contentShape(Rectangle())
 
-            // iOS 17 及以下的 fullScreenCover 不会稳定提供系统下拉返回，
-            // 用高优先级手势扩大可触区域；iOS 18+ 保留系统交互并采用同时手势。
-            if usesSystemInteractiveDismissal {
-                playerSurface.simultaneousGesture(dismissGesture)
-            } else {
+            // iOS 26 以下的 fullScreenCover 不稳定提供完整的下拉返回区域，
+            // 用新的兼容性手势覆盖播放器表面；iOS 26+ 保留 1.6.5.1 的系统交互。
+            if !usesSystemInteractiveDismissal {
                 playerSurface.highPriorityGesture(dismissGesture)
+            } else {
+                playerSurface
             }
         }
         .onAppear { dragOffset = 0 }

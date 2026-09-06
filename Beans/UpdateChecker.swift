@@ -4,6 +4,7 @@ struct UpdateChecker {
     static let repoPath = "XIaodou0416/Beans-Music"
     static let releasePageURL = URL(string: "https://github.com/\(repoPath)/releases/latest")!
     private static let latestAPI = URL(string: "https://api.github.com/repos/\(repoPath)/releases/latest")!
+    private static let serverUpdateAPI = URL(string: "http://189.24.78.193/beans/update.json")!
     private static let suppressedVersionKey = "beans.updateCheck.suppressedVersion"
 
     struct ReleaseInfo {
@@ -47,6 +48,10 @@ struct UpdateChecker {
     }
 
     static func fetchLatest() async throws -> ReleaseInfo {
+        // 后端公告可以直接指向 IPA；后端不可用时再回退到 GitHub Releases。
+        if let serverInfo = try? await fetchServerLatest() {
+            return serverInfo
+        }
         var request = URLRequest(url: latestAPI)
         request.setValue("Beans-Music/\(currentVersion)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
@@ -76,6 +81,32 @@ struct UpdateChecker {
         )
     }
 
+    /// 优先读取 Beans 后端发布配置，失败时由 fetchLatest 回退 GitHub。
+    private static func fetchServerLatest() async throws -> ReleaseInfo {
+        var request = URLRequest(url: serverUpdateAPI)
+        request.timeoutInterval = 8
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("Beans-Music/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        let payload = try JSONDecoder().decode(ServerUpdatePayload.self, from: data)
+        guard !payload.version.isEmpty else {
+            throw URLError(.cannotParseResponse)
+        }
+        let assetURL = payload.ipaURL.flatMap(URL.init(string:))
+        return ReleaseInfo(
+            version: payload.version,
+            name: payload.title.isEmpty ? "Beans Music \(payload.version)" : payload.title,
+            body: payload.notes.joined(separator: "\n"),
+            htmlURL: assetURL ?? releasePageURL,
+            assetURL: assetURL,
+            notesImageURL: payload.notesImageURL.flatMap(URL.init(string:)),
+            notesTextColorHex: payload.notesTextColor
+        )
+    }
+
     static func isNewer(_ remote: String, than current: String) -> Bool {
         func parts(_ v: String) -> [Int] {
             v.split(separator: ".").compactMap { Int($0) }
@@ -91,4 +122,38 @@ struct UpdateChecker {
         return false
     }
 
+}
+
+private struct ServerUpdatePayload: Decodable {
+    let version: String
+    let title: String
+    let notes: [String]
+    let ipaURL: String?
+    let notesImageURL: String?
+    let notesTextColor: String?
+
+    enum CodingKeys: String, CodingKey {
+        case version
+        case title
+        case notes
+        case ipaURL = "ipa_url"
+        case notesImageURL = "notes_image_url"
+        case notesTextColor = "notes_text_color"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(String.self, forKey: .version) ?? ""
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        ipaURL = try container.decodeIfPresent(String.self, forKey: .ipaURL)
+        notesImageURL = try container.decodeIfPresent(String.self, forKey: .notesImageURL)
+        notesTextColor = try container.decodeIfPresent(String.self, forKey: .notesTextColor)
+        if let values = try? container.decode([String].self, forKey: .notes) {
+            notes = values
+        } else if let value = try? container.decode(String.self, forKey: .notes) {
+            notes = value.isEmpty ? [] : [value]
+        } else {
+            notes = []
+        }
+    }
 }
