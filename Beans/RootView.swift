@@ -394,24 +394,28 @@ struct RootView: View {
     @available(iOS 26.0, *)
     private var nativeTabs: some View {
         TabView(selection: $selection) {
-            Tab("主页", systemImage: "house", value: .discover) {
+            Tab(nativeTabTitle(.discover), systemImage: "house", value: .discover) {
                 DiscoverView()
             }
 
-            Tab("搜索", systemImage: "magnifyingglass", value: .search) {
+            Tab(nativeTabTitle(.search), systemImage: "magnifyingglass", value: .search) {
                 SearchView()
             }
 
-            Tab("音乐库", systemImage: "music.note.list", value: .library) {
+            Tab(nativeTabTitle(.library), systemImage: "music.note.list", value: .library) {
                 LibraryView()
             }
 
-            Tab("我的", systemImage: "person.crop.circle", value: .profile) {
+            Tab(nativeTabTitle(.profile), systemImage: "person.crop.circle", value: .profile) {
                 ProfileView()
             }
         }
         .tint(Color.beansAmber)
         .tabBarMinimizeBehavior(player.currentSong == nil ? .never : .onScrollDown)
+    }
+
+    private func nativeTabTitle(_ tab: RootTab) -> LocalizedStringKey {
+        tabLabelsVisible ? LocalizedStringKey(tab.title) : LocalizedStringKey("")
     }
 
     /// 旧系统将页面、底部播放器和胶囊底栏放在同一个 ZStack 中，
