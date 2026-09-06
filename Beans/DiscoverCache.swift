@@ -13,11 +13,20 @@ final class DiscoverCache {
         var personalized: [Playlist] = []
         var qqTopLists: [QQTopInfo] = []
         var kugouTopLists: [KugouTopInfo] = []
+        var qqNewSongs: [Song] = []
+        var qqGuessSongs: [Song] = []
+        var qqRadarSongs: [Song] = []
+        var qqRecommendationPlaylists: [Playlist] = []
+        var qqRadarPage = 1
+        var qqRadarHasMore = false
+        var qqRecommendationError: String?
         var savedAt: Date = .distantPast
 
         var isEmpty: Bool {
             dailySongs.isEmpty && topLists.isEmpty && personalized.isEmpty
                 && qqTopLists.isEmpty && kugouTopLists.isEmpty
+                && qqNewSongs.isEmpty && qqGuessSongs.isEmpty && qqRadarSongs.isEmpty
+                && qqRecommendationPlaylists.isEmpty
         }
     }
 
@@ -38,9 +47,12 @@ final class DiscoverCache {
         store[source.rawValue] = snapshot
     }
 
-    /// 缓存是否仍然新鲜：每日推荐单独放宽到 6 小时，其余按 1 小时
+    /// 缓存是否仍然新鲜：QQ 推荐模块使用服务约定的 60 秒，其余沿用旧策略。
     func isFresh(_ snapshot: Snapshot) -> Bool {
         let age = Date().timeIntervalSince(snapshot.savedAt)
+        if !snapshot.qqNewSongs.isEmpty || !snapshot.qqGuessSongs.isEmpty || !snapshot.qqRadarSongs.isEmpty || !snapshot.qqRecommendationPlaylists.isEmpty {
+            return age < 60
+        }
         let ttl = snapshot.dailySongs.isEmpty ? listTTL : dailyTTL
         return age < ttl
     }

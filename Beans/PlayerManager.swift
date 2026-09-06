@@ -141,6 +141,15 @@ final class PlayerManager: NSObject, ObservableObject {
         let message: String
     }
 
+    private enum PlaybackFailureCategory {
+        case membership
+        case network
+        case sourceUnavailable
+        case unsupportedFormat
+        case thirdPartyUnavailable
+        case unknown
+    }
+
     private struct PersistedPlaybackState: Codable {
         let queue: [Song]
         let currentIndex: Int
@@ -1199,13 +1208,13 @@ final class PlayerManager: NSObject, ObservableObject {
         let failureMessage: String
         if shouldAutoSkip && queue.count > 1 {
             failureMessage = beansLocalized(
-                "播放失败，10秒后自动切换到下一首",
-                "Playback failed. The next song will start in 10 seconds."
+                "播放失败：\(playbackFailureMessage(for: failedSong, reason: reason))，10秒后自动切换到下一首",
+                "Playback failed: \(playbackFailureMessage(for: failedSong, reason: reason, english: true)). The next song will start in 10 seconds."
             )
         } else {
             failureMessage = message ?? beansLocalized(
-                "播放失败，请稍后重试或切换其他歌曲",
-                "Playback failed. Please try again later or switch songs."
+                "播放失败：\(playbackFailureMessage(for: failedSong, reason: reason))",
+                "Playback failed: \(playbackFailureMessage(for: failedSong, reason: reason, english: true))"
             )
         }
         Task { @MainActor in
@@ -1228,6 +1237,60 @@ final class PlayerManager: NSObject, ObservableObject {
         failureAutoSkipWorkItem?.cancel()
         failureAutoSkipWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: workItem)
+    }
+
+    private func playbackFailureMessage(for song: Song, reason: String, english: Bool = false) -> String {
+        let category = playbackFailureCategory(for: song, reason: reason)
+        if english {
+            switch category {
+            case .membership:
+                return "this song may require a platform membership; sign in to the platform and try again"
+            case .network:
+                return "the source timed out or the network is unavailable; check the connection and try again"
+            case .sourceUnavailable:
+                return "the platform did not return a playable address"
+            case .unsupportedFormat:
+                return "the returned audio format is not supported on this device"
+            case .thirdPartyUnavailable:
+                return "all enabled custom sources failed to return a playable address"
+            case .unknown:
+                return "the audio address could not be loaded; try again or switch songs"
+            }
+        }
+        switch category {
+        case .membership:
+            return "该歌曲可能需要平台会员，请登录平台账号后重试"
+        case .network:
+            return "音源请求超时或网络不可用，请检查网络后重试"
+        case .sourceUnavailable:
+            return "平台没有返回可播放地址"
+        case .unsupportedFormat:
+            return "返回的音频格式不受当前设备支持"
+        case .thirdPartyUnavailable:
+            return "所有已启用的自定义音源都没有返回可播放地址"
+        case .unknown:
+            return "音频地址加载失败，请重试或切换歌曲"
+        }
+    }
+
+    private func playbackFailureCategory(for song: Song, reason: String) -> PlaybackFailureCategory {
+        let normalizedReason = reason.lowercased()
+        if normalizedReason.contains("长时间") || normalizedReason.contains("timeout") || normalizedReason.contains("超时") {
+            return .network
+        }
+        if normalizedReason.contains("第三方") || normalizedReason.contains("自定义") {
+            return .thirdPartyUnavailable
+        }
+        if normalizedReason.contains("格式") || normalizedReason.contains("解码") || normalizedReason.contains("unsupported") {
+            return .unsupportedFormat
+        }
+        if song.isVIP && !hasMembership(for: song.source) && !externalSourcesEnabled {
+            return .membership
+        }
+        if normalizedReason.contains("解析") || normalizedReason.contains("地址") || normalizedReason.contains("加载") {
+            return .sourceUnavailable
+        }
+        return .unknown
     }
 
     private func ensurePlaybackAllowed() -> Bool {
