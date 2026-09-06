@@ -118,6 +118,8 @@ final class PlayerManager: NSObject, ObservableObject {
     private var qqThirdPartyFallbackSongKey: String?
     private var playbackConfirmationWorkItem: DispatchWorkItem?
     private var playbackStallWorkItem: DispatchWorkItem?
+    /// 提前解析下一首第三方地址，切歌时直接命中 UnblockService 的短缓存。
+    private var thirdPartyPrefetchTask: Task<Void, Never>?
     private static let nowPlayingArtworkCache = NSCache<NSURL, UIImage>()
 
     private let historyKey = "beans.history"
@@ -508,6 +510,8 @@ final class PlayerManager: NSObject, ObservableObject {
         failureAutoSkipWorkItem = nil
         playbackStallWorkItem?.cancel()
         playbackStallWorkItem = nil
+        thirdPartyPrefetchTask?.cancel()
+        thirdPartyPrefetchTask = nil
         qqThirdPartyFallbackSongKey = nil
         let initialProgress = max(0, min(resumeAt ?? 0, max(song.duration, 0)))
         // 切歌立即暂停旧音频，避免新歌加载期间旧歌继续播放造成“切歌卡住”感
@@ -578,6 +582,7 @@ final class PlayerManager: NSObject, ObservableObject {
                         isThirdParty: true,
                         thirdPartyQuality: resolved.quality
                     )
+                    self.prefetchNextThirdPartyIfNeeded(currentWasThirdParty: true)
                 }
                 return
             }
@@ -607,8 +612,37 @@ final class PlayerManager: NSObject, ObservableObject {
                     qqOfficialBR: qqOfficialBR,
                     attemptedQQOfficialBRs: attemptedQQOfficialBRs
                 )
+                self.prefetchNextThirdPartyIfNeeded(currentWasThirdParty: false, song: song)
             }
         }
+    }
+
+    /// 当前歌曲已经通过第三方音源播放，或当前歌曲属于会员歌曲时，提前解析下一首。
+    /// 解析结果只进入 UnblockService 的短缓存，不会改动播放队列或播放器状态。
+    private func prefetchNextThirdPartyIfNeeded(currentWasThirdParty: Bool, song: Song? = nil) {
+        guard externalSourcesEnabled,
+              playMode != .repeatOne,
+              currentWasThirdParty || song?.isVIP == true,
+              let nextSong = nextSongForPrefetch else { return }
+
+        thirdPartyPrefetchTask?.cancel()
+        let quality = ThirdPartyAudioQuality.current
+        thirdPartyPrefetchTask = Task { [weak self] in
+            guard let self else { return }
+            _ = await self.resolveThirdParty(song: nextSong, quality: quality, strict: false)
+        }
+    }
+
+    private var nextSongForPrefetch: Song? {
+        guard !queue.isEmpty else { return nil }
+        let nextIndex: Int
+        if playMode == .shuffle, !playOrder.isEmpty {
+            nextIndex = playOrder[(orderPosition + 1) % playOrder.count]
+        } else {
+            nextIndex = (currentIndex + 1) % queue.count
+        }
+        guard queue.indices.contains(nextIndex), nextIndex != currentIndex else { return nil }
+        return queue[nextIndex]
     }
 
     /// 网易云播放地址解析：按设置音质取 URL，VIP/灰色歌曲交给第三方解锁。

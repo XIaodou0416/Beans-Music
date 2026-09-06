@@ -15,13 +15,22 @@ enum UnblockService {
         }
     }
 
+    private struct ResolutionCacheEntry {
+        let resolved: Resolved
+        let expiresAt: Date
+    }
+
     private static let session: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 7
-        config.timeoutIntervalForResource = 12
+        // 音源解析是切歌关键路径，缩短单个失效源的阻塞时间，让其它源更快接管。
+        config.timeoutIntervalForRequest = 4
+        config.timeoutIntervalForResource = 8
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: config)
     }()
+    private static let resolutionCacheLock = NSLock()
+    private static var resolutionCache: [String: ResolutionCacheEntry] = [:]
+    private static let resolutionCacheTTL: TimeInterval = 35
 
     /// 入口：并发尝试用户导入且可用于当前平台的音源，返回第一个可用地址。
     static func resolve(
@@ -53,7 +62,24 @@ enum UnblockService {
             return nil
         }
 
-        return await resolveSources(
+        let cacheKey = resolutionCacheKey(
+            name: name,
+            artists: artists,
+            neteaseID: neteaseID,
+            songSource: songSource,
+            qqMid: qqMid,
+            qqMediaMid: qqMediaMid,
+            kugouID: kugouID,
+            quality: quality,
+            strict: strict,
+            sources: sources
+        )
+        if let cached = cachedResolution(for: cacheKey, excludedHosts: excludedHosts) {
+            BeansLogger.shared.log("第三方音源命中短缓存：歌曲=\(name)｜音质=\(cached.quality.rawValue)", level: .debug)
+            return cached
+        }
+
+        let resolved = await resolveSources(
             sources,
             name: name,
             artists: artists,
@@ -65,6 +91,63 @@ enum UnblockService {
             quality: quality,
             excludedHosts: excludedHosts
         )
+        if let resolved {
+            storeResolution(resolved, for: cacheKey)
+        }
+        return resolved
+    }
+
+    private static func resolutionCacheKey(
+        name: String,
+        artists: String,
+        neteaseID: Int,
+        songSource: SongSource,
+        qqMid: String?,
+        qqMediaMid: String?,
+        kugouID: String?,
+        quality: ThirdPartyAudioQuality,
+        strict: Bool,
+        sources: [ThirdPartySource]
+    ) -> String {
+        let sourceFingerprint = sources.map { requestFingerprint(for: $0) }.joined(separator: "||")
+        return [
+            songSource.rawValue,
+            String(neteaseID),
+            qqMid ?? "",
+            qqMediaMid ?? "",
+            kugouID ?? "",
+            name,
+            artists,
+            quality.rawValue,
+            strict ? "strict" : "normal",
+            sourceFingerprint
+        ].joined(separator: "|")
+    }
+
+    private static func cachedResolution(for key: String, excludedHosts: Set<String>) -> Resolved? {
+        resolutionCacheLock.lock()
+        defer { resolutionCacheLock.unlock() }
+        guard let entry = resolutionCache[key] else { return nil }
+        guard entry.expiresAt > Date() else {
+            resolutionCache.removeValue(forKey: key)
+            return nil
+        }
+        guard let host = entry.resolved.url.host?.lowercased(), !excludedHosts.contains(host) else {
+            return nil
+        }
+        return entry.resolved
+    }
+
+    private static func storeResolution(_ resolved: Resolved, for key: String) {
+        resolutionCacheLock.lock()
+        resolutionCache[key] = ResolutionCacheEntry(
+            resolved: resolved,
+            expiresAt: Date().addingTimeInterval(resolutionCacheTTL)
+        )
+        // 避免长期运行的应用持续保留已经过期的地址。
+        let now = Date()
+        resolutionCache = resolutionCache.filter { $0.value.expiresAt > now }
+        resolutionCacheLock.unlock()
     }
 
     private static func resolveSources(
