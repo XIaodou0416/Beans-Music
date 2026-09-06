@@ -445,6 +445,8 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .offset(y: usesSystemInteractiveDismissal ? 0 : dragOffset)
+            .contentShape(Rectangle())
+            .simultaneousGesture(dismissGesture)
         }
         .onAppear { dragOffset = 0 }
     }
@@ -477,18 +479,31 @@ struct BeansNowPlayingPresentation<Content: View>: View {
         } else {
             surface
                 .padding(.top, safeAreaTop)
-                .gesture(dismissGesture)
+                .allowsHitTesting(false)
         }
     }
 
     private var dismissGesture: some Gesture {
-        DragGesture(minimumDistance: 3, coordinateSpace: .global)
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
             .onChanged { value in
-                dragOffset = max(value.translation.height, 0)
+                let vertical = value.translation.height
+                let horizontal = value.translation.width
+                // 旧系统没有系统级下拉返回手势，因此整张播放器表面都接收下拉，
+                // 同时支持从屏幕左侧向右滑动返回，避免顶部小区域拦截触摸。
+                if abs(horizontal) > abs(vertical) && value.startLocation.x < 72 {
+                    dragOffset = max(horizontal, 0) * 0.72
+                } else {
+                    dragOffset = max(vertical, 0)
+                }
             }
             .onEnded { value in
-                let translation = max(value.translation.height, 0)
-                let prediction = max(value.predictedEndTranslation.height, 0)
+                let horizontal = value.translation.width
+                let vertical = value.translation.height
+                let isEdgeSwipe = value.startLocation.x < 72 && horizontal > abs(vertical)
+                let translation = isEdgeSwipe ? max(horizontal, 0) : max(vertical, 0)
+                let predictedHorizontal = value.predictedEndTranslation.width
+                let predictedVertical = value.predictedEndTranslation.height
+                let prediction = isEdgeSwipe ? max(predictedHorizontal, 0) : max(predictedVertical, 0)
                 if translation > BeansNowPlayingPresentationMetrics.dismissDistance
                     || prediction > BeansNowPlayingPresentationMetrics.dismissPrediction {
                     BeansHaptics.medium()

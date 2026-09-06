@@ -802,12 +802,14 @@ final class QQMusicAPI {
         var comm: [String: Any] = [
             "uin": Int(uin) ?? 0,
             "format": "json",
-            "ct": loginKey.isEmpty ? 24 : 19,
+            // 会员账号的 vkey 请求仍使用新版 musicu 参数结构；
+            // 登录身份通过 Cookie + loginUin 传递，ct 固定为 24 可兼容 QQ/微信登录态。
+            "ct": 24,
             "cv": 0,
             "g_tk": qqAuth.gtk,
         ]
-        if !loginKey.isEmpty { comm["authst"] = loginKey }
         let payload: [String: Any] = [
+            "loginUin": uin,
             "comm": comm,
             "req": [
                 "module": "CDN.SrfCdnDispatchServer",
