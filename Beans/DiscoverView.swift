@@ -88,11 +88,7 @@ struct DiscoverView: View {
     @State private var kugouTopLists: [KugouTopInfo] = []
     @State private var qqNewSongs: [Song] = []
     @State private var qqGuessSongs: [Song] = []
-    @State private var qqRadarSongs: [Song] = []
     @State private var qqRecommendationPlaylists: [Playlist] = []
-    @State private var qqRadarPage = 1
-    @State private var qqRadarHasMore = false
-    @State private var qqRecommendationLoading = false
     @State private var qqRecommendationError: String?
     /// 排行榜展开状态：收起显示前 3，展开显示前 10
     @State private var ranksExpanded = false
@@ -772,7 +768,7 @@ struct DiscoverView: View {
     private var qqRecommendationSection: some View {
         VStack(alignment: .leading, spacing: 18) {
             SectionHeader(title: "推荐")
-            if let qqRecommendationError, qqNewSongs.isEmpty, qqGuessSongs.isEmpty, qqRadarSongs.isEmpty {
+            if let qqRecommendationError, qqNewSongs.isEmpty, qqGuessSongs.isEmpty {
                 ErrorStateView(message: qqRecommendationError) {
                     Task { await load(force: true) }
                 }
@@ -789,7 +785,7 @@ struct DiscoverView: View {
                     ) {
                         guard !qqNewSongs.isEmpty else { return }
                         BeansHaptics.tap()
-                        player.play(songs: qqNewSongs, startAt: 0)
+                        openRoute(.dailySongs(qqNewSongs))
                     }
                     neteaseRecommendationCard(
                         title: "猜你喜欢",
@@ -801,56 +797,12 @@ struct DiscoverView: View {
                     ) {
                         guard !qqGuessSongs.isEmpty else { return }
                         BeansHaptics.tap()
-                        player.play(songs: qqGuessSongs, startAt: 0)
-                    }
-                    neteaseRecommendationCard(
-                        title: "私人雷达",
-                        subtitle: qqRadarSongs.isEmpty ? "暂无推荐内容" : "\(qqRadarSongs.count) 首私人推荐",
-                        icon: "dot.radiowaves.left.and.right",
-                        coverURL: qqRadarSongs.first?.coverURL,
-                        gradient: [Color(red: 0.55, green: 0.22, blue: 0.76), Color(red: 0.88, green: 0.30, blue: 0.48)],
-                        loadingKey: nil
-                    ) {
-                        guard !qqRadarSongs.isEmpty else { return }
-                        BeansHaptics.tap()
-                        player.play(songs: qqRadarSongs, startAt: 0)
+                        openRoute(.dailySongs(qqGuessSongs))
                     }
                 }
                 .padding(.vertical, 3)
             }
             .padding(.trailing, isNativeClean ? -24 : 0)
-            if qqRadarHasMore {
-                Button {
-                    Task { await loadMoreQQRadar() }
-                } label: {
-                    HStack(spacing: 5) {
-                        if qqRecommendationLoading { ProgressView().scaleEffect(0.7) }
-                        Text(LocalizedStringKey("加载更多私人雷达"))
-                            .font(BeansFont.appFont(12, .medium))
-                    }
-                    .foregroundStyle(Color.beansComment)
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    @MainActor
-    private func loadMoreQQRadar() async {
-        guard source == .qq, !qqRecommendationLoading, qqRadarHasMore else { return }
-        qqRecommendationLoading = true
-        defer { qqRecommendationLoading = false }
-        do {
-            let page = try await RecommendationService.shared.fetchRadarRecommendations(page: qqRadarPage + 1, limit: 30, loggedIn: QQMusicAuth.shared.isLoggedIn)
-            qqRadarSongs.append(contentsOf: page.songs.filter { song in
-                !qqRadarSongs.contains { $0.identityKey == song.identityKey }
-            })
-            qqRadarPage = page.page
-            qqRadarHasMore = page.hasMore
-            qqRecommendationError = nil
-        } catch {
-            qqRecommendationError = error.localizedDescription
         }
     }
 
@@ -1601,10 +1553,9 @@ struct DiscoverView: View {
             let qqLoggedIn = QQMusicAuth.shared.isLoggedIn
             async let newSongs = try? await RecommendationService.shared.fetchNewSongs(limit: 30, loggedIn: qqLoggedIn)
             async let guessSongs = try? await RecommendationService.shared.fetchGuessRecommendations(limit: 30, loggedIn: qqLoggedIn)
-            async let radarSongs = try? await RecommendationService.shared.fetchRadarRecommendations(page: 1, limit: 30, loggedIn: qqLoggedIn)
             async let recommendedPlaylists = try? await RecommendationService.shared.fetchPlaylists(page: 1, limit: 25, loggedIn: qqLoggedIn)
             async let b: [QQTopInfo] = (try? await QQMusicAPI.shared.topLists()) ?? []
-            let (newPage, guessPage, radarPage, playlistPage, tl) = await (newSongs, guessSongs, radarSongs, recommendedPlaylists, b)
+            let (newPage, guessPage, playlistPage, tl) = await (newSongs, guessSongs, recommendedPlaylists, b)
             let dr = newPage?.songs ?? []
             let pp = playlistPage?.playlists ?? []
             if pp.isEmpty {
@@ -1615,11 +1566,8 @@ struct DiscoverView: View {
             snapshot.personalized = pp
             snapshot.qqNewSongs = dr
             snapshot.qqGuessSongs = guessPage?.songs ?? []
-            snapshot.qqRadarSongs = radarPage?.songs ?? []
             snapshot.qqRecommendationPlaylists = pp
-            snapshot.qqRadarPage = radarPage?.page ?? 1
-            snapshot.qqRadarHasMore = radarPage?.hasMore ?? false
-            if newPage == nil && guessPage == nil && radarPage == nil && playlistPage == nil {
+            if newPage == nil && guessPage == nil && playlistPage == nil {
                 snapshot.qqRecommendationError = beansLocalized("QQ 推荐加载失败，请稍后重试", "QQ recommendations could not be loaded. Please try again later.")
             }
         case .netease:
@@ -1659,18 +1607,12 @@ struct DiscoverView: View {
         if source == .qq {
             qqNewSongs = snapshot.qqNewSongs.isEmpty ? snapshot.dailySongs : snapshot.qqNewSongs
             qqGuessSongs = snapshot.qqGuessSongs
-            qqRadarSongs = snapshot.qqRadarSongs
             qqRecommendationPlaylists = snapshot.qqRecommendationPlaylists.isEmpty ? snapshot.personalized : snapshot.qqRecommendationPlaylists
-            qqRadarPage = snapshot.qqRadarPage
-            qqRadarHasMore = snapshot.qqRadarHasMore
             qqRecommendationError = snapshot.qqRecommendationError
         } else {
             qqNewSongs = []
             qqGuessSongs = []
-            qqRadarSongs = []
             qqRecommendationPlaylists = []
-            qqRadarPage = 1
-            qqRadarHasMore = false
             qqRecommendationError = nil
         }
     }
@@ -1678,7 +1620,7 @@ struct DiscoverView: View {
     private var hasAnyData: Bool {
         !dailySongs.isEmpty || !topLists.isEmpty || !personalized.isEmpty
             || !qqTopLists.isEmpty || !kugouTopLists.isEmpty
-            || !qqNewSongs.isEmpty || !qqGuessSongs.isEmpty || !qqRadarSongs.isEmpty
+            || !qqNewSongs.isEmpty || !qqGuessSongs.isEmpty
             || !qqRecommendationPlaylists.isEmpty
     }
 }
