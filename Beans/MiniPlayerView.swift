@@ -4,11 +4,12 @@ struct MiniPlayerView: View {
     enum Presentation {
         case dock
         case accessory
+        case inlineAccessory
 
         var showsCardSurface: Bool { self == .dock }
+        var isInline: Bool { self == .inlineAccessory }
     }
 
-    @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
     @Binding var showPlayer: Bool
@@ -16,15 +17,9 @@ struct MiniPlayerView: View {
     var transitionNamespace: Namespace.ID?
     @State private var miniLyrics: [LyricLine] = []
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
-    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
 
-    private var coverSize: CGFloat { 36 }
-    private var controlSize: CGFloat { 32 }
-    private var containerRadius: CGFloat { 18 }
-    private var verticalPadding: CGFloat { 4 }
-
-    /// 二分查找当前播放到的歌词行（歌词按时间升序）
+    /// Keep the existing lyric preview while matching Kumone's compact layout.
     private var currentLyricLine: LyricLine? {
         guard !miniLyrics.isEmpty else { return nil }
         var low = 0
@@ -43,119 +38,143 @@ struct MiniPlayerView: View {
     }
 
     var body: some View {
-        let _ = theme.accent
-        Button {
-            BeansHaptics.tap()
-            showPlayer = true
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(theme.accent.highlight.opacity(0.32))
-                        .frame(width: 42, height: 42)
-                        .blur(radius: 9)
-                    CoverImage(url: player.currentSong?.coverURL, size: coverSize, cornerRadius: 7)
+        playerBarSurface
+            .simultaneousGesture(expandGesture)
+            .transitionSource(in: transitionNamespace)
+            .task(id: player.currentSong?.identityKey) {
+                await loadMiniLyrics()
+            }
+    }
+
+    @ViewBuilder
+    private var playerBarSurface: some View {
+        if presentation.showsCardSurface {
+            content
+                .background(.regularMaterial, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
                 }
-                .frame(width: 42, height: 42)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Text(player.currentSong?.name ?? "")
-                            .font(BeansFont.appFont(12, .semibold))
-                            .foregroundStyle(Color.beansLabel)
-                            .lineLimit(1)
-                        if showSongVIPBadge, player.currentSong?.isVIP == true {
-                            Text("VIP")
-                                .font(BeansFont.appFont(8, .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1.5)
-                                .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
-                        }
-                    }
-                    Text(currentLyricLine?.text ?? player.currentSong?.artists ?? "")
-                        .font(BeansFont.appFont(10))
-                        .foregroundStyle(Color.beansComment)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .animation(.easeInOut(duration: 0.25), value: currentLyricLine?.text)
-                }
-                Spacer(minLength: 8)
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
+        HStack(spacing: 4) {
+            Button(action: showNowPlaying) {
+                trackSummary
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(nowPlayingAccessibilityLabel)
+            .accessibilityHint("打开正在播放")
+
+            if !presentation.isInline {
                 Button {
                     BeansHaptics.tap()
                     player.previous()
                 } label: {
                     Image(systemName: "backward.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.beansLabel)
-                        .frame(width: controlSize, height: controlSize)
-                        .contentShape(Circle())
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(GlassPressButtonStyle())
-                Button {
-                    BeansHaptics.tap()
-                    player.togglePlayPause()
-                } label: {
-                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 16)
-                        .foregroundStyle(Color.beansLabel)
-                        .frame(width: controlSize, height: controlSize)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(GlassPressButtonStyle())
+                .disabled(player.isFMMode)
+                .opacity(player.isFMMode ? 0.35 : 1)
+                .accessibilityLabel("上一首")
+            }
+
+            Button {
+                BeansHaptics.tap()
+                player.togglePlayPause()
+            } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(GlassPressButtonStyle())
+            .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
+
+            if !presentation.isInline {
                 Button {
                     BeansHaptics.tap()
                     player.next()
                 } label: {
                     Image(systemName: "forward.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.beansLabel)
-                        .frame(width: controlSize, height: controlSize)
-                        .contentShape(Circle())
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(GlassPressButtonStyle())
+                .accessibilityLabel("下一首")
             }
-            .padding(.leading, 10)
-            .padding(.trailing, 6)
-            .padding(.vertical, verticalPadding)
-            .background {
-                if presentation.showsCardSurface {
-                    // 普通底部浮层：保留卡片质感与阴影。
-                    BeansGlass(
-                        shape: RoundedRectangle(cornerRadius: containerRadius, style: .continuous),
-                        forceLiquid: false
-                    )
-                    .overlay {
-                        LinearGradient(
-                            colors: [.white.opacity(0.25), .clear, .white.opacity(0.05)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var trackSummary: some View {
+        HStack(alignment: .top, spacing: 8) {
+            CoverImage(
+                url: player.currentSong?.coverURL,
+                size: presentation.isInline ? 28 : 32,
+                cornerRadius: 7
+            )
+                .shadow(color: .black.opacity(0.15), radius: 4, y: 1)
+
+            VStack(alignment: .leading, spacing: presentation.isInline ? 2 : 3) {
+                HStack(spacing: 5) {
+                    Text(player.currentSong?.name ?? "")
+                        .font(.system(size: presentation.isInline ? 10 : 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    if showSongVIPBadge, player.currentSong?.isVIP == true {
+                        Text("VIP")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1.5)
+                            .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
                     }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: containerRadius, style: .continuous)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.45), .white.opacity(0.08)],
-                                    startPoint: .top, endPoint: .bottom
-                                ),
-                                lineWidth: 0.8
-                            )
-                    }
-                } else {
-                    // 进入底栏 accessory 时不再叠一层卡片，交给系统/底栏容器去承载。
-                    RoundedRectangle(cornerRadius: containerRadius, style: .continuous)
-                        .fill(.clear)
                 }
+                Text(currentLyricLine?.text ?? player.currentSong?.artists ?? "")
+                    .font(.system(size: presentation.isInline ? 8 : 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .animation(.easeInOut(duration: 0.25), value: currentLyricLine?.text)
             }
-            .clipShape(RoundedRectangle(cornerRadius: containerRadius, style: .continuous))
-            .shadow(color: presentation.showsCardSurface ? .black.opacity(0.16) : .clear, radius: 12, y: 6)
-            .scaleEffect(showPlayer ? 0.985 : 1)
-            .animation(.spring(response: 0.34, dampingFraction: 0.86), value: showPlayer)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-        .transitionSource(in: transitionNamespace)
-        .padding(.horizontal, presentation.showsCardSurface ? 12 : 0)
-        .task(id: player.currentSong?.identityKey) {
-            await loadMiniLyrics()
-        }
+        .contentShape(Rectangle())
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var nowPlayingAccessibilityLabel: String {
+        let title = player.currentSong?.name ?? String(localized: "正在播放")
+        guard let artist = player.currentSong?.artists, !artist.isEmpty else { return title }
+        return "\(title)，\(artist)"
+    }
+
+    private var expandGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onEnded { value in
+                guard value.translation.height < -50 || value.predictedEndTranslation.height < -100 else { return }
+                showNowPlaying()
+            }
+    }
+
+    private func showNowPlaying() {
+        BeansHaptics.tap()
+        showPlayer = true
     }
 
     private func loadMiniLyrics() async {

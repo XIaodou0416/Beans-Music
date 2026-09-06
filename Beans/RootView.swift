@@ -84,6 +84,12 @@ struct RootView: View {
         min(CGFloat(legacyTabWidth), max(300, UIScreen.main.bounds.width - 28))
     }
 
+    /// Keep the Kumone bar full-width by default, while retaining the existing
+    /// width adjustment for users who have explicitly changed it.
+    private var legacyTabCustomWidth: CGFloat? {
+        abs(legacyTabWidth - 356) > 0.5 ? legacyTabResolvedWidth : nil
+    }
+
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
@@ -122,6 +128,7 @@ struct RootView: View {
             // iOS 26 用系统 tab accessory，把迷你播放器缩进底栏槽位；旧系统走自绘胶囊底栏。
             if #available(iOS 26.0, *) {
                 rootTabs
+                    .tabBarMinimizeBehavior(.onScrollDown)
                     .modifier(
                         MiniPlayerAccessoryModifier(
                             isActive: player.currentSong != nil,
@@ -351,24 +358,26 @@ struct RootView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            KumoneGlassTabBar(
-                items: RootTab.allCases.map {
-                    KumoneGlassTabBar.Item(tab: $0, title: $0.title, icon: $0.icon)
-                },
-                selection: $selection,
-                labelsVisible: tabLabelsVisible,
-                accentIsNativeClean: isNativeClean,
-                onHomeLongPress: { showHomePlatformMenu = true }
-            ) { tab in
-                guard selection != tab else { return }
-                BeansHaptics.select()
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                    selection = tab
+            Group {
+                KumoneGlassTabBar(
+                    items: RootTab.allCases.map {
+                        KumoneGlassTabBar.Item(tab: $0, title: LocalizedStringKey($0.title), icon: $0.icon)
+                    },
+                    selection: $selection,
+                    labelsVisible: tabLabelsVisible,
+                    accentIsNativeClean: isNativeClean,
+                    onHomeLongPress: { showHomePlatformMenu = true }
+                ) { tab in
+                    guard selection != tab else { return }
+                    BeansHaptics.select()
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                        selection = tab
+                    }
                 }
+                .frame(maxWidth: .infinity)
             }
-            .frame(width: legacyTabResolvedWidth)
+            .frame(width: legacyTabCustomWidth)
         }
-        .padding(.horizontal, 18)
         .padding(.bottom, 12)
         .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
     }
@@ -593,13 +602,11 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
     func body(content: Content) -> some View {
         if isActive {
             content.tabViewBottomAccessory {
-                MiniPlayerView(
+                RootMiniPlayerAccessory(
                     showPlayer: $showPlayer,
-                    presentation: .accessory,
+                    clock: clock,
                     transitionNamespace: transitionNamespace
                 )
-                    .padding(.horizontal, 12)
-                    .environmentObject(clock)
                     .environment(\.colorScheme, colorScheme)
             }
         } else {
@@ -608,10 +615,34 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
     }
 }
 
+/// Mirrors Kumone's accessory layout: the system switches to the compact
+/// inline variant when the tab bar minimizes.
+@available(iOS 26.0, *)
+private struct RootMiniPlayerAccessory: View {
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+    @Binding var showPlayer: Bool
+    let clock: PlaybackClock
+    let transitionNamespace: Namespace.ID
+
+    var body: some View {
+        MiniPlayerView(
+            showPlayer: $showPlayer,
+            presentation: presentation,
+            transitionNamespace: transitionNamespace
+        )
+        .padding(.horizontal, 12)
+        .environmentObject(clock)
+    }
+
+    private var presentation: MiniPlayerView.Presentation {
+        placement.map { $0 == .inline } == true ? .inlineAccessory : .accessory
+    }
+}
+
 private struct KumoneGlassTabBar: View {
     struct Item: Identifiable {
         let tab: RootTab
-        let title: String
+        let title: LocalizedStringKey
         let icon: String
         var id: RootTab { tab }
     }
@@ -661,10 +692,10 @@ private struct KumoneGlassTabBar: View {
         .background { Capsule().fill(.regularMaterial) }
         .overlay {
             Capsule()
-                .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.20), lineWidth: 0.5)
+                .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.22), lineWidth: 0.5)
         }
         .clipShape(Capsule())
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.26 : 0.12), radius: 12, y: 4)
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.28 : 0.10), radius: 12, y: 4)
         .padding(.horizontal, 12)
     }
 
