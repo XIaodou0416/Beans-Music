@@ -969,15 +969,30 @@ final class KugouMusicAPI {
         ]
     }
 
+    /// 加载酷狗歌单歌曲。优先使用 MoeKoe / KuGouMusicApi 当前使用的
+    /// `global_collection_id + begin_idx` 接口，旧云歌单接口仅作为兜底。
+    func playlistSongs(playlist: Playlist) async throws -> [Song] {
+        let globalID = playlist.kugouGlobalCollectionID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let requestedID = globalID.flatMap { $0.isEmpty ? nil : $0 } ?? "\(playlist.id)"
+        return try await playlistSongs(globalCollectionID: requestedID, fallbackListID: playlist.id)
+    }
+
     func playlistSongs(listID: Int) async throws -> [Song] {
-        if listID >= 1000,
-           let songs = try? await officialWebPlaylistSongs(listID: listID),
+        try await playlistSongs(globalCollectionID: "\(listID)", fallbackListID: listID)
+    }
+
+    private func playlistSongs(globalCollectionID: String, fallbackListID: Int) async throws -> [Song] {
+        if let songs = try? await modernPlaylistSongs(globalCollectionID: globalCollectionID), !songs.isEmpty {
+            return songs
+        }
+        if fallbackListID >= 1000,
+           let songs = try? await officialWebPlaylistSongs(listID: fallbackListID),
            !songs.isEmpty {
             return songs
         }
         let auth = KugouMusicAuth.shared
         guard auth.isLoggedIn else { return [] }
-        let pid = "\(listID)"
+        let pid = "\(fallbackListID)"
         var all: [[String: Any]] = []
         var page = 1
         let pageSize = 200
@@ -1010,6 +1025,54 @@ final class KugouMusicAPI {
         return all
             .sorted { (Self.int($0["fsort"] ?? $0["sort"] ?? $0["position"]) ) < (Self.int($1["fsort"] ?? $1["sort"] ?? $1["position"])) }
             .compactMap(Self.mapTrack)
+    }
+
+    /// MoeKoe 使用的酷狗新版歌单歌曲接口：
+    /// 每页最多 300 首，通过 begin_idx 连续读取，避免云歌单被截断在 2000 首以内。
+    private func modernPlaylistSongs(globalCollectionID: String) async throws -> [Song] {
+        let pageSize = 300
+        let maxSongs = 10_000
+        var page = 1
+        var result: [Song] = []
+        var seen = Set<String>()
+
+        repeat {
+            let response = try await upstreamRequest(
+                "/pubsongs/v2/get_other_list_file_nofilt",
+                params: [
+                    "area_code": "1",
+                    "begin_idx": "\((page - 1) * pageSize)",
+                    "plat": "1",
+                    "type": "1",
+                    "mode": "1",
+                    "personal_switch": "1",
+                    "extend_fields": "abtags,hot_cmt,popularization",
+                    "pagesize": "\(pageSize)",
+                    "global_collection_id": globalCollectionID,
+                ]
+            )
+            let raw = Self.deepArrays(
+                response.json,
+                names: ["songs", "song", "songlist", "list", "files", "file", "data", "info", "records"]
+            )
+            let batch = raw.compactMap(Self.mapCompleteTrack)
+            BeansLogger.shared.log(
+                "酷狗新版歌单歌曲：globalID=\(globalCollectionID) page=\(page) 返回 \(batch.count) 首",
+                level: .debug
+            )
+            for song in batch where seen.insert(song.identityKey).inserted {
+                result.append(song)
+                if result.count >= maxSongs { return Array(result.prefix(maxSongs)) }
+            }
+            if batch.count < pageSize { break }
+            page += 1
+        } while page <= maxSongs / pageSize
+
+        BeansLogger.shared.log(
+            "酷狗新版歌单歌曲：globalID=\(globalCollectionID) 最终返回 \(result.count) 首",
+            level: .debug
+        )
+        return result
     }
 
     func songURL(song: Song, quality: BeansAudioQuality? = nil) async throws -> String? {
@@ -1850,12 +1913,21 @@ final class KugouMusicAPI {
     }
 
     private static func mapPlaylist(_ raw: [String: Any]) -> Playlist? {
-        let id = int(raw["listid"] ?? raw["id"] ?? raw["global_collection_id"] ?? raw["specialid"])
+        let globalID = string(raw["global_collection_id"] ?? raw["globalCollectionId"] ?? raw["global_id"])
+        let id = int(raw["listid"] ?? raw["id"] ?? raw["specialid"] ?? (globalID.isEmpty ? nil : globalID))
         guard id > 0 else { return nil }
         let name = string(raw["name"] ?? raw["listname"] ?? raw["list_name"] ?? raw["specialname"] ?? raw["title"])
-        let cover = string(raw["pic"] ?? raw["img"] ?? raw["cover"] ?? raw["sizable_cover"] ?? raw["list_pic"]).replacingOccurrences(of: "{size}", with: "240")
-        let count = int(raw["count"] ?? raw["song_count"] ?? raw["total"] ?? raw["file_count"] ?? raw["songcount"])
-        return Playlist(id: id, name: name.isEmpty ? "酷狗歌单" : name, coverURL: URL(string: cover), trackCount: count, source: .kugou)
+        let cover = string(raw["pic"] ?? raw["img"] ?? raw["cover"] ?? raw["sizable_cover"] ?? raw["list_pic"] ?? raw["imgurl"] ?? raw["picurl"])
+            .replacingOccurrences(of: "{size}", with: "400")
+        let count = int(raw["count"] ?? raw["song_count"] ?? raw["total"] ?? raw["file_count"] ?? raw["songcount"] ?? raw["song_num"])
+        return Playlist(
+            id: id,
+            name: name.isEmpty ? "酷狗歌单" : name,
+            coverURL: URL(string: cover),
+            trackCount: count,
+            source: .kugou,
+            kugouGlobalCollectionID: globalID.isEmpty ? nil : globalID
+        )
     }
 
     private static func mapTrack(_ raw: [String: Any]) -> Song? {

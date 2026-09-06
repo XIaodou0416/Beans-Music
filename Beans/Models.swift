@@ -311,16 +311,19 @@ struct Playlist: Identifiable, Hashable, Codable {
     let trackCount: Int
     let creatorName: String
     let specialType: Int
+    /// 酷狗新版歌单接口使用的 global_collection_id，和本地展示用的数字 listid 可能不同。
+    let kugouGlobalCollectionID: String?
     /// 歌单来源（网易云 / QQ音乐），非网易云歌单用对应接口加载
     let source: SongSource
 
-    init(id: Int, name: String, coverURL: URL?, trackCount: Int = 0, source: SongSource = .netease) {
+    init(id: Int, name: String, coverURL: URL?, trackCount: Int = 0, source: SongSource = .netease, kugouGlobalCollectionID: String? = nil) {
         self.id = id
         self.name = name
         self.coverURL = coverURL
         self.trackCount = trackCount
         self.creatorName = ""
         self.specialType = 0
+        self.kugouGlobalCollectionID = kugouGlobalCollectionID
         self.source = source
     }
 
@@ -333,6 +336,7 @@ struct Playlist: Identifiable, Hashable, Codable {
         coverURL = pic.isEmpty ? nil : URL(string: pic)
         creatorName = (json["creator"] as? [String: Any])?["nickname"] as? String ?? ""
         specialType = json["specialType"] as? Int ?? 0
+        kugouGlobalCollectionID = nil
         source = .netease
     }
 
@@ -345,6 +349,7 @@ struct Playlist: Identifiable, Hashable, Codable {
         coverURL = pic.isEmpty ? nil : URL(string: pic)
         creatorName = ""
         specialType = json["specialType"] as? Int ?? 0
+        kugouGlobalCollectionID = nil
         source = .netease
     }
 

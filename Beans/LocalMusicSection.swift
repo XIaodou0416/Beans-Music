@@ -243,7 +243,7 @@ struct LocalMusicSection: View {
                     return name.contains("喜欢") || name.contains("收藏") || name.contains("红心")
                 }
                 if let liked {
-                    let kugouSongs = try await KugouMusicAPI.shared.playlistSongs(listID: liked.id)
+                    let kugouSongs = try await KugouMusicAPI.shared.playlistSongs(playlist: liked)
                     songs.append(contentsOf: kugouSongs)
                     details.append(platformSongCount("酷狗音乐", kugouSongs.count))
                 } else {

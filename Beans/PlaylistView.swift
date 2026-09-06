@@ -186,7 +186,7 @@ struct PlaylistView: View {
         BeansLogger.shared.log("歌单页面打开 source=\(playlist.source.rawValue) id=\(playlist.id) name=\(playlist.name) advertisedCount=\(playlist.trackCount)", level: .info)
         do {
             if playlist.source == .kugou {
-                tracks = try await KugouMusicAPI.shared.playlistSongs(listID: playlist.id)
+                tracks = try await KugouMusicAPI.shared.playlistSongs(playlist: playlist)
             } else if playlist.source == .qq {
                 tracks = try await QQMusicAPI.shared.playlistSongs(listID: playlist.id)
                 // 云端收藏接口临时被风控或返回空时，至少展示已同步到本机的 QQ 收藏，
