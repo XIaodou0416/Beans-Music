@@ -1798,11 +1798,14 @@ final class PlayerManager: NSObject, ObservableObject {
             lastNowPlayingArtworkKey = nil
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        // 混音模式不再关闭系统正在播放状态；重新声明播放状态，避免切换音频会话后被清空。
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
     }
 
     private func clearNowPlayingInfo() {
         lastNowPlayingArtworkKey = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        MPNowPlayingInfoCenter.default().playbackState = .stopped
     }
 
     private func setupRemoteCommands() {
@@ -1860,11 +1863,15 @@ final class PlayerManager: NSObject, ObservableObject {
     /// 与其他 App 音频混合播放。此开关与锁屏/灵动岛显示相互独立。
     var mixesWithOthers: Bool {
         get { defaults.object(forKey: audioMixKey) as? Bool ?? false }
-        set {
-            defaults.set(newValue, forKey: audioMixKey)
-            sessionConfigured = false
-            configureAudioSession()
-        }
+        set { setMixesWithOthers(newValue) }
+    }
+
+    /// 更新混音会话后立即重申系统正在播放信息，避免混音开关影响锁屏和灵动岛显示。
+    func setMixesWithOthers(_ enabled: Bool) {
+        defaults.set(enabled, forKey: audioMixKey)
+        sessionConfigured = false
+        configureAudioSession()
+        updateNowPlaying()
     }
 
     /// 独立控制锁屏和灵动岛的系统正在播放信息，不影响与其他音频混合播放。

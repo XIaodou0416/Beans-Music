@@ -4185,7 +4185,7 @@ struct PlayerSettingsSheet: View {
                 settingToggle("与其他音频同时播放", isOn: $mixesWithOthers,
                               caption: "开启后可与其他 App 的音频同时播放")
                     .onChange(of: mixesWithOthers) { value in
-                        PlayerManager.applyAudioMixPreference(value)
+                        player.setMixesWithOthers(value)
                     }
                 Divider().opacity(0.35)
                 settingToggle("显示锁屏与灵动岛播放器", isOn: $nowPlayingEnabled,

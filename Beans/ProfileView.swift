@@ -2430,7 +2430,7 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 .tint(Color.beansAmber)
                 .onChange(of: mixesWithOthers) { value in
-                    PlayerManager.applyAudioMixPreference(value)
+                    player.setMixesWithOthers(value)
                 }
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
