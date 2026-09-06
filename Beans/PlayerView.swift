@@ -3464,6 +3464,10 @@ struct LyricsSection: View {
                             try? await Task.sleep(nanoseconds: 3_000_000_000)
                             guard !Task.isCancelled else { return }
                             isUserScrolling = false
+                            guard let currentIndex else { return }
+                            withAnimation(.easeInOut(duration: 0.34)) {
+                                proxy.scrollTo(currentIndex, anchor: anchor)
+                            }
                         }
                     }
             )

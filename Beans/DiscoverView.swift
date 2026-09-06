@@ -992,7 +992,7 @@ struct DiscoverView: View {
         Task {
             defer { Task { @MainActor in recommendationActionLoading = nil } }
             do {
-                let songs = try await NetEaseAPI.shared.personalFM()
+                let songs = try await NetEaseAPI.shared.personalFM(limit: 300)
                 await MainActor.run {
                     if songs.isEmpty {
                         ToastCenter.shared.show("私人漫游暂时没有推荐")
@@ -1242,7 +1242,22 @@ struct DiscoverView: View {
         playlistsExpanded ? playlistDisplayItems : Array(playlistDisplayItems.prefix(collapsedPlaylistCount))
     }
 
+    @ViewBuilder
     private var playlistSearchField: some View {
+        if #available(iOS 26, *) {
+            GlassEffectContainer {
+                playlistSearchFieldContent
+                    .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            }
+        } else {
+            playlistSearchFieldContent
+                .background {
+                    BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+        }
+    }
+
+    private var playlistSearchFieldContent: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .medium))
@@ -1288,14 +1303,6 @@ struct DiscoverView: View {
         }
         .padding(.horizontal, 13)
         .frame(height: 42)
-        .background {
-            if isNativeClean {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.primary.opacity(0.045))
-            } else {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-        }
     }
 
     @MainActor

@@ -440,13 +440,16 @@ struct BeansNowPlayingPresentation<Content: View>: View {
                 content
 
                 if isPhone {
-                    dragIndicator(safeAreaTop: proxy.safeAreaInsets.top)
+                    if usesSystemInteractiveDismissal {
+                        dragIndicator(safeAreaTop: proxy.safeAreaInsets.top)
+                    } else {
+                        dragIndicator(safeAreaTop: proxy.safeAreaInsets.top)
+                            .simultaneousGesture(dismissGesture)
+                    }
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .offset(y: usesSystemInteractiveDismissal ? 0 : dragOffset)
-            .contentShape(Rectangle())
-            .simultaneousGesture(dismissGesture)
         }
         .onAppear { dragOffset = 0 }
     }
@@ -476,10 +479,10 @@ struct BeansNowPlayingPresentation<Content: View>: View {
         if usesSystemInteractiveDismissal {
             surface
                 .padding(.top, safeAreaTop)
+                .allowsHitTesting(false)
         } else {
             surface
                 .padding(.top, safeAreaTop)
-                .allowsHitTesting(false)
         }
     }
 

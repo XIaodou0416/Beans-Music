@@ -622,8 +622,8 @@ final class NetEaseAPI {
         }
     }
 
-    /// 网易云私人漫游：一次预取 30 首，避免只有 12 首时很快播放完。
-    func personalFM(limit: Int = 30) async throws -> [Song] {
+    /// 网易云私人漫游：一次预取最多 300 首，减少播放过程中频繁重新请求。
+    func personalFM(limit: Int = 300) async throws -> [Song] {
         var songs: [Song] = []
         var seen = Set<String>()
         let batchCount = max(1, Int(ceil(Double(limit) / 3.0)))
