@@ -342,6 +342,14 @@ final class NetEaseAPI {
         return songs.compactMap(Song.init(json:))
     }
 
+    /// 搜索歌单（网易云搜索类型 1000）
+    func searchPlaylists(keyword: String, limit: Int = 30, offset: Int = 0) async throws -> [Playlist] {
+        let json = try await request("/api/cloudsearch/pc", payload: ["s": keyword, "type": 1000, "limit": limit, "offset": offset, "total": true], crypto: "weapi")
+        let result = json["result"] as? [String: Any] ?? [:]
+        let playlists = result["playlists"] as? [[String: Any]] ?? []
+        return playlists.compactMap(Playlist.init(json:))
+    }
+
     /// 搜索歌手（type=100）
     func searchArtists(keyword: String, limit: Int = 30) async throws -> [Artist] {
         let json = try await request("/api/cloudsearch/pc", payload: ["s": keyword, "type": 100, "limit": limit, "offset": 0, "total": true], crypto: "weapi")

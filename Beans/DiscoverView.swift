@@ -100,6 +100,12 @@ struct DiscoverView: View {
     @State private var neteaseCat = "全部"
     /// 官方歌单分类列表
     @State private var playlistCats: [String] = []
+    /// 网易云歌单广场搜索状态；搜索结果沿用现有歌单卡片和详情路由
+    @State private var playlistSearchText = ""
+    @State private var playlistSearchResults: [Playlist] = []
+    @State private var playlistSearchActive = false
+    @State private var playlistSearchLoading = false
+    @State private var playlistSearchTask: Task<Void, Never>?
 
     var body: some View {
         let _ = theme.accent
@@ -151,7 +157,7 @@ struct DiscoverView: View {
                                 case "排行榜":
                                     if hasRankData { topListsSection.sectionEntrance(delay: 0.08) }
                                 case "歌单广场":
-                                    if source == .qq || !personalized.isEmpty {
+                                    if source == .netease || source == .qq || !personalized.isEmpty {
                                         personalizedSection.sectionEntrance(delay: 0.16)
                                     }
                                 default:
@@ -196,6 +202,7 @@ struct DiscoverView: View {
             }
             .onChange(of: source) { _ in
                 guard !homeRenderingPaused else { return }
+                clearPlaylistSearch()
                 homeOrder = SectionOrderStore.load(SectionOrderStore.homeKey, defaults: availableSections)
             }
             .onChange(of: disclaimerAccepted) { accepted in
@@ -1102,7 +1109,14 @@ struct DiscoverView: View {
     private var personalizedSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: playlistSectionTitle)
-            if visiblePersonalizedPlaylists.isEmpty {
+            if source == .netease {
+                playlistSearchField
+            }
+            if playlistSearchLoading && visiblePersonalizedPlaylists.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 88)
+                    .tint(Color.beansAmber)
+            } else if visiblePersonalizedPlaylists.isEmpty {
                 EmptyStateView(icon: "music.note.list", text: playlistEmptyText)
             } else if isNativeClean && !playlistsExpanded {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1164,7 +1178,7 @@ struct DiscoverView: View {
                     }
                 }
             }
-            if personalized.count > collapsedPlaylistCount {
+            if playlistDisplayItems.count > collapsedPlaylistCount {
                 Button {
                     BeansHaptics.select()
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
@@ -1174,7 +1188,7 @@ struct DiscoverView: View {
                     HStack(spacing: 6) {
                         Text(playlistsExpanded
                              ? beansLocalized("收起歌单广场", "Collapse Playlist Square")
-                             : beansLocalized("展开全部（\(personalized.count)）", "Show all (\(personalized.count))"))
+                             : beansLocalized("展开全部（\(playlistDisplayItems.count)）", "Show all (\(playlistDisplayItems.count))"))
                             .font(BeansFont.appFont(13, .semibold))
                         Image(systemName: playlistsExpanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 11, weight: .semibold))
@@ -1197,6 +1211,9 @@ struct DiscoverView: View {
     }
 
     private var playlistSectionTitle: String {
+        if playlistSearchActive && source == .netease {
+            return beansLocalized("歌单搜索结果", "Playlist Search Results")
+        }
         switch source {
         case .netease: return "推荐歌单"
         case .qq: return "QQ音乐热门歌单"
@@ -1205,6 +1222,9 @@ struct DiscoverView: View {
     }
 
     private var playlistEmptyText: String {
+        if playlistSearchActive && source == .netease {
+            return beansLocalized("没有找到相关歌单", "No matching playlists found")
+        }
         switch source {
         case .netease: return "推荐歌单暂时没有内容"
         case .qq: return "QQ音乐热门歌单暂未加载成功\n下拉刷新可重新获取"
@@ -1214,8 +1234,106 @@ struct DiscoverView: View {
 
     private var collapsedPlaylistCount: Int { 6 }
 
+    private var playlistDisplayItems: [Playlist] {
+        playlistSearchActive ? playlistSearchResults : personalized
+    }
+
     private var visiblePersonalizedPlaylists: [Playlist] {
-        playlistsExpanded ? personalized : Array(personalized.prefix(collapsedPlaylistCount))
+        playlistsExpanded ? playlistDisplayItems : Array(playlistDisplayItems.prefix(collapsedPlaylistCount))
+    }
+
+    private var playlistSearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.beansComment)
+
+            TextField(
+                beansLocalized("搜索网易云歌单", "Search NetEase playlists"),
+                text: $playlistSearchText
+            )
+            .font(BeansFont.appFont(14))
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .submitLabel(.search)
+            .onSubmit {
+                submitPlaylistSearch()
+            }
+
+            if playlistSearchLoading {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Color.beansAmber)
+            } else if !playlistSearchText.isEmpty {
+                Button {
+                    clearPlaylistSearch()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.beansComment.opacity(0.85))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button {
+                submitPlaylistSearch()
+            } label: {
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.system(size: 19))
+                    .foregroundStyle(Color.beansAmber)
+            }
+            .buttonStyle(.plain)
+            .disabled(playlistSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || playlistSearchLoading)
+            .opacity(playlistSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+        }
+        .padding(.horizontal, 13)
+        .frame(height: 42)
+        .background {
+            if isNativeClean {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.primary.opacity(0.045))
+            } else {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
+    }
+
+    @MainActor
+    private func submitPlaylistSearch() {
+        let keyword = playlistSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        playlistSearchTask?.cancel()
+        guard !keyword.isEmpty, source == .netease else {
+            clearPlaylistSearch()
+            return
+        }
+
+        playlistSearchActive = true
+        playlistSearchLoading = true
+        playlistSearchResults = []
+        playlistsExpanded = true
+
+        playlistSearchTask = Task {
+            do {
+                let results = try await NetEaseAPI.shared.searchPlaylists(keyword: keyword, limit: 30)
+                guard !Task.isCancelled else { return }
+                playlistSearchResults = results
+            } catch {
+                guard !Task.isCancelled else { return }
+                playlistSearchResults = []
+            }
+            playlistSearchLoading = false
+        }
+    }
+
+    @MainActor
+    private func clearPlaylistSearch() {
+        playlistSearchTask?.cancel()
+        playlistSearchTask = nil
+        playlistSearchText = ""
+        playlistSearchResults = []
+        playlistSearchActive = false
+        playlistSearchLoading = false
+        playlistsExpanded = false
     }
 
     // MARK: - 动作
