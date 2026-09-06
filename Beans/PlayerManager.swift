@@ -125,7 +125,6 @@ final class PlayerManager: NSObject, ObservableObject {
     private var thirdPartyPrefetchTask: Task<Void, Never>?
     private static let nowPlayingArtworkCache = NSCache<NSURL, UIImage>()
 #if canImport(ActivityKit)
-    @available(iOS 16.1, *)
     private var liveActivity: Activity<BeansNowPlayingAttributes>?
     private var liveActivitySongKey: String?
     private var liveActivityIsPlaying: Bool?
