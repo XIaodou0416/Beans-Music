@@ -84,8 +84,8 @@ struct RootView: View {
         min(CGFloat(legacyTabWidth), max(300, UIScreen.main.bounds.width - 28))
     }
 
-    /// Keep the Kumone bar full-width by default, while retaining the existing
-    /// width adjustment for users who have explicitly changed it.
+    /// Full-width by default; retain the existing width adjustment when it was
+    /// explicitly changed in settings.
     private var legacyTabCustomWidth: CGFloat? {
         abs(legacyTabWidth - 356) > 0.5 ? legacyTabResolvedWidth : nil
     }
@@ -102,33 +102,11 @@ struct RootView: View {
 
     var body: some View {
         let _ = theme.accent
-        let rootTabs = TabView(selection: $selection) {
-            DiscoverView()
-                .tabItem { Label(tabLabelsVisible ? "主页" : "", systemImage: "house.fill") }
-                .tag(RootTab.discover)
-            SearchView()
-                .tabItem { Label(tabLabelsVisible ? "搜索" : "", systemImage: "magnifyingglass") }
-                .tag(RootTab.search)
-            LibraryView()
-                .tabItem { Label(tabLabelsVisible ? "音乐库" : "", systemImage: "music.note.list") }
-                .tag(RootTab.library)
-            ProfileView()
-                .tabItem { Label(tabLabelsVisible ? "我的" : "", systemImage: "person.crop.circle") }
-                .tag(RootTab.profile)
-        }
-        .tint(Color.beansAmber)
-        .background {
-            TabBarAppearanceConfigurator(
-                hidesSystemTabBarOnLegacy: !usesSystemFloatingTabBar,
-                onHomeLongPress: { showHomePlatformMenu = true }
-            )
-        }
-
         ZStack {
-            // iOS 26 必须使用 Kumone 同款的 Tab API，系统才会提供同款
-            // Liquid Glass 底栏、搜索槽位和下滑收缩行为。旧系统保留兼容底栏。
+
+            // iOS 26 使用系统底栏和下滑收缩行为，旧系统使用兼容底栏。
             if #available(iOS 26.0, *) {
-                kumoneNativeTabs
+                nativeTabs
                     .tabBarMinimizeBehavior(.onScrollDown)
                     .modifier(
                         MiniPlayerAccessoryModifier(
@@ -140,12 +118,14 @@ struct RootView: View {
                         )
                     )
             } else {
-                rootTabs
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        legacyFloatingTabBar
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
+                legacyRootTabs
             }
+        }
+        .background {
+            TabBarAppearanceConfigurator(
+                hidesSystemTabBarOnLegacy: !usesSystemFloatingTabBar,
+                onHomeLongPress: { showHomePlatformMenu = true }
+            )
         }
         .background {
             HighRefreshConfigurator()
@@ -360,9 +340,9 @@ struct RootView: View {
             }
 
             Group {
-                KumoneGlassTabBar(
+                GlassTabBar(
                     items: RootTab.allCases.map {
-                        KumoneGlassTabBar.Item(tab: $0, title: LocalizedStringKey($0.title), icon: $0.icon)
+                        GlassTabBar.Item(tab: $0, title: LocalizedStringKey($0.title), icon: $0.icon)
                     },
                     selection: $selection,
                     labelsVisible: tabLabelsVisible,
@@ -379,7 +359,7 @@ struct RootView: View {
             }
             .frame(width: legacyTabCustomWidth)
         }
-        .padding(.bottom, 12)
+        .padding(.bottom, 6)
         .offset(x: CGFloat(legacyTabOffsetX), y: CGFloat(legacyTabOffsetY))
     }
 
@@ -411,10 +391,9 @@ struct RootView: View {
         }
     }
 
-    /// Kumone 使用的新式 Tab 容器。旧式 `.tabItem` 虽然外观相近，
-    /// 但不会触发 iOS 26 的原生 Liquid Glass 底栏布局。
+    /// iOS 26 的系统 Tab 容器，提供原生底栏、搜索槽位和收缩行为。
     @available(iOS 26.0, *)
-    private var kumoneNativeTabs: some View {
+    private var nativeTabs: some View {
         TabView(selection: $selection) {
             Tab("主页", systemImage: "house", value: .discover) {
                 DiscoverView()
@@ -433,6 +412,35 @@ struct RootView: View {
             }
         }
         .tint(Color.beansAmber)
+    }
+
+    /// 旧系统将页面、底部播放器和胶囊底栏放在同一个 ZStack 中，
+    /// 让收缩、上划展开和页面切换共享同一套手势层级。
+    private var legacyRootTabs: some View {
+        ZStack(alignment: .bottom) {
+            ZStack {
+                legacyPage(.discover) { DiscoverView() }
+                legacyPage(.search) { SearchView() }
+                legacyPage(.library) { LibraryView() }
+                legacyPage(.profile) { ProfileView() }
+            }
+
+            legacyFloatingTabBar
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+        .animation(.easeInOut(duration: 0.25), value: selection)
+        .animation(.easeInOut(duration: 0.25), value: player.currentSong?.identityKey)
+    }
+
+    @ViewBuilder
+    private func legacyPage<Content: View>(
+        _ tab: RootTab,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .opacity(selection == tab ? 1 : 0)
+            .allowsHitTesting(selection == tab)
+            .zIndex(selection == tab ? 1 : 0)
     }
 }
 
@@ -641,8 +649,7 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
 
 }
 
-/// Mirrors Kumone's accessory layout: the system switches to the compact
-/// inline variant when the tab bar minimizes.
+/// 根据系统 accessory 位置在展开和紧凑布局之间切换。
 @available(iOS 26.0, *)
 private struct RootMiniPlayerAccessory: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
@@ -665,7 +672,7 @@ private struct RootMiniPlayerAccessory: View {
     }
 }
 
-private struct KumoneGlassTabBar: View {
+private struct GlassTabBar: View {
     struct Item: Identifiable {
         let tab: RootTab
         let title: LocalizedStringKey
