@@ -82,8 +82,6 @@ struct MiniPlayerView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(GlassPressButtonStyle())
-                .disabled(player.isFMMode)
-                .opacity(player.isFMMode ? 0.35 : 1)
                 .accessibilityLabel("上一首")
             }
 
