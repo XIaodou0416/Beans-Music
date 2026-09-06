@@ -166,8 +166,14 @@ actor RecommendationService {
             )
         } else {
             switch endpoint {
-            case .newSongs, .guess, .radar:
-                let songs = try await QQMusicAPI.shared.recommendSongs(limit: limit)
+            case .newSongs:
+                let songs = try await QQMusicAPI.shared.topListSongs(topid: 27, limit: limit)
+                pageResult = QQRecommendationPage(songs: songs, playlists: [], artists: [], page: page, hasMore: false, usedFallback: true)
+            case .guess:
+                let songs = try await QQMusicAPI.shared.topListSongs(topid: 26, limit: limit)
+                pageResult = QQRecommendationPage(songs: songs, playlists: [], artists: [], page: page, hasMore: false, usedFallback: true)
+            case .radar:
+                let songs = try await QQMusicAPI.shared.topListSongs(topid: 62, limit: limit)
                 pageResult = QQRecommendationPage(songs: songs, playlists: [], artists: [], page: page, hasMore: false, usedFallback: true)
             case .playlists:
                 let playlists = try await QQMusicAPI.shared.hotPlaylists(limit: limit)

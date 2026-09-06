@@ -777,81 +777,107 @@ struct DiscoverView: View {
                     Task { await load(force: true) }
                 }
             }
-            qqSongCarousel(title: "每日推荐新歌", songs: qqNewSongs)
-            qqSongCarousel(title: "猜你喜欢", songs: qqGuessSongs)
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(LocalizedStringKey("私人雷达"))
-                        .font(BeansFont.appFont(16, .bold))
-                        .foregroundStyle(Color.beansLabel)
-                    Spacer()
-                    if qqRadarHasMore {
-                        Button {
-                            Task { await loadMoreQQRadar() }
-                        } label: {
-                            HStack(spacing: 4) {
-                                if qqRecommendationLoading { ProgressView().scaleEffect(0.7) }
-                                Text(LocalizedStringKey("加载更多"))
-                            }
-                            .font(BeansFont.appFont(12, .medium))
-                            .foregroundStyle(Color.beansComment)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                if !qqRadarSongs.isEmpty {
-                    qqSongScroller(songs: qqRadarSongs)
-                } else if qqRecommendationError == nil {
-                    EmptyStateView(icon: "dot.radiowaves.left.and.right", text: "暂无推荐内容")
-                }
-            }
-        }
-    }
-
-    private func qqSongCarousel(title: String, songs: [Song]) -> some View {
-        Group {
-            if !songs.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text(LocalizedStringKey(title))
-                            .font(BeansFont.appFont(16, .bold))
-                            .foregroundStyle(Color.beansLabel)
-                        Spacer()
-                    }
-                    qqSongScroller(songs: songs)
-                }
-            }
-        }
-    }
-
-    private func qqSongScroller(songs: [Song]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(alignment: .top, spacing: 12) {
-                ForEach(Array(songs.prefix(12).enumerated()), id: \.element.identityKey) { index, song in
-                    Button {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    qqRecommendationCard(
+                        title: "每日推荐新歌",
+                        subtitle: qqNewSongs.isEmpty ? "暂无推荐内容" : "\(qqNewSongs.count) 首新歌",
+                        icon: "calendar",
+                        coverURL: qqNewSongs.first?.coverURL,
+                        gradient: [Color(red: 0.95, green: 0.36, blue: 0.28), Color(red: 0.96, green: 0.68, blue: 0.30)]
+                    ) {
+                        guard !qqNewSongs.isEmpty else { return }
                         BeansHaptics.tap()
-                        player.play(songs: songs, startAt: index)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            CoverImage(url: song.coverURL, size: isNativeClean ? 146 : 112, cornerRadius: 14)
-                            Text(song.name)
-                                .font(BeansFont.appFont(12, .medium))
-                                .foregroundStyle(Color.beansLabel)
-                                .lineLimit(1)
-                                .frame(width: isNativeClean ? 146 : 112, alignment: .leading)
-                            Text(song.artists.isEmpty ? song.album : song.artists)
-                                .font(BeansFont.appFont(10))
-                                .foregroundStyle(Color.beansComment)
-                                .lineLimit(1)
-                                .frame(width: isNativeClean ? 146 : 112, alignment: .leading)
-                        }
+                        player.play(songs: qqNewSongs, startAt: 0)
                     }
-                    .buttonStyle(GlassPressButtonStyle(scale: 0.95))
+                    qqRecommendationCard(
+                        title: "猜你喜欢",
+                        subtitle: qqGuessSongs.isEmpty ? "暂无推荐内容" : "\(qqGuessSongs.count) 首为你推荐",
+                        icon: "sparkles",
+                        coverURL: qqGuessSongs.first?.coverURL,
+                        gradient: [Color(red: 0.16, green: 0.38, blue: 0.82), Color(red: 0.28, green: 0.70, blue: 0.76)]
+                    ) {
+                        guard !qqGuessSongs.isEmpty else { return }
+                        BeansHaptics.tap()
+                        player.play(songs: qqGuessSongs, startAt: 0)
+                    }
+                    qqRecommendationCard(
+                        title: "私人雷达",
+                        subtitle: qqRadarSongs.isEmpty ? "暂无推荐内容" : "\(qqRadarSongs.count) 首私人推荐",
+                        icon: "dot.radiowaves.left.and.right",
+                        coverURL: qqRadarSongs.first?.coverURL,
+                        gradient: [Color(red: 0.55, green: 0.22, blue: 0.76), Color(red: 0.88, green: 0.30, blue: 0.48)]
+                    ) {
+                        guard !qqRadarSongs.isEmpty else { return }
+                        BeansHaptics.tap()
+                        player.play(songs: qqRadarSongs, startAt: 0)
+                    }
                 }
+                .padding(.vertical, 3)
             }
-            .padding(.vertical, 2)
+            .padding(.trailing, isNativeClean ? -24 : 0)
+            if qqRadarHasMore {
+                Button {
+                    Task { await loadMoreQQRadar() }
+                } label: {
+                    HStack(spacing: 5) {
+                        if qqRecommendationLoading { ProgressView().scaleEffect(0.7) }
+                        Text(LocalizedStringKey("加载更多私人雷达"))
+                            .font(BeansFont.appFont(12, .medium))
+                    }
+                    .foregroundStyle(Color.beansComment)
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .padding(.trailing, isNativeClean ? -24 : 0)
+    }
+
+    private func qqRecommendationCard(
+        title: String,
+        subtitle: String,
+        icon: String,
+        coverURL: URL?,
+        gradient: [Color],
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            ZStack(alignment: .bottomLeading) {
+                if let coverURL {
+                    CoverImage(url: coverURL, size: isNativeClean ? 184 : 168, cornerRadius: isNativeClean ? 16 : 18)
+                        .overlay {
+                            LinearGradient(
+                                colors: [.black.opacity(0.04), .black.opacity(0.64)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        }
+                } else {
+                    RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous)
+                        .fill(LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+                VStack(alignment: .leading, spacing: 7) {
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.92))
+                    Spacer(minLength: 0)
+                    Text(LocalizedStringKey(title))
+                        .font(BeansFont.appFont(isNativeClean ? 20 : 18, .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(BeansFont.appFont(12, .semibold))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                }
+                .padding(14)
+            }
+            .frame(width: isNativeClean ? 184 : 168, height: isNativeClean ? 184 : 168)
+            .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
+            .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 16, x: 0, y: 8)
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.95))
     }
 
     @MainActor
