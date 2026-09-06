@@ -24,17 +24,19 @@ jobs:
       - name: Install XcodeGen
         run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
 
-      - name: Bump build number (版本号由维护者在 project.yml 手动改，CI 只递增内部构建号)
+      - name: Resolve build number (手动构建使用 project.yml 中的值，主分支推送仍自动递增)
         id: bump
         run: |
           python3 - <<'PYEOF'
           import re
+          import os
           path = 'project.yml'
           with open(path) as f:
               content = f.read()
           def bump_build(m):
               return 'CURRENT_PROJECT_VERSION: "' + str(int(m.group(1)) + 1) + '"'
-          content, n2 = re.subn(r'CURRENT_PROJECT_VERSION:\s*"(\d+)"', bump_build, content)
+          if os.environ.get('GITHUB_EVENT_NAME') == 'push':
+              content, n2 = re.subn(r'CURRENT_PROJECT_VERSION:\s*"(\d+)"', bump_build, content)
           with open(path, 'w') as f:
               f.write(content)
           ver = re.search(r'MARKETING_VERSION:\s*"([^"]+)"', content).group(1)
