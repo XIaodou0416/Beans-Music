@@ -126,6 +126,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private let countsKey = "beans.playcounts"
     private let playbackStateKey = "beans.player.playbackState.v1"
     private let audioMixKey = "beans.audio.mixothers.v1"
+    private let nowPlayingEnabledKey = "beans.nowPlaying.enabled.v1"
     private let playModeKey = "beans.player.playMode"
     private let autoSkipOnFailureKey = "beans.playback.autoSkipOnFailure"
     private let autoResumeLastPlaybackKey = "beans.playback.autoResumeLast"
@@ -1764,6 +1765,10 @@ final class PlayerManager: NSObject, ObservableObject {
     // MARK: - 系统正在播放
 
     private func updateNowPlaying() {
+        guard nowPlayingEnabled else {
+            clearNowPlayingInfo()
+            return
+        }
         guard let song = currentSong else { return }
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: song.name,
@@ -1782,6 +1787,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 Task {
                     if let data = try? Data(contentsOf: artworkURL), let image = UIImage(data: data) {
                         Self.nowPlayingArtworkCache.setObject(image, forKey: artworkURL as NSURL)
+                        guard self.nowPlayingEnabled else { return }
                         var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
                         updated[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                         MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
@@ -1792,6 +1798,11 @@ final class PlayerManager: NSObject, ObservableObject {
             lastNowPlayingArtworkKey = nil
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    private func clearNowPlayingInfo() {
+        lastNowPlayingArtworkKey = nil
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
     private func setupRemoteCommands() {
@@ -1846,13 +1857,28 @@ final class PlayerManager: NSObject, ObservableObject {
 
     // MARK: - 与其他音频同时播放
 
-    /// 与其他 App 音频混合播放。默认关闭，让系统把 Beans 作为主播放 App 显示到锁屏/灵动岛。
+    /// 与其他 App 音频混合播放。此开关与锁屏/灵动岛显示相互独立。
     var mixesWithOthers: Bool {
         get { defaults.object(forKey: audioMixKey) as? Bool ?? false }
         set {
             defaults.set(newValue, forKey: audioMixKey)
             sessionConfigured = false
             configureAudioSession()
+        }
+    }
+
+    /// 独立控制锁屏和灵动岛的系统正在播放信息，不影响与其他音频混合播放。
+    var nowPlayingEnabled: Bool {
+        get { defaults.object(forKey: nowPlayingEnabledKey) as? Bool ?? true }
+        set { setNowPlayingEnabled(newValue) }
+    }
+
+    func setNowPlayingEnabled(_ enabled: Bool) {
+        defaults.set(enabled, forKey: nowPlayingEnabledKey)
+        if enabled {
+            updateNowPlaying()
+        } else {
+            clearNowPlayingInfo()
         }
     }
 

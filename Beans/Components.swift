@@ -180,30 +180,34 @@ struct BeansGlass<S: Shape>: View {
     }
 
     var body: some View {
-        if isLiquid {
-            if #available(iOS 26, *) {
-                GlassEffectContainer {
+        Group {
+            if isLiquid {
+                if #available(iOS 26, *) {
+                    GlassEffectContainer {
+                        shape
+                            .fill(.clear)
+                            .glassEffect(.clear, in: shape)
+                    }
+                } else {
                     shape
-                        .fill(.clear)
-                        .glassEffect(.clear, in: shape)
+                        .fill(.ultraThinMaterial)
                 }
             } else {
-                shape
-                    .fill(.ultraThinMaterial)
-            }
-        } else {
-            switch uiStyle {
-            case .clear, .liquid:
-                shape
-                    .fill(.ultraThinMaterial)
-            case .compact:
-                shape
-                    .fill(Color.beansGlassFill.opacity(0.74))
-            case .nativeClean:
-                shape
-                    .fill(Color.beansGlassFill.opacity(0.62))
+                switch uiStyle {
+                case .clear, .liquid:
+                    shape
+                        .fill(.ultraThinMaterial)
+                case .compact:
+                    shape
+                        .fill(Color.beansGlassFill.opacity(0.74))
+                case .nativeClean:
+                    shape
+                        .fill(Color.beansGlassFill.opacity(0.62))
+                }
             }
         }
+        // iOS 26 的玻璃容器只负责绘制背景，不能拦截设置控件的触摸。
+        .allowsHitTesting(false)
     }
 }
 

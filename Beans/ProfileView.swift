@@ -1238,6 +1238,7 @@ struct SettingsView: View {
     /// 高刷新率请求，默认开启
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
+    @AppStorage("beans.nowPlaying.enabled.v1") private var nowPlayingEnabled = true
     @AppStorage("beans.audioQuality") private var playbackAudioQualityRaw = BeansAudioQuality.hires.rawValue
     @AppStorage(BeansHaptics.enabledKey) private var hapticsEnabled = true
     @AppStorage("beans.playback.autoResumeLast") private var autoResumeLastPlayback = false
@@ -2429,6 +2430,27 @@ struct SettingsView: View {
                 .tint(Color.beansAmber)
                 .onChange(of: mixesWithOthers) { value in
                     PlayerManager.applyAudioMixPreference(value)
+                }
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
+                Toggle(isOn: $nowPlayingEnabled) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "lock.iphone")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(beansLocalized("显示锁屏与灵动岛播放器", "Show Lock Screen and Dynamic Island player"))
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color.beansAmber)
+                .onChange(of: nowPlayingEnabled) { value in
+                    player.setNowPlayingEnabled(value)
                 }
 
                 Divider().overlay(Color.beansComment.opacity(0.15))

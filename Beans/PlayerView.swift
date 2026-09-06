@@ -3652,6 +3652,7 @@ struct LyricPreset {
 
 struct PlayerSettingsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
+    @EnvironmentObject private var player: PlayerManager
     private let onDismiss: (() -> Void)?
     @AppStorage("beans.playerBreath") private var breath = 0.6
     @AppStorage("beans.playerDustMode") private var playerDustModeRaw = BeansPlayerDustMode.off.rawValue
@@ -3694,6 +3695,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.lyricBackground.blur") private var lyricBackgroundBlur = 12.0
     @AppStorage("beans.lyricBackground.syncCover") private var lyricBackgroundSyncCover = false
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
+    @AppStorage("beans.nowPlaying.enabled.v1") private var nowPlayingEnabled = true
     @AppStorage("beans.playerButtonStyle") private var playerButtonStyleRaw = BeansPlayerButtonStyle.glass.rawValue
     @AppStorage("beans.albumTitleColorHex") private var albumTitleColorHex = ""
     @AppStorage("beans.albumArtistColorHex") private var albumArtistColorHex = ""
@@ -4181,9 +4183,15 @@ struct PlayerSettingsSheet: View {
                 }
                 Divider().opacity(0.35)
                 settingToggle("与其他音频同时播放", isOn: $mixesWithOthers,
-                              caption: "默认关闭以显示锁屏/灵动岛")
+                              caption: "开启后可与其他 App 的音频同时播放")
                     .onChange(of: mixesWithOthers) { value in
                         PlayerManager.applyAudioMixPreference(value)
+                    }
+                Divider().opacity(0.35)
+                settingToggle("显示锁屏与灵动岛播放器", isOn: $nowPlayingEnabled,
+                              caption: "独立控制系统锁屏和灵动岛的播放器信息")
+                    .onChange(of: nowPlayingEnabled) { value in
+                        player.setNowPlayingEnabled(value)
                     }
             }
         }
@@ -4673,22 +4681,26 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
     }
 
     var body: some View {
-        if #available(iOS 26, *), uiStyle == .liquid {
-            GlassEffectContainer {
-                shape
-                    .fill(.clear)
-                    .glassEffect(.clear, in: shape)
-            }
-        } else {
-            switch uiStyle {
-            case .clear, .liquid:
-                shape.fill(.ultraThinMaterial)
-            case .compact:
-                shape.fill(Color.beansGlassFill.opacity(0.74))
-            case .nativeClean:
-                shape.fill(Color.primary.opacity(0.038))
+        Group {
+            if #available(iOS 26, *), uiStyle == .liquid {
+                GlassEffectContainer {
+                    shape
+                        .fill(.clear)
+                        .glassEffect(.clear, in: shape)
+                }
+            } else {
+                switch uiStyle {
+                case .clear, .liquid:
+                    shape.fill(.ultraThinMaterial)
+                case .compact:
+                    shape.fill(Color.beansGlassFill.opacity(0.74))
+                case .nativeClean:
+                    shape.fill(Color.primary.opacity(0.038))
+                }
             }
         }
+        // 纯视觉背景不能覆盖 Slider、Toggle 等设置控件的命中区域。
+        .allowsHitTesting(false)
     }
 
 }
