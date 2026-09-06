@@ -16,7 +16,6 @@ struct MiniPlayerView: View {
     @Binding var showPlayer: Bool
     var presentation: Presentation = .dock
     var transitionNamespace: Namespace.ID?
-    var onCollapse: (() -> Void)?
 
     var body: some View {
         playerBarSurface
@@ -113,10 +112,6 @@ struct MiniPlayerView: View {
             .onEnded { value in
                 let translation = value.translation.height
                 let prediction = value.predictedEndTranslation.height
-                if translation > 24 || prediction > 48 {
-                    onCollapse?()
-                    return
-                }
                 guard translation < -50 || prediction < -100 else { return }
                 showNowPlaying()
             }
