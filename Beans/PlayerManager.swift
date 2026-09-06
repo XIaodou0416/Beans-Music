@@ -2,9 +2,6 @@ import AVFoundation
 import MediaPlayer
 import SwiftUI
 import UIKit
-#if canImport(ActivityKit)
-import ActivityKit
-#endif
 
 enum PlayMode: String, CaseIterable, Identifiable {
     case sequential
@@ -124,12 +121,6 @@ final class PlayerManager: NSObject, ObservableObject {
     /// 提前解析下一首第三方地址，切歌时直接命中 UnblockService 的短缓存。
     private var thirdPartyPrefetchTask: Task<Void, Never>?
     private static let nowPlayingArtworkCache = NSCache<NSURL, UIImage>()
-#if canImport(ActivityKit)
-    // ActivityKit 仅在 iOS 16.1+ 可用，使用类型擦除让主 App 继续支持 iOS 15。
-    private var liveActivity: Any?
-    private var liveActivitySongKey: String?
-    private var liveActivityIsPlaying: Bool?
-#endif
 
     private let historyKey = "beans.history"
     private let countsKey = "beans.playcounts"
@@ -1809,64 +1800,12 @@ final class PlayerManager: NSObject, ObservableObject {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         // 混音模式不再关闭系统正在播放状态；重新声明播放状态，避免切换音频会话后被清空。
         MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
-        syncLiveActivity(for: song)
     }
 
     private func clearNowPlayingInfo() {
         lastNowPlayingArtworkKey = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         MPNowPlayingInfoCenter.default().playbackState = .stopped
-        endLiveActivity()
-    }
-
-    private func syncLiveActivity(for song: Song) {
-#if canImport(ActivityKit)
-        guard #available(iOS 16.1, *), nowPlayingEnabled else { return }
-        let songKey = song.identityKey
-        let playing = isPlaying
-        if liveActivitySongKey == songKey, liveActivityIsPlaying == playing {
-            return
-        }
-
-        let attributes = BeansNowPlayingAttributes(
-            songKey: songKey,
-            title: song.name,
-            artist: song.artists
-        )
-        let state = BeansNowPlayingAttributes.ContentState(isPlaying: playing)
-
-        if let liveActivity = liveActivity as? Activity<BeansNowPlayingAttributes>, liveActivity.attributes.songKey == songKey {
-            liveActivitySongKey = songKey
-            liveActivityIsPlaying = playing
-            Task { await liveActivity.update(using: state) }
-            return
-        }
-
-        if let liveActivity = liveActivity as? Activity<BeansNowPlayingAttributes> {
-            Task { await liveActivity.end(dismissalPolicy: .immediate) }
-        }
-        for activity in Activity<BeansNowPlayingAttributes>.activities where activity.attributes.songKey != songKey {
-            Task { await activity.end(dismissalPolicy: .immediate) }
-        }
-        liveActivitySongKey = songKey
-        liveActivityIsPlaying = playing
-        liveActivity = try? Activity.request(attributes: attributes, contentState: state, pushType: nil)
-#endif
-    }
-
-    private func endLiveActivity() {
-#if canImport(ActivityKit)
-        guard #available(iOS 16.1, *) else { return }
-        if let liveActivity = liveActivity as? Activity<BeansNowPlayingAttributes> {
-            Task { await liveActivity.end(dismissalPolicy: .immediate) }
-        }
-        for activity in Activity<BeansNowPlayingAttributes>.activities {
-            Task { await activity.end(dismissalPolicy: .immediate) }
-        }
-        liveActivity = nil
-        liveActivitySongKey = nil
-        liveActivityIsPlaying = nil
-#endif
     }
 
     private func setupRemoteCommands() {
