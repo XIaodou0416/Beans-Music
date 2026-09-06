@@ -125,7 +125,8 @@ final class PlayerManager: NSObject, ObservableObject {
     private var thirdPartyPrefetchTask: Task<Void, Never>?
     private static let nowPlayingArtworkCache = NSCache<NSURL, UIImage>()
 #if canImport(ActivityKit)
-    private var liveActivity: Activity<BeansNowPlayingAttributes>?
+    // ActivityKit 仅在 iOS 16.1+ 可用，使用类型擦除让主 App 继续支持 iOS 15。
+    private var liveActivity: Any?
     private var liveActivitySongKey: String?
     private var liveActivityIsPlaying: Bool?
 #endif
@@ -1834,14 +1835,14 @@ final class PlayerManager: NSObject, ObservableObject {
         )
         let state = BeansNowPlayingAttributes.ContentState(isPlaying: playing)
 
-        if let liveActivity, liveActivity.attributes.songKey == songKey {
+        if let liveActivity = liveActivity as? Activity<BeansNowPlayingAttributes>, liveActivity.attributes.songKey == songKey {
             liveActivitySongKey = songKey
             liveActivityIsPlaying = playing
             Task { await liveActivity.update(using: state) }
             return
         }
 
-        if let liveActivity {
+        if let liveActivity = liveActivity as? Activity<BeansNowPlayingAttributes> {
             Task { await liveActivity.end(dismissalPolicy: .immediate) }
         }
         for activity in Activity<BeansNowPlayingAttributes>.activities where activity.attributes.songKey != songKey {
@@ -1856,7 +1857,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private func endLiveActivity() {
 #if canImport(ActivityKit)
         guard #available(iOS 16.1, *) else { return }
-        if let liveActivity {
+        if let liveActivity = liveActivity as? Activity<BeansNowPlayingAttributes> {
             Task { await liveActivity.end(dismissalPolicy: .immediate) }
         }
         for activity in Activity<BeansNowPlayingAttributes>.activities {
