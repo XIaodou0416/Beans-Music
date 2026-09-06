@@ -495,18 +495,18 @@ struct CoverImage: View {
             .fill(Color.beansGlassFill)
             .frame(width: size, height: size)
             .overlay {
-                if let image = imageLoader.image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: size, height: size)
-                        .clipped()
-                } else if url == nil || imageLoader.didFail {
-                    placeholderIcon
-                } else {
-                    ZStack {
+                Group {
+                    if let image = imageLoader.image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else if url == nil || imageLoader.didFail {
                         placeholderIcon
-                        ProgressView().tint(Color.beansAmber)
+                    } else {
+                        ZStack {
+                            placeholderIcon
+                            ProgressView().tint(Color.beansAmber)
+                        }
                     }
                 }
                 .frame(width: size, height: size)
