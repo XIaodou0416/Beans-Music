@@ -43,6 +43,7 @@ struct RootView: View {
     @Namespace private var nowPlayingTransition
     @Namespace private var legacyAccessoryTransition
     @State private var legacyPlayerCollapsed = false
+    @State private var nativePlayerCollapsed = false
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
@@ -110,9 +111,17 @@ struct RootView: View {
             if #available(iOS 26.0, *) {
                 nativeTabs
                     .tabBarMinimizeBehavior(.onScrollDown)
+                    .simultaneousGesture(nativeScrollGesture)
+                    .background {
+                        ScrollActivityMonitor { scrollingDown in
+                            setNativePlayerCollapsed(scrollingDown)
+                        }
+                        .frame(width: 0, height: 0)
+                    }
                     .modifier(
                         MiniPlayerAccessoryModifier(
                             isActive: player.currentSong != nil,
+                            forceInline: nativePlayerCollapsed,
                             showPlayer: $showPlayer,
                             clock: player.clock,
                             colorScheme: colorScheme,
@@ -448,8 +457,15 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.25), value: selection)
         .animation(.easeInOut(duration: 0.25), value: player.currentSong?.identityKey)
         .simultaneousGesture(legacyScrollGesture)
+        .background {
+            ScrollActivityMonitor { scrollingDown in
+                setLegacyPlayerCollapsed(scrollingDown)
+            }
+            .frame(width: 0, height: 0)
+        }
         .onChange(of: selection) { _ in
             setLegacyPlayerCollapsed(false)
+            setNativePlayerCollapsed(false)
         }
     }
 
@@ -469,11 +485,35 @@ struct RootView: View {
             }
     }
 
+    private var nativeScrollGesture: some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .global)
+            .onChanged { value in
+                let vertical = value.translation.height
+                let horizontal = abs(value.translation.width)
+                guard abs(vertical) > horizontal * 1.15 else { return }
+                guard value.startLocation.y < UIScreen.main.bounds.height - 150 else { return }
+
+                if vertical < -24 {
+                    setNativePlayerCollapsed(true)
+                } else if vertical > 24 {
+                    setNativePlayerCollapsed(false)
+                }
+            }
+    }
+
     private func setLegacyPlayerCollapsed(_ collapsed: Bool) {
         guard player.currentSong != nil || !collapsed else { return }
         guard legacyPlayerCollapsed != collapsed else { return }
         withAnimation(.spring(response: 0.38, dampingFraction: 0.84)) {
             legacyPlayerCollapsed = collapsed
+        }
+    }
+
+    private func setNativePlayerCollapsed(_ collapsed: Bool) {
+        guard player.currentSong != nil || !collapsed else { return }
+        guard nativePlayerCollapsed != collapsed else { return }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.84)) {
+            nativePlayerCollapsed = collapsed
         }
     }
 
@@ -668,9 +708,83 @@ private struct ClearSheetBackground: ViewModifier {
     }
 }
 
+private struct ScrollActivityMonitor: UIViewControllerRepresentable {
+    let onScroll: (Bool) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onScroll: onScroll)
+    }
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        let controller = UIViewController()
+        controller.view.backgroundColor = .clear
+        controller.view.isUserInteractionEnabled = false
+        DispatchQueue.main.async {
+            context.coordinator.scanWindow()
+        }
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        context.coordinator.onScroll = onScroll
+        DispatchQueue.main.async {
+            context.coordinator.scanWindow()
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var onScroll: (Bool) -> Void
+        private var observedScrollViews: [ObjectIdentifier: UIScrollView] = [:]
+
+        init(onScroll: @escaping (Bool) -> Void) {
+            self.onScroll = onScroll
+        }
+
+        func scanWindow() {
+            let windows = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+            guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return }
+            scan(view: window)
+        }
+
+        private func scan(view: UIView) {
+            if let scrollView = view as? UIScrollView {
+                observe(scrollView)
+            }
+            view.subviews.forEach { scan(view: $0) }
+        }
+
+        private func observe(_ scrollView: UIScrollView) {
+            let identifier = ObjectIdentifier(scrollView)
+            guard observedScrollViews[identifier] == nil else { return }
+            observedScrollViews[identifier] = scrollView
+            scrollView.panGestureRecognizer.addTarget(
+                self,
+                action: #selector(handlePan(_:))
+            )
+        }
+
+        @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
+            guard recognizer.state == .changed || recognizer.state == .ended else { return }
+            let velocity = recognizer.velocity(in: recognizer.view)
+            guard abs(velocity.y) > abs(velocity.x) * 1.15,
+                  abs(velocity.y) > 20 else { return }
+            onScroll(velocity.y < 0)
+        }
+
+        deinit {
+            observedScrollViews.values.forEach {
+                $0.panGestureRecognizer.removeTarget(self, action: #selector(handlePan(_:)))
+            }
+        }
+    }
+}
+
 @available(iOS 26.0, *)
 private struct MiniPlayerAccessoryModifier: ViewModifier {
     let isActive: Bool
+    let forceInline: Bool
     @Binding var showPlayer: Bool
     let clock: PlaybackClock
     let colorScheme: ColorScheme
@@ -682,6 +796,7 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
             content.tabViewBottomAccessory {
                 RootMiniPlayerAccessory(
                     showPlayer: $showPlayer,
+                    forceInline: forceInline,
                     clock: clock,
                     transitionNamespace: transitionNamespace
                 )
@@ -699,6 +814,7 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
 private struct RootMiniPlayerAccessory: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
     @Binding var showPlayer: Bool
+    let forceInline: Bool
     let clock: PlaybackClock
     let transitionNamespace: Namespace.ID
 
@@ -712,7 +828,7 @@ private struct RootMiniPlayerAccessory: View {
     }
 
     private var presentation: MiniPlayerView.Presentation {
-        placement.map { $0 == .inline } == true ? .inlineAccessory : .accessory
+        forceInline || placement.map { $0 == .inline } == true ? .inlineAccessory : .accessory
     }
 }
 
