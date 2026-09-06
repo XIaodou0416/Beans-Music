@@ -6,7 +6,7 @@ private enum DiscoverRoute: Hashable {
     case playlist(Playlist)
     case qqTopList(QQTopInfo)
     case kugouTopList(KugouTopInfo)
-    case dailySongs([Song], title: String)
+    case dailySongs([Song])
 }
 
 struct DiscoverView: View {
@@ -86,10 +86,6 @@ struct DiscoverView: View {
 
     @State private var qqTopLists: [QQTopInfo] = []
     @State private var kugouTopLists: [KugouTopInfo] = []
-    @State private var qqNewSongs: [Song] = []
-    @State private var qqGuessSongs: [Song] = []
-    @State private var qqRecommendationPlaylists: [Playlist] = []
-    @State private var qqRecommendationError: String?
     /// 排行榜展开状态：收起显示前 3，展开显示前 10
     @State private var ranksExpanded = false
     /// 歌单广场展开状态：收起显示前 6，展开显示全部
@@ -121,7 +117,7 @@ struct DiscoverView: View {
             TabBarAppearanceConfigurator()
             if #unavailable(iOS 16.0) {
                 NavigationLink(
-                    destination: discoverDestination(legacyRoute ?? .dailySongs([], title: "今日推荐")),
+                    destination: discoverDestination(legacyRoute ?? .dailySongs([])),
                     isActive: Binding(
                         get: { legacyRoute != nil },
                         set: { if !$0 { legacyRoute = nil } }
@@ -269,8 +265,8 @@ struct DiscoverView: View {
             KugouTopListDetailView(topList: info)
                 .environmentObject(player)
                 .environmentObject(auth)
-        case .dailySongs(let songs, let title):
-            DailySongsSheet(songs: songs, title: title)
+        case .dailySongs(let songs):
+            DailySongsSheet(songs: songs)
                 .environmentObject(player)
                 .environmentObject(auth)
         }
@@ -761,48 +757,7 @@ struct DiscoverView: View {
         } else if source == .kugou {
             kugouRecommendationCards
         } else {
-            qqRecommendationSection
-        }
-    }
-
-    private var qqRecommendationSection: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            SectionHeader(title: "推荐")
-            if let qqRecommendationError, qqNewSongs.isEmpty, qqGuessSongs.isEmpty {
-                ErrorStateView(message: qqRecommendationError) {
-                    Task { await load(force: true) }
-                }
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 14) {
-                    neteaseRecommendationCard(
-                        title: "每日推荐",
-                        subtitle: qqNewSongs.isEmpty ? "暂无推荐内容" : "\(qqNewSongs.count) 首新歌",
-                        icon: "calendar",
-                        coverURL: qqNewSongs.first?.coverURL,
-                        gradient: [Color(red: 0.95, green: 0.36, blue: 0.28), Color(red: 0.96, green: 0.68, blue: 0.30)],
-                        loadingKey: nil
-                    ) {
-                        guard !qqNewSongs.isEmpty else { return }
-                        BeansHaptics.tap()
-                        openRoute(.dailySongs(qqNewSongs, title: "QQ 每日推荐新歌"))
-                    }
-                    neteaseRecommendationCard(
-                        title: "猜你喜欢",
-                        subtitle: qqGuessSongs.isEmpty ? "暂无推荐内容" : "\(qqGuessSongs.count) 首为你推荐",
-                        icon: "sparkles",
-                        coverURL: qqGuessSongs.first?.coverURL,
-                        gradient: [Color(red: 0.16, green: 0.38, blue: 0.82), Color(red: 0.28, green: 0.70, blue: 0.76)],
-                        loadingKey: nil
-                    ) {
-                        guard !qqGuessSongs.isEmpty else { return }
-                        BeansHaptics.tap()
-                        openRoute(.dailySongs(qqGuessSongs, title: "QQ 猜你喜欢"))
-                    }
-                }
-                .padding(.vertical, 3)
-            }
-            .padding(.trailing, isNativeClean ? -24 : 0)
+            dailySongCards
         }
     }
 
@@ -820,7 +775,7 @@ struct DiscoverView: View {
                         loadingKey: nil
                     ) {
                         BeansHaptics.tap()
-                        openRoute(DiscoverRoute.dailySongs(dailySongs, title: "今日推荐"))
+                        openRoute(DiscoverRoute.dailySongs(dailySongs))
                     }
 
                     neteaseRecommendationCard(
@@ -854,7 +809,7 @@ struct DiscoverView: View {
                         loadingKey: nil
                     ) {
                         BeansHaptics.tap()
-                        openRoute(DiscoverRoute.dailySongs(dailySongs, title: "今日推荐"))
+                        openRoute(DiscoverRoute.dailySongs(dailySongs))
                     }
 
                     neteaseRecommendationCard(
@@ -928,7 +883,7 @@ struct DiscoverView: View {
                     }
                     Button {
                         BeansHaptics.tap()
-                        openRoute(DiscoverRoute.dailySongs(dailySongs, title: "今日推荐"))
+                        openRoute(DiscoverRoute.dailySongs(dailySongs))
                     } label: {
                         VStack(spacing: 5) {
                             Image(systemName: "chevron.right")
@@ -1037,7 +992,7 @@ struct DiscoverView: View {
         Task {
             defer { Task { @MainActor in recommendationActionLoading = nil } }
             do {
-                let songs = try await NetEaseAPI.shared.personalFM(limit: 300)
+                let songs = try await NetEaseAPI.shared.personalFM()
                 await MainActor.run {
                     if songs.isEmpty {
                         ToastCenter.shared.show("私人漫游暂时没有推荐")
@@ -1348,6 +1303,14 @@ struct DiscoverView: View {
         }
         .padding(.horizontal, 13)
         .frame(height: 42)
+        .background {
+            if isNativeClean {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.primary.opacity(0.045))
+            } else {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
     }
 
     @MainActor
@@ -1550,26 +1513,16 @@ struct DiscoverView: View {
         snapshot.savedAt = Date()
         switch source {
         case .qq:
-            let qqLoggedIn = QQMusicAuth.shared.isLoggedIn
-            async let newSongs = try? await RecommendationService.shared.fetchNewSongs(limit: 30, loggedIn: qqLoggedIn)
-            async let guessSongs = try? await RecommendationService.shared.fetchGuessRecommendations(limit: 30, loggedIn: qqLoggedIn)
-            async let recommendedPlaylists = try? await RecommendationService.shared.fetchPlaylists(page: 1, limit: 25, loggedIn: qqLoggedIn)
+            async let a: [Song] = (try? await QQMusicAPI.shared.recommendSongs(limit: 30)) ?? []
             async let b: [QQTopInfo] = (try? await QQMusicAPI.shared.topLists()) ?? []
-            let (newPage, guessPage, playlistPage, tl) = await (newSongs, guessSongs, recommendedPlaylists, b)
-            let dr = newPage?.songs ?? []
-            let pp = playlistPage?.playlists ?? []
+            async let c: [Playlist] = (try? await QQMusicAPI.shared.hotPlaylists(limit: 18)) ?? []
+            let (dr, tl, pp) = await (a, b, c)
             if pp.isEmpty {
                 BeansLogger.shared.log("QQ音乐热门歌单为空：保留板块并显示空状态", level: .warn)
             }
             snapshot.dailySongs = dr
             snapshot.qqTopLists = tl
             snapshot.personalized = pp
-            snapshot.qqNewSongs = dr
-            snapshot.qqGuessSongs = guessPage?.songs ?? []
-            snapshot.qqRecommendationPlaylists = pp
-            if newPage == nil && guessPage == nil && playlistPage == nil {
-                snapshot.qqRecommendationError = beansLocalized("QQ 推荐加载失败，请稍后重试", "QQ recommendations could not be loaded. Please try again later.")
-            }
         case .netease:
             async let a = NetEaseAPI.shared.topLists()
             async let b = NetEaseAPI.shared.dailyRecommend()
@@ -1604,24 +1557,11 @@ struct DiscoverView: View {
         personalized = snapshot.personalized
         qqTopLists = snapshot.qqTopLists
         kugouTopLists = snapshot.kugouTopLists
-        if source == .qq {
-            qqNewSongs = snapshot.qqNewSongs.isEmpty ? snapshot.dailySongs : snapshot.qqNewSongs
-            qqGuessSongs = snapshot.qqGuessSongs
-            qqRecommendationPlaylists = snapshot.qqRecommendationPlaylists.isEmpty ? snapshot.personalized : snapshot.qqRecommendationPlaylists
-            qqRecommendationError = snapshot.qqRecommendationError
-        } else {
-            qqNewSongs = []
-            qqGuessSongs = []
-            qqRecommendationPlaylists = []
-            qqRecommendationError = nil
-        }
     }
 
     private var hasAnyData: Bool {
         !dailySongs.isEmpty || !topLists.isEmpty || !personalized.isEmpty
             || !qqTopLists.isEmpty || !kugouTopLists.isEmpty
-            || !qqNewSongs.isEmpty || !qqGuessSongs.isEmpty
-            || !qqRecommendationPlaylists.isEmpty
     }
 }
 
@@ -1835,7 +1775,6 @@ struct DailySongsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
 
     let songs: [Song]
-    let title: String
     @State private var searchText = ""
 
     var body: some View {
@@ -1846,8 +1785,8 @@ struct DailySongsSheet: View {
                 if songs.isEmpty {
                     EmptyStateView(icon: "sparkles", text: "今日推荐加载中，下拉刷新试试")
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 8) {
+                    List {
+                    Section {
                         HStack(spacing: 12) {
                             GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
                                 guard !filteredSongs.isEmpty else { return }
@@ -1860,21 +1799,26 @@ struct DailySongsSheet: View {
                                 player.play(songs: filteredSongs, startAt: Int.random(in: 0..<filteredSongs.count))
                             }
                         }
+                        .listRowBackground(Color.clear)
                         .padding(.vertical, 8)
+                    }
+                    Section {
                         ForEach(Array(filteredSongs.enumerated()), id: \.element.identityKey) { index, song in
                             SongCell(song: song, glassRow: true) {
                                 BeansHaptics.tap()
                                 player.play(songs: filteredSongs, startAt: index)
                             }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                         }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 24)
                     }
+                }
+                .beansScrollContentBackgroundHidden()
+                .listStyle(.plain)
                 }
             }
             }
-            .navigationTitle(title)
+            .navigationTitle("今日推荐")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索每日推荐", "Search daily recommendations"))
     }

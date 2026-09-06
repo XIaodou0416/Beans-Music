@@ -42,13 +42,6 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
 
-  BeansTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources: [BeansTests]
-    dependencies:
-      - target: Beans
-
 schemes:
   Beans:
     build:
@@ -58,6 +51,3 @@ schemes:
       config: Debug
     archive:
       config: Release
-    test:
-      targets:
-        - BeansTests

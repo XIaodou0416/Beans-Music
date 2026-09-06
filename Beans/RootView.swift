@@ -409,6 +409,9 @@ private enum BeansNowPlayingPresentationMetrics {
     static let indicatorHitHeight: CGFloat = 82
     static let dismissDistance: CGFloat = 110
     static let dismissPrediction: CGFloat = 190
+    /// 旧系统的整屏手势仍然覆盖播放器，但只有从顶部区域开始的纵向拖动才关闭，
+    /// 避免歌词滚动被误判为返回。
+    static let verticalStartZone: CGFloat = 220
     static let dismissAnimation = Animation.spring(
         response: 0.52,
         dampingFraction: 0.90,
@@ -436,20 +439,24 @@ struct BeansNowPlayingPresentation<Content: View>: View {
     var body: some View {
         GeometryReader { proxy in
             let isPhone = proxy.size.width < 720
-            ZStack(alignment: .top) {
+            let playerSurface = ZStack(alignment: .top) {
                 content
 
                 if isPhone {
-                    if usesSystemInteractiveDismissal {
-                        dragIndicator(safeAreaTop: proxy.safeAreaInsets.top)
-                    } else {
-                        dragIndicator(safeAreaTop: proxy.safeAreaInsets.top)
-                            .simultaneousGesture(dismissGesture)
-                    }
+                    dragIndicator(safeAreaTop: proxy.safeAreaInsets.top)
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .offset(y: usesSystemInteractiveDismissal ? 0 : dragOffset)
+            .contentShape(Rectangle())
+
+            // iOS 17 及以下的 fullScreenCover 不会稳定提供系统下拉返回，
+            // 用高优先级手势扩大可触区域；iOS 18+ 保留系统交互并采用同时手势。
+            if usesSystemInteractiveDismissal {
+                playerSurface.simultaneousGesture(dismissGesture)
+            } else {
+                playerSurface.highPriorityGesture(dismissGesture)
+            }
         }
         .onAppear { dragOffset = 0 }
     }
@@ -479,10 +486,10 @@ struct BeansNowPlayingPresentation<Content: View>: View {
         if usesSystemInteractiveDismissal {
             surface
                 .padding(.top, safeAreaTop)
-                .allowsHitTesting(false)
         } else {
             surface
                 .padding(.top, safeAreaTop)
+                .allowsHitTesting(false)
         }
     }
 
@@ -495,18 +502,25 @@ struct BeansNowPlayingPresentation<Content: View>: View {
                 // 同时支持从屏幕左侧向右滑动返回，避免顶部小区域拦截触摸。
                 if abs(horizontal) > abs(vertical) && value.startLocation.x < 72 {
                     dragOffset = max(horizontal, 0) * 0.72
-                } else {
+                } else if value.startLocation.y <= BeansNowPlayingPresentationMetrics.verticalStartZone {
                     dragOffset = max(vertical, 0)
+                } else {
+                    dragOffset = 0
                 }
             }
             .onEnded { value in
                 let horizontal = value.translation.width
                 let vertical = value.translation.height
                 let isEdgeSwipe = value.startLocation.x < 72 && horizontal > abs(vertical)
-                let translation = isEdgeSwipe ? max(horizontal, 0) : max(vertical, 0)
+                let isTopSwipe = value.startLocation.y <= BeansNowPlayingPresentationMetrics.verticalStartZone
+                let translation = isEdgeSwipe
+                    ? max(horizontal, 0)
+                    : (isTopSwipe ? max(vertical, 0) : 0)
                 let predictedHorizontal = value.predictedEndTranslation.width
                 let predictedVertical = value.predictedEndTranslation.height
-                let prediction = isEdgeSwipe ? max(predictedHorizontal, 0) : max(predictedVertical, 0)
+                let prediction = isEdgeSwipe
+                    ? max(predictedHorizontal, 0)
+                    : (isTopSwipe ? max(predictedVertical, 0) : 0)
                 if translation > BeansNowPlayingPresentationMetrics.dismissDistance
                     || prediction > BeansNowPlayingPresentationMetrics.dismissPrediction {
                     BeansHaptics.medium()

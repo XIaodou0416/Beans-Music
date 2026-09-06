@@ -188,13 +188,7 @@ struct PlaylistView: View {
             if playlist.source == .kugou {
                 tracks = try await KugouMusicAPI.shared.playlistSongs(listID: playlist.id)
             } else if playlist.source == .qq {
-                if playlist.id != QQMusicAPI.qqLikedPlaylistID,
-                   let recommendationPage = try? await RecommendationService.shared.fetchPlaylistDetail(id: playlist.id),
-                   !recommendationPage.songs.isEmpty {
-                    tracks = recommendationPage.songs
-                } else {
-                    tracks = try await QQMusicAPI.shared.playlistSongs(listID: playlist.id)
-                }
+                tracks = try await QQMusicAPI.shared.playlistSongs(listID: playlist.id)
                 // 云端收藏接口临时被风控或返回空时，至少展示已同步到本机的 QQ 收藏，
                 // 避免“我的喜欢”进入后变成空白页面。
                 if tracks.isEmpty, playlist.id == QQMusicAPI.qqLikedPlaylistID {

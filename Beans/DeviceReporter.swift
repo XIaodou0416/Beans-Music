@@ -259,12 +259,8 @@ final class DeviceReporter {
                 NotificationCenter.default.post(name: .beansBackendBlockStateDidChange, object: nil)
             }
         }
-        if let downloadUnlocked = response.downloadUnlocked {
-            let previous = UserDefaults.standard.bool(forKey: BeansBackendSettings.downloadUnlockKey)
-            UserDefaults.standard.set(downloadUnlocked, forKey: BeansBackendSettings.downloadUnlockKey)
-            if previous != downloadUnlocked {
-                NotificationCenter.default.post(name: .beansDownloadPermissionDidChange, object: nil)
-            }
+        if response.downloadUnlocked == true {
+            UserDefaults.standard.set(true, forKey: BeansBackendSettings.downloadUnlockKey)
         }
         FeedbackHistoryStore.shared.receiveServerReplies(response.feedbackReplies)
     }
