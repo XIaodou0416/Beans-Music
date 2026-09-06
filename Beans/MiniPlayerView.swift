@@ -13,14 +13,38 @@ struct MiniPlayerView: View {
     }
 
     @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var clock: PlaybackClock
     @Binding var showPlayer: Bool
     var presentation: Presentation = .dock
     var transitionNamespace: Namespace.ID?
+    @State private var miniLyrics: [LyricLine] = []
+    @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
+
+    private var currentLyricLine: LyricLine? {
+        guard !miniLyrics.isEmpty else { return nil }
+        let progress = LyricTiming.effectiveProgress(clock.progress, userOffset: lyricOffset)
+        var low = 0
+        var high = miniLyrics.count - 1
+        var answer: LyricLine?
+        while low <= high {
+            let middle = (low + high) / 2
+            if miniLyrics[middle].time <= progress {
+                answer = miniLyrics[middle]
+                low = middle + 1
+            } else {
+                high = middle - 1
+            }
+        }
+        return answer
+    }
 
     var body: some View {
         playerBarSurface
             .simultaneousGesture(expandGesture)
             .transitionSource(in: transitionNamespace)
+            .task(id: player.currentSong?.identityKey) {
+                await loadMiniLyrics()
+            }
     }
 
     @ViewBuilder
@@ -88,10 +112,12 @@ struct MiniPlayerView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(player.currentSong?.artists ?? "")
+                Text(currentLyricLine?.text ?? player.currentSong?.artists ?? "")
                     .font(.system(size: presentation.isInline ? 8 : 10))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    .animation(.easeInOut(duration: 0.25), value: currentLyricLine?.text)
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
@@ -120,6 +146,23 @@ struct MiniPlayerView: View {
     private func showNowPlaying() {
         BeansHaptics.tap()
         showPlayer = true
+    }
+
+    private func loadMiniLyrics() async {
+        miniLyrics = []
+        guard let song = player.currentSong else { return }
+        let identity = song.identityKey
+        var raw: String?
+        if song.source == .kugou, let hash = song.kugouHash {
+            raw = await KugouMusicAPI.shared.lyric(hash: hash, duration: song.duration)
+        } else if song.source == .qq, let mid = song.qqMid {
+            raw = try? await QQMusicAPI.shared.lyric(songmid: mid)
+        } else {
+            raw = try? await NetEaseAPI.shared.lyric(id: song.id)
+        }
+        guard !Task.isCancelled, let raw else { return }
+        guard player.currentSong?.identityKey == identity else { return }
+        miniLyrics = LyricParser.parse(raw)
     }
 }
 

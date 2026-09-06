@@ -411,7 +411,7 @@ struct RootView: View {
             }
         }
         .tint(Color.beansAmber)
-        .tabBarMinimizeBehavior(.onScrollDown)
+        .tabBarMinimizeBehavior(player.currentSong == nil ? .never : .onScrollDown)
     }
 
     /// 旧系统将页面、底部播放器和胶囊底栏放在同一个 ZStack 中，
