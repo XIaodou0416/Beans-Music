@@ -107,7 +107,6 @@ struct RootView: View {
             // iOS 26 使用系统底栏和下滑收缩行为，旧系统使用兼容底栏。
             if #available(iOS 26.0, *) {
                 nativeTabs
-                    .tabBarMinimizeBehavior(.onScrollDown)
                     .modifier(
                         MiniPlayerAccessoryModifier(
                             isActive: player.currentSong != nil,
@@ -412,6 +411,7 @@ struct RootView: View {
             }
         }
         .tint(Color.beansAmber)
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 
     /// 旧系统将页面、底部播放器和胶囊底栏放在同一个 ZStack 中，
@@ -968,6 +968,7 @@ struct TabBarAppearanceConfigurator: UIViewControllerRepresentable {
         installHomeLongPress(on: tabBar, coordinator: coordinator)
         if #available(iOS 26, *) {
             tabBar.isHidden = false
+            return
         } else if hidesSystemTabBarOnLegacy {
             tabBar.isHidden = true
             tabBar.isTranslucent = true
