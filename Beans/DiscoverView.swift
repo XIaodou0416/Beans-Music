@@ -175,10 +175,6 @@ struct DiscoverView: View {
                 }
             }
             .beansScrollIndicatorsHidden()
-            .refreshable {
-                guard !homeRenderingPaused else { return }
-                await load(force: true)
-            }
             .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
                 homePlatformSelectionMenu
             }
@@ -1109,9 +1105,7 @@ struct DiscoverView: View {
     private var personalizedSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: playlistSectionTitle)
-            if source == .netease {
-                playlistSearchField
-            }
+            playlistSearchField
             if playlistSearchLoading && visiblePersonalizedPlaylists.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 88)
@@ -1211,7 +1205,7 @@ struct DiscoverView: View {
     }
 
     private var playlistSectionTitle: String {
-        if playlistSearchActive && source == .netease {
+        if playlistSearchActive {
             return beansLocalized("歌单搜索结果", "Playlist Search Results")
         }
         switch source {
@@ -1222,12 +1216,12 @@ struct DiscoverView: View {
     }
 
     private var playlistEmptyText: String {
-        if playlistSearchActive && source == .netease {
+        if playlistSearchActive {
             return beansLocalized("没有找到相关歌单", "No matching playlists found")
         }
         switch source {
         case .netease: return "推荐歌单暂时没有内容"
-        case .qq: return "QQ音乐热门歌单暂未加载成功\n下拉刷新可重新获取"
+        case .qq: return "QQ音乐热门歌单暂未加载成功\n请稍后重试"
         case .kugou: return "歌单广场暂时没有内容"
         }
     }
@@ -1264,7 +1258,7 @@ struct DiscoverView: View {
                 .foregroundStyle(Color.beansComment)
 
             TextField(
-                beansLocalized("搜索网易云歌单", "Search NetEase playlists"),
+                playlistSearchPrompt,
                 text: $playlistSearchText
             )
             .font(BeansFont.appFont(14))
@@ -1317,7 +1311,7 @@ struct DiscoverView: View {
     private func submitPlaylistSearch() {
         let keyword = playlistSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
         playlistSearchTask?.cancel()
-        guard !keyword.isEmpty, source == .netease else {
+        guard !keyword.isEmpty else {
             clearPlaylistSearch()
             return
         }
@@ -1329,7 +1323,15 @@ struct DiscoverView: View {
 
         playlistSearchTask = Task {
             do {
-                let results = try await NetEaseAPI.shared.searchPlaylists(keyword: keyword, limit: 30)
+                let results: [Playlist]
+                switch source {
+                case .netease:
+                    results = try await NetEaseAPI.shared.searchPlaylists(keyword: keyword, limit: 30)
+                case .qq:
+                    results = try await QQMusicAPI.shared.searchPlaylists(keyword: keyword, limit: 30)
+                case .kugou:
+                    results = try await KugouMusicAPI.shared.searchPlaylists(keyword: keyword, limit: 30)
+                }
                 guard !Task.isCancelled else { return }
                 playlistSearchResults = results
             } catch {
@@ -1337,6 +1339,17 @@ struct DiscoverView: View {
                 playlistSearchResults = []
             }
             playlistSearchLoading = false
+        }
+    }
+
+    private var playlistSearchPrompt: String {
+        switch source {
+        case .netease:
+            return beansLocalized("搜索网易云歌单", "Search NetEase playlists")
+        case .qq:
+            return beansLocalized("搜索 QQ 音乐歌单", "Search QQ Music playlists")
+        case .kugou:
+            return beansLocalized("搜索酷狗歌单", "Search Kugou playlists")
         }
     }
 
@@ -1783,7 +1796,7 @@ struct DailySongsSheet: View {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if songs.isEmpty {
-                    EmptyStateView(icon: "sparkles", text: "今日推荐加载中，下拉刷新试试")
+                    EmptyStateView(icon: "sparkles", text: "今日推荐加载中，请稍后重试")
                 } else {
                     List {
                     Section {

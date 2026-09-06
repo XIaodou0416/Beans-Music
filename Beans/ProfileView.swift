@@ -2359,9 +2359,6 @@ struct SettingsView: View {
                     Text(beansLocalized("均衡器", "Equalizer"))
                         .font(BeansFont.appFont(15))
                         .foregroundStyle(Color.beansLabel)
-                    Text(beansLocalized("调节低音、人声与高音", "Adjust bass, vocals, and treble"))
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
                 }
                 Spacer()
                 Text(equalizer.isEnabled ? beansLocalized("已开启", "On") : beansLocalized("已关闭", "Off"))
@@ -3199,19 +3196,11 @@ struct EqualizerSettingsView: View {
                         Text(beansLocalized("启用均衡器", "Enable Equalizer"))
                             .font(BeansFont.appFont(15, .semibold))
                             .foregroundStyle(Color.beansLabel)
-                        Text(beansLocalized("播放时实时应用当前调节", "Apply the current tuning while playing"))
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
                     }
                 }
             }
             .toggleStyle(.switch)
             .tint(Color.beansAmber)
-
-            Text(beansLocalized("均衡器仅处理 Beans 当前播放的音乐，不影响其他 App。", "The equalizer only processes music playing in Beans."))
-                .font(BeansFont.appFont(11))
-                .foregroundStyle(Color.beansComment)
-                .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider().overlay(Color.beansComment.opacity(0.14))
 

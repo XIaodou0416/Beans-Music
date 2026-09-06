@@ -46,9 +46,9 @@ enum ChangelogStore {
 
     static var latest: VersionLog? { logs.first }
 
-    /// 更新日志由服务器后台维护；网络不可用时继续显示内置历史记录。
+    /// 更新日志从 GitHub Releases 读取；网络不可用时继续显示内置历史记录。
     static func fetchRemoteLatest() async -> VersionLog? {
-        guard let remote = try? await UpdateChecker.fetchServerLatest() else { return nil }
+        guard let remote = try? await UpdateChecker.fetchLatest() else { return nil }
         let notes = remote.body
             .split(whereSeparator: { $0 == "\n" || $0 == "\r" })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

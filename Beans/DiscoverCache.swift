@@ -2,7 +2,7 @@ import Foundation
 
 /// 主页数据内存缓存：避免每次切回主页 Tab 都重新请求接口。
 /// 排行榜 / 歌单广场缓存 1 小时，每日推荐缓存 6 小时；
-/// 点右上角刷新或下拉刷新会强制重新加载。
+/// 点右上角刷新会强制重新加载。
 final class DiscoverCache {
     static let shared = DiscoverCache()
 

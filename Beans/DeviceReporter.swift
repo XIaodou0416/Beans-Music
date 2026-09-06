@@ -259,8 +259,10 @@ final class DeviceReporter {
                 NotificationCenter.default.post(name: .beansBackendBlockStateDidChange, object: nil)
             }
         }
-        if response.downloadUnlocked == true {
-            UserDefaults.standard.set(true, forKey: BeansBackendSettings.downloadUnlockKey)
+        if let downloadUnlocked = response.downloadUnlocked {
+            // 后台取消解锁时会明确返回 false；不能只处理 true，
+            // 否则客户端会永久保留上一次的下载权限。
+            UserDefaults.standard.set(downloadUnlocked, forKey: BeansBackendSettings.downloadUnlockKey)
         }
         FeedbackHistoryStore.shared.receiveServerReplies(response.feedbackReplies)
     }

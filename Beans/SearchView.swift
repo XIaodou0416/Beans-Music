@@ -437,7 +437,6 @@ struct SearchView: View {
                     historyStore.record(word)
                     Task { await startSearch(word) }
                 }
-                SectionHeader(title: provider == .netease ? "网易云音乐热搜" : provider == .qq ? "QQ音乐热搜" : "酷狗音乐热搜")
                 if hotWords.isEmpty {
                     LoadingStateView()
                 } else {

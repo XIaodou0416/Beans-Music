@@ -181,9 +181,6 @@ struct LibraryView: View {
                 .frame(maxWidth: .infinity)
             }
             .beansScrollIndicatorsHidden()
-            .refreshable {
-                await refreshCurrentSource(force: true)
-            }
         }
         .task {
             source = platformPrefs.ensureVisible(source)
@@ -642,7 +639,7 @@ struct LibraryView: View {
             } else if kugouLoading {
                 LoadingStateView()
             } else if kugouPlaylists.isEmpty {
-                EmptyStateView(icon: "music.note.list", text: "暂未同步到酷狗歌单，下拉刷新试试")
+                EmptyStateView(icon: "music.note.list", text: "暂未同步到酷狗歌单，请稍后重试")
             } else {
                 VStack(spacing: 0) {
                     ForEach(orderedKugouPlaylists) { playlist in
@@ -697,7 +694,7 @@ struct LibraryView: View {
             qqPlaylists = cached.playlists
             qqSavedAt = cached.savedAt
         }
-        // 持久化缓存仍新鲜时直接展示；下拉刷新会跳过缓存。
+        // 持久化缓存仍新鲜时直接展示；手动刷新会跳过缓存。
         if !force, !qqPlaylists.isEmpty, Date().timeIntervalSince(qqSavedAt) < cache.playlistTTL { return }
         qqLoading = qqPlaylists.isEmpty
         let list = (try? await QQMusicAPI.shared.userPlaylists(uin: qqAuth.uin)) ?? []

@@ -5,6 +5,7 @@ enum QQSearchType: Int {
     case song = 0
     case artist = 1
     case album = 2
+    case playlist = 3
 }
 
 /// QQ 音乐接口（搜索 / 播放地址 / 歌词 / 热搜）
@@ -316,6 +317,37 @@ final class QQMusicAPI {
             if !list.isEmpty {
                 return parseAlbumItems(list)
             }
+        }
+        return []
+    }
+
+    /// 搜索 QQ 音乐歌单（musicu search_type=3）。
+    func searchPlaylists(keyword: String, limit: Int = 30) async throws -> [Playlist] {
+        let target = max(limit, 1)
+        if let json = try? await musicu(musicuSearchPayload(keyword: keyword, limit: target, type: .playlist)) {
+            let rawItems = Self.searchPlaylistItems(from: json)
+            var seen = Set<Int>()
+            let playlists = rawItems.compactMap { item -> Playlist? in
+                guard let playlist = Self.playlist(fromQQDiss: item), seen.insert(playlist.id).inserted else {
+                    return nil
+                }
+                return playlist
+            }
+            if !playlists.isEmpty { return Array(playlists.prefix(target)) }
+        }
+
+        // 部分网络环境会拦截 musicu 搜索，旧搜索接口仍能返回歌单结果。
+        if let url = clientSearchURL(keyword: keyword, limit: target, type: 3),
+           let json = try? await get(url.absoluteString, referer: "https://y.qq.com/portal/player.html") {
+            let rawItems = Self.searchPlaylistItems(from: json)
+            var seen = Set<Int>()
+            let playlists = rawItems.compactMap { item -> Playlist? in
+                guard let playlist = Self.playlist(fromQQDiss: item), seen.insert(playlist.id).inserted else {
+                    return nil
+                }
+                return playlist
+            }
+            if !playlists.isEmpty { return Array(playlists.prefix(target)) }
         }
         return []
     }
@@ -1456,6 +1488,23 @@ final class QQMusicAPI {
             }
         }
         walk(json)
+        return result
+    }
+
+    /// 搜索接口的歌单字段在不同 QQ 客户端版本中位于不同节点，递归收集带有歌单 ID 的对象。
+    private static func searchPlaylistItems(from value: Any) -> [[String: Any]] {
+        var result: [[String: Any]] = []
+        func walk(_ value: Any) {
+            if let dict = value as? [String: Any] {
+                let hasID = dict["dissid"] != nil || dict["diss_id"] != nil || dict["tid"] != nil || dict["listid"] != nil
+                let hasName = dict["dissname"] != nil || dict["diss_name"] != nil || dict["name"] != nil || dict["title"] != nil
+                if hasID && hasName { result.append(dict) }
+                for child in dict.values { walk(child) }
+            } else if let array = value as? [Any] {
+                for child in array { walk(child) }
+            }
+        }
+        walk(value)
         return result
     }
 
