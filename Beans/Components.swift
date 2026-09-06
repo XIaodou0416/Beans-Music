@@ -486,6 +486,8 @@ struct CoverImage: View {
     /// 封面未加载时的提示文字（播放器大封面用：等待开始播放）；nil 显示中性图标
     var emptyHint: String? = nil
 
+    @StateObject private var imageLoader = BeansCoverImageLoader()
+
     // 布局尺寸完全由外层固定容器决定；AsyncImage 只放在 overlay 中渲染，
     // 图片加载完成与否都不会改变任何布局尺寸（根治"封面加载后错乱"）。
     var body: some View {
@@ -493,32 +495,26 @@ struct CoverImage: View {
             .fill(Color.beansGlassFill)
             .frame(width: size, height: size)
             .overlay {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                            .frame(width: size, height: size)
-                            .clipped()
-                    case .failure:
+                if let image = imageLoader.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipped()
+                } else if url == nil || imageLoader.didFail {
+                    placeholderIcon
+                } else {
+                    ZStack {
                         placeholderIcon
-                    case .empty:
-                        if url == nil {
-                            // 封面地址为空时：直接显示占位图标，避免一直转圈
-                            placeholderIcon
-                        } else {
-                            ZStack {
-                                placeholderIcon
-                                ProgressView().tint(Color.beansAmber)
-                            }
-                        }
-                    @unknown default:
-                        placeholderIcon
+                        ProgressView().tint(Color.beansAmber)
                     }
                 }
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .onAppear { imageLoader.load(url: url) }
+            .onChange(of: url) { nextURL in imageLoader.load(url: nextURL) }
     }
 
     private var placeholderIcon: some View {
@@ -541,6 +537,55 @@ struct CoverImage: View {
         }
         .frame(width: size, height: size)
     }
+}
+
+/// 所有歌曲封面共用的内存与 URLCache 缓存，避免详情页每次进入都重新下载封面。
+@MainActor
+private final class BeansCoverImageLoader: ObservableObject {
+    private static let memoryCache = NSCache<NSURL, UIImage>()
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.requestCachePolicy = .returnCacheDataElseLoad
+        configuration.urlCache = URLCache(
+            memoryCapacity: 50 * 1024 * 1024,
+            diskCapacity: 200 * 1024 * 1024,
+            diskPath: "BeansCoverImageCache"
+        )
+        return URLSession(configuration: configuration)
+    }()
+
+    @Published private(set) var image: UIImage?
+    @Published private(set) var didFail = false
+    private var task: Task<Void, Never>?
+    private var loadedURL: URL?
+
+    func load(url: URL?) {
+        task?.cancel()
+        image = nil
+        didFail = false
+        loadedURL = url
+        guard let url else { return }
+        if let cached = Self.memoryCache.object(forKey: url as NSURL) {
+            image = cached
+            return
+        }
+        task = Task { [weak self] in
+            do {
+                var request = URLRequest(url: url)
+                request.cachePolicy = .returnCacheDataElseLoad
+                let (data, _) = try await Self.session.data(for: request)
+                guard !Task.isCancelled, let image = UIImage(data: data) else { return }
+                Self.memoryCache.setObject(image, forKey: url as NSURL)
+                guard let self, self.loadedURL == url else { return }
+                self.image = image
+            } catch {
+                guard !Task.isCancelled, let self, self.loadedURL == url else { return }
+                self.didFail = true
+            }
+        }
+    }
+
+    deinit { task?.cancel() }
 }
 
 // MARK: - 会员标识小标（SVIP 金色 / VIP 红色）

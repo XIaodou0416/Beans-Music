@@ -265,7 +265,8 @@ final class NetEaseAPI {
 
     func songURLs(ids: [Int], level: String = "standard") async throws -> [Int: String] {
         let idsString = "[" + ids.map(String.init).joined(separator: ",") + "]"
-        let json = try await request("/api/song/enhance/player/url/v1", payload: ["ids": idsString, "level": level, "encodeType": "flac"], crypto: "eapi")
+        let encodeType = ["standard", "higher"].contains(level) ? "mp3" : "flac"
+        let json = try await request("/api/song/enhance/player/url/v1", payload: ["ids": idsString, "level": level, "encodeType": encodeType], crypto: "eapi")
         let data = json["data"] as? [[String: Any]] ?? []
         var result: [Int: String] = [:]
         for item in data {
@@ -285,7 +286,8 @@ final class NetEaseAPI {
 
     func songURLInfo(ids: [Int], level: String = "standard") async throws -> [Int: SongURLInfo] {
         let idsString = "[" + ids.map(String.init).joined(separator: ",") + "]"
-        let json = try await request("/api/song/enhance/player/url/v1", payload: ["ids": idsString, "level": level, "encodeType": "flac"], crypto: "eapi")
+        let encodeType = ["standard", "higher"].contains(level) ? "mp3" : "flac"
+        let json = try await request("/api/song/enhance/player/url/v1", payload: ["ids": idsString, "level": level, "encodeType": encodeType], crypto: "eapi")
         let data = json["data"] as? [[String: Any]] ?? []
         var result: [Int: SongURLInfo] = [:]
         for item in data {
@@ -628,7 +630,19 @@ final class NetEaseAPI {
         var seen = Set<String>()
         let batchCount = max(1, Int(ceil(Double(limit) / 3.0)))
         for _ in 0..<batchCount {
-            let json = try await request("/api/v1/radio/get", payload: [:], crypto: "weapi")
+            let json: [String: Any]
+            do {
+                let primary = try await request("/api/v1/radio/get", payload: [:], crypto: "weapi")
+                let primaryList = primary["data"] as? [[String: Any]] ?? []
+                if primaryList.isEmpty {
+                    // 部分登录态只接受旧版私人漫游路径，保留同一请求参数作为兼容回退。
+                    json = (try? await request("/api/radio/get", payload: [:], crypto: "weapi")) ?? primary
+                } else {
+                    json = primary
+                }
+            } catch {
+                json = try await request("/api/radio/get", payload: [:], crypto: "weapi")
+            }
             let list = json["data"] as? [[String: Any]] ?? []
             let batch = list.compactMap(Song.init(json:))
             for song in batch where seen.insert(song.identityKey).inserted {

@@ -105,9 +105,13 @@ final class PlayerManager: NSObject, ObservableObject {
     /// 记录已经交给 AVPlayer 的第三方音质，失败后选择下一个更低档位。
     private var attemptedThirdPartyQualitiesBySong: [String: Set<String>] = [:]
     private var activeThirdPartyQuality: ThirdPartyAudioQuality?
+    /// 当前网易云官方地址使用的音质；地址实际失效时继续向低档位重试。
+    private var activeNetEaseLevel: String?
     /// 记录 QQ 官方 vkey 已经尝试过的 BR，官方地址实际打不开时继续换档位。
     private var attemptedQQOfficialBRsBySong: [String: Set<String>] = [:]
     private var activeQQOfficialBR: String?
+    /// 网易云地址实际失效时按官方音质从高到低重试，避免私人漫游偶发 CDN 失效直接报错。
+    private var attemptedNetEaseLevelsBySong: [String: Set<String>] = [:]
     /// KVO 与 AVPlayerItemFailedToPlayToEndTime 可能同时报告同一次失败。
     private var playbackRecoveryInFlightSongKey: String?
     /// 同一首歌的多个 AVFoundation 失败回调只允许弹一次提示并自动切歌一次。
@@ -489,7 +493,9 @@ final class PlayerManager: NSObject, ObservableObject {
         thirdPartyRetryExcludedHostsBySong.removeValue(forKey: song.identityKey)
         attemptedThirdPartyQualitiesBySong.removeValue(forKey: song.identityKey)
         attemptedQQOfficialBRsBySong.removeValue(forKey: song.identityKey)
+        attemptedNetEaseLevelsBySong.removeValue(forKey: song.identityKey)
         activeThirdPartyQuality = nil
+        activeNetEaseLevel = nil
         activeQQOfficialBR = nil
         playbackRecoveryInFlightSongKey = nil
         finalizedFailureSongKey = nil
@@ -513,6 +519,7 @@ final class PlayerManager: NSObject, ObservableObject {
             var resolvedThirdParty: UnblockService.Resolved?
             var qqOfficialBR: String?
             var attemptedQQOfficialBRs: [String] = []
+            var netEaseLevel: String?
             // 官方地址失败后，使用已启用的自定义音源兜底。
             let enableUnblock = externalSourcesEnabled
             let strictUnlock = shouldLockOfficialOnly(song)
@@ -548,7 +555,7 @@ final class PlayerManager: NSObject, ObservableObject {
                     )
                 }
             } else {
-                (urlString, resolvedThirdParty) = await neteaseResolve(
+                (urlString, resolvedThirdParty, netEaseLevel) = await neteaseResolve(
                     song: song,
                     quality: quality,
                     thirdPartyQuality: thirdPartyQuality,
@@ -594,7 +601,8 @@ final class PlayerManager: NSObject, ObservableObject {
                     url: url,
                     resumeAt: initialProgress,
                     qqOfficialBR: qqOfficialBR,
-                    attemptedQQOfficialBRs: attemptedQQOfficialBRs
+                    attemptedQQOfficialBRs: attemptedQQOfficialBRs,
+                    netEaseLevel: netEaseLevel
                 )
             }
         }
@@ -607,20 +615,24 @@ final class PlayerManager: NSObject, ObservableObject {
         thirdPartyQuality: ThirdPartyAudioQuality = .current,
         enableUnblock: Bool,
         strict: Bool = false
-    ) async -> (String?, UnblockService.Resolved?) {
+    ) async -> (String?, UnblockService.Resolved?, String?) {
         var urlString: String?
         var resolved: UnblockService.Resolved?
-        let infos = try? await NetEaseAPI.shared.songURLInfo(ids: [song.id], level: quality.level)
-        var info = infos?[song.id]
-        if (info?.url == nil || info?.freeTrial == true), quality != .standard {
-            // 高音质拿不到时自动回落到标准音质
-            let fallback = try? await NetEaseAPI.shared.songURLInfo(ids: [song.id], level: "standard")
-            info = fallback?[song.id]
+        var selectedLevel: String?
+        let levels = [quality.level, "lossless", "exhigh", "higher", "standard"]
+            .filter { !$0.isEmpty }
+            .reduce(into: [String]()) { result, level in
+                if !result.contains(level) { result.append(level) }
         }
-        BeansLogger.shared.log("网易云解析：\(song.name) 音质=\(quality.level) 官方URL=\(info?.url == nil ? "无" : "有") 试听=\(info?.freeTrial == true ? "是" : "否")", level: .debug)
-        // 试听片段 / 无 URL 一律不直接播放，交给第三方解锁，避免"只能试听"
-        if let u = info?.url, info?.freeTrial != true {
-            urlString = u
+        for level in levels {
+            guard let infos = try? await NetEaseAPI.shared.songURLInfo(ids: [song.id], level: level),
+                  let info = infos[song.id] else { continue }
+            BeansLogger.shared.log("网易云解析：\(song.name) 音质=\(level) 官方URL=\(info.url == nil ? "无" : "有") 试听=\(info.freeTrial ? "是" : "否")", level: .debug)
+            if let u = info.url, !info.freeTrial {
+                urlString = u
+                selectedLevel = level
+                break
+            }
         }
         if urlString == nil, enableUnblock {
             resolved = await UnblockService.resolve(
@@ -633,7 +645,7 @@ final class PlayerManager: NSObject, ObservableObject {
             )
         }
         BeansLogger.shared.log("网易云结果：\(song.name) 官方=\(urlString != nil ? "是" : "否") 第三方=\(resolved != nil ? "命中" : "未用/未命中")", level: .debug)
-        return (urlString, resolved)
+        return (urlString, resolved, selectedLevel)
     }
 
     /// QQ 歌曲兜底：官方失败后只走 QQ 第三方接口，不跨平台匹配同名歌曲。
@@ -842,6 +854,86 @@ final class PlayerManager: NSObject, ObservableObject {
         return true
     }
 
+    /// 网易云官方地址进入 AVPlayer 后仍可能因 CDN 节点或档位失效而失败。
+    /// 失败时继续尝试更低档位，全部官方档位都失败后再使用已启用的自定义音源。
+    @discardableResult
+    private func retryNetEaseIfNeeded() -> Bool {
+        guard let song = currentSong, song.source == .netease else { return false }
+        if playbackRecoveryInFlightSongKey == song.identityKey { return true }
+
+        let levels = ["hires", "lossless", "exhigh", "higher", "standard"]
+        let attempted = attemptedNetEaseLevelsBySong[song.identityKey] ?? []
+        if let nextLevel = levels.first(where: { !attempted.contains($0) }) {
+            attemptedNetEaseLevelsBySong[song.identityKey, default: []].insert(nextLevel)
+            playbackRecoveryInFlightSongKey = song.identityKey
+            let generation = loadGeneration
+            let resume = progress
+            Task {
+                let infos = try? await NetEaseAPI.shared.songURLInfo(ids: [song.id], level: nextLevel)
+                let info = infos?[song.id]
+                var urlString: String?
+                if let info, let url = info.url, !info.freeTrial {
+                    urlString = url
+                }
+                await MainActor.run {
+                    guard generation == self.loadGeneration,
+                          self.currentSong?.identityKey == song.identityKey else {
+                        if self.playbackRecoveryInFlightSongKey == song.identityKey {
+                            self.playbackRecoveryInFlightSongKey = nil
+                        }
+                        return
+                    }
+                    self.playbackRecoveryInFlightSongKey = nil
+                    if let urlString, let url = URL(string: urlString) {
+                        self.setupPlayer(url: url, resumeAt: resume, netEaseLevel: nextLevel)
+                        return
+                    }
+                    if self.retryNetEaseIfNeeded() { return }
+                    if self.fallbackNetEaseToThirdParty(song: song, generation: generation, resume: resume) { return }
+                    self.finishUnrecoverablePlaybackFailure(song: song, reason: "网易云官方音质均不可播放")
+                }
+            }
+            return true
+        }
+        return fallbackNetEaseToThirdParty(song: song, generation: loadGeneration, resume: progress)
+    }
+
+    @discardableResult
+    private func fallbackNetEaseToThirdParty(song: Song, generation: Int, resume: Double) -> Bool {
+        guard externalSourcesEnabled,
+              playbackRecoveryInFlightSongKey != song.identityKey else {
+            return playbackRecoveryInFlightSongKey == song.identityKey
+        }
+        playbackRecoveryInFlightSongKey = song.identityKey
+        let quality = ThirdPartyAudioQuality.current
+        Task {
+            let resolved = await self.resolveThirdParty(song: song, quality: quality, strict: false)
+            await MainActor.run {
+                guard generation == self.loadGeneration,
+                      self.currentSong?.identityKey == song.identityKey else {
+                    if self.playbackRecoveryInFlightSongKey == song.identityKey {
+                        self.playbackRecoveryInFlightSongKey = nil
+                    }
+                    return
+                }
+                self.playbackRecoveryInFlightSongKey = nil
+                if let resolved {
+                    let notice = self.thirdPartyVIPNotice(for: song, sourceTitle: resolved.sourceTitle)
+                    self.setupPlayer(
+                        url: resolved.url,
+                        thirdPartyVIPNotice: notice,
+                        resumeAt: resume,
+                        isThirdParty: true,
+                        thirdPartyQuality: resolved.quality
+                    )
+                } else {
+                    self.finishUnrecoverablePlaybackFailure(song: song, reason: "网易云官方与自定义音源均不可播放")
+                }
+            }
+        }
+        return true
+    }
+
     @discardableResult
     private func retryQQOfficialIfNeeded() -> Bool {
         guard let song = currentSong,
@@ -964,7 +1056,8 @@ final class PlayerManager: NSObject, ObservableObject {
         isThirdParty: Bool = false,
         thirdPartyQuality: ThirdPartyAudioQuality? = nil,
         qqOfficialBR: String? = nil,
-        attemptedQQOfficialBRs: [String] = []
+        attemptedQQOfficialBRs: [String] = [],
+        netEaseLevel: String? = nil
     ) {
         guard ensurePlaybackAllowed(), let loadedSong = currentSong else { return }
         if isThirdParty {
@@ -976,6 +1069,10 @@ final class PlayerManager: NSObject, ObservableObject {
             }
         } else {
             activeThirdPartyQuality = nil
+            activeNetEaseLevel = netEaseLevel
+            if let netEaseLevel, let songKey = currentSong?.identityKey {
+                attemptedNetEaseLevelsBySong[songKey, default: []].insert(netEaseLevel)
+            }
             activeQQOfficialBR = qqOfficialBR
             if let songKey = currentSong?.identityKey, !attemptedQQOfficialBRs.isEmpty {
                 attemptedQQOfficialBRsBySong[songKey, default: []].formUnion(attemptedQQOfficialBRs)
@@ -1047,6 +1144,7 @@ final class PlayerManager: NSObject, ObservableObject {
                     playbackHeaders: playbackHeaders
                 )
                 if isThirdParty && self.retryThirdPartyIfNeeded(excludingHost: url.host) { return }
+                if !isThirdParty && self.retryNetEaseIfNeeded() { return }
                 if !isThirdParty && self.retryQQOfficialIfNeeded() { return }
                 if !isThirdParty && self.fallbackQQToThirdPartyIfNeeded() { return }
                 if self.retryKugouAtStandardIfNeeded(error: item.error) { return }
@@ -1074,6 +1172,7 @@ final class PlayerManager: NSObject, ObservableObject {
                             level: .debug
                         )
                         if isThirdParty && self.retryThirdPartyIfNeeded(excludingHost: url.host) { return }
+                        if !isThirdParty && self.retryNetEaseIfNeeded() { return }
                         if !isThirdParty && self.retryQQOfficialIfNeeded() { return }
                         if !isThirdParty && self.fallbackQQToThirdPartyIfNeeded() { return }
                         if self.retryKugouAtStandardIfNeeded(error: item.error) { return }
@@ -1170,6 +1269,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 isThirdParty: isThirdParty,
                 playbackHeaders: playbackHeaders
             )
+            if !isThirdParty && self.retryNetEaseIfNeeded() { return }
             if !isThirdParty && self.retryQQOfficialIfNeeded() { return }
             if !isThirdParty && self.fallbackQQToThirdPartyIfNeeded() { return }
             if isThirdParty && self.retryThirdPartyIfNeeded(excludingHost: url.host) { return }

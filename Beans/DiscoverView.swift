@@ -6,7 +6,7 @@ private enum DiscoverRoute: Hashable {
     case playlist(Playlist)
     case qqTopList(QQTopInfo)
     case kugouTopList(KugouTopInfo)
-    case dailySongs([Song])
+    case dailySongs([Song], title: String)
 }
 
 struct DiscoverView: View {
@@ -121,7 +121,7 @@ struct DiscoverView: View {
             TabBarAppearanceConfigurator()
             if #unavailable(iOS 16.0) {
                 NavigationLink(
-                    destination: discoverDestination(legacyRoute ?? .dailySongs([])),
+                    destination: discoverDestination(legacyRoute ?? .dailySongs([], title: "今日推荐")),
                     isActive: Binding(
                         get: { legacyRoute != nil },
                         set: { if !$0 { legacyRoute = nil } }
@@ -269,8 +269,8 @@ struct DiscoverView: View {
             KugouTopListDetailView(topList: info)
                 .environmentObject(player)
                 .environmentObject(auth)
-        case .dailySongs(let songs):
-            DailySongsSheet(songs: songs)
+        case .dailySongs(let songs, let title):
+            DailySongsSheet(songs: songs, title: title)
                 .environmentObject(player)
                 .environmentObject(auth)
         }
@@ -785,7 +785,7 @@ struct DiscoverView: View {
                     ) {
                         guard !qqNewSongs.isEmpty else { return }
                         BeansHaptics.tap()
-                        openRoute(.dailySongs(qqNewSongs))
+                        openRoute(.dailySongs(qqNewSongs, title: "QQ 每日推荐新歌"))
                     }
                     neteaseRecommendationCard(
                         title: "猜你喜欢",
@@ -797,7 +797,7 @@ struct DiscoverView: View {
                     ) {
                         guard !qqGuessSongs.isEmpty else { return }
                         BeansHaptics.tap()
-                        openRoute(.dailySongs(qqGuessSongs))
+                        openRoute(.dailySongs(qqGuessSongs, title: "QQ 猜你喜欢"))
                     }
                 }
                 .padding(.vertical, 3)
@@ -820,7 +820,7 @@ struct DiscoverView: View {
                         loadingKey: nil
                     ) {
                         BeansHaptics.tap()
-                        openRoute(DiscoverRoute.dailySongs(dailySongs))
+                        openRoute(DiscoverRoute.dailySongs(dailySongs, title: "今日推荐"))
                     }
 
                     neteaseRecommendationCard(
@@ -854,7 +854,7 @@ struct DiscoverView: View {
                         loadingKey: nil
                     ) {
                         BeansHaptics.tap()
-                        openRoute(DiscoverRoute.dailySongs(dailySongs))
+                        openRoute(DiscoverRoute.dailySongs(dailySongs, title: "今日推荐"))
                     }
 
                     neteaseRecommendationCard(
@@ -928,7 +928,7 @@ struct DiscoverView: View {
                     }
                     Button {
                         BeansHaptics.tap()
-                        openRoute(DiscoverRoute.dailySongs(dailySongs))
+                        openRoute(DiscoverRoute.dailySongs(dailySongs, title: "今日推荐"))
                     } label: {
                         VStack(spacing: 5) {
                             Image(systemName: "chevron.right")
@@ -1835,6 +1835,7 @@ struct DailySongsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
 
     let songs: [Song]
+    let title: String
     @State private var searchText = ""
 
     var body: some View {
@@ -1845,8 +1846,8 @@ struct DailySongsSheet: View {
                 if songs.isEmpty {
                     EmptyStateView(icon: "sparkles", text: "今日推荐加载中，下拉刷新试试")
                 } else {
-                    List {
-                    Section {
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
                         HStack(spacing: 12) {
                             GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
                                 guard !filteredSongs.isEmpty else { return }
@@ -1859,26 +1860,21 @@ struct DailySongsSheet: View {
                                 player.play(songs: filteredSongs, startAt: Int.random(in: 0..<filteredSongs.count))
                             }
                         }
-                        .listRowBackground(Color.clear)
                         .padding(.vertical, 8)
-                    }
-                    Section {
                         ForEach(Array(filteredSongs.enumerated()), id: \.element.identityKey) { index, song in
                             SongCell(song: song, glassRow: true) {
                                 BeansHaptics.tap()
                                 player.play(songs: filteredSongs, startAt: index)
                             }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
                         }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 24)
                     }
                 }
-                .beansScrollContentBackgroundHidden()
-                .listStyle(.plain)
-                }
             }
             }
-            .navigationTitle("今日推荐")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索每日推荐", "Search daily recommendations"))
     }
