@@ -908,7 +908,6 @@ struct PlayerView: View {
             if song == nil {
                 placeholderView
             } else if coverPlayerStyle == .vinyl {
-                // 黑胶布局参考 kumone 的 Now Playing / Vinyl 页面结构，保留 Beans 自己的控制逻辑。
                 if showLyrics {
                     vinylLyricsPanel(geo: geo)
                         .transition(.opacity)
@@ -2003,10 +2002,10 @@ struct PlayerView: View {
     private func controlDeck(bottomInset: CGFloat) -> some View {
         VStack(spacing: 0) {
             if coverPlayerStyle == .vinyl {
-                vinylKumoneProgress
+                vinylProgress
                 .offset(y: VinylLayoutDefaults.progressY)
 
-                vinylKumoneControlRow
+                vinylControlRow
                     .scaleEffect(VinylLayoutDefaults.controlsScale)
                     .offset(y: VinylLayoutDefaults.controlsY)
             } else {
@@ -2030,7 +2029,7 @@ struct PlayerView: View {
     }
 
     /// 黑胶样式控制行：左侧循环/上一首，中间播放，右侧下一首/播放列表。
-    private var vinylKumoneControlRow: some View {
+    private var vinylControlRow: some View {
         HStack(spacing: 0) {
             HStack(spacing: 6) {
                 vinylSideControl(icon: player.playMode.icon, active: player.playMode == .shuffle) {
@@ -2095,8 +2094,8 @@ struct PlayerView: View {
         .buttonStyle(.plain)
     }
 
-    private var vinylKumoneProgress: some View {
-        VinylKumoneScrubber()
+    private var vinylProgress: some View {
+        VinylScrubber()
     }
 
     /// 底部指示线：只有在指示线附近上滑才呼出评论区（避免误触控制按钮）
@@ -2953,7 +2952,7 @@ struct PlayerView: View {
 }
 
 /// 黑胶页专用的白色极简进度条：非拖动时隐藏滑块，拖动时才显示。
-private struct VinylKumoneScrubber: View {
+private struct VinylScrubber: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
     @State private var isDragging = false

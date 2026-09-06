@@ -41,6 +41,8 @@ struct RootView: View {
     @State private var selection: RootTab = .discover
     @State private var showPlayer = false
     @Namespace private var nowPlayingTransition
+    @Namespace private var legacyAccessoryTransition
+    @State private var legacyPlayerCollapsed = false
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
@@ -328,31 +330,46 @@ struct RootView: View {
 
     private var legacyFloatingTabBar: some View {
         VStack(spacing: 8) {
-            if player.currentSong != nil {
+            if player.currentSong != nil && !legacyPlayerCollapsed {
                 MiniPlayerView(
                     showPlayer: $showPlayer,
                     presentation: .dock,
-                    transitionNamespace: nowPlayingTransition
+                    transitionNamespace: nowPlayingTransition,
+                    onCollapse: { setLegacyPlayerCollapsed(true) }
                 )
                     .environmentObject(player.clock)
                     .padding(.horizontal, 12)
+                    .matchedGeometryEffect(id: "legacy-inline-player", in: legacyAccessoryTransition)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             Group {
-                GlassTabBar(
-                    items: RootTab.allCases.map {
-                        GlassTabBar.Item(tab: $0, title: LocalizedStringKey($0.title), icon: $0.icon)
-                    },
-                    selection: $selection,
-                    labelsVisible: tabLabelsVisible,
-                    accentIsNativeClean: isNativeClean,
-                    onHomeLongPress: { showHomePlatformMenu = true }
-                ) { tab in
-                    guard selection != tab else { return }
-                    BeansHaptics.select()
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        selection = tab
+                ZStack(alignment: .top) {
+                    GlassTabBar(
+                        items: RootTab.allCases.map {
+                            GlassTabBar.Item(tab: $0, title: LocalizedStringKey($0.title), icon: $0.icon)
+                        },
+                        selection: $selection,
+                        labelsVisible: tabLabelsVisible,
+                        accentIsNativeClean: isNativeClean,
+                        onHomeLongPress: { showHomePlatformMenu = true }
+                    ) { tab in
+                        guard selection != tab else { return }
+                        BeansHaptics.select()
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                            selection = tab
+                        }
+                    }
+
+                    if player.currentSong != nil && legacyPlayerCollapsed {
+                        MiniPlayerView(
+                            showPlayer: $showPlayer,
+                            presentation: .inlineAccessory,
+                            transitionNamespace: nowPlayingTransition
+                        )
+                            .frame(width: min(198, max(150, legacyTabResolvedWidth * 0.52)))
+                            .matchedGeometryEffect(id: "legacy-inline-player", in: legacyAccessoryTransition)
+                            .transition(.scale(scale: 0.72, anchor: .bottom).combined(with: .opacity))
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -430,6 +447,34 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: selection)
         .animation(.easeInOut(duration: 0.25), value: player.currentSong?.identityKey)
+        .simultaneousGesture(legacyScrollGesture)
+        .onChange(of: selection) { _ in
+            setLegacyPlayerCollapsed(false)
+        }
+    }
+
+    private var legacyScrollGesture: some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .global)
+            .onChanged { value in
+                let vertical = value.translation.height
+                let horizontal = abs(value.translation.width)
+                guard abs(vertical) > horizontal * 1.15 else { return }
+                guard value.startLocation.y < UIScreen.main.bounds.height - 150 else { return }
+
+                if vertical < -24 {
+                    setLegacyPlayerCollapsed(true)
+                } else if vertical > 24 {
+                    setLegacyPlayerCollapsed(false)
+                }
+            }
+    }
+
+    private func setLegacyPlayerCollapsed(_ collapsed: Bool) {
+        guard player.currentSong != nil || !collapsed else { return }
+        guard legacyPlayerCollapsed != collapsed else { return }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.84)) {
+            legacyPlayerCollapsed = collapsed
+        }
     }
 
     @ViewBuilder
@@ -663,7 +708,6 @@ private struct RootMiniPlayerAccessory: View {
             presentation: presentation,
             transitionNamespace: transitionNamespace
         )
-        .padding(.horizontal, 12)
         .environmentObject(clock)
     }
 
