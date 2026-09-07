@@ -642,7 +642,6 @@ struct DiscoverView: View {
             SectionHeader(title: "排行榜")
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     if source == .netease {
                         ForEach(Array(neteaseTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, topList in
                             nativeRankCard(index: index, name: beansChartName(topList.name), subtitle: beansChartSubtitle(topList.updateFrequency), coverURL: topList.coverURL) {
@@ -662,7 +661,7 @@ struct DiscoverView: View {
                             }
                         }
                     }
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
+                    Color.clear.frame(width: 0, height: 1)
                 }
                 .padding(.vertical, 2)
                 .frame(height: 202)
@@ -826,7 +825,6 @@ struct DiscoverView: View {
             SectionHeader(title: "推荐")
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     Button {
                         BeansHaptics.tap()
                         openRoute(DiscoverRoute.dailySongs(dailySongs))
@@ -877,7 +875,7 @@ struct DiscoverView: View {
                     }
                     .buttonStyle(GlassPressButtonStyle(scale: 0.97))
                     .padding(.vertical, 3)
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
+                    Color.clear.frame(width: 0, height: 1)
                 }
                 .frame(height: isNativeClean ? 178 : 166)
             }
@@ -891,7 +889,6 @@ struct DiscoverView: View {
             SectionHeader(title: "推荐")
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     neteaseRecommendationCard(
                         title: "每日推荐",
                         subtitle: dailyRecommendationSubtitle,
@@ -916,7 +913,7 @@ struct DiscoverView: View {
                     ) {
                         startKugouPersonalFM()
                     }
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
+                    Color.clear.frame(width: 0, height: 1)
                 }
                 .padding(.vertical, 3)
                 .frame(height: isNativeClean ? 178 : 166)
@@ -931,7 +928,6 @@ struct DiscoverView: View {
             SectionHeader(title: "推荐")
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     neteaseRecommendationCard(
                         title: "每日推荐",
                         subtitle: dailyRecommendationSubtitle,
@@ -968,7 +964,7 @@ struct DiscoverView: View {
                     ) {
                         startHeartbeatMode()
                     }
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
+                    Color.clear.frame(width: 0, height: 1)
                 }
                 .padding(.vertical, 3)
                 .frame(height: isNativeClean ? 178 : 166)
@@ -983,7 +979,6 @@ struct DiscoverView: View {
             // 横滑歌曲卡：每日推荐前 8 首
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     ForEach(Array(dailySongs.prefix(8).enumerated()), id: \.element.identityKey) { index, song in
                         Button {
                             BeansHaptics.tap()
@@ -1268,7 +1263,6 @@ struct DiscoverView: View {
             } else if isNativeClean && !playlistsExpanded {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                         ForEach(visiblePersonalizedPlaylists, id: \.id) { (playlist: Playlist) in
                             Button {
                                 BeansHaptics.tap()
@@ -1415,7 +1409,6 @@ struct DiscoverView: View {
             SectionHeader(title: beansLocalized("新碟上架", "New Releases"))
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     ForEach(newAlbums) { album in
                         Button {
                             BeansHaptics.tap()
@@ -1452,7 +1445,6 @@ struct DiscoverView: View {
             SectionHeader(title: beansLocalized("歌手", "Artists"))
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     ForEach(topArtists) { artist in
                         Button {
                             BeansHaptics.tap()
