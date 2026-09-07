@@ -72,7 +72,9 @@ struct PlaylistSquareView: View {
 
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
-                            playlistSearchField
+                            if source != .netease {
+                                playlistSearchField
+                            }
 
                             if categories.count > 1 {
                                 categoryChips
@@ -130,7 +132,9 @@ struct PlaylistSquareView: View {
 
     private var headerTitle: some View {
         HStack(alignment: .center, spacing: 10) {
-            Text(beansLocalized("歌单广场", "Playlist Square"))
+            Text(source == .netease
+                 ? beansLocalized("精选", "Curated")
+                 : beansLocalized("歌单广场", "Playlist Square"))
                 .font(BeansFont.appFont(32, .bold))
                 .foregroundStyle(Color.beansLabel)
 
@@ -238,9 +242,9 @@ struct PlaylistSquareView: View {
     }
 
     private func playlistCard(_ playlist: Playlist) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             CoverImage(url: playlist.coverURL, size: 150, cornerRadius: isNativeClean ? 14 : 16)
-            Text(playlist.name)
+                Text(playlist.name)
                 .font(BeansFont.appFont(13, .medium))
                 .foregroundStyle(Color.beansLabel)
                 .lineLimit(2)
@@ -263,7 +267,7 @@ struct PlaylistSquareView: View {
             .opacity(playlist.trackCount > 0 || !playlist.creatorName.isEmpty ? 1 : 0)
             .frame(height: 14, alignment: .leading)
         }
-        .padding(isNativeClean ? 0 : 8)
+        .padding(isNativeClean || source == .netease ? 0 : 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             if usesSolidSurface {
