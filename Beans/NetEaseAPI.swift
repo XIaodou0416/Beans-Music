@@ -726,7 +726,7 @@ enum FeaturedPlaylistAPI {
         )
         let list = json["playlists"] as? [[String: Any]] ?? []
         let playlists = list.compactMap(Playlist.init(json:))
-        let hasMore = json["more"] as? Bool ?? playlists.count >= limit
+        let hasMore = (json["more"] as? Bool) ?? (playlists.count >= limit)
         return PlaylistSquarePage(
             playlists: playlists,
             hasMore: hasMore,
@@ -765,7 +765,7 @@ enum FeaturedPlaylistAPI {
         )
         let list = json["playlists"] as? [[String: Any]] ?? []
         let playlists = list.compactMap(Playlist.init(json:))
-        let hasMore = json["more"] as? Bool ?? playlists.count >= limit
+        let hasMore = (json["more"] as? Bool) ?? (playlists.count >= limit)
         let nextOffset = (json["lasttime"] as? Int) ?? (before + playlists.count)
         return PlaylistSquarePage(
             playlists: playlists,
