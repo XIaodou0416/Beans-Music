@@ -20,6 +20,13 @@ enum UnblockService {
         let expiresAt: Date
     }
 
+    private struct PersistentResolutionCacheEntry: Codable {
+        let url: String
+        let source: String
+        let quality: String
+        let expiresAt: Date
+    }
+
     private static let session: URLSession = {
         let config = URLSessionConfiguration.default
         // 音源解析是切歌关键路径，缩短单个失效源的阻塞时间，让其它源更快接管。
@@ -31,6 +38,11 @@ enum UnblockService {
     private static let resolutionCacheLock = NSLock()
     private static var resolutionCache: [String: ResolutionCacheEntry] = [:]
     private static let resolutionCacheTTL: TimeInterval = 35
+    private static let persistentResolutionCacheKey = "beans.thirdPartyPlaybackURLCache.v1"
+    private static let persistentResolutionCacheTTL: TimeInterval = 30 * 60
+    private static let persistentResolutionCacheLimit = 200
+    private static var persistentResolutionCache: [String: PersistentResolutionCacheEntry] = [:]
+    private static var persistentCacheLoaded = false
 
     /// 入口：并发尝试用户导入且可用于当前平台的音源，返回第一个可用地址。
     static func resolve(
@@ -127,27 +139,92 @@ enum UnblockService {
     private static func cachedResolution(for key: String, excludedHosts: Set<String>) -> Resolved? {
         resolutionCacheLock.lock()
         defer { resolutionCacheLock.unlock() }
-        guard let entry = resolutionCache[key] else { return nil }
-        guard entry.expiresAt > Date() else {
-            resolutionCache.removeValue(forKey: key)
+        loadPersistentCacheIfNeededLocked()
+        let now = Date()
+
+        if let entry = resolutionCache[key] {
+            if entry.expiresAt <= now {
+                resolutionCache.removeValue(forKey: key)
+            } else {
+                guard let host = entry.resolved.url.host?.lowercased(), !excludedHosts.contains(host) else {
+                    return nil
+                }
+                return entry.resolved
+            }
+        }
+
+        guard let persistentEntry = persistentResolutionCache[key] else {
             return nil
         }
-        guard let host = entry.resolved.url.host?.lowercased(), !excludedHosts.contains(host) else {
+        guard persistentEntry.expiresAt > now else {
+            persistentResolutionCache.removeValue(forKey: key)
+            persistCacheLocked()
             return nil
         }
-        return entry.resolved
+        guard let url = URL(string: persistentEntry.url),
+              let quality = ThirdPartyAudioQuality(rawValue: persistentEntry.quality),
+              let host = url.host?.lowercased(),
+              !excludedHosts.contains(host) else {
+            persistentResolutionCache.removeValue(forKey: key)
+            persistCacheLocked()
+            return nil
+        }
+
+        let resolved = Resolved(url: url, source: persistentEntry.source, quality: quality)
+        resolutionCache[key] = ResolutionCacheEntry(
+            resolved: resolved,
+            expiresAt: now.addingTimeInterval(resolutionCacheTTL)
+        )
+        return resolved
     }
 
     private static func storeResolution(_ resolved: Resolved, for key: String) {
         resolutionCacheLock.lock()
+        loadPersistentCacheIfNeededLocked()
+        let now = Date()
         resolutionCache[key] = ResolutionCacheEntry(
             resolved: resolved,
-            expiresAt: Date().addingTimeInterval(resolutionCacheTTL)
+            expiresAt: now.addingTimeInterval(resolutionCacheTTL)
         )
         // 避免长期运行的应用持续保留已经过期的地址。
-        let now = Date()
         resolutionCache = resolutionCache.filter { $0.value.expiresAt > now }
+        persistentResolutionCache[key] = PersistentResolutionCacheEntry(
+            url: resolved.url.absoluteString,
+            source: resolved.source,
+            quality: resolved.quality.rawValue,
+            expiresAt: now.addingTimeInterval(persistentResolutionCacheTTL)
+        )
+        persistentResolutionCache = persistentResolutionCache
+            .filter { $0.value.expiresAt > now }
+            .sorted { $0.value.expiresAt > $1.value.expiresAt }
+            .prefix(persistentResolutionCacheLimit)
+            .reduce(into: [String: PersistentResolutionCacheEntry]()) { result, item in
+                result[item.key] = item.value
+            }
+        persistCacheLocked()
         resolutionCacheLock.unlock()
+    }
+
+    private static func loadPersistentCacheIfNeededLocked() {
+        guard !persistentCacheLoaded else { return }
+        persistentCacheLoaded = true
+        guard let data = UserDefaults.standard.data(forKey: persistentResolutionCacheKey),
+              let decoded = try? JSONDecoder().decode(
+                [String: PersistentResolutionCacheEntry].self,
+                from: data
+              ) else {
+            return
+        }
+        let now = Date()
+        persistentResolutionCache = decoded.filter { $0.value.expiresAt > now }
+        if persistentResolutionCache.count != decoded.count {
+            persistCacheLocked()
+        }
+    }
+
+    private static func persistCacheLocked() {
+        guard let data = try? JSONEncoder().encode(persistentResolutionCache) else { return }
+        UserDefaults.standard.set(data, forKey: persistentResolutionCacheKey)
     }
 
     private static func resolveSources(
