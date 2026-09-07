@@ -22,7 +22,7 @@ struct PlaylistSquareView: View {
     @State private var expanded = false
     @State private var loadRequestID = UUID()
 
-    // 与 Kumone 一致，分类请求通过 /playlist/list 的 cat 参数区分内容。
+    // 分类请求通过 /playlist/list 的 cat 参数区分内容。
     private let neteaseCategories = [
         "全部", "推荐歌单", "精品歌单", "官方", "华语", "流行", "摇滚", "民谣", "电子",
         "轻音乐", "说唱", "爵士", "古典", "影视原声", "ACG", "古风", "怀旧", "治愈",
@@ -128,7 +128,7 @@ struct PlaylistSquareView: View {
 
             Spacer(minLength: 0)
 
-            // 与搜索页相同的右上角快捷平台切换，不再占用内容区一整行。
+            // 右上角快捷平台切换，不再占用内容区一整行。
             Menu {
                 ForEach(providers) { provider in
                     Button {
