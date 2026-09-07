@@ -111,15 +111,27 @@ final class LocalLibraryStore: ObservableObject {
 
     @discardableResult
     func syncSongs(_ songs: [Song], intoPlaylistNamed name: String = "三平台喜欢") -> Int {
-        let target: LocalPlaylist
-        if let existing = playlists.first(where: { $0.name == name }) {
-            target = existing
+        var updated = playlists
+        let targetIndex: Int
+        if let index = updated.firstIndex(where: { $0.name == name }) {
+            targetIndex = index
         } else {
-            target = createPlaylist(name: name)
+            updated.append(LocalPlaylist(name: name))
+            targetIndex = updated.index(before: updated.endIndex)
         }
-        let before = playlists.first(where: { $0.id == target.id })?.songs.count ?? 0
-        for song in songs { addSong(song, to: target.id) }
-        return (playlists.first(where: { $0.id == target.id })?.songs.count ?? before) - before
+
+        var merged = updated[targetIndex].songs
+        var identities = Set(merged.map(\.identityKey))
+        var added = 0
+        for song in songs where identities.insert(song.identityKey).inserted {
+            merged.append(song)
+            added += 1
+        }
+
+        // 批量合并后只重新赋值一次，避免大歌单同步时逐首触发持久化。
+        updated[targetIndex].songs = merged
+        playlists = updated
+        return added
     }
 
     func removeSong(playlistID: UUID, songIdentity: String) {

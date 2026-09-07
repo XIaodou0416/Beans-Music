@@ -9,6 +9,8 @@ final class DiscoverCache {
     /// 单个平台的主页完整数据快照
     struct Snapshot {
         var dailySongs: [Song] = []
+        var newAlbums: [Album] = []
+        var topArtists: [Artist] = []
         var topLists: [TopList] = []
         var personalized: [Playlist] = []
         var qqTopLists: [QQTopInfo] = []
@@ -16,7 +18,8 @@ final class DiscoverCache {
         var savedAt: Date = .distantPast
 
         var isEmpty: Bool {
-            dailySongs.isEmpty && topLists.isEmpty && personalized.isEmpty
+            dailySongs.isEmpty && newAlbums.isEmpty && topArtists.isEmpty
+                && topLists.isEmpty && personalized.isEmpty
                 && qqTopLists.isEmpty && kugouTopLists.isEmpty
         }
     }

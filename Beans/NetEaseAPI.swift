@@ -608,6 +608,57 @@ final class NetEaseAPI {
         return songs
     }
 
+    /// 网易云新碟上架，返回完整专辑卡片信息。
+    func newAlbums(area: Int = 0, limit: Int = 18, offset: Int = 0) async throws -> [Album] {
+        let json = try await request(
+            "/api/album/new",
+            payload: ["area": area, "type": "new", "limit": limit, "offset": max(0, offset)],
+            crypto: "weapi"
+        )
+        let list = json["albums"] as? [[String: Any]] ?? []
+        return list.compactMap { item in
+            guard let id = item["id"] as? Int else { return nil }
+            let artist = (item["artist"] as? [String: Any])?[
+                "name"
+            ] as? String ?? ""
+            let cover = item["picUrl"] as? String ?? ""
+            return Album(
+                id: "netease-\(id)",
+                name: item["name"] as? String ?? "",
+                artistName: artist,
+                coverURL: cover.isEmpty ? nil : URL(string: cover),
+                source: .netease,
+                trackCount: item["size"] as? Int
+            )
+        }
+    }
+
+    /// 网易云热门歌手列表。
+    func topArtists(limit: Int = 18, offset: Int = 0) async throws -> [Artist] {
+        let json = try await request(
+            "/api/artist/list",
+            payload: [
+                "type": -1,
+                "area": -1,
+                "initial": "-1",
+                "offset": max(0, offset),
+                "limit": limit,
+            ],
+            crypto: "weapi"
+        )
+        let list = json["artists"] as? [[String: Any]] ?? []
+        return list.compactMap { item in
+            guard let id = item["id"] as? Int else { return nil }
+            let cover = item["picUrl"] as? String ?? (item["img1v1Url"] as? String ?? "")
+            return Artist(
+                id: "netease-\(id)",
+                name: item["name"] as? String ?? "",
+                coverURL: cover.isEmpty ? nil : URL(string: cover),
+                source: .netease
+            )
+        }
+    }
+
     func topPlaylists(limit: Int = 10) async throws -> [Playlist] {
         let json = try await request("/api/top/playlist", payload: ["limit": limit, "order": "hot", "cat": "全部", "total": true], crypto: "weapi")
         let list = json["playlists"] as? [[String: Any]] ?? []

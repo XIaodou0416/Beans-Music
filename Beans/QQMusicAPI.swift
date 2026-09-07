@@ -1203,6 +1203,60 @@ final class QQMusicAPI {
         return Array(songs.prefix(limit))
     }
 
+    /// QQ 音乐新碟上架，使用 musicu 的 NewAlbumServer。
+    func newAlbums(limit: Int = 18, offset: Int = 0) async throws -> [Album] {
+        let payload: [String: Any] = [
+            "comm": ["ct": 24, "cv": 0],
+            "new_album": [
+                "module": "newalbum.NewAlbumServer",
+                "method": "get_new_album_info",
+                "param": ["area": 1, "start": max(0, offset), "num": limit],
+            ],
+        ]
+        let json = try await musicu(payload, timeout: 12)
+        let list = nestedArray(json, path: ["new_album", "data", "list"])
+            + nestedArray(json, path: ["new_album", "data", "albumList"])
+        var albums = parseAlbumItems(list)
+        if albums.isEmpty {
+            albums = parseAlbumItems(Self.searchAlbumObjects(from: json))
+        }
+        return albums.prefix(max(1, limit)).map { $0 }
+    }
+
+    /// QQ 音乐歌手列表，使用 Music.SingerListServer。
+    func topArtists(limit: Int = 18, offset: Int = 0) async throws -> [Artist] {
+        let page = max(1, offset / 80 + 1)
+        let payload: [String: Any] = [
+            "comm": ["ct": 24, "cv": 0],
+            "singerList": [
+                "module": "Music.SingerListServer",
+                "method": "get_singer_list",
+                "param": [
+                    "area": -100,
+                    "sex": -100,
+                    "genre": -100,
+                    "index": -100,
+                    "sin": max(0, offset),
+                    "cur_page": page,
+                ],
+            ],
+        ]
+        let json = try await musicu(payload, timeout: 12)
+        var list = nestedArray(json, path: ["singerList", "data", "singerlist"])
+        if list.isEmpty { list = nestedArray(json, path: ["singerList", "data", "list"]) }
+        if list.isEmpty { list = Self.searchSingerObjects(from: json) }
+        return list.compactMap { item in
+            let mid = item["singer_mid"] as? String
+                ?? item["singerMID"] as? String
+                ?? item["mid"] as? String
+            let name = item["singer_name"] as? String
+                ?? item["singerName"] as? String
+                ?? item["name"] as? String ?? ""
+            guard !name.isEmpty else { return nil }
+            return Artist(id: mid ?? "qq-name-\(name)", name: name, coverURL: Self.singerPhotoURL(mid), source: .qq)
+        }.prefix(max(1, limit)).map { $0 }
+    }
+
     /// 用户歌单（创建 + 收藏合并）。
     /// 微信网页登录可能没有 QQ uin，优先使用带微信 Cookie 的官方 GetUserPlaylist 接口，
     /// 同时保留旧版 fcg 接口作为 QQ 登录和部分旧账号的快速通道。
@@ -1938,6 +1992,38 @@ final class QQMusicAPI {
             }
         }
         return (current as? [[String: Any]]) ?? []
+    }
+
+    private static func searchAlbumObjects(from value: Any) -> [[String: Any]] {
+        var result: [[String: Any]] = []
+        func walk(_ value: Any) {
+            if let dict = value as? [String: Any] {
+                let hasName = dict["albumName"] != nil || dict["albumname"] != nil || dict["name"] != nil
+                let hasID = dict["albumMID"] != nil || dict["albummid"] != nil || dict["mid"] != nil
+                if hasName && hasID { result.append(dict) }
+                dict.values.forEach(walk)
+            } else if let array = value as? [Any] {
+                array.forEach(walk)
+            }
+        }
+        walk(value)
+        return result
+    }
+
+    private static func searchSingerObjects(from value: Any) -> [[String: Any]] {
+        var result: [[String: Any]] = []
+        func walk(_ value: Any) {
+            if let dict = value as? [String: Any] {
+                let hasName = dict["singer_name"] != nil || dict["singerName"] != nil || dict["name"] != nil
+                let hasID = dict["singer_mid"] != nil || dict["singerMID"] != nil || dict["mid"] != nil
+                if hasName && hasID { result.append(dict) }
+                dict.values.forEach(walk)
+            } else if let array = value as? [Any] {
+                array.forEach(walk)
+            }
+        }
+        walk(value)
+        return result
     }
 }
 

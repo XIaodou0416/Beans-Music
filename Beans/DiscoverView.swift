@@ -4,6 +4,8 @@ import UIKit
 private enum DiscoverRoute: Hashable {
     case topList(TopList)
     case playlist(Playlist)
+    case album(Album)
+    case artist(Artist)
     case qqTopList(QQTopInfo)
     case kugouTopList(KugouTopInfo)
     case dailySongs([Song])
@@ -17,6 +19,8 @@ struct DiscoverView: View {
 
     @State private var topLists: [TopList] = []
     @State private var dailySongs: [Song] = []
+    @State private var newAlbums: [Album] = []
+    @State private var topArtists: [Artist] = []
     @State private var personalized: [Playlist] = []
 
     @State private var loading = true
@@ -154,8 +158,18 @@ struct DiscoverView: View {
                                         dailySection
                                             .sectionEntrance(delay: 0)
                                     }
+                                case "新碟上架":
+                                    if !newAlbums.isEmpty {
+                                        newAlbumsSection
+                                            .sectionEntrance(delay: 0.04)
+                                    }
+                                case "歌手":
+                                    if !topArtists.isEmpty {
+                                        artistsSection
+                                            .sectionEntrance(delay: 0.08)
+                                    }
                                 case "排行榜":
-                                    if hasRankData { topListsSection.sectionEntrance(delay: 0.08) }
+                                    if hasRankData { topListsSection.sectionEntrance(delay: 0.12) }
                                 default:
                                     EmptyView()
                                 }
@@ -249,6 +263,12 @@ struct DiscoverView: View {
             PlaylistView(playlist: playlist)
                 .environmentObject(player)
                 .environmentObject(auth)
+        case .album(let album):
+            AlbumDetailView(album: album)
+                .environmentObject(player)
+        case .artist(let artist):
+            ArtistHomeSheet(artist: artist)
+                .environmentObject(player)
         case .qqTopList(let info):
             QQTopListDetailView(topID: info.id, name: info.name)
                 .environmentObject(player)
@@ -646,6 +666,8 @@ struct DiscoverView: View {
             }
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
             .padding(.trailing, isNativeClean ? -24 : 0)
+            .overlay(horizontalEdgeFade, alignment: .leading)
+            .overlay(horizontalEdgeFade, alignment: .trailing)
         }
         .id("rankTopSection")
     }
@@ -826,6 +848,8 @@ struct DiscoverView: View {
                 .padding(.vertical, 3)
             }
             .padding(.trailing, isNativeClean ? -24 : 0)
+            .overlay(horizontalEdgeFade, alignment: .leading)
+            .overlay(horizontalEdgeFade, alignment: .trailing)
         }
     }
 
@@ -871,6 +895,8 @@ struct DiscoverView: View {
                 .padding(.vertical, 3)
             }
             .padding(.trailing, isNativeClean ? -24 : 0)
+            .overlay(horizontalEdgeFade, alignment: .leading)
+            .overlay(horizontalEdgeFade, alignment: .trailing)
         }
     }
 
@@ -1295,6 +1321,83 @@ struct DiscoverView: View {
         }
     }
 
+    // MARK: - 新碟与歌手
+
+    private var newAlbumsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: beansLocalized("新碟上架", "New Releases"))
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    ForEach(newAlbums) { album in
+                        Button {
+                            BeansHaptics.tap()
+                            openRoute(.album(album))
+                        } label: {
+                            VStack(alignment: .leading, spacing: 7) {
+                                CoverImage(url: album.coverURL, size: isNativeClean ? 148 : 124, cornerRadius: isNativeClean ? 14 : 16)
+                                Text(album.name)
+                                    .font(BeansFont.appFont(isNativeClean ? 14 : 12, .semibold))
+                                    .foregroundStyle(Color.beansLabel)
+                                    .lineLimit(1)
+                                    .frame(width: isNativeClean ? 148 : 124, alignment: .leading)
+                                Text(album.artistName.isEmpty ? beansLocalized("未知歌手", "Unknown artist") : album.artistName)
+                                    .font(BeansFont.appFont(11))
+                                    .foregroundStyle(Color.beansComment)
+                                    .lineLimit(1)
+                                    .frame(width: isNativeClean ? 148 : 124, alignment: .leading)
+                            }
+                        }
+                        .buttonStyle(GlassPressButtonStyle(scale: 0.95))
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .overlay(horizontalEdgeFade, alignment: .leading)
+            .overlay(horizontalEdgeFade, alignment: .trailing)
+            .padding(.trailing, isNativeClean ? -24 : 0)
+        }
+    }
+
+    private var artistsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: beansLocalized("歌手", "Artists"))
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 16) {
+                    ForEach(topArtists) { artist in
+                        Button {
+                            BeansHaptics.tap()
+                            openRoute(.artist(artist))
+                        } label: {
+                            VStack(spacing: 8) {
+                                CoverImage(url: artist.coverURL, size: isNativeClean ? 112 : 96, cornerRadius: isNativeClean ? 56 : 48)
+                                Text(artist.name)
+                                    .font(BeansFont.appFont(isNativeClean ? 14 : 12, .semibold))
+                                    .foregroundStyle(Color.beansLabel)
+                                    .lineLimit(1)
+                                    .frame(width: isNativeClean ? 112 : 96)
+                            }
+                        }
+                        .buttonStyle(GlassPressButtonStyle(scale: 0.95))
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .overlay(horizontalEdgeFade, alignment: .leading)
+            .overlay(horizontalEdgeFade, alignment: .trailing)
+            .padding(.trailing, isNativeClean ? -24 : 0)
+        }
+    }
+
+    private var horizontalEdgeFade: some View {
+        LinearGradient(
+            colors: [Color.primary.opacity(0.10), Color.clear],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .frame(width: 22)
+        .allowsHitTesting(false)
+    }
+
     private var playlistSearchFieldContent: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
@@ -1572,21 +1675,39 @@ struct DiscoverView: View {
         case .qq:
             async let a: [Song] = (try? await QQMusicAPI.shared.recommendSongs(limit: 30)) ?? []
             async let b: [QQTopInfo] = (try? await QQMusicAPI.shared.topLists()) ?? []
-            let (dr, tl) = await (a, b)
+            async let c: [Album] = (try? await QQMusicAPI.shared.newAlbums(limit: 18)) ?? []
+            async let d: [Artist] = (try? await QQMusicAPI.shared.topArtists(limit: 18)) ?? []
+            async let e: [Playlist] = (try? await QQMusicAPI.shared.hotPlaylists(limit: 18)) ?? []
+            let (dr, tl, albums, artists, playlists) = await (a, b, c, d, e)
             snapshot.dailySongs = dr
             snapshot.qqTopLists = tl
+            snapshot.newAlbums = albums
+            snapshot.topArtists = artists
+            snapshot.personalized = playlists
         case .netease:
-            async let a = NetEaseAPI.shared.topLists()
-            async let b = NetEaseAPI.shared.dailyRecommend()
-            let (tl, dr) = try await (a, b)
+            async let a: [TopList] = (try? await NetEaseAPI.shared.topLists()) ?? []
+            async let b: [Song] = (try? await NetEaseAPI.shared.dailyRecommend()) ?? []
+            async let c: [Album] = (try? await NetEaseAPI.shared.newAlbums(limit: 18)) ?? []
+            async let d: [Artist] = (try? await NetEaseAPI.shared.topArtists(limit: 18)) ?? []
+            async let e: [Playlist] = (try? await NetEaseAPI.shared.recommendedHomePlaylists(loggedIn: auth.isLoggedIn, limit: 18)) ?? []
+            let (tl, dr, albums, artists, playlists) = await (a, b, c, d, e)
             snapshot.topLists = tl
             snapshot.dailySongs = dr
+            snapshot.newAlbums = albums
+            snapshot.topArtists = artists
+            snapshot.personalized = playlists
         case .kugou:
             async let songs = loadKugouDailySongs(limit: 30)
             async let ranks = KugouMusicAPI.shared.topLists(limit: 10)
-            let (daily, top) = try await (songs, ranks)
+            async let albums: [Album] = (try? await KugouMusicAPI.shared.newAlbums(limit: 18)) ?? []
+            async let artists: [Artist] = (try? await KugouMusicAPI.shared.topArtists(limit: 18)) ?? []
+            async let playlists: [Playlist] = (try? await KugouMusicAPI.shared.recommendPlaylists(limit: 18)) ?? []
+            let (daily, top, newAlbums, topArtists, personalized) = await (songs, ranks, albums, artists, playlists)
             snapshot.dailySongs = daily
             snapshot.kugouTopLists = top
+            snapshot.newAlbums = newAlbums
+            snapshot.topArtists = topArtists
+            snapshot.personalized = personalized
         }
         return snapshot
     }
@@ -1601,6 +1722,8 @@ struct DiscoverView: View {
     @MainActor
     private func apply(_ snapshot: DiscoverCache.Snapshot) {
         dailySongs = snapshot.dailySongs
+        newAlbums = snapshot.newAlbums
+        topArtists = snapshot.topArtists
         topLists = snapshot.topLists
         personalized = snapshot.personalized
         qqTopLists = snapshot.qqTopLists
@@ -1608,7 +1731,8 @@ struct DiscoverView: View {
     }
 
     private var hasAnyData: Bool {
-        !dailySongs.isEmpty || !topLists.isEmpty || !personalized.isEmpty
+        !dailySongs.isEmpty || !newAlbums.isEmpty || !topArtists.isEmpty
+            || !topLists.isEmpty || !personalized.isEmpty
             || !qqTopLists.isEmpty || !kugouTopLists.isEmpty
     }
 }

@@ -114,39 +114,44 @@ final class KugouMusicAPI {
         let auth = KugouMusicAuth.shared
         guard auth.isLoggedIn else { return [] }
         await refreshMembershipStatusIfNeeded()
-        let dataBody: [String: Any] = [
-            "total_ver": 979,
-            "type": 2,
-            "page": 1,
-            "pagesize": 200,
-            "userid": Int(auth.userId) ?? 0,
-            "token": auth.token,
-        ]
-        let response = try await gatewayRequest(
-            "/v7/get_all_list",
-            method: "POST",
-            params: [
-                "total_ver": "979",
-                "type": "2",
-                "page": "1",
-                "pagesize": "200",
-                "userid": auth.userId,
-                "token": auth.token,
-            ],
-            data: dataBody,
-            headers: ["x-router": "cloudlist.service.kugou.com"]
-        )
-        let json = response.json
-        let code = Self.deepInt(json, names: ["error_code", "errcode", "code"])
-        let status = Self.deepInt(json, names: ["status"])
-        let raw = Self.deepArrays(json, names: ["lists", "list", "info", "data", "listinfo", "collection_list", "playlist"])
-        BeansLogger.shared.log("酷狗歌单同步：status=\(status) code=\(code) 返回 \(raw.count) 个", level: .debug)
+        let pageSize = 200
+        let maxPages = 50
         var seen = Set<Int>()
-        return raw.compactMap { item in
-            guard let playlist = Self.mapPlaylist(item), !seen.contains(playlist.id) else { return nil }
-            seen.insert(playlist.id)
-            return playlist
+        var result: [Playlist] = []
+        for page in 1...maxPages {
+            let dataBody: [String: Any] = [
+                "total_ver": 979,
+                "type": 2,
+                "page": page,
+                "pagesize": pageSize,
+                "userid": Int(auth.userId) ?? 0,
+                "token": auth.token,
+            ]
+            let response = try await gatewayRequest(
+                "/v7/get_all_list",
+                method: "POST",
+                params: [
+                    "total_ver": "979",
+                    "type": "2",
+                    "page": "\(page)",
+                    "pagesize": "\(pageSize)",
+                    "userid": auth.userId,
+                    "token": auth.token,
+                ],
+                data: dataBody,
+                headers: ["x-router": "cloudlist.service.kugou.com"]
+            )
+            let json = response.json
+            let raw = Self.deepArrays(json, names: ["lists", "list", "info", "data", "listinfo", "collection_list", "playlist"])
+            let pageItems = raw.compactMap { item -> Playlist? in
+                guard let playlist = Self.mapPlaylist(item), seen.insert(playlist.id).inserted else { return nil }
+                return playlist
+            }
+            result.append(contentsOf: pageItems)
+            BeansLogger.shared.log("酷狗歌单同步分页：page=\(page) raw=\(raw.count) new=\(pageItems.count) total=\(result.count)", level: .debug)
+            if raw.count < pageSize || pageItems.isEmpty { break }
         }
+        return result
     }
 
     /// 酷狗私人漫游：使用 KuGouMusicApi 的 personal_fm 请求协议，连续取几批推荐，
@@ -249,6 +254,34 @@ final class KugouMusicAPI {
             names: ["songs", "songlist", "list", "data", "recommend", "recommend_list"]
         )
         return Array(rows.compactMap(Self.mapCompleteTrack).prefix(max(limit, 1)))
+    }
+
+    /// 酷狗没有稳定统一的新碟接口时，从每日推荐聚合专辑卡片。
+    func newAlbums(limit: Int = 18) async throws -> [Album] {
+        let songs = try await everydayRecommend(limit: max(limit * 3, 30))
+        var seen = Set<String>()
+        return songs.compactMap { song in
+            guard !song.album.isEmpty else { return nil }
+            let key = "\(song.album)|\(song.artists)"
+            guard seen.insert(key).inserted else { return nil }
+            return Album(id: "kugou-\(key)", name: song.album, artistName: song.artists, coverURL: song.coverURL, source: .kugou, trackCount: nil)
+        }.prefix(max(1, limit)).map { $0 }
+    }
+
+    /// 酷狗歌手板块使用推荐歌曲中的官方歌手与头像聚合，接口失败时返回空数组。
+    func topArtists(limit: Int = 18) async throws -> [Artist] {
+        let songs = try await everydayRecommend(limit: max(limit * 3, 30))
+        var result: [Artist] = []
+        var seen = Set<String>()
+        for song in songs {
+            for raw in song.artists.split(separator: "/") {
+                let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty, seen.insert(name).inserted else { continue }
+                result.append(Artist(id: "kugou-name-\(name)", name: name, coverURL: song.coverURL, source: .kugou))
+                if result.count >= max(1, limit) { return result }
+            }
+        }
+        return result
     }
 
     /// 酷狗自有移动端搜索接口：搜索结果携带 hash、专辑和封面，可直接复用酷狗播放地址解析。
