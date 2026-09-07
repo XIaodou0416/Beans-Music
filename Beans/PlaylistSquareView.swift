@@ -417,7 +417,11 @@ struct PlaylistSquareView: View {
         let loggedIn = source == .netease && auth.isLoggedIn
         let cache = PlaylistSquareCache.shared
 
-        if !force, let entry = cache.entry(provider: requestedSource, category: category, loggedIn: loggedIn), isCurrent(requestedID, source: requestedSource, categoryID: category.id) {
+        // 网易云精选内容必须以当前分类的实时响应为准，不能把旧分类缓存回填到新分类。
+        if requestedSource != .netease,
+           !force,
+           let entry = cache.entry(provider: requestedSource, category: category, loggedIn: loggedIn),
+           isCurrent(requestedID, source: requestedSource, categoryID: category.id) {
             playlists = entry.playlists
             if requestedSource == .netease {
                 neteaseHasMore = entry.hasMore
@@ -467,14 +471,16 @@ struct PlaylistSquareView: View {
                     level: .warn
                 )
             }
-            cache.save(
-                loadedPlaylists,
-                provider: requestedSource,
-                category: category,
-                loggedIn: loggedIn,
-                hasMore: hasMore,
-                nextOffset: nextOffset
-            )
+            if requestedSource != .netease {
+                cache.save(
+                    loadedPlaylists,
+                    provider: requestedSource,
+                    category: category,
+                    loggedIn: loggedIn,
+                    hasMore: hasMore,
+                    nextOffset: nextOffset
+                )
+            }
         } catch {
             guard isCurrent(requestedID, source: requestedSource, categoryID: category.id) else { return }
             errorMessage = error.localizedDescription
@@ -534,14 +540,6 @@ struct PlaylistSquareView: View {
             playlists.append(contentsOf: newItems)
             neteaseOffset = page.nextOffset
             neteaseHasMore = page.hasMore && !newItems.isEmpty
-            PlaylistSquareCache.shared.save(
-                playlists,
-                provider: .netease,
-                category: category,
-                loggedIn: auth.isLoggedIn,
-                hasMore: neteaseHasMore,
-                nextOffset: neteaseOffset
-            )
         } catch {
             guard isCurrent(requestedID, source: .netease, categoryID: category.id) else { return }
             neteaseHasMore = false
