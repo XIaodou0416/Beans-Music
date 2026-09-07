@@ -495,12 +495,12 @@ struct PlaylistSquareView: View {
     private func loadNeteaseCategory(_ category: String, offset: Int) async throws -> PlaylistSquarePage {
         switch category {
         case "推荐歌单":
-            let playlists = try await NetEaseAPI.shared.personalizedPlaylists(limit: 100)
-            return PlaylistSquarePage(playlists: playlists, hasMore: false, nextOffset: playlists.count)
+            let page = try await FeaturedPlaylistAPI.recommended(limit: 100)
+            return page
         case "精品歌单":
-            return try await NetEaseAPI.shared.highQualityPlaylistsPage(cat: "全部", limit: neteasePageSize, offset: offset)
+            return try await FeaturedPlaylistAPI.highQuality(category: "全部", limit: neteasePageSize, before: offset)
         default:
-            return try await NetEaseAPI.shared.playlistSquarePage(cat: category, order: "hot", limit: neteasePageSize, offset: offset)
+            return try await FeaturedPlaylistAPI.categoryPage(category: category, limit: neteasePageSize, offset: offset)
         }
     }
 

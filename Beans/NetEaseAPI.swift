@@ -41,7 +41,7 @@ final class NetEaseAPI {
 
     // MARK: - 请求
 
-    private func request(_ uri: String, payload: [String: Any], crypto: String) async throws -> [String: Any] {
+    fileprivate func request(_ uri: String, payload: [String: Any], crypto: String) async throws -> [String: Any] {
         let url: URL
         let form: String
         var request: URLRequest
@@ -698,6 +698,80 @@ final class NetEaseAPI {
     func deletePlaylist(id: Int) async throws -> Bool {
         let json = try await request("/api/playlist/remove", payload: ["ids": "[" + String(id) + "]"], crypto: "weapi")
         return (json["code"] as? Int) == 200
+    }
+}
+
+// MARK: - Featured playlist data source
+
+/// Independent data adapter for the curated playlist page.
+enum FeaturedPlaylistAPI {
+    private static let api = NetEaseAPI.shared
+
+    static func categoryPage(
+        category: String,
+        limit: Int = 30,
+        offset: Int = 0
+    ) async throws -> PlaylistSquarePage {
+        let safeOffset = max(0, offset)
+        let json = try await api.request(
+            "/api/playlist/list",
+            payload: [
+                "cat": category,
+                "order": "hot",
+                "limit": limit,
+                "offset": safeOffset,
+                "total": true,
+            ],
+            crypto: "weapi"
+        )
+        let list = json["playlists"] as? [[String: Any]] ?? []
+        let playlists = list.compactMap(Playlist.init(json:))
+        let hasMore = json["more"] as? Bool ?? playlists.count >= limit
+        return PlaylistSquarePage(
+            playlists: playlists,
+            hasMore: hasMore,
+            nextOffset: safeOffset + playlists.count
+        )
+    }
+
+    static func recommended(limit: Int = 100) async throws -> PlaylistSquarePage {
+        let json = try await api.request(
+            "/api/personalized/playlist",
+            payload: ["limit": limit, "n": 1000],
+            crypto: "weapi"
+        )
+        let list = json["result"] as? [[String: Any]] ?? []
+        return PlaylistSquarePage(
+            playlists: list.compactMap(Playlist.init(personalizedJSON:)),
+            hasMore: false,
+            nextOffset: list.count
+        )
+    }
+
+    static func highQuality(
+        category: String = "全部",
+        limit: Int = 30,
+        before: Int = 0
+    ) async throws -> PlaylistSquarePage {
+        let json = try await api.request(
+            "/api/playlist/highquality/list",
+            payload: [
+                "cat": category,
+                "limit": limit,
+                "lasttime": before,
+                "total": true,
+            ],
+            crypto: "weapi"
+        )
+        let list = json["playlists"] as? [[String: Any]] ?? []
+        let playlists = list.compactMap(Playlist.init(json:))
+        let hasMore = json["more"] as? Bool ?? playlists.count >= limit
+        let nextOffset = (json["lasttime"] as? Int) ?? (before + playlists.count)
+        return PlaylistSquarePage(
+            playlists: playlists,
+            hasMore: hasMore,
+            nextOffset: nextOffset
+        )
     }
 }
 
