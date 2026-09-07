@@ -579,10 +579,15 @@ private final class BeansCoverImageLoader: ObservableObject {
             do {
                 var request = URLRequest(url: url)
                 request.cachePolicy = .returnCacheDataElseLoad
-                let (data, _) = try await Self.session.data(for: request)
-                guard !Task.isCancelled, let image = UIImage(data: data) else { return }
+                let (data, response) = try await Self.session.data(for: request)
+                guard !Task.isCancelled, let self, self.loadedURL == url else { return }
+                guard let http = response as? HTTPURLResponse,
+                      200..<300 ~= http.statusCode,
+                      let image = UIImage(data: data) else {
+                    self.didFail = true
+                    return
+                }
                 Self.memoryCache.setObject(image, forKey: url as NSURL)
-                guard let self, self.loadedURL == url else { return }
                 self.image = image
             } catch {
                 guard !Task.isCancelled, let self, self.loadedURL == url else { return }

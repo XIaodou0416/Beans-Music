@@ -287,7 +287,7 @@ struct Song: Identifiable, Hashable, Codable {
 }
 
 /// 歌手搜索结果（网易云 / QQ音乐通用）
-struct Artist: Identifiable, Hashable {
+struct Artist: Identifiable, Hashable, Codable {
     let id: String
     let name: String
     let coverURL: URL?
@@ -295,7 +295,7 @@ struct Artist: Identifiable, Hashable {
 }
 
 /// 专辑搜索结果（网易云 / QQ音乐通用）
-struct Album: Identifiable, Hashable {
+struct Album: Identifiable, Hashable, Codable {
     let id: String
     let name: String
     let artistName: String

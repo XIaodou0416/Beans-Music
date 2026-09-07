@@ -2,6 +2,7 @@ import SwiftUI
 
 // MARK: - 歌手主页（点击播放器顶部歌手名跳转：热门歌曲 + 专辑）
 
+@MainActor
 struct ArtistHomeSheet: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
@@ -34,6 +35,12 @@ struct ArtistHomeSheet: View {
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var searchText = ""
+
+    private var cacheKey: String {
+        let identity = artistID?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? artistName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return "\(artistSource.rawValue):\(identity)"
+    }
 
     var body: some View {
         Group {
@@ -304,7 +311,21 @@ struct ArtistHomeSheet: View {
     }
 
     private func load() async {
-        loading = true
+        let cache = ArtistHomeCache.shared
+        var hasCachedContent = false
+        if let cached = cache.cached(for: cacheKey) {
+            artist = cached.artist ?? artist
+            hotSongs = cached.songs
+            albums = cached.albums
+            loading = false
+            errorMessage = nil
+            hasCachedContent = true
+            if cache.isFresh(cached) {
+                return
+            }
+        } else {
+            loading = true
+        }
         errorMessage = nil
         if artistSource == .qq {
             await loadQQArtist()
@@ -312,6 +333,12 @@ struct ArtistHomeSheet: View {
             await loadKugouArtist()
         } else {
             await loadNetEaseArtist()
+        }
+        if !hotSongs.isEmpty || !albums.isEmpty {
+            cache.save(artist: artist, songs: hotSongs, albums: albums, for: cacheKey)
+        } else if hasCachedContent {
+            loading = false
+            errorMessage = nil
         }
     }
 

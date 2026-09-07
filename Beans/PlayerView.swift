@@ -541,6 +541,7 @@ struct PlayerView: View {
             dominantColor = nil
             await MainActor.run {
                 coverDrag = .zero
+                lyrics = []
                 vinylFocusedLyricIndex = nil
                 vinylIsDraggingLyrics = false
                 vinylLyricsViewportHeight = 0
@@ -2916,7 +2917,7 @@ struct PlayerView: View {
         guard let song else { return }
         let identity = song.identityKey
         func apply(_ parsed: [LyricLine]) {
-            guard self.song?.identityKey == identity else { return }
+            guard self.song?.identityKey == identity, !parsed.isEmpty else { return }
             self.lyrics = parsed
         }
 

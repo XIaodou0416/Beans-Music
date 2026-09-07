@@ -170,7 +170,6 @@ struct ReferencePlaybackView: View {
             .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.title)))
 
             MiniLyricsPreview(lines: previewLyrics, primary: primaryColor, secondary: secondaryColor) {
-                guard !lyrics.isEmpty else { return }
                 BeansHaptics.tap()
                 showLyrics = true
             }
@@ -385,10 +384,12 @@ struct ReferencePlaybackView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            HStack(spacing: 48) {
+            HStack(spacing: 24) {
                 referenceActionButton(icon: "quote.bubble", active: showLyrics) {
-                    guard !lyrics.isEmpty else { return }
                     showLyrics.toggle()
+                }
+                referenceActionButton(icon: "bubble.left") {
+                    onComments()
                 }
                 referenceActionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
                     player.togglePlayMode()
