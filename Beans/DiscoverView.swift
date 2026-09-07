@@ -889,7 +889,8 @@ struct DiscoverView: View {
                         icon: "calendar",
                         coverURL: dailySongs.first?.coverURL,
                         gradient: [Color(red: 0.95, green: 0.36, blue: 0.28), Color(red: 0.96, green: 0.68, blue: 0.30)],
-                        loadingKey: nil
+                        loadingKey: nil,
+                        emphasized: true
                     ) {
                         BeansHaptics.tap()
                         openRoute(DiscoverRoute.dailySongs(dailySongs))
@@ -924,7 +925,8 @@ struct DiscoverView: View {
                         icon: "calendar",
                         coverURL: dailySongs.first?.coverURL,
                         gradient: [Color(red: 0.95, green: 0.36, blue: 0.28), Color(red: 0.96, green: 0.68, blue: 0.30)],
-                        loadingKey: nil
+                        loadingKey: nil,
+                        emphasized: true
                     ) {
                         BeansHaptics.tap()
                         openRoute(DiscoverRoute.dailySongs(dailySongs))
@@ -1038,12 +1040,13 @@ struct DiscoverView: View {
         coverURL: URL?,
         gradient: [Color],
         loadingKey: String?,
+        emphasized: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
                 if let coverURL {
-                    CoverImage(url: coverURL, size: isNativeClean ? 172 : 160, cornerRadius: isNativeClean ? 16 : 18)
+                    CoverImage(url: coverURL, size: emphasized ? (isNativeClean ? 172 : 160) : (isNativeClean ? 160 : 148), cornerRadius: isNativeClean ? 16 : 18)
                         .overlay {
                             LinearGradient(
                                 colors: [.black.opacity(0.05), .black.opacity(0.62)],
@@ -1093,7 +1096,7 @@ struct DiscoverView: View {
                 }
                 .padding(14)
             }
-            .frame(width: isNativeClean ? 172 : 160, height: isNativeClean ? 172 : 160)
+            .frame(width: emphasized ? (isNativeClean ? 172 : 160) : (isNativeClean ? 160 : 148), height: emphasized ? (isNativeClean ? 172 : 160) : (isNativeClean ? 160 : 148))
             .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
             .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 16, x: 0, y: 8)
             .contentShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
@@ -1429,12 +1432,12 @@ struct DiscoverView: View {
                             openRoute(.artist(artist))
                         } label: {
                             VStack(spacing: 8) {
-                                CoverImage(url: artist.coverURL, size: isNativeClean ? 272 : 232, cornerRadius: isNativeClean ? 136 : 116)
+                                CoverImage(url: artist.coverURL, size: isNativeClean ? 136 : 116, cornerRadius: isNativeClean ? 68 : 58)
                                 Text(artist.name)
                                     .font(BeansFont.appFont(isNativeClean ? 14 : 12, .semibold))
                                     .foregroundStyle(Color.beansLabel)
                                     .lineLimit(1)
-                                    .frame(width: isNativeClean ? 272 : 232)
+                                    .frame(width: isNativeClean ? 136 : 116)
                             }
                         }
                         .buttonStyle(GlassPressButtonStyle(scale: 0.95))

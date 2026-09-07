@@ -355,23 +355,61 @@ final class QQMusicAPI {
     private func parseAlbumItems(_ items: [[String: Any]]) -> [Album] {
         var albums: [Album] = []
         for item in items {
-            let name = item["name"] as? String ?? (item["albumname"] as? String ?? item["albumName"] as? String ?? "")
+            let nestedAlbum = item["album"] as? [String: Any] ?? [:]
+            let name = item["name"] as? String
+                ?? (item["albumname"] as? String
+                ?? (item["albumName"] as? String
+                ?? (item["album_name"] as? String
+                ?? nestedAlbum["name"] as? String ?? "")))
             guard !name.isEmpty else { continue }
-            let mid = item["mid"] as? String ?? (item["albummid"] as? String ?? item["albumMID"] as? String)
+            let mid = item["mid"] as? String
+                ?? (item["albummid"] as? String
+                ?? (item["albumMID"] as? String
+                ?? (item["album_mid"] as? String
+                ?? nestedAlbum["mid"] as? String)))
             let singer = (item["singer"] as? [[String: Any]]) ?? []
             var artistName = singer.compactMap { $0["name"] as? String }.joined(separator: " / ")
-            if artistName.isEmpty { artistName = item["singerName"] as? String ?? "" }
-            let numericID = item["id"] as? Int ?? 0
+            if artistName.isEmpty {
+                artistName = item["singerName"] as? String
+                    ?? (item["singer_name"] as? String
+                    ?? (item["artistName"] as? String ?? ""))
+            }
+            let numericID = integerValue(item["id"] ?? item["albumid"] ?? item["album_id"])
+            let image = [
+                item["pic"], item["picUrl"], item["picurl"], item["pic_url"],
+                item["cover"], item["cover_url"], item["albumPic"], item["album_pic"],
+                nestedAlbum["pic"], nestedAlbum["picUrl"], nestedAlbum["picurl"],
+            ].compactMap { normalizedQQImageURL($0) }.first
             albums.append(Album(
                 id: mid ?? "qq-album-\(numericID)-\(name)",
                 name: name,
                 artistName: artistName,
-                coverURL: Self.photoURL(mid),
+                coverURL: image ?? Self.photoURL(mid),
                 source: .qq,
-                trackCount: item["total"] as? Int
+                trackCount: integerValue(item["total"] ?? item["songnum"] ?? item["song_count"])
             ))
         }
         return albums
+    }
+
+    /// QQ 专辑详情，优先使用 album MID 获取完整歌曲列表。
+    func albumSongs(albumMID: String) async throws -> [Song] {
+        let trimmed = albumMID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("qq-album-") else { return [] }
+        var components = URLComponents(string: "https://c.y.qq.com/v8/fcg-bin/fcg_v8_album_info_cp.fcg")
+        components?.queryItems = [
+            URLQueryItem(name: "albummid", value: trimmed),
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "outCharset", value: "utf-8"),
+        ]
+        guard let url = components?.url else { return [] }
+        let json = try await get(url.absoluteString, referer: "https://y.qq.com/portal/player.html")
+        let data = json["data"] as? [String: Any] ?? [:]
+        let list = (data["songlist"] as? [[String: Any]])
+            ?? (data["list"] as? [[String: Any]])
+            ?? (json["songlist"] as? [[String: Any]])
+            ?? []
+        return list.compactMap { song(from: $0) }
     }
 
     /// QQ 音乐热搜词

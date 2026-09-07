@@ -990,12 +990,18 @@ struct AlbumDetailView: View {
                     )
                 }
             case .qq:
-                result = await searchFallbackSongs(
-                    queries: [albumSearchQuery, album.name],
-                    search: { query in
-                        (try? await QQMusicAPI.shared.searchSongs(keyword: query, limit: 100)) ?? []
-                    }
-                )
+                let qqMID = album.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                let direct = (try? await QQMusicAPI.shared.albumSongs(albumMID: qqMID)) ?? []
+                if !direct.isEmpty {
+                    result = direct
+                } else {
+                    result = await searchFallbackSongs(
+                        queries: [albumSearchQuery, album.name],
+                        search: { query in
+                            (try? await QQMusicAPI.shared.searchSongs(keyword: query, limit: 100)) ?? []
+                        }
+                    )
+                }
             case .kugou:
                 result = await searchFallbackSongs(
                     queries: [albumSearchQuery, album.name],
@@ -1065,6 +1071,7 @@ struct AlbumDetailView: View {
 
     private func albumSongMatches(_ song: Song) -> Bool {
         guard albumNamesMatch(song.album, album.name) else { return false }
+        guard !normalizedArtist(album.artistName).isEmpty else { return true }
         return artistsMatch(expected: album.artistName, actual: song.artists)
     }
 
