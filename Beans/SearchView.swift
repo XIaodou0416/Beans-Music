@@ -879,6 +879,8 @@ struct SearchView: View {
 /// 专辑详情页：点击搜索结果直接进入专辑内容，不再把专辑名当作歌曲关键词重新搜索。
 struct AlbumDetailView: View {
     let album: Album
+    /// 从已有导航栈推入时不再创建嵌套 NavigationStack。
+    var embeddedInNavigation = false
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
@@ -887,58 +889,67 @@ struct AlbumDetailView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        BeansNavigationStack {
-            ZStack {
-                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
-                if isLoading {
-                    LoadingStateView()
-                } else if let errorMessage {
-                    ErrorStateView(message: errorMessage) { Task { await load() } }
-                } else {
-                    List {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(spacing: 14) {
-                                CoverImage(url: album.coverURL, size: 92, cornerRadius: 16)
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(album.name)
-                                        .font(BeansFont.appFont(19, .bold))
-                                        .foregroundStyle(Color.beansLabel)
-                                        .lineLimit(2)
-                                    Text(album.artistName.isEmpty ? "未知歌手" : album.artistName)
-                                        .font(BeansFont.appFont(13))
-                                        .foregroundStyle(Color.beansComment)
-                                    Text(beansSongCountText(tracks.count))
-                                        .font(BeansFont.appFont(12))
-                                        .foregroundStyle(Color.beansComment)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            if !tracks.isEmpty {
-                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
-                                    player.play(songs: tracks, startAt: 0)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 10)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-
-                        ForEach(Array(tracks.enumerated()), id: \.element.identityKey) { index, song in
-                            SongCell(song: song, glassRow: true, playbackContext: tracks, playbackIndex: index) {
-                                player.play(songs: tracks, startAt: index)
-                            }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        }
-                    }
-                    .listStyle(.plain)
-                    .beansScrollContentBackgroundHidden()
-                }
+        Group {
+            if embeddedInNavigation {
+                albumPage
+            } else {
+                BeansNavigationStack { albumPage }
             }
-            .navigationTitle(album.name)
-            .navigationBarTitleDisplayMode(.inline)
         }
         .task { await load() }
+    }
+
+    @ViewBuilder
+    private var albumPage: some View {
+        ZStack {
+            GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            if isLoading {
+                LoadingStateView()
+            } else if let errorMessage {
+                ErrorStateView(message: errorMessage) { Task { await load() } }
+            } else {
+                List {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 14) {
+                            CoverImage(url: album.coverURL, size: 92, cornerRadius: 16)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(album.name)
+                                    .font(BeansFont.appFont(19, .bold))
+                                    .foregroundStyle(Color.beansLabel)
+                                    .lineLimit(2)
+                                Text(album.artistName.isEmpty ? "未知歌手" : album.artistName)
+                                    .font(BeansFont.appFont(13))
+                                    .foregroundStyle(Color.beansComment)
+                                Text(beansSongCountText(tracks.count))
+                                    .font(BeansFont.appFont(12))
+                                    .foregroundStyle(Color.beansComment)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        if !tracks.isEmpty {
+                            GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                                player.play(songs: tracks, startAt: 0)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 10)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
+                    ForEach(Array(tracks.enumerated()), id: \.element.identityKey) { index, song in
+                        SongCell(song: song, glassRow: true, playbackContext: tracks, playbackIndex: index) {
+                            player.play(songs: tracks, startAt: index)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                }
+                .listStyle(.plain)
+                .beansScrollContentBackgroundHidden()
+            }
+        }
+        .navigationTitle(album.name)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func load() async {

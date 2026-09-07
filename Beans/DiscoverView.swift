@@ -264,10 +264,10 @@ struct DiscoverView: View {
                 .environmentObject(player)
                 .environmentObject(auth)
         case .album(let album):
-            AlbumDetailView(album: album)
+            AlbumDetailView(album: album, embeddedInNavigation: true)
                 .environmentObject(player)
         case .artist(let artist):
-            ArtistHomeSheet(artist: artist)
+            ArtistHomeSheet(artist: artist, embeddedInNavigation: true)
                 .environmentObject(player)
         case .qqTopList(let info):
             QQTopListDetailView(topID: info.id, name: info.name)
@@ -809,10 +809,72 @@ struct DiscoverView: View {
     private var dailySection: some View {
         if source == .netease {
             neteaseRecommendationCards
+        } else if source == .qq {
+            qqRecommendationCard
         } else if source == .kugou {
             kugouRecommendationCards
         } else {
             dailySongCards
+        }
+    }
+
+    private var qqRecommendationCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "推荐")
+            ScrollView(.horizontal, showsIndicators: false) {
+                Button {
+                    BeansHaptics.tap()
+                    openRoute(DiscoverRoute.dailySongs(dailySongs))
+                } label: {
+                    let cardWidth = isNativeClean ? 324.0 : 292.0
+                    let cardHeight = isNativeClean ? 158.0 : 142.0
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: isNativeClean ? 18 : 16, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(red: 0.10, green: 0.58, blue: 0.43), Color(red: 0.12, green: 0.38, blue: 0.74)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        if let coverURL = dailySongs.first?.coverURL {
+                            CoverImage(url: coverURL, size: cardHeight - 16, cornerRadius: isNativeClean ? 14 : 12)
+                                .overlay {
+                                    LinearGradient(
+                                        colors: [.clear, .black.opacity(0.18)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                }
+                                .padding(8)
+                                .frame(width: cardWidth, alignment: .trailing)
+                        }
+                        VStack(alignment: .leading, spacing: 8) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 17, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.92))
+                            Spacer(minLength: 0)
+                            Text("每日推荐")
+                                .font(BeansFont.appFont(isNativeClean ? 22 : 20, .bold))
+                                .foregroundStyle(.white)
+                            Text(dailyRecommendationSubtitle)
+                                .font(BeansFont.appFont(12, .semibold))
+                                .foregroundStyle(.white.opacity(0.80))
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.82)
+                        }
+                        .padding(16)
+                        .frame(width: cardWidth - cardHeight + 12, height: cardHeight, alignment: .leading)
+                    }
+                    .frame(width: cardWidth, height: cardHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 18 : 16, style: .continuous))
+                    .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 14, x: 0, y: 7)
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+                .padding(.vertical, 3)
+            }
+            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
+            .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
 
@@ -981,7 +1043,7 @@ struct DiscoverView: View {
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
                 if let coverURL {
-                    CoverImage(url: coverURL, size: isNativeClean ? 160 : 148, cornerRadius: isNativeClean ? 16 : 18)
+                    CoverImage(url: coverURL, size: isNativeClean ? 172 : 160, cornerRadius: isNativeClean ? 16 : 18)
                         .overlay {
                             LinearGradient(
                                 colors: [.black.opacity(0.05), .black.opacity(0.62)],
@@ -1031,7 +1093,7 @@ struct DiscoverView: View {
                 }
                 .padding(14)
             }
-            .frame(width: isNativeClean ? 160 : 148, height: isNativeClean ? 160 : 148)
+            .frame(width: isNativeClean ? 172 : 160, height: isNativeClean ? 172 : 160)
             .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
             .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 16, x: 0, y: 8)
             .contentShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))

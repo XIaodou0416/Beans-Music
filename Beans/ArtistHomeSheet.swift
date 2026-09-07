@@ -9,18 +9,22 @@ struct ArtistHomeSheet: View {
     let artistName: String
     var artistSource: SongSource = .netease
     var artistID: String?
+    /// 从已有导航栈推入时不再创建嵌套 NavigationStack，也不应用 sheet 专用修饰器。
+    var embeddedInNavigation = false
 
-    init(artist: Artist) {
+    init(artist: Artist, embeddedInNavigation: Bool = false) {
         self.artistName = artist.name
         self.artistSource = artist.source
         self.artistID = artist.id
+        self.embeddedInNavigation = embeddedInNavigation
         _artist = State(initialValue: artist)
     }
 
-    init(artistName: String, artistSource: SongSource = .netease) {
+    init(artistName: String, artistSource: SongSource = .netease, embeddedInNavigation: Bool = false) {
         self.artistName = artistName
         self.artistSource = artistSource
         self.artistID = nil
+        self.embeddedInNavigation = embeddedInNavigation
         _artist = State(initialValue: nil)
     }
 
@@ -32,43 +36,52 @@ struct ArtistHomeSheet: View {
     @State private var searchText = ""
 
     var body: some View {
-        BeansNavigationStack {
-            ZStack {
-                // 歌手页沿用主页壁纸，不受“同步到全部页面”开关影响。
-                GlassBackdrop(customColor: theme.customBackground, homeMode: true)
-                Group {
-                    if loading {
-                        LoadingStateView()
-                    } else if let errorMessage {
-                        ErrorStateView(message: errorMessage) {
-                            Task { await load() }
-                        }
-                    } else {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 14) {
-                                artistHeader
-                                hotSongsSection
-                                if artistSource == .netease {
-                                    albumsSection
-                                }
-                            }
-                            .padding(.top, 6)
-                            .padding(.bottom, 16)
-                        }
-                        .beansScrollIndicatorsHidden()
-                    }
-                }
-            }
-            .navigationTitle("歌手主页")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                }
+        Group {
+            if embeddedInNavigation {
+                artistPage
+            } else {
+                BeansNavigationStack { artistPage }
+                    .modifier(BeansSheetModifier(detents: [.large], dragIndicator: true))
             }
         }
         .task { await load() }
-        .modifier(BeansSheetModifier(detents: [.large], dragIndicator: true))
+    }
+
+    @ViewBuilder
+    private var artistPage: some View {
+        ZStack {
+            // 歌手页沿用主页壁纸，不受“同步到全部页面”开关影响。
+            GlassBackdrop(customColor: theme.customBackground, homeMode: true)
+            Group {
+                if loading {
+                    LoadingStateView()
+                } else if let errorMessage {
+                    ErrorStateView(message: errorMessage) {
+                        Task { await load() }
+                    }
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            artistHeader
+                            hotSongsSection
+                            if artistSource == .netease {
+                                albumsSection
+                            }
+                        }
+                        .padding(.top, 6)
+                        .padding(.bottom, 16)
+                    }
+                    .beansScrollIndicatorsHidden()
+                }
+            }
+        }
+        .navigationTitle("歌手主页")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("完成") { dismiss() }
+            }
+        }
     }
 
     private var artistHeader: some View {
