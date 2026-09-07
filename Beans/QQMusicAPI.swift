@@ -374,19 +374,19 @@ final class QQMusicAPI {
                     ?? (item["singer_name"] as? String
                     ?? (item["artistName"] as? String ?? ""))
             }
-            let numericID = integerValue(item["id"] ?? item["albumid"] ?? item["album_id"])
+            let numericID = Self.integerValue(item["id"] ?? item["albumid"] ?? item["album_id"])
             let image = [
                 item["pic"], item["picUrl"], item["picurl"], item["pic_url"],
                 item["cover"], item["cover_url"], item["albumPic"], item["album_pic"],
                 nestedAlbum["pic"], nestedAlbum["picUrl"], nestedAlbum["picurl"],
-            ].compactMap { normalizedQQImageURL($0) }.first
+            ].compactMap { Self.normalizedQQImageURL($0) }.first
             albums.append(Album(
                 id: mid ?? "qq-album-\(numericID)-\(name)",
                 name: name,
                 artistName: artistName,
                 coverURL: image ?? Self.photoURL(mid),
                 source: .qq,
-                trackCount: integerValue(item["total"] ?? item["songnum"] ?? item["song_count"])
+                trackCount: Self.integerValue(item["total"] ?? item["songnum"] ?? item["song_count"])
             ))
         }
         return albums
