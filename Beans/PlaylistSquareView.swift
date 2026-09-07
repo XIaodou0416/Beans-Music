@@ -500,11 +500,16 @@ struct PlaylistSquareView: View {
         switch category {
         case "推荐歌单":
             let page = try await FeaturedPlaylistAPI.recommended(limit: 100)
+            BeansLogger.shared.log("精选页请求：推荐歌单 endpoint=/personalized/playlist 数量=\(page.playlists.count)", level: .debug)
             return page
         case "精品歌单":
-            return try await FeaturedPlaylistAPI.highQuality(category: "全部", limit: neteasePageSize, before: offset)
+            let page = try await FeaturedPlaylistAPI.highQuality(category: "全部", limit: neteasePageSize, before: offset)
+            BeansLogger.shared.log("精选页请求：精品歌单 endpoint=/playlist/highquality/list cursor=\(offset) 数量=\(page.playlists.count)", level: .debug)
+            return page
         default:
-            return try await FeaturedPlaylistAPI.categoryPage(category: category, limit: neteasePageSize, offset: offset)
+            let page = try await FeaturedPlaylistAPI.categoryPage(category: category, limit: neteasePageSize, offset: offset)
+            BeansLogger.shared.log("精选页请求：分类=\(category) endpoint=/playlist/list offset=\(offset) 数量=\(page.playlists.count)", level: .debug)
+            return page
         }
     }
 

@@ -27,7 +27,7 @@ final class PlaylistSquareCache {
     }
 
     // 分类请求和平台隔离规则变化后，不能继续读取旧版可能混入的分类缓存。
-    private let prefix = "beans.playlistSquare.cache.v4."
+    private let prefix = "beans.playlistSquare.cache.v5."
     private let ttl: TimeInterval = 30 * 60
 
     private init() {}
