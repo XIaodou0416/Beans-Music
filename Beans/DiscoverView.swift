@@ -642,6 +642,7 @@ struct DiscoverView: View {
             SectionHeader(title: "排行榜")
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     if source == .netease {
                         ForEach(Array(neteaseTopLists.prefix(min(visibleRankCount, 10)).enumerated()), id: \.element.id) { index, topList in
                             nativeRankCard(index: index, name: beansChartName(topList.name), subtitle: beansChartSubtitle(topList.updateFrequency), coverURL: topList.coverURL) {
@@ -661,10 +662,11 @@ struct DiscoverView: View {
                             }
                         }
                     }
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 2)
             }
-            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
+            .beansCompatScrollClipDisabled()
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
@@ -822,58 +824,62 @@ struct DiscoverView: View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeader(title: "推荐")
             ScrollView(.horizontal, showsIndicators: false) {
-                Button {
-                    BeansHaptics.tap()
-                    openRoute(DiscoverRoute.dailySongs(dailySongs))
-                } label: {
-                    let cardWidth = isNativeClean ? 324.0 : 292.0
-                    let cardHeight = isNativeClean ? 158.0 : 142.0
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: isNativeClean ? 18 : 16, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(red: 0.10, green: 0.58, blue: 0.43), Color(red: 0.12, green: 0.38, blue: 0.74)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        if let coverURL = dailySongs.first?.coverURL {
-                            CoverImage(url: coverURL, size: cardHeight - 16, cornerRadius: isNativeClean ? 14 : 12)
-                                .overlay {
+                LazyHStack(spacing: 16) {
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
+                    Button {
+                        BeansHaptics.tap()
+                        openRoute(DiscoverRoute.dailySongs(dailySongs))
+                    } label: {
+                        let cardWidth = isNativeClean ? 380.0 : 360.0
+                        let cardHeight = isNativeClean ? 172.0 : 160.0
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: isNativeClean ? 18 : 16, style: .continuous)
+                                .fill(
                                     LinearGradient(
-                                        colors: [.clear, .black.opacity(0.18)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
+                                        colors: [Color(red: 0.10, green: 0.58, blue: 0.43), Color(red: 0.12, green: 0.38, blue: 0.74)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
                                     )
-                                }
-                                .padding(8)
-                                .frame(width: cardWidth, alignment: .trailing)
+                                )
+                            if let coverURL = dailySongs.first?.coverURL {
+                                CoverImage(url: coverURL, size: cardHeight - 16, cornerRadius: isNativeClean ? 14 : 12)
+                                    .overlay {
+                                        LinearGradient(
+                                            colors: [.clear, .black.opacity(0.18)],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    }
+                                    .padding(8)
+                                    .frame(width: cardWidth, alignment: .trailing)
+                            }
+                            VStack(alignment: .leading, spacing: 8) {
+                                Image(systemName: "calendar")
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundStyle(.white.opacity(0.92))
+                                Spacer(minLength: 0)
+                                Text("每日推荐")
+                                    .font(BeansFont.appFont(isNativeClean ? 22 : 20, .bold))
+                                    .foregroundStyle(.white)
+                                Text(dailyRecommendationSubtitle)
+                                    .font(BeansFont.appFont(12, .semibold))
+                                    .foregroundStyle(.white.opacity(0.80))
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.82)
+                            }
+                            .padding(16)
+                            .frame(width: cardWidth - cardHeight + 12, height: cardHeight, alignment: .leading)
                         }
-                        VStack(alignment: .leading, spacing: 8) {
-                            Image(systemName: "calendar")
-                                .font(.system(size: 17, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.92))
-                            Spacer(minLength: 0)
-                            Text("每日推荐")
-                                .font(BeansFont.appFont(isNativeClean ? 22 : 20, .bold))
-                                .foregroundStyle(.white)
-                            Text(dailyRecommendationSubtitle)
-                                .font(BeansFont.appFont(12, .semibold))
-                                .foregroundStyle(.white.opacity(0.80))
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.82)
-                        }
-                        .padding(16)
-                        .frame(width: cardWidth - cardHeight + 12, height: cardHeight, alignment: .leading)
+                        .frame(width: cardWidth, height: cardHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 18 : 16, style: .continuous))
+                        .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 14, x: 0, y: 7)
                     }
-                    .frame(width: cardWidth, height: cardHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 18 : 16, style: .continuous))
-                    .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 14, x: 0, y: 7)
+                    .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+                    .padding(.vertical, 3)
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
-                .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-                .padding(.vertical, 3)
             }
-            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
+            .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
@@ -883,6 +889,7 @@ struct DiscoverView: View {
             SectionHeader(title: "推荐")
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     neteaseRecommendationCard(
                         title: "每日推荐",
                         subtitle: dailyRecommendationSubtitle,
@@ -902,14 +909,16 @@ struct DiscoverView: View {
                         icon: "wave.3.right.circle.fill",
                         coverURL: nil,
                         gradient: [Color(red: 0.08, green: 0.46, blue: 0.82), Color(red: 0.18, green: 0.72, blue: 0.72)],
-                        loadingKey: "kugouFM"
+                        loadingKey: "kugouFM",
+                        emphasized: true
                     ) {
                         startKugouPersonalFM()
                     }
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 3)
             }
-            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
+            .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
@@ -919,6 +928,7 @@ struct DiscoverView: View {
             SectionHeader(title: "推荐")
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     neteaseRecommendationCard(
                         title: "每日推荐",
                         subtitle: dailyRecommendationSubtitle,
@@ -938,7 +948,8 @@ struct DiscoverView: View {
                         icon: "wave.3.right.circle.fill",
                         coverURL: nil,
                         gradient: [Color(red: 0.16, green: 0.22, blue: 0.42), Color(red: 0.41, green: 0.28, blue: 0.65)],
-                        loadingKey: "fm"
+                        loadingKey: "fm",
+                        emphasized: true
                     ) {
                         startPersonalFM()
                     }
@@ -949,14 +960,16 @@ struct DiscoverView: View {
                         icon: "heart.circle.fill",
                         coverURL: nil,
                         gradient: [Color(red: 0.84, green: 0.16, blue: 0.38), Color(red: 0.98, green: 0.43, blue: 0.35)],
-                        loadingKey: "heartbeat"
+                        loadingKey: "heartbeat",
+                        emphasized: true
                     ) {
                         startHeartbeatMode()
                     }
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 3)
             }
-            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
+            .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
@@ -966,6 +979,7 @@ struct DiscoverView: View {
             // 横滑歌曲卡：每日推荐前 8 首
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     ForEach(Array(dailySongs.prefix(8).enumerated()), id: \.element.identityKey) { index, song in
                         Button {
                             BeansHaptics.tap()
@@ -1017,10 +1031,11 @@ struct DiscoverView: View {
                         .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
                     }
                     .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 2)
             }
-            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
+            .beansCompatScrollClipDisabled()
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
@@ -1248,6 +1263,7 @@ struct DiscoverView: View {
             } else if isNativeClean && !playlistsExpanded {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
+                        Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                         ForEach(visiblePersonalizedPlaylists, id: \.id) { (playlist: Playlist) in
                             Button {
                                 BeansHaptics.tap()
@@ -1272,9 +1288,10 @@ struct DiscoverView: View {
                             }
                             .buttonStyle(GlassPressButtonStyle(scale: 0.96))
                         }
+                        Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     }
                     .padding(.vertical, 2)
-                    .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
+                    .beansCompatScrollClipDisabled()
                 }
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
@@ -1392,6 +1409,7 @@ struct DiscoverView: View {
             SectionHeader(title: beansLocalized("新碟上架", "New Releases"))
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     ForEach(newAlbums) { album in
                         Button {
                             BeansHaptics.tap()
@@ -1413,10 +1431,11 @@ struct DiscoverView: View {
                         }
                         .buttonStyle(GlassPressButtonStyle(scale: 0.95))
                     }
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 2)
             }
-            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
+            .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
@@ -1426,6 +1445,7 @@ struct DiscoverView: View {
             SectionHeader(title: beansLocalized("歌手", "Artists"))
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     ForEach(topArtists) { artist in
                         Button {
                             BeansHaptics.tap()
@@ -1442,10 +1462,11 @@ struct DiscoverView: View {
                         }
                         .buttonStyle(GlassPressButtonStyle(scale: 0.95))
                     }
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 2)
             }
-            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
+            .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
@@ -1786,17 +1807,6 @@ struct DiscoverView: View {
         !dailySongs.isEmpty || !newAlbums.isEmpty || !topArtists.isEmpty
             || !topLists.isEmpty || !personalized.isEmpty
             || !qqTopLists.isEmpty || !kugouTopLists.isEmpty
-    }
-}
-
-private struct DiscoverHorizontalScrollEdgeEffectDisabled: ViewModifier {
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.scrollEdgeEffectStyle(.hard, for: .horizontal)
-        } else {
-            content
-        }
     }
 }
 

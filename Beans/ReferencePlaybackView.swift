@@ -384,12 +384,9 @@ struct ReferencePlaybackView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            HStack(spacing: 24) {
+            HStack(spacing: 48) {
                 referenceActionButton(icon: "quote.bubble", active: showLyrics) {
                     showLyrics.toggle()
-                }
-                referenceActionButton(icon: "bubble.left") {
-                    onComments()
                 }
                 referenceActionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
                     player.togglePlayMode()

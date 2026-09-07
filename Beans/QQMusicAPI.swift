@@ -395,21 +395,42 @@ final class QQMusicAPI {
     /// QQ 专辑详情，优先使用 album MID 获取完整歌曲列表。
     func albumSongs(albumMID: String) async throws -> [Song] {
         let trimmed = albumMID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.hasPrefix("qq-album-") else { return [] }
+        let mid: String
+        if trimmed.hasPrefix("qq-album-") {
+            let payload = String(trimmed.dropFirst("qq-album-".count))
+            mid = String(payload.split(separator: "-", maxSplits: 1).first ?? "")
+        } else {
+            mid = trimmed
+        }
+        guard !mid.isEmpty else { return [] }
         var components = URLComponents(string: "https://c.y.qq.com/v8/fcg-bin/fcg_v8_album_info_cp.fcg")
         components?.queryItems = [
-            URLQueryItem(name: "albummid", value: trimmed),
+            URLQueryItem(name: "albummid", value: mid),
             URLQueryItem(name: "format", value: "json"),
             URLQueryItem(name: "outCharset", value: "utf-8"),
         ]
         guard let url = components?.url else { return [] }
         let json = try await get(url.absoluteString, referer: "https://y.qq.com/portal/player.html")
-        let data = json["data"] as? [String: Any] ?? [:]
-        let list = (data["songlist"] as? [[String: Any]])
-            ?? (data["list"] as? [[String: Any]])
-            ?? (json["songlist"] as? [[String: Any]])
-            ?? []
-        return list.compactMap { song(from: $0) }
+        let list: [[String: Any]]
+        if let direct = json["data"] as? [[String: Any]] {
+            list = direct
+        } else if let data = json["data"] as? [String: Any] {
+            list = (data["songlist"] as? [[String: Any]])
+                ?? (data["song"] as? [[String: Any]])
+                ?? (data["list"] as? [[String: Any]])
+                ?? []
+        } else {
+            list = (json["songlist"] as? [[String: Any]])
+                ?? (json["song"] as? [[String: Any]])
+                ?? (json["list"] as? [[String: Any]])
+                ?? []
+        }
+        var seen = Set<String>()
+        return list.compactMap { raw in
+            let item = Self.unwrapQQSong(raw)
+            guard let parsed = song(from: item), seen.insert(parsed.identityKey).inserted else { return nil }
+            return parsed
+        }
     }
 
     /// QQ 音乐热搜词
@@ -1938,15 +1959,19 @@ final class QQMusicAPI {
 
     /// 通用 QQ 歌曲解析（各接口字段略有差异，此处统一容错）
     private func song(from item: [String: Any]) -> Song? {
-        let mid = item["songmid"] as? String ?? (item["mid"] as? String ?? "")
-        let sid = item["songid"] as? Int ?? (item["id"] as? Int ?? 0)
+        let mid = item["songmid"] as? String
+            ?? item["song_mid"] as? String
+            ?? (item["mid"] as? String ?? "")
+        let sid = Self.integerValue(item["songid"] ?? item["song_id"] ?? item["id"])
         guard !mid.isEmpty || sid > 0 else { return nil }
         let singers = (item["singer"] as? [[String: Any]]) ?? (item["songer"] as? [[String: Any]]) ?? []
         let artists = singers.compactMap { $0["name"] as? String }.joined(separator: " / ")
         let albumDict = item["album"] as? [String: Any] ?? [:]
         let albumName = albumDict["name"] as? String ?? (item["albumname"] as? String ?? "")
-        let albumMid = albumDict["mid"] as? String ?? (item["albummid"] as? String ?? "")
-        let interval = item["interval"] as? Int ?? 0
+        let albumMid = albumDict["mid"] as? String
+            ?? albumDict["albummid"] as? String
+            ?? (item["albummid"] as? String ?? item["album_mid"] as? String ?? "")
+        let interval = Self.integerValue(item["interval"] ?? item["duration"] ?? item["dt"])
         let pay = item["pay"] as? [String: Any]
         let fee = (item["fee"] as? Int) ?? (pay?["pay_play"] as? Int) ?? (pay?["payplay"] as? Int) ?? 0
         let file = item["file"] as? [String: Any]

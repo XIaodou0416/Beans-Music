@@ -1,6 +1,18 @@
 import SwiftUI
 import CoreImage.CIFilterBuiltins
 
+extension View {
+    /// 横向卡片列表的滚动裁剪兼容：高系统允许卡片自然延伸，旧系统保持系统默认裁剪。
+    @ViewBuilder
+    func beansCompatScrollClipDisabled() -> some View {
+        if #available(iOS 17.0, *) {
+            scrollClipDisabled()
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - 工具
 
 func beansSongCountText(_ count: Int) -> String {
