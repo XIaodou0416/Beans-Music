@@ -4,27 +4,30 @@ import AVKit
 
 enum RootTab: String, CaseIterable, Identifiable {
     case discover
-    case search
+    case playlists
     case library
     case profile
+    case search
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .discover: return "主页"
-        case .search: return "搜索"
+        case .playlists: return "歌单广场"
         case .library: return "音乐库"
         case .profile: return "我的"
+        case .search: return "搜索"
         }
     }
 
     var icon: String {
         switch self {
         case .discover: return "house.fill"
-        case .search: return "magnifyingglass"
+        case .playlists: return "square.grid.2x2.fill"
         case .library: return "music.note.list"
         case .profile: return "person.crop.circle"
+        case .search: return "magnifyingglass"
         }
     }
 }
@@ -398,8 +401,8 @@ struct RootView: View {
                 DiscoverView()
             }
 
-            Tab(nativeTabTitle(.search), systemImage: "magnifyingglass", value: .search) {
-                SearchView()
+            Tab(nativeTabTitle(.playlists), systemImage: "square.grid.2x2", value: .playlists) {
+                PlaylistSquareView()
             }
 
             Tab(nativeTabTitle(.library), systemImage: "music.note.list", value: .library) {
@@ -408,6 +411,12 @@ struct RootView: View {
 
             Tab(nativeTabTitle(.profile), systemImage: "person.crop.circle", value: .profile) {
                 ProfileView()
+            }
+
+            Tab(value: .search, role: .search) {
+                SearchView()
+            } label: {
+                Label(nativeTabTitle(.search), systemImage: "magnifyingglass")
             }
         }
         .tint(Color.beansAmber)
@@ -424,6 +433,7 @@ struct RootView: View {
         ZStack(alignment: .bottom) {
             ZStack {
                 legacyPage(.discover) { DiscoverView() }
+                legacyPage(.playlists) { PlaylistSquareView() }
                 legacyPage(.search) { SearchView() }
                 legacyPage(.library) { LibraryView() }
                 legacyPage(.profile) { ProfileView() }
