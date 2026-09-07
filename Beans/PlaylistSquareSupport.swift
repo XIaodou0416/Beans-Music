@@ -18,7 +18,8 @@ final class PlaylistSquareCache {
         let playlists: [Playlist]
     }
 
-    private let prefix = "beans.playlistSquare.cache."
+    // 分类参数改为与 Kumone 一致后，不能继续读取旧版可能混入的分类缓存。
+    private let prefix = "beans.playlistSquare.cache.v2."
     private let ttl: TimeInterval = 30 * 60
 
     private init() {}

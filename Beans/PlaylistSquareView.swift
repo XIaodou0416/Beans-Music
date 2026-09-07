@@ -8,7 +8,7 @@ struct PlaylistSquareView: View {
 
     @AppStorage("beans.playlistSquareSource") private var playlistSourceRaw = SearchProvider.netease.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
-    @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
+    @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @State private var playlists: [Playlist] = []
     @State private var selectedCategory = PlaylistSquareCategory.all.id
     @State private var categories: [PlaylistSquareCategory] = [.all]
@@ -20,14 +20,21 @@ struct PlaylistSquareView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var expanded = false
+    @State private var loadRequestID = UUID()
 
+    // 与 Kumone 一致，分类请求通过 /playlist/list 的 cat 参数区分内容。
     private let neteaseCategories = [
-        "全部", "华语", "流行", "经典", "摇滚", "民谣", "电子", "影视原声", "ACG",
-        "怀旧", "欧美", "日韩", "粤语", "古风", "轻音乐", "治愈", "学习", "运动", "夜晚"
+        "全部", "推荐歌单", "精品歌单", "官方", "华语", "流行", "摇滚", "民谣", "电子",
+        "轻音乐", "说唱", "爵士", "古典", "影视原声", "ACG", "古风", "怀旧", "治愈",
+        "放松", "伤感", "快乐", "学习", "工作", "运动", "驾车", "夜晚"
     ]
 
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
+
+    private var usesSolidSurface: Bool {
+        isNativeClean && appleSolidSurface
     }
 
     private var providers: [SearchProvider] {
@@ -51,52 +58,53 @@ struct PlaylistSquareView: View {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
 
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
-                        if !hidePlatformPicker {
-                            sourcePicker
-                        }
+                VStack(spacing: 0) {
+                    headerTitle
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 10)
 
-                        playlistSearchField
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 18) {
+                            playlistSearchField
 
-                        if categories.count > 1 {
-                            categoryChips
-                        }
-
-                        if isSearching && isSearchLoading {
-                            ProgressView()
-                                .frame(maxWidth: .infinity, minHeight: 180)
-                                .tint(Color.beansAmber)
-                        } else if isSearching {
-                            searchGrid
-                        } else if isLoading && playlists.isEmpty {
-                            ProgressView()
-                                .frame(maxWidth: .infinity, minHeight: 180)
-                                .tint(Color.beansAmber)
-                        } else if let errorMessage, playlists.isEmpty {
-                            ErrorStateView(message: errorMessage) {
-                                Task { await load(force: true) }
+                            if categories.count > 1 {
+                                categoryChips
                             }
-                            .frame(minHeight: 220)
-                        } else if playlists.isEmpty {
-                            EmptyStateView(icon: "music.note.list", text: emptyText)
-                                .frame(maxWidth: .infinity, minHeight: 220)
-                        } else {
-                            playlistGrid
-                            if playlists.count > 18 {
-                                expandButton
-                            }
-                        }
 
-                        Color.clear.frame(height: 100)
+                            if isSearching && isSearchLoading {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity, minHeight: 180)
+                                    .tint(Color.beansAmber)
+                            } else if isSearching {
+                                searchGrid
+                            } else if isLoading && playlists.isEmpty {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity, minHeight: 180)
+                                    .tint(Color.beansAmber)
+                            } else if let errorMessage, playlists.isEmpty {
+                                ErrorStateView(message: errorMessage) {
+                                    Task { await load(force: true) }
+                                }
+                                .frame(minHeight: 220)
+                            } else if playlists.isEmpty {
+                                EmptyStateView(icon: "music.note.list", text: emptyText)
+                                    .frame(maxWidth: .infinity, minHeight: 220)
+                            } else {
+                                playlistGrid
+                                if playlists.count > 18 {
+                                    expandButton
+                                }
+                            }
+
+                            Color.clear.frame(height: 100)
+                        }
+                        .padding(.horizontal, isNativeClean ? 20 : 16)
+                        .padding(.top, 2)
                     }
-                    .padding(.horizontal, isNativeClean ? 20 : 16)
-                    .padding(.top, 10)
+                    .beansScrollIndicatorsHidden()
                 }
-                .beansScrollIndicatorsHidden()
             }
-            .navigationTitle(beansLocalized("歌单广场", "Playlist Square"))
-            .navigationBarTitleDisplayMode(.inline)
             .task(id: "\(source.rawValue)-\(selectedCategory)") {
                 await load(force: false)
             }
@@ -112,43 +120,68 @@ struct PlaylistSquareView: View {
         }
     }
 
-    private var sourcePicker: some View {
-        HStack(spacing: 4) {
-            ForEach(providers) { provider in
-                Button {
-                    BeansHaptics.tap()
-                    guard source != provider else { return }
-                    playlistSourceRaw = provider.rawValue
-                    selectedCategory = PlaylistSquareCategory.all.id
-                    playlists = []
-                    expanded = false
-                } label: {
-                    HStack(spacing: 5) {
-                        if let imageName = provider.brandImageName {
-                            Image(imageName)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 14, height: 14)
-                        }
-                        Text(LocalizedStringKey(provider.rawValue))
-                            .font(BeansFont.appFont(12, .semibold))
-                            .lineLimit(1)
-                    }
-                    .foregroundStyle(source == provider ? Color.white : Color.beansComment)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background {
-                        if source == provider { Capsule().fill(provider.tint) }
+    private var headerTitle: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text(beansLocalized("歌单广场", "Playlist Square"))
+                .font(BeansFont.appFont(32, .bold))
+                .foregroundStyle(Color.beansLabel)
+
+            Spacer(minLength: 0)
+
+            // 与搜索页相同的右上角快捷平台切换，不再占用内容区一整行。
+            Menu {
+                ForEach(providers) { provider in
+                    Button {
+                        BeansHaptics.tap()
+                        guard source != provider else { return }
+                        playlistSourceRaw = provider.rawValue
+                        selectedCategory = PlaylistSquareCategory.all.id
+                        playlists = []
+                        categories = [.all]
+                        expanded = false
+                        loadRequestID = UUID()
+                    } label: {
+                        Label(
+                            LocalizedStringKey(provider.rawValue),
+                            systemImage: provider == source ? "checkmark" : provider.icon
+                        )
                     }
                 }
-                .buttonStyle(.plain)
+            } label: {
+                HStack(spacing: 5) {
+                    if let imageName = source.brandImageName {
+                        Image(imageName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 15, height: 15)
+                    } else {
+                        Image(systemName: source.icon)
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    Text(LocalizedStringKey(source.rawValue))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .font(BeansFont.appFont(12, .semibold))
+                .foregroundStyle(Color.beansComment)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 7)
+                .background {
+                    if usesSolidSurface {
+                        Capsule().fill(Color.primary.opacity(0.045))
+                    } else {
+                        BeansGlass(shape: Capsule())
+                    }
+                }
+                .overlay {
+                    if usesSolidSurface {
+                        Capsule().strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.7)
+                    }
+                }
             }
+            .disabled(providers.count < 2)
         }
-        .padding(4)
-        .background {
-            if isNativeClean { BeansSurface(shape: Capsule()) } else { BeansGlass(shape: Capsule()) }
-        }
-        .clipShape(Capsule())
     }
 
     private var categoryChips: some View {
@@ -161,6 +194,7 @@ struct PlaylistSquareView: View {
                         selectedCategory = category.id
                         playlists = []
                         expanded = false
+                        loadRequestID = UUID()
                     } label: {
                         Text(LocalizedStringKey(category.name))
                             .font(BeansFont.appFont(12, .medium))
@@ -196,7 +230,10 @@ struct PlaylistSquareView: View {
                     .padding(isNativeClean ? 0 : 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background {
-                        if !isNativeClean {
+                        if usesSolidSurface {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.primary.opacity(0.04))
+                        } else if !isNativeClean {
                             BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         }
                     }
@@ -230,6 +267,12 @@ struct PlaylistSquareView: View {
                             }
                             .padding(isNativeClean ? 0 : 8)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .background {
+                                if usesSolidSurface {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.primary.opacity(0.04))
+                                }
+                            }
                         }
                         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
                     }
@@ -271,7 +314,14 @@ struct PlaylistSquareView: View {
         .padding(.horizontal, 13)
         .frame(height: 42)
         .background {
-            if #available(iOS 26, *) {
+            if usesSolidSurface {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.primary.opacity(0.04))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.7)
+                    }
+            } else if #available(iOS 26, *) {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(.clear)
                     .glassEffect(.regular, in: .rect(cornerRadius: 16))
@@ -319,6 +369,8 @@ struct PlaylistSquareView: View {
 
     @MainActor
     private func load(force: Bool) async {
+        let requestedID = loadRequestID
+        let requestedSource = source
         let category = selectedCategoryInfo
         let loggedIn = source == .netease && auth.isLoggedIn
         let cache = PlaylistSquareCache.shared
@@ -335,20 +387,32 @@ struct PlaylistSquareView: View {
         errorMessage = nil
         expanded = false
         do {
+            let loadedPlaylists: [Playlist]
             switch source {
             case .netease:
-                playlists = selectedCategory == PlaylistSquareCategory.all.id
+                loadedPlaylists = selectedCategory == PlaylistSquareCategory.all.id
                     ? try await NetEaseAPI.shared.recommendedHomePlaylists(loggedIn: auth.isLoggedIn, limit: 18)
-                    : try await NetEaseAPI.shared.playlistSquare(cat: category.name, order: "hot", limit: 50)
+                    : try await loadNeteaseCategory(category.name)
             case .qq:
-                playlists = selectedCategory == PlaylistSquareCategory.all.id
+                loadedPlaylists = selectedCategory == PlaylistSquareCategory.all.id
                     ? try await QQMusicAPI.shared.hotPlaylists(limit: 18)
                     : try await QQMusicAPI.shared.playlists(categoryID: category.remoteID ?? 10000000, limit: 30)
             case .kugou:
-                playlists = selectedCategory == PlaylistSquareCategory.all.id
+                loadedPlaylists = selectedCategory == PlaylistSquareCategory.all.id
                     ? try await KugouMusicAPI.shared.recommendPlaylists(limit: 12)
                     : try await KugouMusicAPI.shared.playlists(categoryID: category.remoteID ?? 0, limit: 30)
             }
+            guard requestedID == loadRequestID, category.id == selectedCategory, source == requestedSource else {
+                if requestedID == loadRequestID {
+                    isLoading = false
+                }
+                return
+            }
+            playlists = loadedPlaylists
+            BeansLogger.shared.log(
+                "歌单广场分类加载完成：平台=\(requestedSource.rawValue) 分类=\(category.name) 数量=\(loadedPlaylists.count) 首个ID=\(loadedPlaylists.first?.id ?? 0)",
+                level: .info
+            )
             cache.save(playlists, provider: source, category: category, loggedIn: loggedIn)
         } catch {
             errorMessage = error.localizedDescription
@@ -360,15 +424,28 @@ struct PlaylistSquareView: View {
         categories.first(where: { $0.id == selectedCategory }) ?? .all
     }
 
+    private func loadNeteaseCategory(_ category: String) async throws -> [Playlist] {
+        switch category {
+        case "推荐歌单":
+            return try await NetEaseAPI.shared.personalizedPlaylists(limit: 50)
+        case "精品歌单":
+            return try await NetEaseAPI.shared.highQualityPlaylists(cat: "全部", limit: 50)
+        default:
+            return try await NetEaseAPI.shared.playlistSquare(cat: category, order: "hot", limit: 50)
+        }
+    }
+
     @MainActor
     private func loadCategories() async {
         do {
             switch source {
             case .netease:
-                let names = await NetEaseAPI.shared.playlistCatlist()
-                let values = names.isEmpty ? neteaseCategories : ["全部"] + names
-                categories = values.enumerated().map { index, name in
-                    PlaylistSquareCategory(id: index == 0 ? "all" : "netease-\(name)", name: name, remoteID: nil)
+                categories = neteaseCategories.map { name in
+                    PlaylistSquareCategory(
+                        id: name == "全部" ? PlaylistSquareCategory.all.id : "netease-\(name)",
+                        name: name,
+                        remoteID: nil
+                    )
                 }
             case .qq:
                 categories = try await QQMusicAPI.shared.playlistCategories()
