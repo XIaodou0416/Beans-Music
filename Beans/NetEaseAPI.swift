@@ -526,16 +526,32 @@ final class NetEaseAPI {
 
     /// 歌单广场（对应网易云「发现音乐-歌单广场」，默认热门排序）
     func playlistSquare(cat: String = "全部", order: String = "hot", limit: Int = 12, offset: Int = 0) async throws -> [Playlist] {
-        let json = try await request("/api/playlist/list", payload: ["cat": cat, "order": order, "limit": limit, "offset": max(0, offset), "total": true], crypto: "weapi")
+        let page = try await playlistSquarePage(cat: cat, order: order, limit: limit, offset: offset)
+        return page.playlists
+    }
+
+    func playlistSquarePage(cat: String = "全部", order: String = "hot", limit: Int = 30, offset: Int = 0) async throws -> PlaylistSquarePage {
+        let safeOffset = max(0, offset)
+        let json = try await request("/api/playlist/list", payload: ["cat": cat, "order": order, "limit": limit, "offset": safeOffset, "total": true], crypto: "weapi")
         let list = json["playlists"] as? [[String: Any]] ?? []
-        return list.compactMap(Playlist.init(json:))
+        let playlists = list.compactMap(Playlist.init(json:))
+        let hasMore = json["more"] as? Bool ?? (playlists.count >= limit)
+        return PlaylistSquarePage(playlists: playlists, hasMore: hasMore, nextOffset: safeOffset + playlists.count)
     }
 
     /// 精品歌单（官方歌单广场默认内容，网易云编辑精选；对应 music.163.com/discover/playlist 的「精品歌单」）
-    func highQualityPlaylists(cat: String = "全部", limit: Int = 18) async throws -> [Playlist] {
-        let json = try await request("/api/playlist/highquality/list", payload: ["cat": cat, "limit": limit, "offset": 0, "total": true], crypto: "weapi")
+    func highQualityPlaylists(cat: String = "全部", limit: Int = 18, offset: Int = 0) async throws -> [Playlist] {
+        let page = try await highQualityPlaylistsPage(cat: cat, limit: limit, offset: offset)
+        return page.playlists
+    }
+
+    func highQualityPlaylistsPage(cat: String = "全部", limit: Int = 30, offset: Int = 0) async throws -> PlaylistSquarePage {
+        let safeOffset = max(0, offset)
+        let json = try await request("/api/playlist/highquality/list", payload: ["cat": cat, "limit": limit, "offset": safeOffset, "total": true], crypto: "weapi")
         let list = json["playlists"] as? [[String: Any]] ?? []
-        return list.compactMap(Playlist.init(json:))
+        let playlists = list.compactMap(Playlist.init(json:))
+        let hasMore = json["more"] as? Bool ?? (playlists.count >= limit)
+        return PlaylistSquarePage(playlists: playlists, hasMore: hasMore, nextOffset: safeOffset + playlists.count)
     }
 
     /// 官方歌单分类（官网 discover/playlist 的分类标签；失败返回空数组，调用方回落内置分类）

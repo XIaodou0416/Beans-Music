@@ -9,6 +9,12 @@ struct PlaylistSquareCategory: Identifiable, Hashable {
     static let all = PlaylistSquareCategory(id: "all", name: "全部", remoteID: nil)
 }
 
+struct PlaylistSquarePage {
+    let playlists: [Playlist]
+    let hasMore: Bool
+    let nextOffset: Int
+}
+
 /// 歌单广场缓存：按平台、分类和网易云登录态隔离，避免切换页面重复刷新。
 final class PlaylistSquareCache {
     static let shared = PlaylistSquareCache()
@@ -16,10 +22,12 @@ final class PlaylistSquareCache {
     struct Entry: Codable {
         let savedAt: Date
         let playlists: [Playlist]
+        let hasMore: Bool
+        let nextOffset: Int
     }
 
-    // 分类参数升级后，不能继续读取旧版可能混入的分类缓存。
-    private let prefix = "beans.playlistSquare.cache.v2."
+    // 分类请求和平台隔离规则变化后，不能继续读取旧版可能混入的分类缓存。
+    private let prefix = "beans.playlistSquare.cache.v4."
     private let ttl: TimeInterval = 30 * 60
 
     private init() {}
@@ -37,8 +45,15 @@ final class PlaylistSquareCache {
         Date().timeIntervalSince(entry.savedAt) < ttl
     }
 
-    func save(_ playlists: [Playlist], provider: SearchProvider, category: PlaylistSquareCategory, loggedIn: Bool) {
-        let entry = Entry(savedAt: Date(), playlists: playlists)
+    func save(
+        _ playlists: [Playlist],
+        provider: SearchProvider,
+        category: PlaylistSquareCategory,
+        loggedIn: Bool,
+        hasMore: Bool = false,
+        nextOffset: Int = 0
+    ) {
+        let entry = Entry(savedAt: Date(), playlists: playlists, hasMore: hasMore, nextOffset: nextOffset)
         guard let data = try? JSONEncoder().encode(entry) else { return }
         UserDefaults.standard.set(data, forKey: cacheKey(provider: provider, category: category, loggedIn: loggedIn))
     }
