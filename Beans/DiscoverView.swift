@@ -665,6 +665,7 @@ struct DiscoverView: View {
                     Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 2)
+                .frame(height: 202)
             }
             .beansCompatScrollClipDisabled()
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
@@ -876,6 +877,7 @@ struct DiscoverView: View {
                     }
                     .buttonStyle(GlassPressButtonStyle(scale: 0.97))
                     .padding(.vertical, 3)
+                    .frame(height: isNativeClean ? 178 : 166)
                     Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
             }
@@ -917,6 +919,7 @@ struct DiscoverView: View {
                     Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 3)
+                .frame(height: isNativeClean ? 178 : 166)
             }
             .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
@@ -968,6 +971,7 @@ struct DiscoverView: View {
                     Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 3)
+                .frame(height: isNativeClean ? 178 : 166)
             }
             .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
@@ -1034,6 +1038,7 @@ struct DiscoverView: View {
                     Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 2)
+                .frame(height: isNativeClean ? 202 : 152)
             }
             .beansCompatScrollClipDisabled()
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
@@ -1291,6 +1296,7 @@ struct DiscoverView: View {
                         Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     }
                     .padding(.vertical, 2)
+                    .frame(height: 238)
                     .beansCompatScrollClipDisabled()
                 }
             } else {
@@ -1434,6 +1440,7 @@ struct DiscoverView: View {
                     Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 2)
+                .frame(height: isNativeClean ? 198 : 170)
             }
             .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
@@ -1465,6 +1472,7 @@ struct DiscoverView: View {
                     Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 2)
+                .frame(height: isNativeClean ? 168 : 146)
             }
             .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
