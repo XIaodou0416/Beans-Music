@@ -167,6 +167,7 @@ struct WallpaperImage: View {
 
 struct BeansGlass<S: Shape>: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
 
     let shape: S
     var forceLiquid = false
@@ -176,7 +177,7 @@ struct BeansGlass<S: Shape>: View {
     }
 
     private var isLiquid: Bool {
-        forceLiquid || uiStyle == .liquid || uiStyle == .nativeClean
+        forceLiquid || uiStyle == .liquid || (uiStyle == .nativeClean && !appleSolidSurface)
     }
 
     var body: some View {
@@ -232,6 +233,7 @@ struct BeansSurface<S: Shape>: View {
 struct GlassCard<Content: View>: View {
     var cornerRadius: CGFloat = 24
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @ViewBuilder var content: () -> Content
 
     private var uiStyle: BeansUIStyle {
@@ -239,7 +241,7 @@ struct GlassCard<Content: View>: View {
     }
 
     private var isLiquid: Bool {
-        uiStyle == .liquid || uiStyle == .nativeClean
+        uiStyle == .liquid || (uiStyle == .nativeClean && !appleSolidSurface)
     }
 
     private var resolvedCornerRadius: CGFloat {

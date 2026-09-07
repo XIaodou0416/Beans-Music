@@ -178,6 +178,11 @@ struct RootView: View {
                 showWhatsNew = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .beansSearchBackRequested)) { _ in
+            withAnimation(.easeInOut(duration: 0.22)) {
+                selection = .discover
+            }
+        }
         .sheet(isPresented: $showWhatsNew) {
             WhatsNewSheet()
         }

@@ -5,4 +5,5 @@ extension Notification.Name {
     static let beansQQLoginDidUpdate = Notification.Name("beans.qq.login.didUpdate")
     static let beansKugouLoginDidUpdate = Notification.Name("beans.kugou.login.didUpdate")
     static let beansBackendBlockStateDidChange = Notification.Name("beans.backend.blockState.didChange")
+    static let beansSearchBackRequested = Notification.Name("beans.search.backRequested")
 }

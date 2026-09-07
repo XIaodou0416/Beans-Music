@@ -26,10 +26,10 @@ struct DiscoverView: View {
     @State private var recommendationActionLoading: String?
     @State private var showHomePlatformMenu = false
     @State private var showSectionSort = false
-    /// 主页板块顺序（每日推荐 / 排行榜 / 歌单广场，可自定义）
+    /// 主页板块顺序（每日推荐 / 排行榜，可自定义）
     @State private var homeOrder = SectionOrderStore.load(SectionOrderStore.homeKey, defaults: SectionOrderStore.homeDefaults)
 
-    /// 三个平台都保留每日推荐、排行榜和歌单板块，QQ 歌单板块展示官网推荐的热门歌单。
+    /// 主页只保留每日推荐和排行榜；歌单广场位于独立底栏页面。
     private var availableSections: [String] { SectionOrderStore.homeDefaults }
     /// 首页数据源：记住上次选择，下次打开仍保持该平台（默认网易云）
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
@@ -136,7 +136,7 @@ struct DiscoverView: View {
                            !remoteAnnouncementText.isEmpty || !remoteAnnouncementMediaURL.isEmpty || !remoteAnnouncementImageURL.isEmpty {
                             remoteAnnouncementBanner
                         }
-                        if !hidePlatformPicker {
+                        if !hidePlatformPicker && !isNativeClean {
                             providerPicker
                         }
                         if let errorMessage {
@@ -156,10 +156,6 @@ struct DiscoverView: View {
                                     }
                                 case "排行榜":
                                     if hasRankData { topListsSection.sectionEntrance(delay: 0.08) }
-                                case "歌单广场":
-                                    if source == .netease || source == .qq || !personalized.isEmpty {
-                                        personalizedSection.sectionEntrance(delay: 0.16)
-                                    }
                                 default:
                                     EmptyView()
                                 }
@@ -363,7 +359,7 @@ struct DiscoverView: View {
                                     )
                                     .fixedSize(horizontal: false, vertical: true)
                                     .offset(y: greetingLineOffsetY(index))
-                                if index == 0 && isNativeClean && !homePlatformHintDismissed {
+                                if index == 0 && !isNativeClean && !homePlatformHintDismissed {
                                     Button {
                                         homePlatformHintDismissed = true
                                         UserDefaults.standard.set(true, forKey: "beans.homePlatformHintDismissed")
@@ -402,6 +398,9 @@ struct DiscoverView: View {
                 }
                 Spacer()
                 HStack(spacing: 10) {
+                    if isNativeClean && !hidePlatformPicker {
+                        nativeHomeProviderMenu
+                    }
                     if !homeHeaderHideSort {
                         GlassIconButton(systemName: "arrow.up.arrow.down") {
                             BeansHaptics.tap()
@@ -466,6 +465,45 @@ struct DiscoverView: View {
         }
         .clipShape(Capsule())
         .beansCardShadow(radius: isNativeClean ? 2 : 6, y: isNativeClean ? 1 : 2)
+    }
+
+    /// Apple 简洁样式使用和搜索页一致的右上角快捷平台菜单，避免顶部再占一整行。
+    private var nativeHomeProviderMenu: some View {
+        Menu {
+            ForEach(homeProviders) { provider in
+                Button {
+                    BeansHaptics.tap()
+                    if source != provider { homeSourceRaw = provider.rawValue }
+                } label: {
+                    Label(
+                        LocalizedStringKey(provider.rawValue),
+                        systemImage: provider == source ? "checkmark" : provider.icon
+                    )
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                if let imageName = source.brandImageName {
+                    Image(imageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 15, height: 15)
+                } else {
+                    Image(systemName: source.icon)
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                Text(LocalizedStringKey(source.rawValue))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .font(BeansFont.appFont(12, .semibold))
+            .foregroundStyle(Color.beansComment)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background { BeansSurface(shape: Capsule()) }
+        }
+        .disabled(homeProviders.count < 2)
     }
 
     private var greeting: String {
@@ -1534,30 +1572,21 @@ struct DiscoverView: View {
         case .qq:
             async let a: [Song] = (try? await QQMusicAPI.shared.recommendSongs(limit: 30)) ?? []
             async let b: [QQTopInfo] = (try? await QQMusicAPI.shared.topLists()) ?? []
-            async let c: [Playlist] = (try? await QQMusicAPI.shared.hotPlaylists(limit: 18)) ?? []
-            let (dr, tl, pp) = await (a, b, c)
-            if pp.isEmpty {
-                BeansLogger.shared.log("QQ音乐热门歌单为空：保留板块并显示空状态", level: .warn)
-            }
+            let (dr, tl) = await (a, b)
             snapshot.dailySongs = dr
             snapshot.qqTopLists = tl
-            snapshot.personalized = pp
         case .netease:
             async let a = NetEaseAPI.shared.topLists()
             async let b = NetEaseAPI.shared.dailyRecommend()
-            async let c = NetEaseAPI.shared.recommendedHomePlaylists(loggedIn: auth.isLoggedIn, limit: 18)
-            let (tl, dr, pp) = try await (a, b, c)
+            let (tl, dr) = try await (a, b)
             snapshot.topLists = tl
             snapshot.dailySongs = dr
-            snapshot.personalized = pp
         case .kugou:
             async let songs = loadKugouDailySongs(limit: 30)
             async let ranks = KugouMusicAPI.shared.topLists(limit: 10)
-            async let playlists = KugouMusicAPI.shared.recommendPlaylists(limit: 12)
-            let (daily, top, pp) = try await (songs, ranks, playlists)
+            let (daily, top) = try await (songs, ranks)
             snapshot.dailySongs = daily
             snapshot.kugouTopLists = top
-            snapshot.personalized = pp
         }
         return snapshot
     }

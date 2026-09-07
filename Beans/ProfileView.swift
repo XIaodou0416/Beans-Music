@@ -15,6 +15,7 @@ struct ProfileView: View {
     @EnvironmentObject private var player: PlayerManager
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
 
@@ -1225,6 +1226,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
     /// 底栏是否显示文字（关闭后只显示图标）
@@ -1305,6 +1308,10 @@ struct SettingsView: View {
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
+    }
+
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
 
     private var customSourceCount: Int {
@@ -1837,6 +1844,13 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    if isNativeClean {
+                        Toggle(
+                            beansLocalized("Apple 样式使用纯色背景", "Use solid background for Apple style"),
+                            isOn: $appleSolidSurface
+                        )
+                        .font(BeansFont.appFont(13))
+                    }
                 }
 
                 Divider().overlay(Color.beansComment.opacity(0.15))

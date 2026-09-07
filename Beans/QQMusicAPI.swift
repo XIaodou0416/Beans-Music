@@ -1440,13 +1440,64 @@ final class QQMusicAPI {
     }
 
     private static func hotRecommendPlaylist(_ item: [String: Any]) -> Playlist? {
-        let id = integerValue(item["dissid"] ?? item["diss_id"] ?? item["tid"] ?? item["id"])
-        let name = (item["dissname"] as? String) ?? (item["title"] as? String) ?? (item["name"] as? String) ?? ""
+        let id = integerValue(item["dissid"] ?? item["diss_id"] ?? item["listid"] ?? item["tid"] ?? item["id"])
+        let name = (item["dissname"] as? String)
+            ?? (item["diss_name"] as? String)
+            ?? (item["title"] as? String)
+            ?? (item["name"] as? String) ?? ""
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard id > 0, !trimmedName.isEmpty else { return nil }
-        let cover = normalizedQQImageURL(item["imgurl"] ?? item["picurl"] ?? item["pic_url"] ?? item["cover"])
+        let cover = normalizedQQImageURL(item["imgurl"] ?? item["picurl"] ?? item["pic_url"] ?? item["logo"] ?? item["cover"])
         let count = integerValue(item["listennum"] ?? item["songnum"] ?? item["song_cnt"] ?? item["listen_num"])
         return Playlist(id: id, name: trimmedName, coverURL: cover, trackCount: count, source: .qq)
+    }
+
+    /// QQ 歌单广场分类，使用官网公开的 fcg 分类接口。
+    func playlistCategories() async throws -> [PlaylistSquareCategory] {
+        let url = "https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_tag_conf.fcg?format=json&outCharset=utf-8"
+        let json = try await get(url, referer: "https://y.qq.com/")
+        var result: [PlaylistSquareCategory] = [.all]
+        var seen = Set<String>([PlaylistSquareCategory.all.id])
+
+        func walk(_ value: Any) {
+            if let dict = value as? [String: Any] {
+            let id = Self.integerValue(dict["categoryId"] ?? dict["category_id"] ?? dict["tag_id"] ?? dict["id"])
+                let name = (dict["categoryName"] as? String)
+                    ?? (dict["category_name"] as? String)
+                    ?? (dict["tag_name"] as? String)
+                    ?? (dict["name"] as? String) ?? ""
+                if id > 0, !name.isEmpty, seen.insert("\(id)").inserted {
+                    result.append(PlaylistSquareCategory(id: "qq-\(id)", name: name, remoteID: id))
+                }
+                dict.values.forEach(walk)
+            } else if let array = value as? [Any] {
+                array.forEach(walk)
+            }
+        }
+        walk(json)
+        return result.count > 1 ? Array(result.prefix(40)) : result
+    }
+
+    /// QQ 歌单广场分类歌单。
+    func playlists(categoryID: Int, sortID: Int = 5, offset: Int = 0, limit: Int = 30) async throws -> [Playlist] {
+        var components = URLComponents(string: "https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg")!
+        components.queryItems = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "outCharset", value: "utf-8"),
+            URLQueryItem(name: "picmid", value: "1"),
+            URLQueryItem(name: "categoryId", value: "\(categoryID)"),
+            URLQueryItem(name: "sortId", value: "\(sortID)"),
+            URLQueryItem(name: "sin", value: "\(max(0, offset))"),
+            URLQueryItem(name: "ein", value: "\(max(0, offset) + max(1, limit) - 1)")
+        ]
+        guard let url = components.url else { throw NetEaseError.unknown("QQ 歌单分类地址无效") }
+        let json = try await get(url.absoluteString, referer: "https://y.qq.com/")
+        var seen = Set<Int>()
+        return Self.searchPlaylistItems(from: json)
+            .compactMap(Self.hotRecommendPlaylist)
+            .filter { seen.insert($0.id).inserted }
+            .prefix(max(1, limit))
+            .map { $0 }
     }
 
     /// 兼容 GetUserPlaylist 在不同客户端版本中的嵌套位置。

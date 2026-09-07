@@ -842,7 +842,35 @@ final class KugouMusicAPI {
         }
     }
 
-    private func upstreamRecommendPlaylists(limit: Int) async throws -> [Playlist] {
+    /// 酷狗歌单广场分类，参考酷狗移动端使用的 pubsongs 分类接口。
+    func playlistCategories() async throws -> [PlaylistSquareCategory] {
+        let response = try await gatewayRequest(
+            "/pubsongs/v1/get_tags_by_type",
+            method: "POST",
+            data: ["tag_type": "collection", "tag_id": 0, "source": 3],
+            headers: ["x-router": "specialrec.service.kugou.com"]
+        )
+        let rows = Self.deepArrays(response.json, names: ["tags", "tag", "categories", "data", "list", "son"])
+        var result: [PlaylistSquareCategory] = [.all]
+        var seen = Set<String>([PlaylistSquareCategory.all.id])
+        for item in rows {
+            let id = Self.int(item["tag_id"] ?? item["tagid"] ?? item["category_id"] ?? item["id"])
+            let name = Self.clean(Self.string(item["tag_name"] ?? item["tagname"] ?? item["category_name"] ?? item["name"]))
+            guard id > 0, !name.isEmpty, seen.insert("kg-\(id)").inserted else { continue }
+            result.append(PlaylistSquareCategory(id: "kg-\(id)", name: name, remoteID: id))
+        }
+        return result
+    }
+
+    /// 酷狗分类歌单。分类为 0 时与主页默认推荐使用同一条链路。
+    func playlists(categoryID: Int, limit: Int = 30) async throws -> [Playlist] {
+        if categoryID == 0 {
+            return try await recommendPlaylists(limit: limit)
+        }
+        return try await upstreamRecommendPlaylists(limit: limit, categoryID: categoryID)
+    }
+
+    private func upstreamRecommendPlaylists(limit: Int, categoryID: Int = 0) async throws -> [Playlist] {
         let auth = KugouMusicAuth.shared
         let clientTime = Int(Date().timeIntervalSince1970)
         let specialRecommend: [String: Any] = [
@@ -853,7 +881,7 @@ final class KugouMusicAPI {
             "is_selected": 0,
             "withrecommend": 1,
             "area_code": 1,
-            "categoryid": 0,
+            "categoryid": categoryID,
         ]
         let response = try await upstreamRequest(
             "/v2/special_recommend",
