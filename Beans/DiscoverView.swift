@@ -664,6 +664,7 @@ struct DiscoverView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
@@ -845,6 +846,7 @@ struct DiscoverView: View {
                 }
                 .padding(.vertical, 3)
             }
+            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
@@ -890,6 +892,7 @@ struct DiscoverView: View {
                 }
                 .padding(.vertical, 3)
             }
+            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
@@ -953,6 +956,7 @@ struct DiscoverView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
@@ -1205,6 +1209,7 @@ struct DiscoverView: View {
                         }
                     }
                     .padding(.vertical, 2)
+                    .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
                 }
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
@@ -1346,6 +1351,7 @@ struct DiscoverView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
@@ -1361,12 +1367,12 @@ struct DiscoverView: View {
                             openRoute(.artist(artist))
                         } label: {
                             VStack(spacing: 8) {
-                                CoverImage(url: artist.coverURL, size: isNativeClean ? 136 : 116, cornerRadius: isNativeClean ? 68 : 58)
+                                CoverImage(url: artist.coverURL, size: isNativeClean ? 272 : 232, cornerRadius: isNativeClean ? 136 : 116)
                                 Text(artist.name)
                                     .font(BeansFont.appFont(isNativeClean ? 14 : 12, .semibold))
                                     .foregroundStyle(Color.beansLabel)
                                     .lineLimit(1)
-                                    .frame(width: isNativeClean ? 136 : 116)
+                                    .frame(width: isNativeClean ? 272 : 232)
                             }
                         }
                         .buttonStyle(GlassPressButtonStyle(scale: 0.95))
@@ -1374,6 +1380,7 @@ struct DiscoverView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .modifier(DiscoverHorizontalScrollEdgeEffectDisabled())
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
@@ -1714,6 +1721,17 @@ struct DiscoverView: View {
         !dailySongs.isEmpty || !newAlbums.isEmpty || !topArtists.isEmpty
             || !topLists.isEmpty || !personalized.isEmpty
             || !qqTopLists.isEmpty || !kugouTopLists.isEmpty
+    }
+}
+
+private struct DiscoverHorizontalScrollEdgeEffectDisabled: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.scrollEdgeEffectStyle(.identity, for: .horizontal)
+        } else {
+            content
+        }
     }
 }
 
