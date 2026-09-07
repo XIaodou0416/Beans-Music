@@ -148,13 +148,10 @@ struct LibraryView: View {
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: isNativeClean ? 30 : 24) {
-                    if isNativeClean {
+                if isNativeClean {
                         appleHeader
                     } else {
                         header
-                    }
-                    if !hidePlatformPicker {
-                        providerPicker
                     }
                     // 板块按用户自定义顺序渲染（可拖拽排序）
                     ForEach(libraryOrder, id: \.self) { key in
@@ -283,6 +280,7 @@ struct LibraryView: View {
                 }
                 Spacer()
                 HStack(spacing: 10) {
+                libraryPlatformMenu
                 if !hideSortButton {
                     GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
                         BeansHaptics.tap()
@@ -304,6 +302,7 @@ struct LibraryView: View {
             HStack(alignment: .center) {
                 libraryTitleButton
                 Spacer(minLength: 12)
+                libraryPlatformMenu
                 if !hideSortButton {
                     GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
                         BeansHaptics.tap()
@@ -335,27 +334,45 @@ struct LibraryView: View {
     }
 
     private var libraryTitleButton: some View {
+        Text("音乐库")
+            .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
+            .foregroundStyle(Color.beansLabel)
+    }
+
+    /// 与搜索页和歌单精选页一致的右上角快捷平台菜单。
+    private var libraryPlatformMenu: some View {
         Menu {
             ForEach(libraryProviders) { candidate in
                 Button {
                     BeansHaptics.tap()
+                    guard source != candidate else { return }
                     source = candidate
                 } label: {
                     Label(LocalizedStringKey(candidate.rawValue), systemImage: candidate == source ? "checkmark" : candidate.icon)
                 }
             }
         } label: {
-            HStack(spacing: 8) {
-                Text("音乐库")
-                    .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
-                    .foregroundStyle(Color.beansLabel)
+            HStack(spacing: 5) {
+                if let imageName = source.brandImageName {
+                    Image(imageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                } else {
+                    Image(systemName: source.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                }
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.beansComment.opacity(0.7))
+                    .font(.system(size: 10, weight: .bold))
             }
-            .contentShape(Rectangle())
+            .foregroundStyle(Color.beansLabel)
+            .frame(width: 42, height: 34)
+            .background {
+                Capsule().fill(Color.beansLabel.opacity(isNativeClean ? 0.08 : 0.12))
+            }
+            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressButtonStyle(scale: 0.94))
     }
 
 

@@ -85,9 +85,12 @@ struct PlaylistView: View {
                         .foregroundStyle(Color.beansLabel)
                         .lineLimit(2)
                     if !playlist.creatorName.isEmpty {
-                        Text(playlist.creatorName)
-                            .font(BeansFont.appFont(12))
-                            .foregroundStyle(Color.beansComment)
+                        HStack(spacing: 6) {
+                            CoverImage(url: playlist.creatorAvatarURL, size: 22, cornerRadius: 11)
+                            Text(playlist.creatorName)
+                                .font(BeansFont.appFont(12))
+                                .foregroundStyle(Color.beansComment)
+                        }
                     }
                     Text(beansSongCountText(tracks.count))
                         .font(BeansFont.appFont(12))

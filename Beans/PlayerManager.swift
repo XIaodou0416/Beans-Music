@@ -535,7 +535,17 @@ final class PlayerManager: NSObject, ObservableObject {
             let quality = (forceKugouStandard && song.source == .kugou) ? .standard : BeansAudioQuality.current
             let thirdPartyQuality = ThirdPartyAudioQuality.current
             BeansLogger.shared.log("▶ 开始播放：\(song.name) - \(song.artists)｜平台=\(song.source.rawValue) id=\(song.id) 音质=\(quality.level) 第三方音质=\(thirdPartyQuality.rawValue) 自定义音源=\(enableUnblock ? "开" : "关") 官方受限=\(strictUnlock ? "是" : "否")", level: .info)
-            if song.source == .kugou {
+            for attempt in 0..<3 {
+                if attempt > 0 {
+                    try? await Task.sleep(nanoseconds: 800_000_000)
+                    if Task.isCancelled { return }
+                    BeansLogger.shared.log("播放地址解析重试：\(song.name)｜第 \(attempt + 1) 次", level: .debug)
+                }
+                urlString = nil
+                resolvedThirdParty = nil
+                qqOfficialBR = nil
+                attemptedQQOfficialBRs = []
+                if song.source == .kugou {
                 urlString = try? await KugouMusicAPI.shared.songURL(song: song, quality: quality)
                 if urlString == nil {
                     resolvedThirdParty = await kugouFallback(
@@ -563,14 +573,16 @@ final class PlayerManager: NSObject, ObservableObject {
                         strict: strictUnlock
                     )
                 }
-            } else {
+                } else {
                 (urlString, resolvedThirdParty) = await neteaseResolve(
                     song: song,
                     quality: quality,
                     thirdPartyQuality: thirdPartyQuality,
                     enableUnblock: enableUnblock,
                     strict: strictUnlock
-                )
+                    )
+                }
+                if urlString != nil || resolvedThirdParty != nil { break }
             }
             if let resolved = resolvedThirdParty {
                 let notice = self.thirdPartyVIPNotice(for: song, sourceTitle: resolved.sourceTitle)

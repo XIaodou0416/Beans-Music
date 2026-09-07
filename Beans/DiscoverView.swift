@@ -666,8 +666,6 @@ struct DiscoverView: View {
             }
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。
             .padding(.trailing, isNativeClean ? -24 : 0)
-            .overlay(horizontalEdgeFade, alignment: .leading)
-            .overlay(horizontalEdgeFade, alignment: .trailing)
         }
         .id("rankTopSection")
     }
@@ -848,8 +846,6 @@ struct DiscoverView: View {
                 .padding(.vertical, 3)
             }
             .padding(.trailing, isNativeClean ? -24 : 0)
-            .overlay(horizontalEdgeFade, alignment: .leading)
-            .overlay(horizontalEdgeFade, alignment: .trailing)
         }
     }
 
@@ -895,8 +891,6 @@ struct DiscoverView: View {
                 .padding(.vertical, 3)
             }
             .padding(.trailing, isNativeClean ? -24 : 0)
-            .overlay(horizontalEdgeFade, alignment: .leading)
-            .overlay(horizontalEdgeFade, alignment: .trailing)
         }
     }
 
@@ -983,7 +977,7 @@ struct DiscoverView: View {
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
                 if let coverURL {
-                    CoverImage(url: coverURL, size: isNativeClean ? 184 : 168, cornerRadius: isNativeClean ? 16 : 18)
+                    CoverImage(url: coverURL, size: isNativeClean ? 160 : 148, cornerRadius: isNativeClean ? 16 : 18)
                         .overlay {
                             LinearGradient(
                                 colors: [.black.opacity(0.05), .black.opacity(0.62)],
@@ -1033,7 +1027,7 @@ struct DiscoverView: View {
                 }
                 .padding(14)
             }
-            .frame(width: isNativeClean ? 184 : 168, height: isNativeClean ? 184 : 168)
+            .frame(width: isNativeClean ? 160 : 148, height: isNativeClean ? 160 : 148)
             .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
             .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 16, x: 0, y: 8)
             .contentShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
@@ -1352,8 +1346,6 @@ struct DiscoverView: View {
                 }
                 .padding(.vertical, 2)
             }
-            .overlay(horizontalEdgeFade, alignment: .leading)
-            .overlay(horizontalEdgeFade, alignment: .trailing)
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
@@ -1369,12 +1361,12 @@ struct DiscoverView: View {
                             openRoute(.artist(artist))
                         } label: {
                             VStack(spacing: 8) {
-                                CoverImage(url: artist.coverURL, size: isNativeClean ? 112 : 96, cornerRadius: isNativeClean ? 56 : 48)
+                                CoverImage(url: artist.coverURL, size: isNativeClean ? 136 : 116, cornerRadius: isNativeClean ? 68 : 58)
                                 Text(artist.name)
                                     .font(BeansFont.appFont(isNativeClean ? 14 : 12, .semibold))
                                     .foregroundStyle(Color.beansLabel)
                                     .lineLimit(1)
-                                    .frame(width: isNativeClean ? 112 : 96)
+                                    .frame(width: isNativeClean ? 136 : 116)
                             }
                         }
                         .buttonStyle(GlassPressButtonStyle(scale: 0.95))
@@ -1382,20 +1374,8 @@ struct DiscoverView: View {
                 }
                 .padding(.vertical, 2)
             }
-            .overlay(horizontalEdgeFade, alignment: .leading)
-            .overlay(horizontalEdgeFade, alignment: .trailing)
             .padding(.trailing, isNativeClean ? -24 : 0)
         }
-    }
-
-    private var horizontalEdgeFade: some View {
-        LinearGradient(
-            colors: [Color.primary.opacity(0.10), Color.clear],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-        .frame(width: 22)
-        .allowsHitTesting(false)
     }
 
     private var playlistSearchFieldContent: some View {

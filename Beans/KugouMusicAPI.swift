@@ -1981,11 +1981,18 @@ final class KugouMusicAPI {
         let cover = string(raw["pic"] ?? raw["img"] ?? raw["cover"] ?? raw["sizable_cover"] ?? raw["list_pic"] ?? raw["imgurl"] ?? raw["picurl"])
             .replacingOccurrences(of: "{size}", with: "400")
         let count = int(raw["count"] ?? raw["song_count"] ?? raw["total"] ?? raw["file_count"] ?? raw["songcount"] ?? raw["song_num"])
+        let creator = raw["creator"] as? [String: Any] ?? raw["author"] as? [String: Any] ?? [:]
+        let creatorName = string(raw["creator_name"] ?? raw["username"] ?? raw["nickname"] ?? raw["author_name"] ?? raw["author"])
+            .isEmpty ? string(creator["name"] ?? creator["nickname"] ?? creator["username"]) : string(raw["creator_name"] ?? raw["username"] ?? raw["nickname"] ?? raw["author_name"] ?? raw["author"])
+        let creatorAvatar = string(raw["creator_avatar"] ?? raw["avatar"] ?? raw["avatarurl"] ?? raw["avatar_url"] ?? raw["author_pic"] ?? raw["headurl"])
+            .isEmpty ? string(creator["avatar"] ?? creator["avatarurl"] ?? creator["headurl"]) : string(raw["creator_avatar"] ?? raw["avatar"] ?? raw["avatarurl"] ?? raw["avatar_url"] ?? raw["author_pic"] ?? raw["headurl"])
         return Playlist(
             id: id,
             name: name.isEmpty ? "酷狗歌单" : name,
             coverURL: URL(string: cover),
             trackCount: count,
+            creatorName: creatorName,
+            creatorAvatarURL: creatorAvatar.isEmpty ? nil : URL(string: creatorAvatar),
             source: .kugou,
             kugouGlobalCollectionID: globalID.isEmpty ? nil : globalID
         )

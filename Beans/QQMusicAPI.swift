@@ -1420,8 +1420,17 @@ final class QQMusicAPI {
             "diss_cover", "dir_pic_url", "logo", "picurl", "pic_url",
             "cover", "cover_url", "headurl", "imgurl",
         ].lazy.compactMap { normalizedQQImageURL(item[$0]) }.first
+        let creator = item["creator"] as? [String: Any] ?? item["author"] as? [String: Any] ?? [:]
+        let creatorName = ["creator_name", "creator", "nickname", "nick", "username", "uinname"]
+            .compactMap { item[$0] as? String }
+            .first ?? (creator["nickname"] as? String ?? creator["name"] as? String ?? "")
+        let creatorAvatarURL = ["creator_avatar", "avatarurl", "avatar_url", "headurl", "userface"]
+            .compactMap { normalizedQQImageURL(item[$0]) }
+            .first ?? ["avatarUrl", "avatar", "headurl", "userface"]
+            .compactMap { normalizedQQImageURL(creator[$0]) }
+            .first
         let count = integerValue(item["song_cnt"] ?? item["songnum"] ?? item["total_song_num"] ?? item["song_count"])
-        return Playlist(id: id, name: trimmedName, coverURL: coverURL, trackCount: count, source: .qq)
+        return Playlist(id: id, name: trimmedName, coverURL: coverURL, trackCount: count, creatorName: creatorName, creatorAvatarURL: creatorAvatarURL, source: .qq)
     }
 
     private static func integerValue(_ value: Any?) -> Int {
