@@ -72,9 +72,7 @@ struct PlaylistSquareView: View {
 
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
-                            if source != .netease {
-                                playlistSearchField
-                            }
+                            playlistSearchField
 
                             if categories.count > 1 {
                                 categoryChips
