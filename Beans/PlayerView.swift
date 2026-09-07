@@ -2913,23 +2913,40 @@ struct PlayerView: View {
     }
 
     private func loadLyrics() async {
-        lyrics = []
         guard let song else { return }
         let identity = song.identityKey
         func apply(_ parsed: [LyricLine]) {
             guard self.song?.identityKey == identity else { return }
             self.lyrics = parsed
         }
+
+        let cacheKey: String
+        if song.source == .kugou {
+            cacheKey = "kugou:\(song.kugouHash ?? song.identityKey)"
+        } else if song.source == .qq {
+            cacheKey = "qq:\(song.qqMid ?? song.identityKey)"
+        } else {
+            cacheKey = "netease:\(song.id)"
+        }
+        if let cached = LyricsCache.shared.value(for: cacheKey) {
+            apply(LyricParser.parse(cached.lyric, translationRaw: cached.translation))
+        }
+
         if song.source == .kugou, let hash = song.kugouHash {
             let raw = await KugouMusicAPI.shared.lyric(hash: hash, duration: song.duration)
             apply(LyricParser.parse(raw))
+            LyricsCache.shared.save(lyric: raw, translation: nil, for: cacheKey)
         } else if song.source == .qq, let mid = song.qqMid {
             if let raw = try? await QQMusicAPI.shared.lyric(songmid: mid) {
                 apply(LyricParser.parse(raw))
+                LyricsCache.shared.save(lyric: raw, translation: nil, for: cacheKey)
             }
         } else {
             if let (lrc, tlyric) = try? await NetEaseAPI.shared.lyricWithTranslation(id: song.id) {
                 apply(LyricParser.parse(lrc ?? "", translationRaw: tlyric))
+                if let lrc, !lrc.isEmpty {
+                    LyricsCache.shared.save(lyric: lrc, translation: tlyric, for: cacheKey)
+                }
             }
         }
     }
@@ -4015,7 +4032,7 @@ struct PlayerSettingsSheet: View {
         VStack(alignment: .leading, spacing: 9) {
             if let isExpanded {
                 Button {
-                    withAnimation(.easeOut(duration: 0.16)) {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.06)) {
                         isExpanded.wrappedValue.toggle()
                     }
                     BeansHaptics.select()
@@ -4038,7 +4055,10 @@ struct PlayerSettingsSheet: View {
 
                 if isExpanded.wrappedValue {
                     content()
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .top)),
+                            removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
+                        ))
                 }
             } else {
                 Text(LocalizedStringKey(title))
