@@ -309,19 +309,23 @@ struct Playlist: Identifiable, Hashable, Codable {
     let name: String
     var coverURL: URL?
     let trackCount: Int
+    let playCount: Int
     let creatorName: String
+    let playlistDescription: String
     let specialType: Int
     /// 酷狗新版歌单接口使用的 global_collection_id，和本地展示用的数字 listid 可能不同。
     let kugouGlobalCollectionID: String?
     /// 歌单来源（网易云 / QQ音乐），非网易云歌单用对应接口加载
     let source: SongSource
 
-    init(id: Int, name: String, coverURL: URL?, trackCount: Int = 0, source: SongSource = .netease, kugouGlobalCollectionID: String? = nil) {
+    init(id: Int, name: String, coverURL: URL?, trackCount: Int = 0, playCount: Int = 0, creatorName: String = "", playlistDescription: String = "", source: SongSource = .netease, kugouGlobalCollectionID: String? = nil) {
         self.id = id
         self.name = name
         self.coverURL = coverURL
         self.trackCount = trackCount
-        self.creatorName = ""
+        self.playCount = playCount
+        self.creatorName = creatorName
+        self.playlistDescription = playlistDescription
         self.specialType = 0
         self.kugouGlobalCollectionID = kugouGlobalCollectionID
         self.source = source
@@ -332,9 +336,11 @@ struct Playlist: Identifiable, Hashable, Codable {
         self.id = id
         name = json["name"] as? String ?? ""
         trackCount = json["trackCount"] as? Int ?? 0
+        playCount = json["playCount"] as? Int ?? 0
         let pic = json["coverImgUrl"] as? String ?? json["picUrl"] as? String ?? ""
         coverURL = pic.isEmpty ? nil : URL(string: pic)
         creatorName = (json["creator"] as? [String: Any])?["nickname"] as? String ?? ""
+        playlistDescription = json["description"] as? String ?? json["desc"] as? String ?? ""
         specialType = json["specialType"] as? Int ?? 0
         kugouGlobalCollectionID = nil
         source = .netease
@@ -345,9 +351,11 @@ struct Playlist: Identifiable, Hashable, Codable {
         self.id = id
         name = json["name"] as? String ?? ""
         trackCount = 0
+        playCount = json["playCount"] as? Int ?? 0
         let pic = json["picUrl"] as? String ?? ""
         coverURL = pic.isEmpty ? nil : URL(string: pic)
         creatorName = ""
+        playlistDescription = json["description"] as? String ?? ""
         specialType = json["specialType"] as? Int ?? 0
         kugouGlobalCollectionID = nil
         source = .netease

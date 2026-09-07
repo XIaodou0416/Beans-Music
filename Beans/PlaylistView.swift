@@ -92,8 +92,20 @@ struct PlaylistView: View {
                     Text(beansSongCountText(tracks.count))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
+                    if playlist.playCount > 0 {
+                        Text("播放 \(formatPlaylistPlayCount(playlist.playCount))")
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansComment)
+                    }
                 }
                 Spacer(minLength: 0)
+            }
+            if !playlist.playlistDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(playlist.playlistDescription)
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 10) {
                 GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
@@ -148,6 +160,12 @@ struct PlaylistView: View {
         }
         .padding(14)
         .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 24, style: .continuous)) }
+    }
+
+    private func formatPlaylistPlayCount(_ count: Int) -> String {
+        if count >= 100_000_000 { return String(format: "%.1f亿", Double(count) / 100_000_000) }
+        if count >= 10_000 { return String(format: "%.1f万", Double(count) / 10_000) }
+        return "\(count)"
     }
 
     /// 歌单内搜索 + 排序后的列表

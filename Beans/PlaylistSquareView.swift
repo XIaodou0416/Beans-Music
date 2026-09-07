@@ -249,7 +249,11 @@ struct PlaylistSquareView: View {
                 .multilineTextAlignment(.leading)
 
             HStack(spacing: 5) {
+                if playlist.playCount > 0 {
+                    Label(formatPlaylistPlayCount(playlist.playCount), systemImage: "play.fill")
+                }
                 if playlist.trackCount > 0 {
+                    if playlist.playCount > 0 { Text("·") }
                     Text(beansSongCountText(playlist.trackCount))
                 }
                 if !playlist.creatorName.isEmpty {
@@ -279,6 +283,12 @@ struct PlaylistSquareView: View {
                 BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
         }
+    }
+
+    private func formatPlaylistPlayCount(_ count: Int) -> String {
+        if count >= 100_000_000 { return String(format: "%.1f亿", Double(count) / 100_000_000) }
+        if count >= 10_000 { return String(format: "%.1f万", Double(count) / 10_000) }
+        return "\(count)"
     }
 
     private var searchGrid: some View {
