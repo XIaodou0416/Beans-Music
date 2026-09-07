@@ -1728,7 +1728,7 @@ private struct DiscoverHorizontalScrollEdgeEffectDisabled: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.scrollEdgeEffectStyle(.identity, for: .horizontal)
+            content.scrollEdgeEffectStyle(.hard, for: .horizontal)
         } else {
             content
         }
