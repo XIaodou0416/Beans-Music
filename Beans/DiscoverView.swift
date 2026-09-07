@@ -159,7 +159,7 @@ struct DiscoverView: View {
                                             .sectionEntrance(delay: 0)
                                     }
                                 case "新碟上架":
-                                    if !newAlbums.isEmpty {
+                                    if source != .qq, !newAlbums.isEmpty {
                                         newAlbumsSection
                                             .sectionEntrance(delay: 0.04)
                                     }
@@ -877,9 +877,9 @@ struct DiscoverView: View {
                     }
                     .buttonStyle(GlassPressButtonStyle(scale: 0.97))
                     .padding(.vertical, 3)
-                    .frame(height: isNativeClean ? 178 : 166)
                     Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
+                .frame(height: isNativeClean ? 178 : 166)
             }
             .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
