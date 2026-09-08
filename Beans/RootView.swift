@@ -446,7 +446,19 @@ struct RootView: View {
 
             // Search becomes a trailing system action only while the
             // accessory is minimized; it stays in the normal row otherwise.
-            nativeSearchTab
+            if nativeTabBarState.isInline {
+                Tab(value: .search, role: .search) {
+                    SearchView()
+                } label: {
+                    nativeTabLabel(.search)
+                }
+            } else {
+                Tab(value: .search) {
+                    SearchView()
+                } label: {
+                    nativeTabLabel(.search)
+                }
+            }
         }
         .tint(Color.beansAmber)
         .tabBarMinimizeBehavior(player.currentSong == nil ? .never : .onScrollDown)
@@ -471,26 +483,6 @@ struct RootView: View {
             } else {
                 Image(systemName: tab.icon)
                     .font(.system(size: 25, weight: .semibold))
-            }
-        }
-    }
-
-    /// Keep search in the normal tab row until the system reports the
-    /// minimized inline accessory placement.
-    @available(iOS 26.0, *)
-    @ViewBuilder
-    private var nativeSearchTab: some View {
-        if nativeTabBarState.isInline {
-            Tab(value: .search, role: .search) {
-                SearchView()
-            } label: {
-                nativeTabLabel(.search)
-            }
-        } else {
-            Tab(value: .search) {
-                SearchView()
-            } label: {
-                nativeTabLabel(.search)
             }
         }
     }
