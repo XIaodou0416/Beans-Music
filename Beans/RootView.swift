@@ -417,10 +417,8 @@ struct RootView: View {
                 LibraryView()
             }
 
-            Tab(value: .search, role: .search) {
+            Tab(nativeTabTitle(.search), systemImage: "magnifyingglass", value: .search) {
                 SearchView()
-            } label: {
-                Label(nativeTabTitle(.search), systemImage: "magnifyingglass")
             }
         }
         .tint(Color.beansAmber)
