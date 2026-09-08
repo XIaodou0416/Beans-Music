@@ -16,11 +16,8 @@ enum SectionOrderStore {
 
     /// 读取已保存顺序：自动补全新板块、剔除已废弃板块
     static func load(_ key: String, defaults: [String]) -> [String] {
-        var order = UserDefaults.standard.stringArray(forKey: key) ?? defaults
-        if key == homeKey, order == ["每日推荐", "新碟上架", "歌手", "排行榜"] {
-            order = homeDefaults
-            UserDefaults.standard.set(order, forKey: key)
-        }
+        let storedOrder = UserDefaults.standard.stringArray(forKey: key)
+        var order = storedOrder ?? defaults
         if key == libraryKey, order == ["本地音乐库", "我的歌单", "最近播放"] {
             order = libraryDefaults
         }
@@ -32,6 +29,9 @@ enum SectionOrderStore {
         for item in defaults where !order.contains(item) { order.append(item) }
         order = order.filter { defaults.contains($0) }
         if order.isEmpty { order = defaults }
+        if storedOrder != order {
+            UserDefaults.standard.set(order, forKey: key)
+        }
         return order
     }
 
