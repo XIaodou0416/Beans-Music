@@ -178,6 +178,7 @@ struct LibraryView: View {
                 .frame(maxWidth: .infinity)
             }
             .beansScrollIndicatorsHidden()
+            .beansTabBarScrollReporter()
         }
         .task {
             source = platformPrefs.ensureVisible(source)

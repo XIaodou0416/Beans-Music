@@ -111,6 +111,7 @@ struct PlaylistSquareView: View {
                         .padding(.top, 2)
                     }
                     .beansScrollIndicatorsHidden()
+                    .beansTabBarScrollReporter()
                 }
             }
             .task(id: "\(source.rawValue)-\(selectedCategory)") {

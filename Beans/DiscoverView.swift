@@ -186,6 +186,7 @@ struct DiscoverView: View {
                 }
             }
             .beansScrollIndicatorsHidden()
+            .beansTabBarScrollReporter()
             .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
                 homePlatformSelectionMenu
             }

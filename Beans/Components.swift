@@ -11,6 +11,43 @@ extension View {
             self
         }
     }
+
+    /// 把主页面的滚动状态交给根底栏，用于切换展开和紧凑两种布局。
+    func beansTabBarScrollReporter() -> some View {
+        modifier(BeansTabBarScrollReporter())
+    }
+}
+
+private struct BeansTabBarScrollReporter: ViewModifier {
+    @State private var isCollapsed = false
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y
+            } action: { oldOffset, newOffset in
+                let delta = newOffset - oldOffset
+                let nextState: Bool
+                if newOffset <= 4 {
+                    nextState = false
+                } else if delta > 8 {
+                    nextState = true
+                } else if delta < -8 {
+                    nextState = false
+                } else {
+                    return
+                }
+                guard nextState != isCollapsed else { return }
+                isCollapsed = nextState
+                NotificationCenter.default.post(
+                    name: .beansTabBarCollapseChanged,
+                    object: nextState
+                )
+            }
+        } else {
+            content
+        }
+    }
 }
 
 // MARK: - 工具
