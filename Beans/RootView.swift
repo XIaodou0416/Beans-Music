@@ -50,13 +50,11 @@ struct RootView: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var favorites: FavoritesStore
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var selection: RootTab = .discover
     @State private var showPlayer = false
-    @State private var nativeTabBarCollapsed = false
     @Namespace private var nowPlayingTransition
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
@@ -124,6 +122,15 @@ struct RootView: View {
             // iOS 26 使用系统底栏和下滑收缩行为，旧系统使用兼容底栏。
             if #available(iOS 26.0, *) {
                 nativeTabs
+                    .modifier(
+                        MiniPlayerAccessoryModifier(
+                            isActive: player.currentSong != nil,
+                            showPlayer: $showPlayer,
+                            clock: player.clock,
+                            colorScheme: colorScheme,
+                            transitionNamespace: nowPlayingTransition
+                        )
+                    )
             } else {
                 legacyRootTabs
             }
@@ -160,11 +167,6 @@ struct RootView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
         .animation(.easeInOut(duration: 0.22), value: selection)
-        .onChange(of: player.currentSong?.identityKey) { identity in
-            if identity == nil {
-                nativeTabBarCollapsed = false
-            }
-        }
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
@@ -436,59 +438,16 @@ struct RootView: View {
                 nativeTabLabel(.library)
             }
 
-            Tab(value: .search) {
+            // Keep search as the system-owned trailing action so iOS can
+            // compress both sides of the bar around the inline player.
+            Tab(value: .search, role: .search) {
                 SearchView()
             } label: {
                 nativeTabLabel(.search)
             }
         }
-        .toolbar(.hidden, for: .tabBar)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            NativeLikeBottomDock(
-                selection: $selection,
-                isCollapsed: $nativeTabBarCollapsed,
-                showPlayer: $showPlayer,
-                tabLabelsVisible: tabLabelsVisible,
-                transitionNamespace: nowPlayingTransition,
-                reduceMotion: reduceMotion
-            )
-            .padding(.bottom, 6)
-        }
-        .simultaneousGesture(nativeTabBarGesture)
-    }
-
-    @available(iOS 26.0, *)
-    private var nativeTabBarGesture: some Gesture {
-        DragGesture(minimumDistance: 8)
-            .onChanged { value in
-                guard player.currentSong != nil else { return }
-                let vertical = value.translation.height
-                let horizontal = value.translation.width
-                guard abs(vertical) > abs(horizontal) * 1.2 else { return }
-            }
-            .onEnded { value in
-                guard player.currentSong != nil else { return }
-                let vertical = value.translation.height
-                let horizontal = value.translation.width
-                guard abs(vertical) > abs(horizontal) * 1.2 else { return }
-
-                if vertical < -28 || value.predictedEndTranslation.height < -72 {
-                    setNativeTabBarCollapsed(true)
-                } else if vertical > 28 || value.predictedEndTranslation.height > 72 {
-                    setNativeTabBarCollapsed(false)
-                }
-            }
-    }
-
-    private func setNativeTabBarCollapsed(_ collapsed: Bool) {
-        guard nativeTabBarCollapsed != collapsed else { return }
-        if reduceMotion {
-            nativeTabBarCollapsed = collapsed
-        } else {
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.84)) {
-                nativeTabBarCollapsed = collapsed
-            }
-        }
+        .tint(Color.beansAmber)
+        .tabBarMinimizeBehavior(player.currentSong == nil ? .never : .onScrollDown)
     }
 
     private func nativeTabTitle(_ tab: RootTab) -> LocalizedStringKey {
@@ -776,135 +735,6 @@ private struct RootMiniPlayerAccessory: View {
 
     private var presentation: MiniPlayerView.Presentation {
         placement.map { $0 == .inline } == true ? .inlineAccessory : .accessory
-    }
-}
-
-/// iOS 26 底部交互层：展开时保留完整导航，收缩时让当前入口和搜索夹住迷你播放器。
-@available(iOS 26.0, *)
-private struct NativeLikeBottomDock: View {
-    @EnvironmentObject private var player: PlayerManager
-    @Binding var selection: RootTab
-    @Binding var isCollapsed: Bool
-    @Binding var showPlayer: Bool
-    let tabLabelsVisible: Bool
-    let transitionNamespace: Namespace.ID
-    let reduceMotion: Bool
-
-    var body: some View {
-        VStack(spacing: isCollapsed ? 0 : 8) {
-            if !isCollapsed, player.currentSong != nil {
-                MiniPlayerView(
-                    showPlayer: $showPlayer,
-                    presentation: .dock,
-                    transitionNamespace: transitionNamespace
-                )
-                .environmentObject(player.clock)
-                .padding(.horizontal, 12)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            if isCollapsed {
-                collapsedBar
-                    .transition(.scale(scale: 0.94).combined(with: .opacity))
-            } else {
-                expandedBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(
-            reduceMotion ? .none : .spring(response: 0.38, dampingFraction: 0.84),
-            value: isCollapsed
-        )
-    }
-
-    private var expandedBar: some View {
-        GlassTabBar(
-            items: RootTab.bottomTabs.map { tab in
-                GlassTabBar.Item(
-                    tab: tab,
-                    title: LocalizedStringKey(tab.title),
-                    icon: tab.icon,
-                    assetName: tab.assetName
-                )
-            },
-            selection: $selection,
-            labelsVisible: tabLabelsVisible,
-            accentIsNativeClean: false,
-            onHomeLongPress: nil,
-            iconSize: 25
-        ) { tab in
-            guard selection != tab else { return }
-            BeansHaptics.select()
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                selection = tab
-            }
-        }
-    }
-
-    private var collapsedBar: some View {
-        HStack(spacing: 6) {
-            collapsedTabButton(for: selection)
-
-            if player.currentSong != nil {
-                MiniPlayerView(
-                    showPlayer: $showPlayer,
-                    presentation: .inlineAccessory,
-                    transitionNamespace: transitionNamespace
-                )
-                .environmentObject(player.clock)
-                .frame(maxWidth: .infinity)
-            } else {
-                Spacer(minLength: 0)
-            }
-
-            Button {
-                BeansHaptics.tap()
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                    selection = .search
-                }
-            } label: {
-                Image(systemName: RootTab.search.icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(GlassPressButtonStyle())
-            .accessibilityLabel("搜索")
-        }
-        .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity)
-        .frame(height: 56)
-        .background(.regularMaterial, in: Capsule())
-        .overlay {
-            Capsule().strokeBorder(.primary.opacity(0.10), lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-        .padding(.horizontal, 12)
-    }
-
-    private func collapsedTabButton(for tab: RootTab) -> some View {
-        Button {
-            BeansHaptics.tap()
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.84)) {
-                isCollapsed = false
-            }
-        } label: {
-            if let assetName = tab.assetName {
-                Image(assetName)
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: 22, height: 22)
-            } else {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 20, weight: .semibold))
-            }
-        }
-        .foregroundStyle(Color.beansAmber)
-        .frame(width: 44, height: 44)
-        .contentShape(Rectangle())
-        .buttonStyle(GlassPressButtonStyle())
-        .accessibilityLabel(LocalizedStringKey(tab.title))
     }
 }
 
