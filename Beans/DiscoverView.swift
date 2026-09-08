@@ -470,20 +470,20 @@ struct DiscoverView: View {
                 }
             }
             .frame(width: 34, height: 34)
-            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .clipShape(Circle())
             .overlay {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                Circle()
                     .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
             }
             .padding(4)
             .background {
                 BeansGlass(
-                    shape: RoundedRectangle(cornerRadius: 15, style: .continuous),
+                    shape: Circle(),
                     forceLiquid: true
                 )
             }
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .clipShape(Circle())
+            .contentShape(Circle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.92))
         .accessibilityLabel(beansLocalized("我的", "Profile"))
