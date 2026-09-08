@@ -29,6 +29,7 @@ struct DiscoverView: View {
     @State private var legacyRoute: DiscoverRoute?
     @State private var recommendationActionLoading: String?
     @State private var showHomePlatformMenu = false
+    @State private var showProfile = false
     @State private var showSectionSort = false
     /// 主页板块顺序（每日推荐 / 排行榜，可自定义）
     @State private var homeOrder = SectionOrderStore.load(SectionOrderStore.homeKey, defaults: SectionOrderStore.homeDefaults)
@@ -245,6 +246,12 @@ struct DiscoverView: View {
                 )
                     .onDisappear { SectionOrderStore.save(SectionOrderStore.homeKey, homeOrder) }
             }
+            .sheet(isPresented: $showProfile) {
+                ProfileView()
+                    .environmentObject(theme)
+                    .environmentObject(auth)
+                    .environmentObject(player)
+            }
         }
             .beansNavigationDestination(for: DiscoverRoute.self) { route in
                 discoverDestination(route)
@@ -418,6 +425,7 @@ struct DiscoverView: View {
                 }
                 Spacer()
                 HStack(spacing: 10) {
+                    homeProfileButton
                     if isNativeClean && !hidePlatformPicker {
                         nativeHomeProviderMenu
                     }
@@ -438,6 +446,55 @@ struct DiscoverView: View {
         }
         .padding(.top, isNativeClean ? 4 : 8)
         .frame(minHeight: homeGreetingHeight > 0 ? homeGreetingHeight : nil, alignment: .top)
+    }
+
+    /// 主页右上角的“我的”入口，复用我的页面头像并保持液态玻璃边框。
+    private var homeProfileButton: some View {
+        Button {
+            BeansHaptics.tap()
+            showProfile = true
+        } label: {
+            ZStack {
+                if let avatarURL = auth.user?.avatarURL {
+                    AsyncImage(url: avatarURL) { phase in
+                        if let image = phase.image {
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            profileFallbackIcon
+                        }
+                    }
+                } else {
+                    profileFallbackIcon
+                }
+            }
+            .frame(width: 34, height: 34)
+            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
+            }
+            .padding(4)
+            .background {
+                BeansGlass(
+                    shape: RoundedRectangle(cornerRadius: 15, style: .continuous),
+                    forceLiquid: true
+                )
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+        .accessibilityLabel(beansLocalized("我的", "Profile"))
+    }
+
+    private var profileFallbackIcon: some View {
+        Image(systemName: "person.fill")
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Color.beansComment)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.beansGlassFill.opacity(0.7))
     }
 
     /// 平台选择（网易云 / QQ音乐 / 酷狗音乐，样式与搜索页一致）

@@ -30,6 +30,9 @@ enum RootTab: String, CaseIterable, Identifiable {
         case .search: return "magnifyingglass"
         }
     }
+
+    /// 底部栏只保留主要内容入口；“我的”从主页右上角头像进入。
+    static let bottomTabs: [RootTab] = [.discover, .playlists, .library, .search]
 }
 
 struct RootView: View {
@@ -348,7 +351,7 @@ struct RootView: View {
 
             Group {
                 GlassTabBar(
-                    items: RootTab.allCases.map {
+                    items: RootTab.bottomTabs.map {
                         GlassTabBar.Item(tab: $0, title: LocalizedStringKey($0.title), icon: $0.icon)
                     },
                     selection: $selection,
@@ -414,14 +417,8 @@ struct RootView: View {
                 LibraryView()
             }
 
-            Tab(nativeTabTitle(.profile), systemImage: "person.crop.circle", value: .profile) {
-                ProfileView()
-            }
-
-            Tab(value: .search, role: .search) {
+            Tab(nativeTabTitle(.search), systemImage: "magnifyingglass", value: .search) {
                 SearchView()
-            } label: {
-                Label(nativeTabTitle(.search), systemImage: "magnifyingglass")
             }
         }
         .tint(Color.beansAmber)
