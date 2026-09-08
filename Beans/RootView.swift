@@ -438,7 +438,9 @@ struct RootView: View {
                 nativeTabLabel(.library)
             }
 
-            Tab(value: .search) {
+            // Keep search as the system-owned trailing action so iOS can
+            // compress both sides of the bar around the inline player.
+            Tab(value: .search, role: .search) {
                 SearchView()
             } label: {
                 nativeTabLabel(.search)
