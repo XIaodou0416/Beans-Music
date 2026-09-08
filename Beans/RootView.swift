@@ -66,6 +66,7 @@ struct RootView: View {
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
+    @AppStorage("beans.legacyTabIconSize") private var legacyTabIconSize = 23.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
@@ -371,7 +372,8 @@ struct RootView: View {
                     selection: $selection,
                     labelsVisible: tabLabelsVisible,
                     accentIsNativeClean: isNativeClean,
-                    onHomeLongPress: { showHomePlatformMenu = true }
+                    onHomeLongPress: { showHomePlatformMenu = true },
+                    iconSize: CGFloat(legacyTabIconSize)
                 ) { tab in
                     guard selection != tab else { return }
                     BeansHaptics.select()
@@ -715,6 +717,7 @@ private struct GlassTabBar: View {
     var labelsVisible: Bool
     var accentIsNativeClean: Bool
     var onHomeLongPress: (() -> Void)?
+    var iconSize: CGFloat
     var onSelect: (RootTab) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -770,10 +773,10 @@ private struct GlassTabBar: View {
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .frame(width: 23, height: 23)
+                    .frame(width: iconSize, height: iconSize)
             } else {
                 Image(systemName: item.icon)
-                    .font(.system(size: 23, weight: .semibold))
+                    .font(.system(size: iconSize, weight: .semibold))
                     .symbolVariant(.fill)
             }
             if labelsVisible {

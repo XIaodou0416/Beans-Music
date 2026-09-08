@@ -1242,6 +1242,7 @@ struct SettingsView: View {
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
+    @AppStorage("beans.legacyTabIconSize") private var legacyTabIconSize = 23.0
     /// 第三方音源播放会员歌成功时提醒，默认开启
     @AppStorage("beans.showThirdPartyVIPNotice") private var showThirdPartyVIPNotice = true
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
@@ -3024,6 +3025,10 @@ struct SettingsView: View {
                 Slider(value: $legacyTabOffsetY, in: -36...36, step: 1)
                     .tint(Color.beansAmber)
             }
+            settingsSlider("图标大小", valueText: "\(Int(legacyTabIconSize))") {
+                Slider(value: $legacyTabIconSize, in: 16...30, step: 1)
+                    .tint(Color.beansAmber)
+            }
         }
         .padding(14)
         .background {
@@ -3036,6 +3041,7 @@ struct SettingsView: View {
         legacyTabWidth = 356
         legacyTabOffsetX = 0
         legacyTabOffsetY = 0
+        legacyTabIconSize = 23
     }
 
     private func signedIntText(_ value: Double) -> String {
