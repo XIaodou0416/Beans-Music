@@ -462,6 +462,7 @@ struct RootView: View {
         }
         .tint(Color.beansAmber)
         .tabBarMinimizeBehavior(player.currentSong == nil ? .never : .onScrollDown)
+        .animation(.spring(response: 0.36, dampingFraction: 0.84), value: nativeTabBarState.isInline)
     }
 
     private func nativeTabTitle(_ tab: RootTab) -> LocalizedStringKey {
@@ -758,10 +759,17 @@ private struct RootMiniPlayerAccessory: View {
         .onChange(of: placement) { _ in
             updateTabBarState()
         }
+        .onDisappear {
+            tabBarState.isInline = false
+        }
     }
 
     private func updateTabBarState() {
-        tabBarState.isInline = placement.map { $0 == .inline } == true
+        let isInline = placement.map { $0 == .inline } == true
+        guard isInline != tabBarState.isInline else { return }
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
+            tabBarState.isInline = isInline
+        }
     }
 
     private var presentation: MiniPlayerView.Presentation {
