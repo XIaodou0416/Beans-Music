@@ -15,7 +15,7 @@ enum RootTab: String, CaseIterable, Identifiable {
         switch self {
         case .discover: return "主页"
         case .playlists: return "精选"
-        case .library: return "歌单"
+        case .library: return "音乐库"
         case .profile: return "我的"
         case .search: return "搜索"
         }

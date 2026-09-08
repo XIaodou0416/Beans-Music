@@ -352,23 +352,27 @@ struct LibraryView: View {
                 }
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 if let imageName = source.brandImageName {
                     Image(imageName)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 16, height: 16)
+                        .frame(width: 15, height: 15)
                 } else {
                     Image(systemName: source.icon)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                 }
+                Text(LocalizedStringKey(source.rawValue))
+                    .lineLimit(1)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
             }
-            .foregroundStyle(Color.beansLabel)
-            .frame(width: 42, height: 34)
+            .font(BeansFont.appFont(12, .semibold))
+            .foregroundStyle(Color.beansComment)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
             .background {
-                Capsule().fill(Color.beansLabel.opacity(isNativeClean ? 0.08 : 0.12))
+                BeansGlass(shape: Capsule())
             }
             .contentShape(Capsule())
         }
