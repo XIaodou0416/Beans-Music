@@ -128,26 +128,30 @@ struct SearchView: View {
             GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
-            VStack(spacing: 0) {
-                headerTitle
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 10)
-
-                searchField
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 10)
-
-                if !hidePlatformPicker {
-                    providerPicker
+            ScrollView {
+                VStack(spacing: 0) {
+                    headerTitle
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
-                }
+                        .padding(.top, 8)
+                        .padding(.bottom, 10)
 
-                contentArea
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    searchField
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 10)
+
+                    if !hidePlatformPicker {
+                        providerPicker
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
+                    }
+
+                    contentArea
+                        .frame(maxWidth: .infinity, alignment: .top)
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .beansScrollIndicatorsHidden()
+            .beansScrollDismissesKeyboard()
         }
         .task(id: provider) {
             guard hotLoadedProvider != provider else { return }
@@ -441,39 +445,36 @@ struct SearchView: View {
     // MARK: - 热搜（排名卡片）
 
     private var hotSection: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                SearchHistorySection { word in
-                    keyword = word
-                    searchController.dismissKeyboard()
-                    debounceTask?.cancel()
-                    historyStore.record(word)
-                    Task { await startSearch(word) }
-                }
-                if hotWords.isEmpty {
-                    LoadingStateView()
-                } else {
-                    if #available(iOS 16, *) {
-                        FlowLayout(spacing: 10) {
-                            ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
-                                hotTag(index: index, word: word)
-                            }
+        VStack(alignment: .leading, spacing: 16) {
+            SearchHistorySection { word in
+                keyword = word
+                searchController.dismissKeyboard()
+                debounceTask?.cancel()
+                historyStore.record(word)
+                Task { await startSearch(word) }
+            }
+            if hotWords.isEmpty {
+                LoadingStateView()
+            } else {
+                if #available(iOS 16, *) {
+                    FlowLayout(spacing: 10) {
+                        ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
+                            hotTag(index: index, word: word)
                         }
-                    } else {
-                        // iOS 15 降级：自适应网格实现流式标签
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], alignment: .leading, spacing: 10) {
-                            ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
-                                hotTag(index: index, word: word)
-                            }
+                    }
+                } else {
+                    // iOS 15 降级：自适应网格实现流式标签
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], alignment: .leading, spacing: 10) {
+                        ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
+                            hotTag(index: index, word: word)
                         }
                     }
                 }
-                Spacer().frame(height: 130)
             }
-            .padding(.horizontal, 20)
+            Spacer().frame(height: 130)
         }
-        .beansScrollIndicatorsHidden()
-        .beansScrollDismissesKeyboard()
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// 热搜前三名渐变配色（更亮眼：橙红 / 金黄 / 冰蓝）
@@ -557,7 +558,7 @@ struct SearchView: View {
             } else if songResults.isEmpty {
                 EmptyStateView(icon: "music.note", text: "\(provider.rawValue)未找到相关歌曲")
             } else {
-                ScrollView {
+                VStack {
                     LazyVStack(spacing: 8) {
                         HStack(spacing: 8) {
                             Text(beansLocalized("找到 \(songResults.count) 首 · \(provider.rawValue)", "Found \(songResults.count) songs · \(beansPlatformName(provider))"))
@@ -600,9 +601,6 @@ struct SearchView: View {
                     .padding(.top, 4)
                     .padding(.bottom, 180)
                 }
-                .beansScrollIndicatorsHidden()
-                .beansScrollDismissesKeyboard()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .top) {
                     ProgressView()
                         .controlSize(.small)
@@ -623,7 +621,7 @@ struct SearchView: View {
             } else if artistResults.isEmpty {
                 EmptyStateView(icon: "person.crop.circle", text: "\(provider.rawValue)未找到相关歌手")
             } else {
-                ScrollView {
+                VStack {
                     LazyVStack(spacing: 8) {
                         HStack {
                             Text(beansLocalized("找到 \(artistResults.count) 位 · \(provider.rawValue)", "Found \(artistResults.count) artists · \(beansPlatformName(provider))"))
@@ -673,9 +671,6 @@ struct SearchView: View {
                     .padding(.top, 4)
                     .padding(.bottom, 180)
                 }
-                .beansScrollIndicatorsHidden()
-                .beansScrollDismissesKeyboard()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .top) {
                     ProgressView()
                         .controlSize(.small)
@@ -696,7 +691,7 @@ struct SearchView: View {
             } else if albumResults.isEmpty {
                 EmptyStateView(icon: "square.stack", text: "\(provider.rawValue)未找到相关专辑")
             } else {
-                ScrollView {
+                VStack {
                     LazyVStack(spacing: 8) {
                         HStack {
                             Text(beansLocalized("找到 \(albumResults.count) 张 · \(provider.rawValue)", "Found \(albumResults.count) albums · \(beansPlatformName(provider))"))
@@ -747,9 +742,6 @@ struct SearchView: View {
                     .padding(.top, 4)
                     .padding(.bottom, 180)
                 }
-                .beansScrollIndicatorsHidden()
-                .beansScrollDismissesKeyboard()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .top) {
                     ProgressView()
                         .controlSize(.small)
