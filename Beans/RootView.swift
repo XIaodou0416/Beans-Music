@@ -45,6 +45,7 @@ struct RootView: View {
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var selection: RootTab = .discover
+    @State private var searchTabIsCollapsed = false
     @State private var showPlayer = false
     @Namespace private var nowPlayingTransition
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
@@ -175,6 +176,11 @@ struct RootView: View {
                 enableHighRefresh = true
             }
             HighRefreshKeeper.shared.configure(enabled: true)
+        }
+        .onChange(of: selection) { nextSelection in
+            if nextSelection != .search {
+                searchTabIsCollapsed = false
+            }
         }
         .onChange(of: disclaimerAccepted) { accepted in
             if accepted, ChangelogStore.shouldShowWhatsNew {
@@ -418,8 +424,20 @@ struct RootView: View {
             }
 
             // 普通 Tab 在展开时与其它项目同组，下滑时由系统底栏统一收缩。
-            Tab(nativeTabTitle(.search), systemImage: "magnifyingglass", value: .search) {
-                SearchView()
+            if searchTabIsCollapsed {
+                Tab(value: .search, role: .search) {
+                    SearchView { collapsed in
+                        searchTabIsCollapsed = collapsed
+                    }
+                } label: {
+                    Label(nativeTabTitle(.search), systemImage: "magnifyingglass")
+                }
+            } else {
+                Tab(nativeTabTitle(.search), systemImage: "magnifyingglass", value: .search) {
+                    SearchView { collapsed in
+                        searchTabIsCollapsed = collapsed
+                    }
+                }
             }
         }
         .tint(Color.beansAmber)

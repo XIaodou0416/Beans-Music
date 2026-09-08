@@ -86,6 +86,12 @@ enum SearchResultType: String, CaseIterable, Identifiable {
 }
 
 struct SearchView: View {
+    private let onScrollStateChange: ((Bool) -> Void)?
+
+    init(onScrollStateChange: ((Bool) -> Void)? = nil) {
+        self.onScrollStateChange = onScrollStateChange
+    }
+
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
@@ -152,6 +158,7 @@ struct SearchView: View {
             }
             .beansScrollIndicatorsHidden()
             .beansScrollDismissesKeyboard()
+            .modifier(SearchScrollStateModifier(onChange: onScrollStateChange))
         }
         .task(id: provider) {
             guard hotLoadedProvider != provider else { return }
@@ -749,6 +756,36 @@ struct SearchView: View {
                         .padding(.top, 10)
                         .opacity(searching ? 1 : 0)
                 }
+            }
+        }
+    }
+
+    private struct SearchScrollStateModifier: ViewModifier {
+        let onChange: ((Bool) -> Void)?
+        @State private var isCollapsed = false
+
+        func body(content: Content) -> some View {
+            if #available(iOS 18.0, *) {
+                content.onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    geometry.contentOffset.y
+                } action: { oldOffset, newOffset in
+                    let delta = newOffset - oldOffset
+                    let nextState: Bool
+                    if newOffset <= 4 {
+                        nextState = false
+                    } else if delta > 8 {
+                        nextState = true
+                    } else if delta < -8 {
+                        nextState = false
+                    } else {
+                        return
+                    }
+                    guard nextState != isCollapsed else { return }
+                    isCollapsed = nextState
+                    onChange?(nextState)
+                }
+            } else {
+                content
             }
         }
     }
