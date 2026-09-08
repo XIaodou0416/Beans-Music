@@ -778,9 +778,7 @@ struct PlayerView: View {
 
             Button {
                 BeansHaptics.tap()
-                // 经典样式统一使用自定义操作面板，避免低系统的 confirmationDialog
-                // 出现点击标题无响应的问题。
-                showMoreActions = true
+                showNativeMoreActions = true
             } label: {
                 VStack(spacing: 2) {
                     Text(LocalizedStringKey(player.isBuffering ? "加载中…" : (player.isPlaying ? "正在播放" : "已暂停")))
@@ -2872,7 +2870,7 @@ struct PlayerView: View {
 
     private func seekToLyric(_ line: LyricLine) {
         guard song?.identityKey == player.currentSong?.identityKey else { return }
-        player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
+        player.seekPrecisely(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
     }
 
     private func closePlayer() {

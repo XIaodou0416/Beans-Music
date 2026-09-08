@@ -325,6 +325,45 @@ final class PlayerManager: NSObject, ObservableObject {
         savePersistedPlaybackState()
     }
 
+    /// 歌词点击专用的精确跳转：暂停后等待 AVPlayer 完成定位，再恢复原播放状态。
+    /// 普通进度条继续使用 seek(to:) 的即时拖动逻辑。
+    func seekPrecisely(to seconds: Double) {
+        let knownDuration = max(duration, currentSong?.duration ?? seconds)
+        let target = knownDuration > 0
+            ? max(0, min(seconds, knownDuration))
+            : max(0, seconds)
+        let shouldResume = isPlaying
+        let seekSongKey = currentSong?.identityKey
+        seekRevision &+= 1
+        let revision = seekRevision
+        progress = target
+        if shouldResume {
+            player?.pause()
+            isPlaying = false
+        }
+        player?.seek(
+            to: CMTime(seconds: target, preferredTimescale: 600),
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        ) { [weak self] finished in
+            guard finished else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      self.currentSong?.identityKey == seekSongKey,
+                      self.seekRevision == revision else { return }
+                self.progress = target
+                if shouldResume {
+                    self.player?.playImmediately(atRate: Float(self.rate))
+                    self.isPlaying = true
+                }
+                self.updateNowPlaying()
+                self.savePersistedPlaybackState()
+                self.seekRevision &+= 1
+            }
+        }
+        updateNowPlaying()
+    }
+
     func seekBy(_ delta: Double) {
         seek(to: progress + delta)
     }
