@@ -1,14 +1,6 @@
 import SwiftUI
 import MediaPlayer
 
-private struct ReferenceLyricCenterKey: PreferenceKey {
-    static var defaultValue: [UUID: CGFloat] = [:]
-
-    static func reduce(value: inout [UUID: CGFloat], nextValue: () -> [UUID: CGFloat]) {
-        value.merge(nextValue(), uniquingKeysWith: { $1 })
-    }
-}
-
 private struct ReferencePlaybackPresentationMetrics {
     static let headerTopSpacing: CGFloat = 20
 }
@@ -43,11 +35,6 @@ struct ReferencePlaybackView: View {
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
     @AppStorage("beans.appleMusic.showLyricPreview") private var showLyricPreview = true
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
-    @State private var lyricCenters: [UUID: CGFloat] = [:]
-    @State private var focusedLyricID: UUID?
-    @State private var lyricsViewportHeight: CGFloat = 0
-    @State private var isDraggingLyrics = false
-    @State private var resumeTask: Task<Void, Never>?
 
     private func layoutEntry(_ part: AppleMusicLayoutPart) -> PlayerLayoutEntry {
         appleLayout.entry(for: part)
@@ -228,61 +215,20 @@ struct ReferencePlaybackView: View {
             if lyrics.isEmpty {
                 emptyLyricsView
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView(showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 26) {
-                            Color.clear.frame(height: max(88, lyricsViewportHeight * 0.30))
-                            ForEach(lyrics) { line in
-                                lyricLine(line, isFocused: line.id == currentVisualLyricID)
-                                    .id(line.id)
-                                    .background {
-                                        GeometryReader { rowGeometry in
-                                            Color.clear.preference(
-                                                key: ReferenceLyricCenterKey.self,
-                                                value: [line.id: rowGeometry.frame(in: .named("referenceLyricsViewport")).midY]
-                                            )
-                                        }
-                                    }
-                            }
-                            Color.clear.frame(height: max(110, lyricsViewportHeight * 0.34))
-                        }
-                        .padding(.horizontal, 28)
-                    }
-                    .coordinateSpace(name: "referenceLyricsViewport")
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0.0),
-                                .init(color: .black, location: 0.12),
-                                .init(color: .black, location: 0.84),
-                                .init(color: .clear, location: 1.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .background {
-                        GeometryReader { viewport in
-                            Color.clear
-                                .onAppear { lyricsViewportHeight = viewport.size.height }
-                                .onChange(of: viewport.size.height) { lyricsViewportHeight = $0 }
-                        }
-                    }
-                    .onPreferenceChange(ReferenceLyricCenterKey.self) { centers in
-                        lyricCenters = centers
-                        updateFocusedLyric(from: centers)
-                    }
-                    .simultaneousGesture(lyricsDragGesture(proxy: proxy))
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-                            scrollToPlaybackLyric(proxy: proxy, animated: false)
-                        }
-                    }
-                    .onChange(of: currentPlaybackLyricID) { _ in
-                        guard !isDraggingLyrics else { return }
-                        scrollToPlaybackLyric(proxy: proxy, animated: true)
-                    }
-                }
+                LyricsSection(
+                    lyrics: lyrics,
+                    accent: primaryColor,
+                    secondary: secondaryColor,
+                    baseFontSize: 21,
+                    lineSpacing: 26,
+                    glowRadius: 0,
+                    showTranslation: false,
+                    alignment: .leading,
+                    anchor: .center,
+                    blurStart: 1,
+                    blurAmount: 0.7,
+                    lyricOffset: CGFloat(lyricOffset)
+                )
             }
         }
     }
@@ -464,108 +410,13 @@ struct ReferencePlaybackView: View {
     }
 
     private var currentPlaybackLyricIndex: Int? {
-        guard !lyrics.isEmpty else { return nil }
-        let progress = LyricTiming.effectiveProgress(player.lyricProgress, userOffset: lyricOffset)
-        var low = 0
-        var high = lyrics.count - 1
-        var answer: Int?
-        while low <= high {
-            let mid = (low + high) / 2
-            if lyrics[mid].time <= progress {
-                answer = mid
-                low = mid + 1
-            } else {
-                high = mid - 1
-            }
-        }
-        return answer
-    }
-
-    private var currentPlaybackLyricID: UUID? {
-        guard let index = currentPlaybackLyricIndex, lyrics.indices.contains(index) else { return nil }
-        return lyrics[index].id
-    }
-
-    private var currentVisualLyricID: UUID? {
-        isDraggingLyrics ? (focusedLyricID ?? currentPlaybackLyricID) : currentPlaybackLyricID
+        LyricTimeline.activeIndex(in: lyrics, at: player.lyricProgress, userOffset: lyricOffset)
     }
 
     private var subtitle: String {
         guard let song else { return "" }
         let parts = [song.artists, song.album].filter { !$0.isEmpty }
         return parts.isEmpty ? "未知歌曲" : parts.joined(separator: " · ")
-    }
-
-    private func lyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
-        Button {
-            BeansHaptics.tap()
-            player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
-        } label: {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(line.text.isEmpty ? " " : line.text)
-                        .font(BeansFont.appFont(isFocused ? 27 : 23, isFocused ? .bold : .semibold))
-                        .foregroundStyle(primaryColor.opacity(isFocused ? 1 : 0.36))
-                        .fixedSize(horizontal: false, vertical: true)
-                    if isFocused && isDraggingLyrics {
-                        Spacer(minLength: 8)
-                        Text(beansTimeString(line.time))
-                            .font(BeansFont.appFont(11, .semibold, .monospaced))
-                            .foregroundStyle(secondaryColor.opacity(0.82))
-                    }
-                }
-                if isFocused, let translation = line.translation, !translation.isEmpty {
-                    Text(translation)
-                        .font(BeansFont.appFont(15, .medium))
-                        .foregroundStyle(secondaryColor.opacity(0.72))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .scaleEffect(isFocused ? 1.06 : 0.84, anchor: .leading)
-            .blur(radius: isFocused ? 0 : 0.7)
-        }
-        .buttonStyle(.plain)
-        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: isFocused)
-    }
-
-    private func updateFocusedLyric(from centers: [UUID: CGFloat]) {
-        guard lyricsViewportHeight > 0, !centers.isEmpty else { return }
-        let center = lyricsViewportHeight / 2
-        focusedLyricID = centers.min { abs($0.value - center) < abs($1.value - center) }?.key
-    }
-
-    private func scrollToPlaybackLyric(proxy: ScrollViewProxy, animated: Bool) {
-        guard let id = currentPlaybackLyricID else { return }
-        let action = { proxy.scrollTo(id, anchor: .center) }
-        if animated {
-            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.38)) { action() }
-        } else {
-            action()
-        }
-    }
-
-    private func lyricsDragGesture(proxy: ScrollViewProxy) -> some Gesture {
-        DragGesture(minimumDistance: 4)
-            .onChanged { _ in
-                isDraggingLyrics = true
-                resumeTask?.cancel()
-                updateFocusedLyric(from: lyricCenters)
-            }
-            .onEnded { _ in
-                resumeTask?.cancel()
-                if let id = focusedLyricID {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                        proxy.scrollTo(id, anchor: .center)
-                    }
-                }
-                resumeTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 2_500_000_000)
-                    guard !Task.isCancelled else { return }
-                    isDraggingLyrics = false
-                }
-            }
     }
 
     private var commentsGesture: some Gesture {

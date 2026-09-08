@@ -312,18 +312,31 @@ final class PlayerManager: NSObject, ObservableObject {
         loadCurrent()
     }
 
-    func seek(to seconds: Double) {
-        // 与播放器的歌词游标保持同一套逻辑：以用户指定的时间立即更新，
-        // 不等待 AVPlayer 回调，也不使用回调中的旧 currentTime 覆盖目标位置。
+    func seek(to seconds: Double, completion: (@escaping () -> Void)? = nil) {
         let clamped = max(0, min(seconds, max(duration, currentSong?.duration ?? seconds)))
         progress = clamped
         lyricProgress = clamped
         seekRevision &+= 1
-        player?.seek(
+        guard let player else {
+            completion?()
+            updateNowPlaying()
+            savePersistedPlaybackState()
+            return
+        }
+        let shouldResume = isPlaying
+        player.seek(
             to: CMTime(seconds: clamped, preferredTimescale: 600),
             toleranceBefore: .zero,
             toleranceAfter: .zero
-        )
+        ) { [weak self] finished in
+            guard finished, let self else { return }
+            self.performOnMain {
+                if shouldResume {
+                    player.playImmediately(atRate: Float(self.rate))
+                }
+                completion?()
+            }
+        }
         updateNowPlaying()
         savePersistedPlaybackState()
     }
