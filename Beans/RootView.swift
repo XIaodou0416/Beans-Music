@@ -417,8 +417,11 @@ struct RootView: View {
                 LibraryView()
             }
 
-            Tab(nativeTabTitle(.search), systemImage: "magnifyingglass", value: .search) {
+            // 系统搜索角色在底栏展开时与其它项目同组，下滑收缩后变为独立搜索按钮。
+            Tab(value: .search, role: .search) {
                 SearchView()
+            } label: {
+                Label(nativeTabTitle(.search), systemImage: "magnifyingglass")
             }
         }
         .tint(Color.beansAmber)
