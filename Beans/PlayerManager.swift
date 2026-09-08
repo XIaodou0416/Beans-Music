@@ -74,6 +74,8 @@ final class PlayerManager: NSObject, ObservableObject {
     @Published var sleepTimerRemaining: Int = 0
     @Published var history: [Song] = []
     @Published var playCounts: [String: Int] = [:]
+    /// 每次用户主动拖动进度或点击歌词都会递增，歌词视图据此立即重新定位。
+    @Published private(set) var seekRevision = 0
 
     private var player: AVPlayer?
     private var timeObserver: Any?
@@ -311,6 +313,7 @@ final class PlayerManager: NSObject, ObservableObject {
     func seek(to seconds: Double) {
         let clamped = max(0, min(seconds, max(duration, 0)))
         progress = clamped
+        seekRevision &+= 1
         // 用 seek 完成回调同步真实进度：避免暂停状态下拖动进度后，歌词定位与实际播放位置不一致
         player?.seek(
             to: CMTime(seconds: clamped, preferredTimescale: 600),
@@ -320,10 +323,9 @@ final class PlayerManager: NSObject, ObservableObject {
             guard let self, finished else { return }
             self.performOnMain { [weak self] in
                 guard let self else { return }
-                let actual = self.player?.currentTime().seconds ?? clamped
-                if abs(actual - self.progress) > 0.25 {
-                    self.progress = actual
-                }
+                let raw = self.player?.currentTime().seconds ?? clamped
+                let actual = raw.isFinite ? max(0, raw) : clamped
+                self.progress = actual
             }
         }
         updateNowPlaying()

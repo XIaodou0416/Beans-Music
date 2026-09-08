@@ -455,19 +455,7 @@ struct DiscoverView: View {
             showProfile = true
         } label: {
             ZStack {
-                if let avatarURL = auth.user?.avatarURL {
-                    AsyncImage(url: avatarURL) { phase in
-                        if let image = phase.image {
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            profileFallbackIcon
-                        }
-                    }
-                } else {
-                    profileFallbackIcon
-                }
+                BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 34, useCustom: true)
             }
             .frame(width: 34, height: 34)
             .clipShape(Circle())
@@ -487,14 +475,6 @@ struct DiscoverView: View {
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.92))
         .accessibilityLabel(beansLocalized("我的", "Profile"))
-    }
-
-    private var profileFallbackIcon: some View {
-        Image(systemName: "person.fill")
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(Color.beansComment)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.beansGlassFill.opacity(0.7))
     }
 
     /// 平台选择（网易云 / QQ音乐 / 酷狗音乐，样式与搜索页一致）
@@ -737,7 +717,7 @@ struct DiscoverView: View {
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 ZStack {
-                    CoverImage(url: coverURL, size: 148, cornerRadius: 10)
+                    CoverImage(url: coverURL, size: 148, cornerRadius: 6)
                     LinearGradient(
                         colors: [.black.opacity(0.08), .black.opacity(0.68)],
                         startPoint: .top,
@@ -826,7 +806,7 @@ struct DiscoverView: View {
                     .font(BeansFont.appFont(16, .bold, .rounded))
                     .foregroundStyle(index < 3 ? Color.beansAmber : Color.beansComment)
                     .frame(width: 24)
-                CoverImage(url: coverURL, size: 52, cornerRadius: 12)
+                CoverImage(url: coverURL, size: 52, cornerRadius: 6)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(name)
                         .font(BeansFont.appFont(15, .semibold))
@@ -898,7 +878,7 @@ struct DiscoverView: View {
                                     )
                                 )
                             if let coverURL = dailySongs.first?.coverURL {
-                                CoverImage(url: coverURL, size: cardHeight - 16, cornerRadius: isNativeClean ? 14 : 12)
+                                CoverImage(url: coverURL, size: cardHeight - 16, cornerRadius: 6)
                                     .overlay {
                                         LinearGradient(
                                             colors: [.clear, .black.opacity(0.18)],
@@ -1042,7 +1022,7 @@ struct DiscoverView: View {
                             player.play(songs: dailySongs, startAt: index)
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
-                                CoverImage(url: song.coverURL, size: isNativeClean ? 156 : 108, cornerRadius: isNativeClean ? 14 : 16)
+                                CoverImage(url: song.coverURL, size: isNativeClean ? 156 : 108, cornerRadius: 6)
                                     .overlay(alignment: .topLeading) {
                                     if showSongVIPBadge, song.isVIP {
                                             Text("VIP")
@@ -1118,7 +1098,7 @@ struct DiscoverView: View {
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
                 if let coverURL {
-                    CoverImage(url: coverURL, size: emphasized ? (isNativeClean ? 172 : 160) : (isNativeClean ? 160 : 148), cornerRadius: isNativeClean ? 16 : 18)
+                    CoverImage(url: coverURL, size: emphasized ? (isNativeClean ? 172 : 160) : (isNativeClean ? 160 : 148), cornerRadius: 6)
                         .overlay {
                             LinearGradient(
                                 colors: [.black.opacity(0.05), .black.opacity(0.62)],
@@ -1326,7 +1306,7 @@ struct DiscoverView: View {
                                 openRoute(DiscoverRoute.playlist(playlist))
                             } label: {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    CoverImage(url: playlist.coverURL, size: 166, cornerRadius: 16)
+                                    CoverImage(url: playlist.coverURL, size: 166, cornerRadius: 6)
                                     Text(playlist.name)
                                         .font(BeansFont.appFont(15, .bold))
                                         .foregroundStyle(Color.primary)
@@ -1357,7 +1337,7 @@ struct DiscoverView: View {
                             openRoute(DiscoverRoute.playlist(playlist))
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
-                                CoverImage(url: playlist.coverURL, size: 144, cornerRadius: 18)
+                                CoverImage(url: playlist.coverURL, size: 144, cornerRadius: 6)
                                     .frame(maxWidth: .infinity)
                                 Text(playlist.name)
                                     .font(BeansFont.appFont(12, .medium))
@@ -1472,7 +1452,7 @@ struct DiscoverView: View {
                             openRoute(.album(album))
                         } label: {
                             VStack(alignment: .leading, spacing: 7) {
-                                CoverImage(url: album.coverURL, size: isNativeClean ? 148 : 124, cornerRadius: isNativeClean ? 14 : 16)
+                                CoverImage(url: album.coverURL, size: isNativeClean ? 148 : 124, cornerRadius: 6)
                                 Text(album.name)
                                     .font(BeansFont.appFont(isNativeClean ? 14 : 12, .semibold))
                                     .foregroundStyle(Color.beansLabel)
@@ -2205,7 +2185,7 @@ struct TopListDetailView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 8)
+            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 6)
             VStack(alignment: .leading, spacing: 6) {
                 Text(beansChartName(topList.name))
                     .font(BeansFont.appFont(18, .bold))
@@ -2347,7 +2327,7 @@ struct KugouTopListDetailView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 8)
+            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 6)
             VStack(alignment: .leading, spacing: 6) {
                 Text(beansChartName(topList.name))
                     .font(BeansFont.appFont(18, .bold))

@@ -14,8 +14,8 @@ enum RootTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .discover: return "主页"
-        case .playlists: return "精选"
-        case .library: return "音乐库"
+        case .playlists: return "广播"
+        case .library: return "资料库"
         case .profile: return "我的"
         case .search: return "搜索"
         }
@@ -24,7 +24,7 @@ enum RootTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .discover: return "house.fill"
-        case .playlists: return "square.grid.2x2.fill"
+        case .playlists: return "dot.radiowaves.left.and.right"
         case .library: return "music.note.list"
         case .profile: return "person.crop.circle"
         case .search: return "magnifyingglass"

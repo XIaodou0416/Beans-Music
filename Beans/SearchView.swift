@@ -89,7 +89,6 @@ struct SearchView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
@@ -211,18 +210,6 @@ struct SearchView: View {
 
     private var headerTitle: some View {
         HStack(alignment: .center, spacing: 10) {
-            Button {
-                dismiss()
-                NotificationCenter.default.post(name: .beansSearchBackRequested, object: nil)
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(beansLocalized("返回", "Back"))
             Text("搜索")
                 .font(BeansFont.appFont(32, .bold))
                 .foregroundStyle(Color.beansLabel)

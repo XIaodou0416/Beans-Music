@@ -93,17 +93,7 @@ struct ArtistHomeSheet: View {
 
     private var artistHeader: some View {
         HStack(spacing: 14) {
-            AsyncImage(url: artist?.coverURL) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().scaledToFill()
-                } else {
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(Color.beansComment)
-                }
-            }
-            .frame(width: 72, height: 72)
-            .clipShape(Circle())
+            BeansAvatarView(remoteURL: artist?.coverURL, size: 72)
             .background(Color.beansGlassFill, in: Circle())
 
             VStack(alignment: .leading, spacing: 6) {

@@ -3401,7 +3401,16 @@ struct LyricsSection: View {
                                 if selectionMode {
                                     withAnimation(.easeInOut(duration: 0.2)) { toggleSelect(index) }
                                 } else {
+                                    resumeScrollTask?.cancel()
+                                    isUserScrolling = false
+                                    focusedIndex = nil
                                     onTapLine(line)
+                                    // 点击歌词后以所点行作为目标，避免 seek 完成前 currentIndex 仍停留在旧行。
+                                    DispatchQueue.main.async {
+                                        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
+                                            proxy.scrollTo(index, anchor: anchor)
+                                        }
+                                    }
                                 }
                             }
                             .onLongPressGesture(minimumDuration: 0.35) {
@@ -3494,6 +3503,14 @@ struct LyricsSection: View {
                 guard let newIndex, !isUserScrolling else { return }
                 withAnimation(.easeInOut(duration: 0.3)) {
                     proxy.scrollTo(newIndex, anchor: anchor)
+                }
+            }
+            .onChange(of: player.seekRevision) { _ in
+                guard !isUserScrolling, let newIndex = currentIndex else { return }
+                DispatchQueue.main.async {
+                    withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
+                        proxy.scrollTo(newIndex, anchor: anchor)
+                    }
                 }
             }
         }

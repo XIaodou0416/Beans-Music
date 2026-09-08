@@ -82,7 +82,8 @@ final class LocalLibraryStore: ObservableObject {
     func addSong(_ song: Song, to id: UUID) {
         guard let idx = playlists.firstIndex(where: { $0.id == id }) else { return }
         guard !playlists[idx].songs.contains(where: { $0.identityKey == song.identityKey }) else { return }
-        playlists[idx].songs.append(song)
+        // 新收藏排在歌单最上方，符合“最近收藏优先”的显示顺序。
+        playlists[idx].songs.insert(song, at: 0)
     }
 
     @discardableResult

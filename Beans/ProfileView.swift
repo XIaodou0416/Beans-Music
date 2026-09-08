@@ -46,7 +46,9 @@ struct ProfileView: View {
     @State private var loadingRemoteDonors = false
     @State private var showWeChatOpenError = false
     @State private var showFeedback = false
+    @State private var showAvatarPicker = false
     @ObservedObject private var feedbackHistory = FeedbackHistoryStore.shared
+    @ObservedObject private var avatarStore = BeansAvatarStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
@@ -192,6 +194,7 @@ struct ProfileView: View {
                             EmptyView()
                         }
                     }
+                    customAvatarCard
                     // 更新入口固定放在“我的”页面最底部，避免被板块排序隐藏。
                     updateLinkCard
                     communityCard
@@ -239,6 +242,11 @@ struct ProfileView: View {
         .sheet(isPresented: $showFeedback) {
             FeedbackSheet()
                 .environmentObject(theme)
+        }
+        .sheet(isPresented: $showAvatarPicker) {
+            WallpaperPhotoPicker(allowsMultiple: false) { data in
+                avatarStore.save(data: data)
+            }
         }
         .fullScreenCover(isPresented: $showSettings) {
             SettingsView()
@@ -355,17 +363,7 @@ struct ProfileView: View {
             } label: {
                 HStack(spacing: 14) {
                     // 头像：主题渐变描边环
-                    AsyncImage(url: auth.user?.avatarURL) { phase in
-                        if case .success(let image) = phase {
-                            image.resizable().scaledToFill()
-                        } else {
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 26))
-                                .foregroundStyle(Color.beansComment)
-                        }
-                    }
-                    .frame(width: 64, height: 64)
-                    .clipShape(Circle())
+                    BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 64, useCustom: true)
                     .background(Color.beansGlassFill, in: Circle())
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -1219,6 +1217,50 @@ struct AccountHubSheet: View {
 }
 
 // MARK: - 设置页（外观 + 歌词翻译，从「我的」右上角齿轮进入）
+
+private extension ProfileView {
+    var customAvatarCard: some View {
+        HStack(spacing: 12) {
+            BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 44, useCustom: true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("自定义头像")
+                    .font(BeansFont.appFont(15, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                Text("仅保存在本机，主页右上角同步显示")
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(Color.beansComment)
+            }
+            Spacer(minLength: 8)
+            Button {
+                BeansHaptics.tap()
+                showAvatarPicker = true
+            } label: {
+                Image(systemName: "photo.badge.plus")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 36, height: 36)
+                    .background { BeansSurface(shape: Circle()) }
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+            if !avatarStore.path.isEmpty {
+                Button {
+                    BeansHaptics.tap()
+                    avatarStore.clear()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.beansComment)
+                        .frame(width: 36, height: 36)
+                        .background { BeansSurface(shape: Circle()) }
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+            }
+        }
+        .padding(14)
+        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
+        .beansCardShadow(radius: 8, y: 3)
+    }
+}
 
 struct SettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
@@ -3562,6 +3604,7 @@ private struct EqualizerResponseView: View {
 // MARK: - 壁纸照片选择器（PHPicker 封装：iOS 14+ 兼容，支持多选图片）
 
 struct WallpaperPhotoPicker: UIViewControllerRepresentable {
+    var allowsMultiple = true
     let onPicked: (Data) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -3569,7 +3612,7 @@ struct WallpaperPhotoPicker: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var config = PHPickerConfiguration()
         config.filter = .images
-        config.selectionLimit = 0 // 0 = 多选
+        config.selectionLimit = allowsMultiple ? 0 : 1
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = context.coordinator
         return picker
