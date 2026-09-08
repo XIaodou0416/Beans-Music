@@ -232,14 +232,14 @@ struct PlaylistSquareView: View {
         ) {
             ForEach(visiblePlaylists) { playlist in
                 NavigationLink(destination: PlaylistView(playlist: playlist)) {
-                    playlistCard(playlist)
+                    playlistCard(playlist, showsContainer: false)
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.97))
             }
         }
     }
 
-    private func playlistCard(_ playlist: Playlist) -> some View {
+    private func playlistCard(_ playlist: Playlist, showsContainer: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             CoverImage(url: playlist.coverURL, size: 150, cornerRadius: isNativeClean ? 14 : 16)
                 Text(playlist.name)
@@ -272,15 +272,17 @@ struct PlaylistSquareView: View {
         .padding(isNativeClean || source == .netease ? 0 : 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            if usesSolidSurface {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.primary.opacity(0.04))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.7)
-                    }
-            } else if !isNativeClean {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            if showsContainer {
+                if usesSolidSurface {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.primary.opacity(0.04))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.7)
+                        }
+                } else if !isNativeClean {
+                    BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
             }
         }
     }

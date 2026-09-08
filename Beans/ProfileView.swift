@@ -957,10 +957,6 @@ struct AccountHubSheet: View {
                         if platformPrefs.isEnabled(SearchProvider.netease) { neteaseCard }
                         if platformPrefs.isEnabled(SearchProvider.qq) { qqCard }
                         if platformPrefs.isEnabled(SearchProvider.kugou) { kugouCard }
-                        Text(isEnglish ? "Sign in to \(displayPlatformSummary) to sync playlists and improve playback availability" : "\(platformPrefs.summaryText) 登录后可同步歌单并提升可播成功率")
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
-                            .padding(.horizontal, 4)
                     }
                     .padding(16)
                 }
@@ -1678,11 +1674,6 @@ struct SettingsView: View {
                     Text(beansLocalized("账号登录", "Account sign-in"))
                         .font(BeansFont.appFont(15, .semibold))
                         .foregroundStyle(Color.beansLabel)
-                    Text(accountSummary)
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
@@ -1696,17 +1687,6 @@ struct SettingsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.98))
-    }
-
-    private var accountSummary: String {
-        var names: [String] = []
-        if auth.isLoggedIn { names.append("网易云音乐") }
-        if qqAuth.isLoggedIn { names.append("QQ 音乐") }
-        if kugouAuth.isLoggedIn { names.append("酷狗音乐") }
-        if names.isEmpty {
-            return beansLocalized("管理网易云、QQ 音乐和酷狗登录", "Manage NetEase, QQ Music and Kugou sign-in")
-        }
-        return beansLocalized(names.joined(separator: "、"), names.joined(separator: ", "))
     }
 
     /// 校验扩展名并安装字体（asCopy 返回的 URL 已在沙盒内，可直接读取）

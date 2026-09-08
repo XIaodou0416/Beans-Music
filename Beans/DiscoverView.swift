@@ -455,9 +455,9 @@ struct DiscoverView: View {
             showProfile = true
         } label: {
             ZStack {
-                BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 34, useCustom: true)
+                BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 38, useCustom: true)
             }
-            .frame(width: 34, height: 34)
+            .frame(width: 38, height: 38)
             .clipShape(Circle())
             .overlay {
                 Circle()

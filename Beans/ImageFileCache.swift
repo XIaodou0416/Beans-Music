@@ -8,9 +8,33 @@ final class BeansAvatarStore: ObservableObject {
 
     @Published private(set) var path: String
     private let defaultsKey = "beans.profile.customAvatarPath"
+    private let dataKey = "beans.profile.customAvatarData"
 
     private init() {
-        path = UserDefaults.standard.string(forKey: defaultsKey) ?? ""
+        let defaults = UserDefaults.standard
+        let storedPath = defaults.string(forKey: defaultsKey) ?? ""
+        if !storedPath.isEmpty, FileManager.default.fileExists(atPath: storedPath) {
+            path = storedPath
+        } else if let encoded = defaults.string(forKey: dataKey),
+                  let data = Data(base64Encoded: encoded),
+                  let image = UIImage(data: data),
+                  let jpeg = image.jpegData(compressionQuality: 0.88) {
+            let fileURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("BeansProfileAvatar.jpg")
+            do {
+                try FileManager.default.createDirectory(
+                    at: fileURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try jpeg.write(to: fileURL, options: .atomic)
+                path = fileURL.path
+                defaults.set(path, forKey: defaultsKey)
+            } catch {
+                path = ""
+            }
+        } else {
+            path = ""
+        }
     }
 
     func save(data: Data) {
@@ -26,6 +50,7 @@ final class BeansAvatarStore: ObservableObject {
             try jpeg.write(to: fileURL, options: .atomic)
             path = fileURL.path
             UserDefaults.standard.set(path, forKey: defaultsKey)
+            UserDefaults.standard.set(jpeg.base64EncodedString(), forKey: dataKey)
             BeansImageFileCache.remove(path)
         } catch {
             BeansLogger.shared.log("自定义头像保存失败：\(error.localizedDescription)", level: .warn)
@@ -39,6 +64,7 @@ final class BeansAvatarStore: ObservableObject {
         }
         path = ""
         UserDefaults.standard.removeObject(forKey: defaultsKey)
+        UserDefaults.standard.removeObject(forKey: dataKey)
     }
 }
 
