@@ -58,6 +58,19 @@ final class SyncedPlaylistCache {
         return songEntries[cacheKey(source: playlist.source, accountID: "\(accountID)|\(playlist.id)")]
     }
 
+    /// 返回磁盘缓存中的歌单与歌曲，启动预加载只读取快照，不触发网络请求。
+    func allCachedPlaylists() -> [Playlist] {
+        lock.lock()
+        defer { lock.unlock() }
+        return playlistEntries.values.flatMap(\.playlists)
+    }
+
+    func allCachedSongs() -> [Song] {
+        lock.lock()
+        defer { lock.unlock() }
+        return songEntries.values.flatMap(\.songs)
+    }
+
     func saveSongs(_ songs: [Song], playlist: Playlist, accountID: String) {
         guard !songs.isEmpty else { return }
         lock.lock()

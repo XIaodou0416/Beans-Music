@@ -41,6 +41,11 @@ final class DiscoverCache {
         store[source.rawValue] = snapshot
     }
 
+    /// 返回当前进程中已经加载过的主页快照，供启动预加载复用已有封面地址。
+    func allSnapshots() -> [Snapshot] {
+        Array(store.values)
+    }
+
     /// 缓存是否仍然新鲜：每日推荐单独放宽到 6 小时，其余按 1 小时
     func isFresh(_ snapshot: Snapshot) -> Bool {
         let age = Date().timeIntervalSince(snapshot.savedAt)

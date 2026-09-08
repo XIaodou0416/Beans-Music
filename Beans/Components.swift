@@ -558,10 +558,11 @@ struct CoverImage: View {
 }
 
 /// 所有歌曲封面共用的内存与 URLCache 缓存，避免详情页每次进入都重新下载封面。
-@MainActor
-private final class BeansCoverImageLoader: ObservableObject {
-    private static let memoryCache = NSCache<NSURL, UIImage>()
-    private static let session: URLSession = {
+/// 封面图片共享缓存：内存缓存负责当前页面快速显示，URLCache 负责跨页面和重启后的磁盘缓存。
+/// 预加载器与 CoverImage 使用同一个 URLSession，避免启动时预加载的图片无法被页面复用。
+final class BeansCoverImageStore {
+    static let memoryCache = NSCache<NSURL, UIImage>()
+    static let session: URLSession = {
         let configuration = URLSessionConfiguration.default
         configuration.requestCachePolicy = .returnCacheDataElseLoad
         configuration.urlCache = URLCache(
@@ -571,6 +572,49 @@ private final class BeansCoverImageLoader: ObservableObject {
         )
         return URLSession(configuration: configuration)
     }()
+
+    /// 分批下载封面，避免首次启动时同时创建大量网络任务。
+    static func prefetch(urls: Set<URL>) async {
+        let uniqueURLs = Array(urls)
+        guard !uniqueURLs.isEmpty else { return }
+
+        let batchSize = 6
+        for start in stride(from: 0, to: uniqueURLs.count, by: batchSize) {
+            if Task.isCancelled { return }
+            let end = min(start + batchSize, uniqueURLs.count)
+            let batch = Array(uniqueURLs[start..<end])
+            await withTaskGroup(of: Void.self) { group in
+                for url in batch {
+                    group.addTask {
+                        await prefetch(url: url)
+                    }
+                }
+            }
+        }
+    }
+
+    private static func prefetch(url: URL) async {
+        if memoryCache.object(forKey: url as NSURL) != nil { return }
+        do {
+            var request = URLRequest(url: url)
+            request.cachePolicy = .returnCacheDataElseLoad
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  200..<300 ~= http.statusCode,
+                  !data.isEmpty else { return }
+            // 显式写入磁盘缓存，兼容部分封面服务器没有返回可缓存响应头的情况。
+            session.configuration.urlCache?.storeCachedResponse(
+                CachedURLResponse(response: response, data: data),
+                for: request
+            )
+        } catch {
+            // 预加载失败不影响页面显示，进入页面后 CoverImage 仍会按需重试。
+        }
+    }
+}
+
+@MainActor
+private final class BeansCoverImageLoader: ObservableObject {
 
     @Published private(set) var image: UIImage?
     @Published private(set) var didFail = false
@@ -583,7 +627,7 @@ private final class BeansCoverImageLoader: ObservableObject {
         didFail = false
         loadedURL = url
         guard let url else { return }
-        if let cached = Self.memoryCache.object(forKey: url as NSURL) {
+        if let cached = BeansCoverImageStore.memoryCache.object(forKey: url as NSURL) {
             image = cached
             return
         }
@@ -591,7 +635,7 @@ private final class BeansCoverImageLoader: ObservableObject {
             do {
                 var request = URLRequest(url: url)
                 request.cachePolicy = .returnCacheDataElseLoad
-                let (data, response) = try await Self.session.data(for: request)
+                let (data, response) = try await BeansCoverImageStore.session.data(for: request)
                 guard !Task.isCancelled, let self, self.loadedURL == url else { return }
                 guard let http = response as? HTTPURLResponse,
                       200..<300 ~= http.statusCode,
@@ -599,7 +643,7 @@ private final class BeansCoverImageLoader: ObservableObject {
                     self.didFail = true
                     return
                 }
-                Self.memoryCache.setObject(image, forKey: url as NSURL)
+                BeansCoverImageStore.memoryCache.setObject(image, forKey: url as NSURL)
                 self.image = image
             } catch {
                 guard !Task.isCancelled, let self, self.loadedURL == url else { return }

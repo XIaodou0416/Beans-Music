@@ -33,6 +33,13 @@ final class DetailSongsCache {
         return entries[key]
     }
 
+    /// 返回详情页缓存中的歌曲，供启动预加载复用已经访问过的封面。
+    func allCachedSongs() -> [Song] {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries.values.flatMap(\.songs)
+    }
+
     func save(_ songs: [Song], for key: String) {
         guard !songs.isEmpty else { return }
         lock.lock()

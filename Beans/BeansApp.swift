@@ -57,6 +57,12 @@ struct BeansApp: App {
                 player.resumePersistedPlaybackIfEnabled()
                 FontManager.reinstallIfNeeded()
                 theme.restoreWallpapersIfNeeded()
+                // 首帧完成后立即启动封面预加载，不等待其他启动网络任务结束。
+                CoverImagePrefetcher.shared.prefetchStartupCovers(
+                    auth: auth,
+                    player: player,
+                    favorites: favorites
+                )
                 await DeviceReporter.shared.reportLaunch()
                 await RemoteControlStore.shared.refreshIfNeeded(force: true)
             }
