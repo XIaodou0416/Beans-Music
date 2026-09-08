@@ -54,6 +54,7 @@ struct RootView: View {
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var selection: RootTab = .discover
+    @ObservedObject private var nativeTabBarState = NativeTabBarCompressionState.shared
     @State private var showPlayer = false
     @Namespace private var nowPlayingTransition
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
@@ -167,6 +168,11 @@ struct RootView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
         .animation(.easeInOut(duration: 0.22), value: selection)
+        .onChange(of: player.currentSong?.identityKey) { identity in
+            if identity == nil {
+                nativeTabBarState.isInline = false
+            }
+        }
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
@@ -438,13 +444,9 @@ struct RootView: View {
                 nativeTabLabel(.library)
             }
 
-            // Keep search as the system-owned trailing action so iOS can
-            // compress both sides of the bar around the inline player.
-            Tab(value: .search, role: .search) {
-                SearchView()
-            } label: {
-                nativeTabLabel(.search)
-            }
+            // Search becomes a trailing system action only while the
+            // accessory is minimized; it stays in the normal row otherwise.
+            nativeSearchTab
         }
         .tint(Color.beansAmber)
         .tabBarMinimizeBehavior(player.currentSong == nil ? .never : .onScrollDown)
@@ -469,6 +471,26 @@ struct RootView: View {
             } else {
                 Image(systemName: tab.icon)
                     .font(.system(size: 25, weight: .semibold))
+            }
+        }
+    }
+
+    /// Keep search in the normal tab row until the system reports the
+    /// minimized inline accessory placement.
+    @available(iOS 26.0, *)
+    @ViewBuilder
+    private var nativeSearchTab: some View {
+        if nativeTabBarState.isInline {
+            Tab(value: .search, role: .search) {
+                SearchView()
+            } label: {
+                nativeTabLabel(.search)
+            }
+        } else {
+            Tab(value: .search) {
+                SearchView()
+            } label: {
+                nativeTabLabel(.search)
             }
         }
     }
@@ -690,6 +712,12 @@ private struct ClearSheetBackground: ViewModifier {
     }
 }
 
+private final class NativeTabBarCompressionState: ObservableObject {
+    static let shared = NativeTabBarCompressionState()
+
+    @Published var isInline = false
+}
+
 @available(iOS 26.0, *)
 private struct MiniPlayerAccessoryModifier: ViewModifier {
     let isActive: Bool
@@ -723,6 +751,7 @@ private struct RootMiniPlayerAccessory: View {
     @Binding var showPlayer: Bool
     let clock: PlaybackClock
     let transitionNamespace: Namespace.ID
+    @ObservedObject private var tabBarState = NativeTabBarCompressionState.shared
 
     var body: some View {
         MiniPlayerView(
@@ -731,6 +760,16 @@ private struct RootMiniPlayerAccessory: View {
             transitionNamespace: transitionNamespace
         )
         .environmentObject(clock)
+        .onAppear {
+            updateTabBarState()
+        }
+        .onChange(of: placement) { _ in
+            updateTabBarState()
+        }
+    }
+
+    private func updateTabBarState() {
+        tabBarState.isInline = placement.map { $0 == .inline } == true
     }
 
     private var presentation: MiniPlayerView.Presentation {
