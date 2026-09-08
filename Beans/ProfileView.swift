@@ -25,9 +25,6 @@ struct ProfileView: View {
     @State private var showAccountHub = false
     /// 设置页（外观 + 歌词翻译等）
     @State private var showSettings = false
-    @State private var showSectionSort = false
-    /// 我的界面板块顺序（账号 / 关于，可自定义）
-    @State private var profileOrder = SectionOrderStore.load(SectionOrderStore.profileKey, defaults: SectionOrderStore.profileDefaults)
     /// 手动检查更新
     @State private var checkingUpdate = false
     @State private var updateResult: UpdateChecker.CheckResult?
@@ -47,6 +44,7 @@ struct ProfileView: View {
     @State private var showWeChatOpenError = false
     @State private var showFeedback = false
     @State private var showAvatarPicker = false
+    @AppStorage("beans.profile.customNickname") private var customNickname = ""
     @ObservedObject private var feedbackHistory = FeedbackHistoryStore.shared
     @ObservedObject private var avatarStore = BeansAvatarStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
@@ -115,18 +113,12 @@ struct ProfileView: View {
                 Text("我的")
                     .font(BeansFont.appFont(30, .bold))
                     .foregroundStyle(Color.beansLabel)
-            Text(isEnglish ? "\(displayPlatformSummary) account and appearance settings" : "\(platformPrefs.summaryText) 账号与外观设置")
+            Text(isEnglish ? "Customize your avatar and nickname" : "自定义头像与昵称")
                     .font(BeansFont.appFont(13))
                     .foregroundStyle(Color.beansComment)
             }
             Spacer()
             HStack(spacing: 10) {
-                if !homeHeaderHideSort {
-                    GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
-                        BeansHaptics.tap()
-                        showSectionSort = true
-                    }
-                }
                 GlassIconButton(systemName: "gearshape.fill", forceLiquid: true) {
                     BeansHaptics.tap()
                     homeRenderingPaused = true
@@ -144,19 +136,13 @@ struct ProfileView: View {
                     .font(BeansFont.appFont(38, .bold))
                     .foregroundStyle(Color.beansLabel)
                 Spacer(minLength: 12)
-                if !homeHeaderHideSort {
-                    GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
-                        BeansHaptics.tap()
-                        showSectionSort = true
-                    }
-                }
                 GlassIconButton(systemName: "gearshape", forceLiquid: true) {
                     BeansHaptics.tap()
                     homeRenderingPaused = true
                     showSettings = true
                 }
             }
-            Text(LocalizedStringKey(accountStatusLine))
+            Text(LocalizedStringKey(isEnglish ? "Customize your avatar and nickname" : "自定义头像与昵称"))
                 .font(BeansFont.appFont(12, .medium))
                 .foregroundStyle(Color.beansComment)
                 .lineLimit(2)
@@ -182,17 +168,6 @@ struct ProfileView: View {
                         appleHeader
                     } else {
                         header
-                    }
-                    // 板块按用户自定义顺序渲染（可拖拽排序）
-                    ForEach(profileOrder, id: \.self) { key in
-                        switch key {
-                        case "账号":
-                            userCard
-                        case "关于":
-                            EmptyView()
-                        default:
-                            EmptyView()
-                        }
                     }
                     customAvatarCard
                     // 更新入口固定放在“我的”页面最底部，避免被板块排序隐藏。
@@ -234,11 +209,6 @@ struct ProfileView: View {
                 .environmentObject(auth)
                 .environmentObject(theme)
         }
-        .sheet(isPresented: $showAccountHub) {
-            AccountHubSheet()
-                .environmentObject(auth)
-                .environmentObject(theme)
-        }
         .sheet(isPresented: $showFeedback) {
             FeedbackSheet()
                 .environmentObject(theme)
@@ -252,19 +222,8 @@ struct ProfileView: View {
             SettingsView()
                 .environmentObject(theme)
                 .environmentObject(player)
+                .environmentObject(auth)
                 .ignoresSafeArea(.all)
-        }
-        .sheet(isPresented: $showSectionSort) {
-            SectionOrderSheet(
-                title: "我的板块排序",
-                sections: SectionOrderStore.profileDefaults,
-                order: $profileOrder,
-                platformOrder: Binding(
-                    get: { platformPrefs.orderedRaw },
-                    set: { platformPrefs.orderedRaw = $0 }
-                )
-            )
-                .onDisappear { SectionOrderStore.save(SectionOrderStore.profileKey, profileOrder) }
         }
         .sheet(item: $updateShareFile, onDismiss: cleanupUpdateShareFile) { item in
             ShareSheet(items: [item.url])
@@ -1221,14 +1180,18 @@ struct AccountHubSheet: View {
 private extension ProfileView {
     var customAvatarCard: some View {
         HStack(spacing: 12) {
-            BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 44, useCustom: true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("自定义头像")
-                    .font(BeansFont.appFont(15, .semibold))
+            BeansAvatarView(remoteURL: nil, size: 48, useCustom: true)
+            VStack(alignment: .leading, spacing: 4) {
+                TextField(isEnglish ? "Nickname" : "自定义昵称", text: $customNickname)
+                    .font(BeansFont.appFont(16, .semibold))
                     .foregroundStyle(Color.beansLabel)
-                Text("仅保存在本机，主页右上角同步显示")
+                    .textFieldStyle(.plain)
+                    .lineLimit(1)
+                Text(isEnglish ? "Avatar and nickname stay on this device" : "头像和昵称仅保存在本机")
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             Spacer(minLength: 8)
             Button {
@@ -1265,6 +1228,7 @@ private extension ProfileView {
 struct SettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var auth: AuthStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
@@ -1324,6 +1288,8 @@ struct SettingsView: View {
     @ObservedObject private var equalizer = BeansEqualizer.shared
     @AppStorage(ThirdPartyAudioQuality.storageKey) private var thirdPartyAudioQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+    @ObservedObject private var qqAuth = QQMusicAuth.shared
+    @ObservedObject private var kugouAuth = KugouMusicAuth.shared
 
     @State private var appearanceExpanded = false
     @State private var platformExpanded = false
@@ -1347,6 +1313,7 @@ struct SettingsView: View {
     @State private var backupMessage: String?
     /// 日志
     @State private var showLogViewer = false
+    @State private var showAccountHub = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1595,6 +1562,7 @@ struct SettingsView: View {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 16) {
+                        accountSection
                         themeSection
                         playbackSection
                         equalizerSection
@@ -1669,6 +1637,11 @@ struct SettingsView: View {
             ThirdPartySourceManagerSheet()
                 .environmentObject(theme)
         }
+        .sheet(isPresented: $showAccountHub) {
+            AccountHubSheet()
+                .environmentObject(auth)
+                .environmentObject(theme)
+        }
         .sheet(isPresented: $showEqualizer) {
             EqualizerSettingsView()
                 .environmentObject(theme)
@@ -1699,6 +1672,51 @@ struct SettingsView: View {
             appearanceSection
             platformSection
         }
+    }
+
+    private var accountSection: some View {
+        Button {
+            BeansHaptics.tap()
+            showAccountHub = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "person.crop.circle.badge.checkmark")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 30)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(beansLocalized("账号登录", "Account sign-in"))
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(accountSummary)
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.beansComment.opacity(0.65))
+            }
+            .padding(14)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+    }
+
+    private var accountSummary: String {
+        var names: [String] = []
+        if auth.isLoggedIn { names.append("网易云音乐") }
+        if qqAuth.isLoggedIn { names.append("QQ 音乐") }
+        if kugouAuth.isLoggedIn { names.append("酷狗音乐") }
+        if names.isEmpty {
+            return beansLocalized("管理网易云、QQ 音乐和酷狗登录", "Manage NetEase, QQ Music and Kugou sign-in")
+        }
+        return beansLocalized("已登录：\(names.joined(separator: "、"))", "Signed in: \(names.joined(separator: ", "))")
     }
 
     /// 校验扩展名并安装字体（asCopy 返回的 URL 已在沙盒内，可直接读取）

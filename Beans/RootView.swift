@@ -352,7 +352,11 @@ struct RootView: View {
             Group {
                 GlassTabBar(
                     items: RootTab.bottomTabs.map {
-                        GlassTabBar.Item(tab: $0, title: LocalizedStringKey($0.title), icon: $0.icon)
+                        GlassTabBar.Item(
+                            tab: $0,
+                            title: LocalizedStringKey($0.title),
+                            icon: $0.icon
+                        )
                     },
                     selection: $selection,
                     labelsVisible: tabLabelsVisible,
@@ -405,20 +409,44 @@ struct RootView: View {
     @available(iOS 26.0, *)
     private var nativeTabs: some View {
         TabView(selection: $selection) {
-            Tab(nativeTabTitle(.discover), systemImage: "house", value: .discover) {
+            Tab(value: .discover) {
                 DiscoverView()
+            } label: {
+                Label {
+                    Text(nativeTabTitle(.discover))
+                } icon: {
+                    BeansTabIcon(tab: .discover, size: 22)
+                }
             }
 
-            Tab(nativeTabTitle(.playlists), systemImage: "square.grid.2x2", value: .playlists) {
+            Tab(value: .playlists) {
                 PlaylistSquareView()
+            } label: {
+                Label {
+                    Text(nativeTabTitle(.playlists))
+                } icon: {
+                    BeansTabIcon(tab: .playlists, size: 22)
+                }
             }
 
-            Tab(nativeTabTitle(.library), systemImage: "music.note.list", value: .library) {
+            Tab(value: .library) {
                 LibraryView()
+            } label: {
+                Label {
+                    Text(nativeTabTitle(.library))
+                } icon: {
+                    BeansTabIcon(tab: .library, size: 22)
+                }
             }
 
-            Tab(nativeTabTitle(.search), systemImage: "magnifyingglass", value: .search) {
+            Tab(value: .search) {
                 SearchView()
+            } label: {
+                Label {
+                    Text(nativeTabTitle(.search))
+                } icon: {
+                    Image(systemName: "magnifyingglass")
+                }
             }
         }
         .tint(Color.beansAmber)
@@ -750,9 +778,7 @@ private struct GlassTabBar: View {
     private func itemLabel(_ item: Item) -> some View {
         let isSelected = selection == item.tab
         return VStack(spacing: 3) {
-            Image(systemName: item.icon)
-                .font(.system(size: 23, weight: .semibold))
-                .symbolVariant(.fill)
+            BeansTabIcon(tab: item.tab, size: 24)
             if labelsVisible {
                 Text(item.title)
                     .font(.system(size: 10, weight: .semibold))
@@ -803,6 +829,111 @@ private struct GlassTabBar: View {
                 }
                 isDragging = false
             }
+    }
+}
+
+/// 按底栏视觉稿绘制的图标，不依赖截图资源，保证不同分辨率下边缘清晰。
+private struct BeansTabIcon: View {
+    let tab: RootTab
+    let size: CGFloat
+
+    var body: some View {
+        switch tab {
+        case .discover:
+            houseIcon
+        case .playlists:
+            broadcastIcon
+        case .library:
+            musicBoxIcon
+        case .search:
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: size * 0.90, weight: .medium))
+        case .profile:
+            Image(systemName: "person.crop.circle")
+                .font(.system(size: size * 0.90, weight: .medium))
+        }
+    }
+
+    private var houseIcon: some View {
+        ZStack(alignment: .bottom) {
+            Path { path in
+                path.move(to: CGPoint(x: size * 0.50, y: size * 0.06))
+                path.addLine(to: CGPoint(x: size * 0.10, y: size * 0.40))
+                path.addLine(to: CGPoint(x: size * 0.10, y: size * 0.91))
+                path.addQuadCurve(
+                    to: CGPoint(x: size * 0.28, y: size * 0.98),
+                    control: CGPoint(x: size * 0.10, y: size * 0.98)
+                )
+                path.addLine(to: CGPoint(x: size * 0.72, y: size * 0.98))
+                path.addQuadCurve(
+                    to: CGPoint(x: size * 0.90, y: size * 0.91),
+                    control: CGPoint(x: size * 0.90, y: size * 0.98)
+                )
+                path.addLine(to: CGPoint(x: size * 0.90, y: size * 0.40))
+                path.closeSubpath()
+            }
+            .fill(Color(red: 0.96, green: 0.08, blue: 0.16))
+
+            RoundedRectangle(cornerRadius: size * 0.035, style: .continuous)
+                .fill(Color.white)
+                .frame(width: size * 0.19, height: size * 0.35)
+                .offset(y: -size * 0.02)
+        }
+        .frame(width: size, height: size)
+    }
+
+    private var broadcastIcon: some View {
+        ZStack {
+            Circle()
+                .fill(Color.black)
+                .frame(width: size * 0.19, height: size * 0.19)
+            ForEach([0.30, 0.53, 0.76], id: \.self) { inset in
+                BeansBroadcastArc(inset: size * inset, side: .left)
+                    .stroke(Color.black, style: StrokeStyle(lineWidth: size * 0.075, lineCap: .round))
+                BeansBroadcastArc(inset: size * inset, side: .right)
+                    .stroke(Color.black, style: StrokeStyle(lineWidth: size * 0.075, lineCap: .round))
+            }
+        }
+        .frame(width: size, height: size)
+    }
+
+    private var musicBoxIcon: some View {
+        VStack(spacing: size * 0.035) {
+            Capsule()
+                .fill(Color.black)
+                .frame(width: size * 0.43, height: size * 0.07)
+            Capsule()
+                .fill(Color.black)
+                .frame(width: size * 0.34, height: size * 0.07)
+            Capsule()
+                .fill(Color.black)
+                .frame(width: size * 0.25, height: size * 0.07)
+            RoundedRectangle(cornerRadius: size * 0.16, style: .continuous)
+                .fill(Color.black)
+                .frame(width: size * 0.84, height: size * 0.84)
+                .overlay {
+                    Image(systemName: "music.note")
+                        .font(.system(size: size * 0.50, weight: .bold))
+                        .foregroundStyle(Color.white)
+                }
+        }
+        .frame(width: size, height: size * 1.18)
+    }
+}
+
+private struct BeansBroadcastArc: Shape {
+    enum Side { case left, right }
+    let inset: CGFloat
+    let side: Side
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = max(1, rect.width / 2 - inset / 2)
+        let start: Angle = side == .left ? .degrees(135) : .degrees(225)
+        let end: Angle = side == .left ? .degrees(225) : .degrees(315)
+        var path = Path()
+        path.addArc(center: center, radius: radius, startAngle: start, endAngle: end, clockwise: false)
+        return path
     }
 }
 
