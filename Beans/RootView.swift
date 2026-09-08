@@ -768,7 +768,7 @@ private struct GlassTabBar: View {
             if let assetName = item.assetName {
                 Image(assetName)
                     .resizable()
-                    .renderingMode(.original)
+                    .renderingMode(.template)
                     .scaledToFit()
                     .frame(width: 24, height: 24)
             } else {
