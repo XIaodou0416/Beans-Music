@@ -311,7 +311,12 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     func seek(to seconds: Double) {
-        let clamped = max(0, min(seconds, max(duration, 0)))
+        // 切歌或低系统布局刚完成时，播放器 duration 可能还没同步；
+        // 这时不能把有效的歌词/进度条跳转错误截成 0。
+        let knownDuration = max(duration, currentSong?.duration ?? 0)
+        let clamped = knownDuration > 0
+            ? max(0, min(seconds, knownDuration))
+            : max(0, seconds)
         let seekSongKey = currentSong?.identityKey
         progress = clamped
         seekRevision &+= 1
@@ -328,6 +333,8 @@ final class PlayerManager: NSObject, ObservableObject {
                 let raw = self.player?.currentTime().seconds ?? clamped
                 let actual = raw.isFinite ? max(0, raw) : clamped
                 self.progress = actual
+                // AVPlayer 完成 seek 后再通知一次，确保歌词按真实音频位置重新定位。
+                self.seekRevision &+= 1
             }
         }
         updateNowPlaying()

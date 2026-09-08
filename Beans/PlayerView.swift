@@ -778,7 +778,9 @@ struct PlayerView: View {
 
             Button {
                 BeansHaptics.tap()
-                showNativeMoreActions = true
+                // 经典样式统一使用自定义操作面板，避免低系统的 confirmationDialog
+                // 出现点击标题无响应的问题。
+                showMoreActions = true
             } label: {
                 VStack(spacing: 2) {
                     Text(LocalizedStringKey(player.isBuffering ? "加载中…" : (player.isPlaying ? "正在播放" : "已暂停")))
@@ -3461,6 +3463,8 @@ struct LyricsSection: View {
                 if selectionMode {
                     selectionBar
                         .padding(.top, 4)
+                        .contentShape(Rectangle())
+                        .allowsHitTesting(true)
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
@@ -3653,6 +3657,7 @@ struct LyricsSection: View {
                     .foregroundStyle(secondary)
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle())
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 9)
