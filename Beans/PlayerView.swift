@@ -1275,11 +1275,11 @@ struct PlayerView: View {
         Button {
             BeansHaptics.tap()
             vinylPendingLyricIndex = index
-            player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset)) {
+            player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset), onComplete: {
                 guard vinylPendingLyricIndex == index else { return }
                 vinylPendingLyricIndex = nil
                 vinylFocusedLyricIndex = nil
-            }
+            })
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -3500,7 +3500,7 @@ struct LyricsSection: View {
             proxy.scrollTo(index, anchor: anchor)
         }
 
-        player.seek(to: LyricTiming.seekTime(for: line, userOffset: Double(lyricOffset))) {
+        player.seek(to: LyricTiming.seekTime(for: line, userOffset: Double(lyricOffset)), onComplete: {
             guard pendingIndex == index else { return }
             activeIndex = index
             pendingIndex = nil
@@ -3508,7 +3508,7 @@ struct LyricsSection: View {
             withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
                 proxy.scrollTo(index, anchor: anchor)
             }
-        }
+        })
     }
 
     private func syncToPlayback(

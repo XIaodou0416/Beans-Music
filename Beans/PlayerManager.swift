@@ -312,13 +312,17 @@ final class PlayerManager: NSObject, ObservableObject {
         loadCurrent()
     }
 
-    func seek(to seconds: Double, completion: (@escaping () -> Void)? = nil) {
+    func seek(to seconds: Double) {
+        seek(to: seconds, onComplete: {})
+    }
+
+    func seek(to seconds: Double, onComplete: @escaping () -> Void) {
         let clamped = max(0, min(seconds, max(duration, currentSong?.duration ?? seconds)))
         progress = clamped
         lyricProgress = clamped
         seekRevision &+= 1
         guard let player else {
-            completion?()
+            onComplete()
             updateNowPlaying()
             savePersistedPlaybackState()
             return
@@ -334,7 +338,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 if shouldResume {
                     player.playImmediately(atRate: Float(self.rate))
                 }
-                completion?()
+                onComplete()
             }
         }
         updateNowPlaying()

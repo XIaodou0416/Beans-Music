@@ -76,7 +76,6 @@ struct ReferencePlaybackView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
-        .onDisappear { resumeTask?.cancel() }
     }
 
     @ViewBuilder
