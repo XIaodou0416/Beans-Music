@@ -51,7 +51,7 @@ final class CoverImagePrefetcher {
 
     private static func urls(in snapshot: DiscoverCache.Snapshot) -> Set<URL> {
         var urls = Set<URL>()
-        urls.formUnion(urls(in: snapshot.dailySongs))
+        urls.formUnion(Self.urls(in: snapshot.dailySongs))
         urls.formUnion(snapshot.newAlbums.compactMap(\.coverURL))
         urls.formUnion(snapshot.topArtists.compactMap(\.coverURL))
         urls.formUnion(snapshot.topLists.compactMap(\.coverURL))
