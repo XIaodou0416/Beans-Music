@@ -20,49 +20,29 @@ extension View {
 
 private struct BeansTabBarScrollReporter: ViewModifier {
     @State private var isCollapsed = false
-    @State private var lastOffset: CGFloat?
-    @State private var accumulatedDelta: CGFloat = 0
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
             content.onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentOffset.y
             } action: { oldOffset, newOffset in
-                let previous = lastOffset ?? oldOffset
-                let delta = newOffset - previous
-                lastOffset = newOffset
-
-                // 滚动回调往往每次只移动几个点，按单次增量判断会漏掉搜索页的连续滑动。
-                // 累计下移到阈值后收缩；出现明确上移就恢复，回到顶部则清空状态。
+                let delta = newOffset - oldOffset
+                let nextState: Bool
                 if newOffset <= 4 {
-                    accumulatedDelta = 0
-                    guard isCollapsed else { return }
-                    isCollapsed = false
-                    NotificationCenter.default.post(
-                        name: .beansTabBarCollapseChanged,
-                        object: false
-                    )
+                    nextState = false
+                } else if delta > 8 {
+                    nextState = true
+                } else if delta < -8 {
+                    nextState = false
+                } else {
                     return
                 }
-
-                if delta > 0.5 {
-                    accumulatedDelta = max(0, accumulatedDelta) + delta
-                    guard !isCollapsed, accumulatedDelta >= 18 else { return }
-                    isCollapsed = true
-                    NotificationCenter.default.post(
-                        name: .beansTabBarCollapseChanged,
-                        object: true
-                    )
-                } else if delta < -0.5 {
-                    accumulatedDelta = min(0, accumulatedDelta) + delta
-                    guard isCollapsed, abs(accumulatedDelta) >= 3 else { return }
-                    accumulatedDelta = 0
-                    isCollapsed = false
-                    NotificationCenter.default.post(
-                        name: .beansTabBarCollapseChanged,
-                        object: false
-                    )
-                }
+                guard nextState != isCollapsed else { return }
+                isCollapsed = nextState
+                NotificationCenter.default.post(
+                    name: .beansTabBarCollapseChanged,
+                    object: nextState
+                )
             }
         } else {
             content
