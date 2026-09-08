@@ -320,6 +320,7 @@ final class PlayerManager: NSObject, ObservableObject {
         let seekSongKey = currentSong?.identityKey
         progress = clamped
         seekRevision &+= 1
+        let seekRevision = self.seekRevision
         // 用 seek 完成回调同步真实进度：避免暂停状态下拖动进度后，歌词定位与实际播放位置不一致
         player?.seek(
             to: CMTime(seconds: clamped, preferredTimescale: 600),
@@ -327,13 +328,15 @@ final class PlayerManager: NSObject, ObservableObject {
             toleranceAfter: .zero
         ) { [weak self] finished in
             guard let self, finished else { return }
-            self.performOnMain { [weak self] in
-                guard let self else { return }
-                guard self.currentSong?.identityKey == seekSongKey else { return }
+            // seek completion 在部分系统上会早于 AVPlayer 的 currentTime 更新，
+            // 延迟读取，避免用旧时间把刚点击的歌词覆盖成下一句。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                guard let self,
+                      self.currentSong?.identityKey == seekSongKey,
+                      self.seekRevision == seekRevision else { return }
                 let raw = self.player?.currentTime().seconds ?? clamped
-                let actual = raw.isFinite ? max(0, raw) : clamped
-                self.progress = actual
-                // AVPlayer 完成 seek 后再通知一次，确保歌词按真实音频位置重新定位。
+                guard raw.isFinite else { return }
+                self.progress = max(0, raw)
                 self.seekRevision &+= 1
             }
         }
