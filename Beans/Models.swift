@@ -444,9 +444,18 @@ enum LyricParser {
     private static func parseCore(_ raw: String, offset: Double) -> [LyricLine] {
         var lines: [LyricLine] = []
         for line in raw.components(separatedBy: .newlines) {
-            parseTimes(in: line).forEach { time in
-                let text = line.replacingOccurrences(of: #"\[\d{2}:\d{2}(\.\d{1,3})?\]"#, with: "", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            let times = parseTimes(in: line)
+            guard !times.isEmpty else { continue }
+            let text = line.replacingOccurrences(of: #"\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+
+            // 部分音源会把逐字时间标签混在同一行歌词中，例如：
+            // [00:12.00]生气[00:12.45]的[00:12.80]温柔。
+            // 这类标签描述的是同一句歌词的内部节奏，不能拆成多行，
+            // 否则点击时会直接跳到句尾。只保留这一行最早的时间点。
+            let lineTimes = hasInlineTimestamps(in: line) ? [times.min()!] : times
+            lineTimes.forEach { time in
                 lines.append(LyricLine(time: max(0, time + offset), text: text))
             }
         }
@@ -483,6 +492,25 @@ enum LyricParser {
             times.append(minutes * 60 + seconds + fraction)
         }
         return times
+    }
+
+    private static func hasInlineTimestamps(in line: String) -> Bool {
+        let pattern = #"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+        let nsLine = line as NSString
+        let matches = regex.matches(in: line, range: NSRange(line.startIndex..., in: line))
+        guard matches.count > 1 else { return false }
+
+        for pair in zip(matches, matches.dropFirst()) {
+            let start = pair.0.range.location + pair.0.range.length
+            let length = pair.1.range.location - start
+            guard length > 0 else { continue }
+            let between = nsLine.substring(with: NSRange(location: start, length: length))
+            if !between.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return true
+            }
+        }
+        return false
     }
 }
 

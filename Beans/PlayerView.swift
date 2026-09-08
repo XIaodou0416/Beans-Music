@@ -2870,7 +2870,7 @@ struct PlayerView: View {
 
     private func seekToLyric(_ line: LyricLine) {
         guard song?.identityKey == player.currentSong?.identityKey else { return }
-        player.seekPrecisely(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
+        player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
     }
 
     private func closePlayer() {
