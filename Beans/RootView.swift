@@ -786,7 +786,7 @@ private struct GlassTabBar: View {
             }
         }
         .foregroundStyle(isSelected
-                         ? AnyShapeStyle(accentIsNativeClean ? Color.red : Color.beansAmber)
+                         ? AnyShapeStyle(Color.beansAmber)
                          : AnyShapeStyle(Color.primary.opacity(0.8)))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())

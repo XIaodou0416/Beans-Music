@@ -859,7 +859,9 @@ struct DiscoverView: View {
 
     private var qqRecommendationCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: "推荐")
+            if !isNativeClean {
+                SectionHeader(title: "推荐")
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     Button {
@@ -923,7 +925,9 @@ struct DiscoverView: View {
 
     private var kugouRecommendationCards: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: "推荐")
+            if !isNativeClean {
+                SectionHeader(title: "推荐")
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
                     neteaseRecommendationCard(
@@ -962,7 +966,9 @@ struct DiscoverView: View {
 
     private var neteaseRecommendationCards: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: "推荐")
+            if !isNativeClean {
+                SectionHeader(title: "推荐")
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
                     neteaseRecommendationCard(
