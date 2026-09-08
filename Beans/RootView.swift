@@ -770,7 +770,7 @@ private struct GlassTabBar: View {
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .frame(width: 24, height: 24)
+                    .frame(width: 20, height: 20)
             } else {
                 Image(systemName: item.icon)
                     .font(.system(size: 23, weight: .semibold))
