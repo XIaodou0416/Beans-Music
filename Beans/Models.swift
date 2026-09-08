@@ -496,10 +496,7 @@ enum LyricTiming {
 
     static func seekTime(for line: LyricLine, userOffset: Double? = nil) -> Double {
         let offset = userOffset ?? UserDefaults.standard.double(forKey: userOffsetKey)
-        // AVPlayer 的精确 seek 在部分系统/音源上完成后可能比目标点略晚，
-        // 导致刚点击的歌词被立即判定为下一句。保留极小前置量，确保落在当前句。
-        let lyricSeekLead: Double = 0.16
-        return max(0, line.time - offset - lyricSeekLead)
+        return max(0, line.time - offset)
     }
 }
 
