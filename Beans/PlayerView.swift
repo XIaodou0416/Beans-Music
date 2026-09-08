@@ -1323,7 +1323,7 @@ struct PlayerView: View {
     }
 
     private var vinylCurrentVisualIndex: Int? {
-        vinylIsDraggingLyrics ? vinylFocusedLyricIndex : (vinylFocusedLyricIndex ?? vinylCurrentLyricIndex)
+        vinylIsDraggingLyrics ? (vinylFocusedLyricIndex ?? vinylCurrentLyricIndex) : vinylCurrentLyricIndex
     }
 
     private var vinylLyricsLineSlotHeight: CGFloat {

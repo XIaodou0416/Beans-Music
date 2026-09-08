@@ -487,7 +487,7 @@ struct ReferencePlaybackView: View {
     }
 
     private var currentVisualLyricID: UUID? {
-        isDraggingLyrics ? focusedLyricID : (focusedLyricID ?? currentPlaybackLyricID)
+        isDraggingLyrics ? (focusedLyricID ?? currentPlaybackLyricID) : currentPlaybackLyricID
     }
 
     private var subtitle: String {
