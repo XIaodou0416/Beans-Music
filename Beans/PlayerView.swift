@@ -1269,7 +1269,7 @@ struct PlayerView: View {
     private func vinylLyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
         Button {
             BeansHaptics.tap()
-            player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
+            seekToLyric(line)
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -1930,7 +1930,7 @@ struct PlayerView: View {
                         lyricOffset: CGFloat(lyricOffset)
                     ) { line in
                         BeansHaptics.tap()
-                        player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
+                        seekToLyric(line)
                     }
                 }
             }
@@ -2865,6 +2865,11 @@ struct PlayerView: View {
         }
     }
 
+    private func seekToLyric(_ line: LyricLine) {
+        guard song?.identityKey == player.currentSong?.identityKey else { return }
+        player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
+    }
+
     private func closePlayer() {
         isPresented = false
     }
@@ -3005,7 +3010,7 @@ private struct VinylScrubber: View {
                 }
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
-                .gesture(
+                .highPriorityGesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             guard clock.duration > 0 else { return }
@@ -3195,7 +3200,7 @@ struct SeekBar: View {
                 flowPhase = playing ? 1 : 0
             }
             .contentShape(Rectangle())
-            .gesture(
+            .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         if !scrubbing {

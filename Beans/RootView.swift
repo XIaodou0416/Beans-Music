@@ -14,8 +14,8 @@ enum RootTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .discover: return "主页"
-        case .playlists: return "广播"
-        case .library: return "资料库"
+        case .playlists: return "精选"
+        case .library: return "歌单"
         case .profile: return "我的"
         case .search: return "搜索"
         }
@@ -66,7 +66,6 @@ struct RootView: View {
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
-    @AppStorage("beans.legacyTabIconSize") private var legacyTabIconSize = 23.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
@@ -98,10 +97,6 @@ struct RootView: View {
 
     private var legacyTabResolvedWidth: CGFloat {
         min(CGFloat(legacyTabWidth), max(300, UIScreen.main.bounds.width - 28))
-    }
-
-    private var tabIconSize: CGFloat {
-        CGFloat(min(max(legacyTabIconSize, 16), 30))
     }
 
     /// Full-width by default; retain the existing width adjustment when it was
@@ -377,7 +372,7 @@ struct RootView: View {
                     labelsVisible: tabLabelsVisible,
                     accentIsNativeClean: isNativeClean,
                     onHomeLongPress: { showHomePlatformMenu = true },
-                    iconSize: tabIconSize
+                    iconSize: 25
                 ) { tab in
                     guard selection != tab else { return }
                     BeansHaptics.select()
@@ -468,10 +463,10 @@ struct RootView: View {
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .frame(width: tabIconSize, height: tabIconSize)
+                    .frame(width: 25, height: 25)
             } else {
                 Image(systemName: tab.icon)
-                    .font(.system(size: tabIconSize, weight: .semibold))
+                    .font(.system(size: 25, weight: .semibold))
             }
         }
     }

@@ -1180,31 +1180,21 @@ struct AccountHubSheet: View {
 private extension ProfileView {
     var customAvatarCard: some View {
         HStack(spacing: 12) {
-            BeansAvatarView(remoteURL: nil, size: 48, useCustom: true)
+            Button {
+                BeansHaptics.tap()
+                showAvatarPicker = true
+            } label: {
+                BeansAvatarView(remoteURL: nil, size: 48, useCustom: true)
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.94))
             VStack(alignment: .leading, spacing: 4) {
                 TextField(isEnglish ? "Nickname" : "自定义昵称", text: $customNickname)
                     .font(BeansFont.appFont(16, .semibold))
                     .foregroundStyle(Color.beansLabel)
                     .textFieldStyle(.plain)
                     .lineLimit(1)
-                Text(isEnglish ? "Avatar and nickname stay on this device" : "头像和昵称仅保存在本机")
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(Color.beansComment)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             }
             Spacer(minLength: 8)
-            Button {
-                BeansHaptics.tap()
-                showAvatarPicker = true
-            } label: {
-                Image(systemName: "photo.badge.plus")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(width: 36, height: 36)
-                    .background { BeansSurface(shape: Circle()) }
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.92))
             if !avatarStore.path.isEmpty {
                 Button {
                     BeansHaptics.tap()
@@ -1242,7 +1232,6 @@ struct SettingsView: View {
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
-    @AppStorage("beans.legacyTabIconSize") private var legacyTabIconSize = 23.0
     /// 第三方音源播放会员歌成功时提醒，默认开启
     @AppStorage("beans.showThirdPartyVIPNotice") private var showThirdPartyVIPNotice = true
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
@@ -1717,7 +1706,7 @@ struct SettingsView: View {
         if names.isEmpty {
             return beansLocalized("管理网易云、QQ 音乐和酷狗登录", "Manage NetEase, QQ Music and Kugou sign-in")
         }
-        return beansLocalized("已登录：\(names.joined(separator: "、"))", "Signed in: \(names.joined(separator: ", "))")
+        return beansLocalized(names.joined(separator: "、"), names.joined(separator: ", "))
     }
 
     /// 校验扩展名并安装字体（asCopy 返回的 URL 已在沙盒内，可直接读取）
@@ -1884,10 +1873,6 @@ struct SettingsView: View {
 
                     Divider().overlay(Color.beansComment.opacity(0.15))
                 }
-
-                tabIconSizeSettings
-
-                Divider().overlay(Color.beansComment.opacity(0.15))
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -3036,19 +3021,11 @@ struct SettingsView: View {
         }
     }
 
-    private var tabIconSizeSettings: some View {
-        settingsSlider("底栏图标大小", valueText: "\(Int(legacyTabIconSize))") {
-            Slider(value: $legacyTabIconSize, in: 16...30, step: 1)
-                .tint(Color.beansAmber)
-        }
-    }
-
     private func resetLegacyTabBar() {
         legacyTabCornerRadius = 32
         legacyTabWidth = 356
         legacyTabOffsetX = 0
         legacyTabOffsetY = 0
-        legacyTabIconSize = 23
     }
 
     private func signedIntText(_ value: Double) -> String {
