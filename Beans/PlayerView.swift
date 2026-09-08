@@ -612,6 +612,9 @@ struct PlayerView: View {
                     .environmentObject(player)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea()
+                    .background(Color.clear)
+                    .contentShape(Rectangle())
+                    .allowsHitTesting(true)
                     .transition(
                         .asymmetric(
                             insertion: .move(edge: .bottom).combined(with: .opacity),
@@ -4125,6 +4128,9 @@ struct PlayerSettingsSheet: View {
                     .foregroundStyle(Color.beansAmber)
             }
             slider()
+                .frame(minHeight: 32)
+                .contentShape(Rectangle())
+                .allowsHitTesting(true)
         }
     }
 

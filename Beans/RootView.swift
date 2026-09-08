@@ -554,7 +554,14 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             // iOS 26 以下的 fullScreenCover 不稳定提供完整的下拉返回区域，
             // 用新的兼容性手势覆盖播放器表面；iOS 26+ 保留 1.6.5.1 的系统交互。
             if !usesSystemInteractiveDismissal {
-                playerSurface.simultaneousGesture(dismissGesture)
+                ZStack(alignment: .top) {
+                    playerSurface
+                    Color.clear
+                        .frame(maxWidth: .infinity)
+                        .frame(height: BeansNowPlayingPresentationMetrics.verticalStartZone)
+                        .contentShape(Rectangle())
+                        .simultaneousGesture(dismissGesture)
+                }
             } else {
                 playerSurface
             }
