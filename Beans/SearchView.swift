@@ -151,7 +151,6 @@ struct SearchView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
             }
             .beansScrollIndicatorsHidden()
-            .beansTabBarScrollReporter()
             .beansScrollDismissesKeyboard()
         }
         .task(id: provider) {

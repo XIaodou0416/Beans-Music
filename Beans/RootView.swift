@@ -45,7 +45,6 @@ struct RootView: View {
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var selection: RootTab = .discover
-    @State private var nativeTabBarCollapsed = false
     @State private var showPlayer = false
     @Namespace private var nowPlayingTransition
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
@@ -114,6 +113,15 @@ struct RootView: View {
             // iOS 26 使用系统底栏和下滑收缩行为，旧系统使用兼容底栏。
             if #available(iOS 26.0, *) {
                 nativeTabs
+                    .modifier(
+                        MiniPlayerAccessoryModifier(
+                            isActive: player.currentSong != nil,
+                            showPlayer: $showPlayer,
+                            clock: player.clock,
+                            colorScheme: colorScheme,
+                            transitionNamespace: nowPlayingTransition
+                        )
+                    )
             } else {
                 legacyRootTabs
             }
@@ -167,24 +175,6 @@ struct RootView: View {
                 enableHighRefresh = true
             }
             HighRefreshKeeper.shared.configure(enabled: true)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .beansTabBarCollapseChanged)) { notification in
-            let collapsed = notification.object as? Bool ?? false
-            guard player.currentSong != nil else {
-                nativeTabBarCollapsed = false
-                return
-            }
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
-                nativeTabBarCollapsed = collapsed
-            }
-        }
-        .onChange(of: selection) { _ in
-            nativeTabBarCollapsed = false
-        }
-        .onChange(of: player.currentSong?.identityKey) { identity in
-            if identity == nil {
-                nativeTabBarCollapsed = false
-            }
         }
         .onChange(of: disclaimerAccepted) { accepted in
             if accepted, ChangelogStore.shouldShowWhatsNew {
@@ -431,72 +421,8 @@ struct RootView: View {
                 SearchView()
             }
         }
-        .toolbar(.hidden, for: .tabBar)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            nativeBottomBar
-        }
-    }
-
-    @available(iOS 26.0, *)
-    @ViewBuilder
-    private var nativeBottomBar: some View {
-        if nativeTabBarCollapsed, player.currentSong != nil {
-            HStack(spacing: 14) {
-                collapsedNativeTabButton(.discover)
-                MiniPlayerView(
-                    showPlayer: $showPlayer,
-                    presentation: .inlineAccessory,
-                    transitionNamespace: nowPlayingTransition
-                )
-                .environmentObject(player.clock)
-                .frame(maxWidth: 340)
-                .background(.regularMaterial, in: Capsule())
-                .overlay { Capsule().strokeBorder(.primary.opacity(0.10), lineWidth: 0.5) }
-                .clipShape(Capsule())
-                collapsedNativeTabButton(.search)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 7)
-        } else {
-            GlassTabBar(
-                items: RootTab.bottomTabs.map {
-                    GlassTabBar.Item(tab: $0, title: LocalizedStringKey($0.title), icon: $0.icon)
-                },
-                selection: $selection,
-                labelsVisible: tabLabelsVisible,
-                accentIsNativeClean: isNativeClean,
-                onHomeLongPress: { showHomePlatformMenu = true }
-            ) { tab in
-                guard selection != tab else { return }
-                BeansHaptics.select()
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                    selection = tab
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 6)
-        }
-    }
-
-    @available(iOS 26.0, *)
-    private func collapsedNativeTabButton(_ tab: RootTab) -> some View {
-        Button {
-            BeansHaptics.select()
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                selection = tab
-                nativeTabBarCollapsed = false
-            }
-        } label: {
-            Image(systemName: tab.icon)
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(selection == tab ? Color.beansAmber : Color.primary)
-                .frame(width: 62, height: 62)
-                .background { BeansGlass(shape: Circle(), forceLiquid: true) }
-                .clipShape(Circle())
-                .overlay { Circle().strokeBorder(.primary.opacity(0.12), lineWidth: 0.5) }
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.92))
-        .accessibilityLabel(LocalizedStringKey(tab.title))
+        .tint(Color.beansAmber)
+        .tabBarMinimizeBehavior(player.currentSong == nil ? .never : .onScrollDown)
     }
 
     private func nativeTabTitle(_ tab: RootTab) -> LocalizedStringKey {
@@ -1015,7 +941,6 @@ private struct UpdatePromptOverlay: View {
 
 struct TabBarAppearanceConfigurator: UIViewControllerRepresentable {
     var hidesSystemTabBarOnLegacy = true
-    var hidesSystemTabBarOnIOS26 = true
     var onHomeLongPress: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
@@ -1031,7 +956,6 @@ struct TabBarAppearanceConfigurator: UIViewControllerRepresentable {
             Self.apply(
                 from: controller,
                 hidesSystemTabBarOnLegacy: hidesSystemTabBarOnLegacy,
-                hidesSystemTabBarOnIOS26: hidesSystemTabBarOnIOS26,
                 coordinator: context.coordinator
             )
         }
@@ -1044,7 +968,6 @@ struct TabBarAppearanceConfigurator: UIViewControllerRepresentable {
             Self.apply(
                 from: uiViewController,
                 hidesSystemTabBarOnLegacy: hidesSystemTabBarOnLegacy,
-                hidesSystemTabBarOnIOS26: hidesSystemTabBarOnIOS26,
                 coordinator: context.coordinator
             )
         }
@@ -1055,13 +978,12 @@ struct TabBarAppearanceConfigurator: UIViewControllerRepresentable {
     private static func apply(
         from controller: UIViewController,
         hidesSystemTabBarOnLegacy: Bool,
-        hidesSystemTabBarOnIOS26: Bool,
         coordinator: Coordinator
     ) {
         guard let tabBar = controller.tabBarController?.tabBar else { return }
         installHomeLongPress(on: tabBar, coordinator: coordinator)
         if #available(iOS 26, *) {
-            tabBar.isHidden = hidesSystemTabBarOnIOS26
+            tabBar.isHidden = false
             return
         } else if hidesSystemTabBarOnLegacy {
             tabBar.isHidden = true
