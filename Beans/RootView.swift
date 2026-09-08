@@ -54,7 +54,6 @@ struct RootView: View {
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var selection: RootTab = .discover
-    @ObservedObject private var nativeTabBarState = NativeTabBarCompressionState.shared
     @State private var showPlayer = false
     @Namespace private var nowPlayingTransition
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
@@ -168,11 +167,6 @@ struct RootView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
         .animation(.easeInOut(duration: 0.22), value: selection)
-        .onChange(of: player.currentSong?.identityKey) { identity in
-            if identity == nil {
-                nativeTabBarState.isInline = false
-            }
-        }
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
@@ -444,25 +438,14 @@ struct RootView: View {
                 nativeTabLabel(.library)
             }
 
-            // Search becomes a trailing system action only while the
-            // accessory is minimized; it stays in the normal row otherwise.
-            if nativeTabBarState.isInline {
-                Tab(value: .search, role: .search) {
-                    SearchView()
-                } label: {
-                    nativeTabLabel(.search)
-                }
-            } else {
-                Tab(value: .search) {
-                    SearchView()
-                } label: {
-                    nativeTabLabel(.search)
-                }
+            Tab(value: .search) {
+                SearchView()
+            } label: {
+                nativeTabLabel(.search)
             }
         }
         .tint(Color.beansAmber)
         .tabBarMinimizeBehavior(player.currentSong == nil ? .never : .onScrollDown)
-        .animation(.spring(response: 0.36, dampingFraction: 0.84), value: nativeTabBarState.isInline)
     }
 
     private func nativeTabTitle(_ tab: RootTab) -> LocalizedStringKey {
@@ -705,12 +688,6 @@ private struct ClearSheetBackground: ViewModifier {
     }
 }
 
-private final class NativeTabBarCompressionState: ObservableObject {
-    static let shared = NativeTabBarCompressionState()
-
-    @Published var isInline = false
-}
-
 @available(iOS 26.0, *)
 private struct MiniPlayerAccessoryModifier: ViewModifier {
     let isActive: Bool
@@ -744,7 +721,6 @@ private struct RootMiniPlayerAccessory: View {
     @Binding var showPlayer: Bool
     let clock: PlaybackClock
     let transitionNamespace: Namespace.ID
-    @ObservedObject private var tabBarState = NativeTabBarCompressionState.shared
 
     var body: some View {
         MiniPlayerView(
@@ -753,23 +729,6 @@ private struct RootMiniPlayerAccessory: View {
             transitionNamespace: transitionNamespace
         )
         .environmentObject(clock)
-        .onAppear {
-            updateTabBarState()
-        }
-        .onChange(of: placement) { _ in
-            updateTabBarState()
-        }
-        .onDisappear {
-            tabBarState.isInline = false
-        }
-    }
-
-    private func updateTabBarState() {
-        let isInline = placement.map { $0 == .inline } == true
-        guard isInline != tabBarState.isInline else { return }
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
-            tabBarState.isInline = isInline
-        }
     }
 
     private var presentation: MiniPlayerView.Presentation {
