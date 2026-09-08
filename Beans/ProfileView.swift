@@ -1885,6 +1885,10 @@ struct SettingsView: View {
                     Divider().overlay(Color.beansComment.opacity(0.15))
                 }
 
+                tabIconSizeSettings
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Image(systemName: "square.stack.3d.up.fill")
@@ -3025,14 +3029,17 @@ struct SettingsView: View {
                 Slider(value: $legacyTabOffsetY, in: -36...36, step: 1)
                     .tint(Color.beansAmber)
             }
-            settingsSlider("图标大小", valueText: "\(Int(legacyTabIconSize))") {
-                Slider(value: $legacyTabIconSize, in: 16...30, step: 1)
-                    .tint(Color.beansAmber)
-            }
         }
         .padding(14)
         .background {
             BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private var tabIconSizeSettings: some View {
+        settingsSlider("底栏图标大小", valueText: "\(Int(legacyTabIconSize))") {
+            Slider(value: $legacyTabIconSize, in: 16...30, step: 1)
+                .tint(Color.beansAmber)
         }
     }
 

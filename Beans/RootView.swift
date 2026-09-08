@@ -100,6 +100,10 @@ struct RootView: View {
         min(CGFloat(legacyTabWidth), max(300, UIScreen.main.bounds.width - 28))
     }
 
+    private var tabIconSize: CGFloat {
+        CGFloat(min(max(legacyTabIconSize, 16), 30))
+    }
+
     /// Full-width by default; retain the existing width adjustment when it was
     /// explicitly changed in settings.
     private var legacyTabCustomWidth: CGFloat? {
@@ -373,7 +377,7 @@ struct RootView: View {
                     labelsVisible: tabLabelsVisible,
                     accentIsNativeClean: isNativeClean,
                     onHomeLongPress: { showHomePlatformMenu = true },
-                    iconSize: CGFloat(legacyTabIconSize)
+                    iconSize: tabIconSize
                 ) { tab in
                     guard selection != tab else { return }
                     BeansHaptics.select()
@@ -421,20 +425,28 @@ struct RootView: View {
     @available(iOS 26.0, *)
     private var nativeTabs: some View {
         TabView(selection: $selection) {
-            Tab(nativeTabTitle(.discover), image: RootTab.discover.assetName ?? "house", value: .discover) {
+            Tab(value: .discover) {
                 DiscoverView()
+            } label: {
+                nativeTabLabel(.discover)
             }
 
-            Tab(nativeTabTitle(.playlists), image: RootTab.playlists.assetName ?? "square.grid.2x2", value: .playlists) {
+            Tab(value: .playlists) {
                 PlaylistSquareView()
+            } label: {
+                nativeTabLabel(.playlists)
             }
 
-            Tab(nativeTabTitle(.library), image: RootTab.library.assetName ?? "music.note.list", value: .library) {
+            Tab(value: .library) {
                 LibraryView()
+            } label: {
+                nativeTabLabel(.library)
             }
 
-            Tab(nativeTabTitle(.search), systemImage: "magnifyingglass", value: .search) {
+            Tab(value: .search) {
                 SearchView()
+            } label: {
+                nativeTabLabel(.search)
             }
         }
         .tint(Color.beansAmber)
@@ -443,6 +455,25 @@ struct RootView: View {
 
     private func nativeTabTitle(_ tab: RootTab) -> LocalizedStringKey {
         tabLabelsVisible ? LocalizedStringKey(tab.title) : LocalizedStringKey("")
+    }
+
+    @available(iOS 26.0, *)
+    @ViewBuilder
+    private func nativeTabLabel(_ tab: RootTab) -> some View {
+        Label {
+            Text(nativeTabTitle(tab))
+        } icon: {
+            if let assetName = tab.assetName {
+                Image(assetName)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: tabIconSize, height: tabIconSize)
+            } else {
+                Image(systemName: tab.icon)
+                    .font(.system(size: tabIconSize, weight: .semibold))
+            }
+        }
     }
 
     /// 旧系统将页面、底部播放器和胶囊底栏放在同一个 ZStack 中，
