@@ -465,7 +465,7 @@ struct ReferencePlaybackView: View {
 
     private var currentPlaybackLyricIndex: Int? {
         guard !lyrics.isEmpty else { return nil }
-        let progress = LyricTiming.effectiveProgress(clock.progress, userOffset: lyricOffset)
+        let progress = LyricTiming.effectiveProgress(player.lyricProgress, userOffset: lyricOffset)
         var low = 0
         var high = lyrics.count - 1
         var answer: Int?

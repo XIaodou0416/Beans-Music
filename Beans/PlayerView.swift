@@ -1306,7 +1306,7 @@ struct PlayerView: View {
 
     private var vinylCurrentLyricIndex: Int? {
         guard !lyrics.isEmpty else { return nil }
-        let progress = LyricTiming.effectiveProgress(clock.progress, userOffset: lyricOffset)
+        let progress = LyricTiming.effectiveProgress(player.lyricProgress, userOffset: lyricOffset)
         var low = 0
         var high = lyrics.count - 1
         var answer: Int?
@@ -1822,7 +1822,7 @@ struct PlayerView: View {
         var answer: Int?
         while low <= high {
             let mid = (low + high) / 2
-            if lyrics[mid].time <= LyricTiming.effectiveProgress(clock.progress, userOffset: lyricOffset) {
+            if lyrics[mid].time <= LyricTiming.effectiveProgress(player.lyricProgress, userOffset: lyricOffset) {
                 answer = mid
                 low = mid + 1
             } else {
@@ -3369,7 +3369,7 @@ struct LyricsSection: View {
         var answer: Int?
         while low <= high {
             let mid = (low + high) / 2
-            if lyrics[mid].time <= LyricTiming.effectiveProgress(clock.progress, userOffset: Double(lyricOffset)) {
+            if lyrics[mid].time <= LyricTiming.effectiveProgress(player.lyricProgress, userOffset: Double(lyricOffset)) {
                 answer = mid
                 low = mid + 1
             } else {

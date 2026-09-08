@@ -76,6 +76,8 @@ final class PlayerManager: NSObject, ObservableObject {
     @Published var playCounts: [String: Int] = [:]
     /// 每次用户主动拖动进度或点击歌词都会递增，歌词视图据此立即重新定位。
     @Published private(set) var seekRevision = 0
+    /// 歌词统一使用的播放游标，和播放器时间观察器使用同一个时间源。
+    @Published private(set) var lyricProgress: Double = 0
 
     private var player: AVPlayer?
     private var timeObserver: Any?
@@ -315,6 +317,7 @@ final class PlayerManager: NSObject, ObservableObject {
         // 不等待 AVPlayer 回调，也不使用回调中的旧 currentTime 覆盖目标位置。
         let clamped = max(0, min(seconds, max(duration, currentSong?.duration ?? seconds)))
         progress = clamped
+        lyricProgress = clamped
         seekRevision &+= 1
         player?.seek(
             to: CMTime(seconds: clamped, preferredTimescale: 600),
@@ -337,6 +340,7 @@ final class PlayerManager: NSObject, ObservableObject {
         seekRevision &+= 1
         let revision = seekRevision
         progress = target
+        lyricProgress = target
         if shouldResume {
             player?.pause()
             isPlaying = false
@@ -553,6 +557,7 @@ final class PlayerManager: NSObject, ObservableObject {
         player?.pause()
         duration = song.duration
         progress = initialProgress
+        lyricProgress = initialProgress
         isPlaying = false
         isBuffering = true
         loadFailed = false
@@ -1222,6 +1227,7 @@ final class PlayerManager: NSObject, ObservableObject {
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.2, preferredTimescale: 600), queue: .main) { [weak self] time in
             guard let self, let player = self.player else { return }
             if time.seconds.isFinite {
+                self.lyricProgress = time.seconds
                 if abs(time.seconds - self.lastPublishedProgress) >= 0.18 {
                     self.lastPublishedProgress = time.seconds
                     self.progress = time.seconds
