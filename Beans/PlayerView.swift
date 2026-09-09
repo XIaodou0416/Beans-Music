@@ -34,7 +34,6 @@ struct PlayerView: View {
     @State private var pickedArtistName = ""
     @State private var showArtistPicker = false
     @State private var vinylFocusedLyricIndex: Int?
-    @State private var vinylPendingLyricIndex: Int?
     @State private var vinylLyricsViewportHeight: CGFloat = 0
     @State private var vinylIsDraggingLyrics = false
     @State private var vinylLyricsResumeTask: Task<Void, Never>?
@@ -1106,7 +1105,7 @@ struct PlayerView: View {
                             LazyVStack(alignment: .leading, spacing: 34) {
                                 Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(VinylLayoutDefaults.lyricTopRows), vinylLyricsViewportHeight * 0.18))
                                 ForEach(lyrics.indices, id: \.self) { index in
-                                    vinylLyricLine(index: index, line: lyrics[index], isFocused: vinylCurrentVisualIndex == index)
+                                    vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
                                         .id(index)
                                         .background {
                                             GeometryReader { rowGeometry in
@@ -1176,7 +1175,6 @@ struct PlayerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onDisappear {
             vinylLyricsResumeTask?.cancel()
-            vinylPendingLyricIndex = nil
         }
     }
 
@@ -1271,15 +1269,10 @@ struct PlayerView: View {
         }
     }
 
-    private func vinylLyricLine(index: Int, line: LyricLine, isFocused: Bool) -> some View {
+    private func vinylLyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
         Button {
             BeansHaptics.tap()
-            vinylPendingLyricIndex = index
-            player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset), onComplete: {
-                guard vinylPendingLyricIndex == index else { return }
-                vinylPendingLyricIndex = nil
-                vinylFocusedLyricIndex = nil
-            })
+            seekToLyric(line)
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -1312,8 +1305,21 @@ struct PlayerView: View {
     }
 
     private var vinylCurrentLyricIndex: Int? {
-        vinylPendingLyricIndex
-            ?? LyricTimeline.activeIndex(in: lyrics, at: player.lyricProgress, userOffset: lyricOffset)
+        guard !lyrics.isEmpty else { return nil }
+        let progress = LyricTiming.effectiveProgress(player.lyricProgress, userOffset: lyricOffset)
+        var low = 0
+        var high = lyrics.count - 1
+        var answer: Int?
+        while low <= high {
+            let mid = (low + high) / 2
+            if lyrics[mid].time <= progress {
+                answer = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return answer
     }
 
     private var vinylCurrentVisualIndex: Int? {
@@ -1810,7 +1816,20 @@ struct PlayerView: View {
 
     /// 当前歌词行索引（二分查找，与歌词面板一致）
     private var previewCurrentIndex: Int? {
-        LyricTimeline.activeIndex(in: lyrics, at: player.lyricProgress, userOffset: lyricOffset)
+        guard !lyrics.isEmpty else { return nil }
+        var low = 0
+        var high = lyrics.count - 1
+        var answer: Int?
+        while low <= high {
+            let mid = (low + high) / 2
+            if lyrics[mid].time <= LyricTiming.effectiveProgress(player.lyricProgress, userOffset: lyricOffset) {
+                answer = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return answer
     }
 
     private var lyricPreviewRows: [LyricPreviewRow] {
@@ -1893,7 +1912,7 @@ struct PlayerView: View {
                 if lyrics.isEmpty {
                     emptyLyricsView
                 } else {
-                    KumoneLyricsSection(
+                    LyricsSection(
                         lyrics: lyrics,
                         accent: lyricCurrentColor,
                         secondary: lyricDimColor,
@@ -1912,7 +1931,10 @@ struct PlayerView: View {
                         tilt: CGFloat(lyricTilt),
                         tiltY: CGFloat(lyricTiltY),
                         lyricOffset: CGFloat(lyricOffset)
-                    )
+                    ) { line in
+                        BeansHaptics.tap()
+                        seekToLyric(line)
+                    }
                 }
             }
             .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
@@ -2846,6 +2868,11 @@ struct PlayerView: View {
         }
     }
 
+    private func seekToLyric(_ line: LyricLine) {
+        guard song?.identityKey == player.currentSong?.identityKey else { return }
+        player.seekPrecisely(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
+    }
+
     private func closePlayer() {
         isPresented = false
     }
@@ -3294,6 +3321,7 @@ private struct LyricCenterPreferenceKey: PreferenceKey {
 
 struct LyricsSection: View {
     @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var clock: PlaybackClock
     let lyrics: [LyricLine]
     let accent: Color
     let secondary: Color
@@ -3321,27 +3349,34 @@ struct LyricsSection: View {
     var tiltY: CGFloat = 0
     /// 歌词进度偏移（秒）：正数提前、负数延后
     var lyricOffset: CGFloat = 0
+    let onTapLine: (LyricLine) -> Void
 
+    /// 长按歌词进入多选复制模式（可多选 / 全选复制）
     @State private var selectionMode = false
     @State private var selected: Set<Int> = []
-    @State private var activeIndex: Int?
-    @State private var pendingIndex: Int?
+    /// 用户手动滚动时暂停自动跟随，停手后延迟恢复。
     @State private var isUserScrolling = false
-    @State private var suppressesAutoScroll = false
-    @State private var scrollResumeTask: Task<Void, Never>?
+    @State private var resumeScrollTask: Task<Void, Never>?
+    /// 歌词手动滚动时，以视口中心最近的一行作为视觉焦点。
     @State private var focusedIndex: Int?
     @State private var viewportHeight: CGFloat = 0
 
-    private var playbackIndex: Int? {
-        LyricTimeline.activeIndex(
-            in: lyrics,
-            at: player.lyricProgress,
-            userOffset: Double(lyricOffset)
-        )
-    }
-
-    private var displayedIndex: Int? {
-        pendingIndex ?? activeIndex ?? playbackIndex
+    /// 二分查找当前行（歌词按时间升序），避免逐行扫描降低 CPU
+    private var currentIndex: Int? {
+        guard !lyrics.isEmpty else { return nil }
+        var low = 0
+        var high = lyrics.count - 1
+        var answer: Int?
+        while low <= high {
+            let mid = (low + high) / 2
+            if lyrics[mid].time <= LyricTiming.effectiveProgress(player.lyricProgress, userOffset: Double(lyricOffset)) {
+                answer = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return answer
     }
 
     var body: some View {
@@ -3359,12 +3394,31 @@ struct LyricsSection: View {
                                 }
                             }
                             .contentShape(Rectangle())
-                            .overlay(alignment: .topTrailing) { selectionMark(index) }
+                            .overlay(alignment: .topTrailing) {
+                                if selectionMode {
+                                    Image(systemName: selected.contains(index) ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(selected.contains(index) ? accent : secondary.opacity(0.55))
+                                        .padding(.trailing, 10)
+                                        .padding(.top, 2)
+                                        .transition(.scale.combined(with: .opacity))
+                                }
+                            }
+                            // 使用 SwiftUI 高级手势 API，避免 iOS 16 上手写组合手势抢占 ScrollView 的垂直滚动。
                             .onTapGesture {
                                 if selectionMode {
                                     withAnimation(.easeInOut(duration: 0.2)) { toggleSelect(index) }
                                 } else {
-                                    seekToLine(line, index: index, proxy: proxy)
+                                    resumeScrollTask?.cancel()
+                                    isUserScrolling = false
+                                    focusedIndex = nil
+                                    onTapLine(line)
+                                    // 点击歌词后以所点行作为目标，避免 seek 完成前 currentIndex 仍停留在旧行。
+                                    DispatchQueue.main.async {
+                                        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
+                                            proxy.scrollTo(index, anchor: anchor)
+                                        }
+                                    }
                                 }
                             }
                             .onLongPressGesture(minimumDuration: 0.35) {
@@ -3432,17 +3486,17 @@ struct LyricsSection: View {
                 DragGesture(minimumDistance: 4)
                     .onChanged { _ in
                         isUserScrolling = true
-                        scrollResumeTask?.cancel()
+                        resumeScrollTask?.cancel()
                     }
                     .onEnded { _ in
-                        scrollResumeTask?.cancel()
+                        resumeScrollTask?.cancel()
                         let selectedIndex = focusedIndex
                         if let selectedIndex {
                             withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.38)) {
                                 proxy.scrollTo(selectedIndex, anchor: .center)
                             }
                         }
-                        scrollResumeTask = Task { @MainActor in
+                        resumeScrollTask = Task { @MainActor in
                             try? await Task.sleep(nanoseconds: 3_000_000_000)
                             guard !Task.isCancelled else { return }
                             isUserScrolling = false
@@ -3450,101 +3504,47 @@ struct LyricsSection: View {
                     }
             )
             .onAppear {
+                // 延迟到布局稳定后再定位当前行，避免从封面页调整进度后切回歌词错位
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-                    syncToPlayback(proxy: proxy, animated: false, force: true)
+                    scrollToCurrent(proxy)
                 }
             }
-            .onChange(of: player.lyricProgress) { _ in
-                syncToPlayback(proxy: proxy, animated: true)
+            .onChange(of: currentIndex) { newIndex in
+                guard let newIndex, !isUserScrolling else { return }
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo(newIndex, anchor: anchor)
+                }
             }
-            .onChange(of: player.currentSong?.identityKey) { _ in
-                pendingIndex = nil
-                activeIndex = nil
-                focusedIndex = nil
-                suppressesAutoScroll = false
+            .onChange(of: player.seekRevision) { _ in
+                guard !isUserScrolling, let newIndex = currentIndex else { return }
                 DispatchQueue.main.async {
-                    syncToPlayback(proxy: proxy, animated: false, force: true)
+                    withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
+                        proxy.scrollTo(newIndex, anchor: anchor)
+                    }
                 }
             }
-            .onChange(of: lyrics.count) { _ in
-                DispatchQueue.main.async {
-                    syncToPlayback(proxy: proxy, animated: false, force: true)
-                }
-            }
-            .onDisappear { scrollResumeTask?.cancel() }
         }
     }
 
-    @ViewBuilder
-    private func selectionMark(_ index: Int) -> some View {
-        if selectionMode {
-            Image(systemName: selected.contains(index) ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(selected.contains(index) ? accent : secondary.opacity(0.55))
-                .padding(.trailing, 10)
-                .padding(.top, 2)
-                .transition(.scale.combined(with: .opacity))
-        }
-    }
-
-    private func seekToLine(_ line: LyricLine, index: Int, proxy: ScrollViewProxy) {
-        scrollResumeTask?.cancel()
-        isUserScrolling = false
-        focusedIndex = nil
-        pendingIndex = index
-        activeIndex = index
-        suppressesAutoScroll = true
-        BeansHaptics.tap()
-
-        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
-            proxy.scrollTo(index, anchor: anchor)
-        }
-
-        player.seek(to: LyricTiming.seekTime(for: line, userOffset: Double(lyricOffset)), onComplete: {
-            guard pendingIndex == index else { return }
-            activeIndex = index
-            pendingIndex = nil
-            suppressesAutoScroll = false
-            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
-                proxy.scrollTo(index, anchor: anchor)
-            }
-        })
-    }
-
-    private func syncToPlayback(
-        proxy: ScrollViewProxy,
-        animated: Bool,
-        force: Bool = false
-    ) {
-        guard pendingIndex == nil,
-              !isUserScrolling,
-              !suppressesAutoScroll,
-              let index = playbackIndex else { return }
-        let changed = activeIndex != index
-        activeIndex = index
-        guard force || changed else { return }
-        if animated {
-            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.38)) {
-                proxy.scrollTo(index, anchor: anchor)
-            }
-        } else {
-            proxy.scrollTo(index, anchor: anchor)
-        }
-    }
-
+    /// Apple Music 风格渐隐：当前行最大最亮，已播放行与未播放行按距离逐层变暗变淡
     private func lyricRow(index: Int, line: LyricLine) -> some View {
-        let current = displayedIndex
-        let visualIndex = isUserScrolling ? (focusedIndex ?? current) : current
-        let isCurrent = current != nil && index == current
+        let playbackIndex = currentIndex ?? 0
+        // 手动滚动时，以视口中心行为清晰度焦点；颜色和渐变仍只跟随实际播放行。
+        // 这样拖动歌词不会暂停播放，也不会让整页歌词一起变糊。
+        let visualIndex = isUserScrolling ? (focusedIndex ?? currentIndex) : currentIndex
+        let isCurrent = currentIndex != nil && index == playbackIndex
         let isFocused = index == visualIndex
-        let isPlayed = (current ?? -1) >= 0 && index < (current ?? 0)
-        let distance = abs(index - (visualIndex ?? current ?? 0))
+        let isPlayed = (currentIndex ?? -1) >= 0 && index < playbackIndex
+        let distance = abs(index - (visualIndex ?? playbackIndex))
         let opacity: Double = isFocused
             ? 1.0
             : (isPlayed ? 0.28 : 0.62) - Double(min(distance, 4)) * 0.05
         let size = isFocused ? baseFontSize + 4 : baseFontSize - CGFloat(min(distance, 2)) * 1.5
+        // 歌词行模糊：当前行与邻近行保持清晰，距离越远才越柔和（避免只剩一行清晰显得突兀）
+        // 模糊起始距离与强度由用户控制（0 强度 = 完全关闭模糊）
         let blurRadius: CGFloat = isFocused ? 0 : min(CGFloat(max(distance - Int(blurStart), 0)) * blurAmount, 7.0)
 
+        // 当前行用渐变（封面色或自定义），光晕跟随渐变起始色
         let lineStyle: AnyShapeStyle
         if isCurrent, let gradientStart, let gradientEnd {
             lineStyle = AnyShapeStyle(LinearGradient(colors: [gradientStart, gradientEnd], startPoint: .top, endPoint: .bottom))
@@ -3554,6 +3554,7 @@ struct LyricsSection: View {
         let glowColor = glowColorOverride ?? (gradientStart ?? accent)
 
         let lineFont: Font = BeansFont.appFont(size)
+        // 翻译行只展示在当前视觉焦点行下方。
         let translationText = (isCurrent && showTranslation) ? line.translation : nil
 
         return VStack(alignment: alignment == .leading ? .leading : .center, spacing: 3) {
@@ -3668,144 +3669,9 @@ struct LyricsSection: View {
         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
     }
 
-}
-
-struct KumoneLyricsSection: View {
-    @EnvironmentObject private var player: PlayerManager
-
-    let lyrics: [LyricLine]
-    let accent: Color
-    let secondary: Color
-    var gradientStart: Color? = nil
-    var gradientEnd: Color? = nil
-    var baseFontSize: CGFloat = 17
-    var lineSpacing: CGFloat = 24
-    var glowRadius: CGFloat = 0
-    var showTranslation: Bool = false
-    var alignment: HorizontalAlignment = .center
-    var offsetX: CGFloat = 0
-    var anchor: UnitPoint = .center
-    var glowColorOverride: Color? = nil
-    var blurStart: CGFloat = 1
-    var blurAmount: CGFloat = 0
-    var tilt: CGFloat = 0
-    var tiltY: CGFloat = 0
-    var lyricOffset: CGFloat = 0
-
-    @State private var activeIndex: Int?
-    @State private var isUserScrolling = false
-    @State private var resumeTask: Task<Void, Never>?
-
-    private var currentIndex: Int? {
-        LyricTimeline.activeIndex(
-            in: lyrics,
-            at: player.lyricProgress,
-            userOffset: Double(lyricOffset)
-        )
-    }
-
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: alignment, spacing: lineSpacing) {
-                    Color.clear.frame(height: 200)
-                    ForEach(Array(lyrics.enumerated()), id: \.element.id) { index, line in
-                        lyricLine(line, isActive: index == activeIndex)
-                            .id(index)
-                    }
-                    Color.clear.frame(height: 240)
-                }
-                .padding(.horizontal, alignment == .leading ? 24 : 18)
-            }
-            .offset(x: offsetX)
-            .beansScrollIndicatorsHidden()
-            .rotation3DEffect(.degrees(Double(tilt)), axis: (x: 1, y: 0, z: 0), anchor: .bottom, perspective: 0.5)
-            .rotation3DEffect(.degrees(Double(tiltY)), axis: (x: 0, y: 1, z: 0), anchor: .center, perspective: 0.5)
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .black, location: 0.12),
-                        .init(color: .black, location: 0.85),
-                        .init(color: .clear, location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .onChange(of: currentIndex) { index in
-                guard index != activeIndex else { return }
-                activeIndex = index
-                guard !isUserScrolling, let index else { return }
-                withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
-                    proxy.scrollTo(index, anchor: anchor)
-                }
-            }
-            .onAppear {
-                adoptCursor(proxy: proxy)
-            }
-            .onChange(of: player.currentSong?.identityKey) { _ in
-                activeIndex = nil
-                resumeTask?.cancel()
-            }
-            .onChange(of: lyrics.count) { _ in
-                adoptCursor(proxy: proxy)
-            }
-            .simultaneousGesture(
-                DragGesture()
-                    .onChanged { _ in
-                        guard !isUserScrolling else { return }
-                        isUserScrolling = true
-                        resumeTask?.cancel()
-                        resumeTask = Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 3_000_000_000)
-                            guard !Task.isCancelled else { return }
-                            isUserScrolling = false
-                        }
-                    }
-            )
-            .onDisappear {
-                resumeTask?.cancel()
-            }
-        }
-    }
-
-    private func adoptCursor(proxy: ScrollViewProxy) {
-        let index = currentIndex
-        activeIndex = index
-        guard let index else { return }
-        DispatchQueue.main.async {
-            proxy.scrollTo(index, anchor: anchor)
-        }
-    }
-
-    private func lyricLine(_ line: LyricLine, isActive: Bool) -> some View {
-        Button {
-            BeansHaptics.tap()
-            player.seek(to: LyricTiming.seekTime(for: line, userOffset: Double(lyricOffset)))
-        } label: {
-            VStack(alignment: alignment, spacing: 5) {
-                Text(line.text.isEmpty ? " " : line.text)
-                    .font(BeansFont.appFont(isActive ? baseFontSize + 4 : baseFontSize, isActive ? .bold : .semibold))
-                    .foregroundStyle(isActive ? accent : secondary.opacity(0.45))
-                    .blur(radius: isActive ? 0 : 0.6)
-                    .scaleEffect(isActive ? 1.02 : 1, anchor: alignment == .leading ? .leading : .center)
-                    .multilineTextAlignment(alignment == .leading ? .leading : .center)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if showTranslation, isActive, let translation = line.translation, !translation.isEmpty {
-                    Text(translation)
-                        .font(BeansFont.appFont(baseFontSize * 0.7, .medium))
-                        .foregroundStyle(secondary.opacity(0.7))
-                        .multilineTextAlignment(alignment == .leading ? .leading : .center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isActive)
+    private func scrollToCurrent(_ proxy: ScrollViewProxy) {
+        guard let currentIndex else { return }
+        proxy.scrollTo(currentIndex, anchor: anchor)
     }
 }
 

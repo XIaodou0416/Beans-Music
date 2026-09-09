@@ -313,36 +313,59 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     func seek(to seconds: Double) {
-        seek(to: seconds, onComplete: {})
-    }
-
-    func seek(to seconds: Double, onComplete: @escaping () -> Void) {
+        // 与播放器的歌词游标保持同一套逻辑：以用户指定的时间立即更新，
+        // 不等待 AVPlayer 回调，也不使用回调中的旧 currentTime 覆盖目标位置。
         let clamped = max(0, min(seconds, max(duration, currentSong?.duration ?? seconds)))
         progress = clamped
         lyricProgress = clamped
         seekRevision &+= 1
-        guard let player else {
-            onComplete()
-            updateNowPlaying()
-            savePersistedPlaybackState()
-            return
-        }
-        let shouldResume = isPlaying
-        player.seek(
+        player?.seek(
             to: CMTime(seconds: clamped, preferredTimescale: 600),
             toleranceBefore: .zero,
             toleranceAfter: .zero
+        )
+        updateNowPlaying()
+        savePersistedPlaybackState()
+    }
+
+    /// 歌词点击专用的精确跳转：暂停后等待 AVPlayer 完成定位，再恢复原播放状态。
+    /// 普通进度条继续使用 seek(to:) 的即时拖动逻辑。
+    func seekPrecisely(to seconds: Double) {
+        let knownDuration = max(duration, currentSong?.duration ?? seconds)
+        let target = knownDuration > 0
+            ? max(0, min(seconds, knownDuration))
+            : max(0, seconds)
+        let shouldResume = isPlaying
+        let seekSongKey = currentSong?.identityKey
+        seekRevision &+= 1
+        let revision = seekRevision
+        progress = target
+        lyricProgress = target
+        if shouldResume {
+            player?.pause()
+            isPlaying = false
+        }
+        player?.seek(
+            to: CMTime(seconds: target, preferredTimescale: 600),
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
         ) { [weak self] finished in
-            guard finished, let self else { return }
-            self.performOnMain {
+            guard finished else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      self.currentSong?.identityKey == seekSongKey,
+                      self.seekRevision == revision else { return }
+                self.progress = target
                 if shouldResume {
-                    player.playImmediately(atRate: Float(self.rate))
+                    self.player?.playImmediately(atRate: Float(self.rate))
+                    self.isPlaying = true
                 }
-                onComplete()
+                self.updateNowPlaying()
+                self.savePersistedPlaybackState()
+                self.seekRevision &+= 1
             }
         }
         updateNowPlaying()
-        savePersistedPlaybackState()
     }
 
     func seekBy(_ delta: Double) {
@@ -1774,7 +1797,6 @@ final class PlayerManager: NSObject, ObservableObject {
         currentIndex = min(max(saved.currentIndex, 0), saved.queue.count - 1)
         duration = max(saved.duration, currentSong?.duration ?? 0)
         progress = max(0, min(saved.progress, max(duration, currentSong?.duration ?? 0)))
-        lyricProgress = progress
         isPlaying = false
         isBuffering = false
         loadFailed = false
