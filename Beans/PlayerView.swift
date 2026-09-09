@@ -3930,6 +3930,10 @@ struct PlayerSettingsSheet: View {
         self.onDismiss = onDismiss
     }
 
+    private var selectedCoverPlayerStyle: BeansCoverPlayerStyle {
+        BeansCoverPlayerStyle.resolved(rawValue: coverPlayerStyleRaw)
+    }
+
     private var tiltYText: String {
         if lyricTiltY == 0 { return "关闭" }
         return lyricTiltY > 0 ? "右倾 \(lyricTiltY)°" : "左倾 \(-lyricTiltY)°"
@@ -4095,7 +4099,7 @@ struct PlayerSettingsSheet: View {
                 .font(BeansFont.appFont(13, .semibold))
                 .foregroundStyle(Color.beansLabel)
             ForEach(BeansCoverPlayerStyle.availableCases) { style in
-                let selected = coverPlayerStyle == style
+                let selected = selectedCoverPlayerStyle == style
                 Button {
                     coverPlayerStyleRaw = style.rawValue
                     BeansHaptics.select()
