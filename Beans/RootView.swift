@@ -122,8 +122,23 @@ struct RootView: View {
         let _ = theme.accent
         ZStack {
 
-            // iOS 26 使用系统底栏和下滑收缩行为，旧系统使用兼容底栏。
-            if #available(iOS 26.0, *) {
+            // iPad 始终使用侧边栏；iOS 26 以上交给系统绘制液态侧栏。
+            if usesPadSidebar {
+                if #available(iOS 26.0, *) {
+                    nativeTabs
+                        .modifier(
+                            MiniPlayerAccessoryModifier(
+                                isActive: player.currentSong != nil,
+                                showPlayer: $showPlayer,
+                                clock: player.clock,
+                                colorScheme: colorScheme,
+                                transitionNamespace: nowPlayingTransition
+                            )
+                        )
+                } else {
+                    iPadSidebarRoot
+                }
+            } else if #available(iOS 26.0, *) {
                 nativeTabs
                     .modifier(
                         MiniPlayerAccessoryModifier(
@@ -491,6 +506,117 @@ struct RootView: View {
                     .font(.system(size: 25, weight: .semibold))
             }
         }
+    }
+
+    /// iOS 15-25 的 iPad 侧栏兼容实现。页面仍复用原有 Tab 内容，
+    /// 只替换导航承载方式，并把迷你播放器固定在内容区底部。
+    private var iPadSidebarRoot: some View {
+        GeometryReader { proxy in
+            HStack(spacing: 0) {
+                iPadSidebar
+                    .frame(width: min(max(proxy.size.width * 0.17, 176), 228))
+
+                VStack(spacing: 0) {
+                    ZStack {
+                        legacyPage(.discover) { DiscoverView() }
+                        legacyPage(.playlists) { PlaylistSquareView() }
+                        legacyPage(.search) { SearchView() }
+                        legacyPage(.library) { LibraryView() }
+                        legacyPage(.profile) { ProfileView() }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    if player.currentSong != nil {
+                        MiniPlayerView(
+                            showPlayer: $showPlayer,
+                            presentation: .dock,
+                            transitionNamespace: nowPlayingTransition
+                        )
+                            .environmentObject(player.clock)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        }
+        .animation(.easeInOut(duration: 0.25), value: selection)
+        .animation(.easeInOut(duration: 0.25), value: player.currentSong?.identityKey)
+    }
+
+    private var iPadSidebar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Spacer(minLength: 20)
+
+            ForEach(RootTab.bottomTabs) { tab in
+                iPadSidebarItem(tab)
+            }
+
+            Spacer(minLength: 20)
+        }
+        .padding(.horizontal, 12)
+        .background {
+            Rectangle()
+                .fill(.regularMaterial)
+                .overlay(alignment: .trailing) {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(width: 0.5)
+                }
+        }
+    }
+
+    private func iPadSidebarItem(_ tab: RootTab) -> some View {
+        let isSelected = selection == tab
+        return Button {
+            guard selection != tab else { return }
+            BeansHaptics.select()
+            withAnimation(.spring(response: 0.30, dampingFraction: 0.82)) {
+                selection = tab
+            }
+        } label: {
+            HStack(spacing: 14) {
+                if let assetName = tab.assetName {
+                    Image(assetName)
+                        .resizable()
+                        .renderingMode(.template)
+                        .scaledToFit()
+                        .frame(width: 25, height: 25)
+                } else {
+                    Image(systemName: tab.icon)
+                        .font(.system(size: 25, weight: .semibold))
+                        .frame(width: 25, height: 25)
+                }
+
+                if tabLabelsVisible {
+                    Text(LocalizedStringKey(tab.title))
+                        .font(BeansFont.appFont(15, .semibold))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(isSelected ? Color.beansAmber : Color.primary.opacity(0.72))
+            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+            .padding(.horizontal, 14)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? Color.beansAmber.opacity(0.14) : .clear)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .onEnded { _ in
+                    guard tab == .discover else { return }
+                    BeansHaptics.select()
+                    showHomePlatformMenu = true
+                }
+        )
+        .accessibilityLabel(LocalizedStringKey(tab.title))
     }
 
     /// 旧系统将页面、底部播放器和胶囊底栏放在同一个 ZStack 中，

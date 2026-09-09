@@ -10,6 +10,8 @@ struct PlayerView: View {
     @EnvironmentObject private var favorites: FavoritesStore
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Binding var isPresented: Bool
 
     @State private var lyrics: [LyricLine] = []
@@ -128,6 +130,12 @@ struct PlayerView: View {
     @State private var animatedSongKey = ""
 
     private var song: Song? { player.currentSong }
+
+    private var isIPadLandscape: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+            && horizontalSizeClass == .regular
+            && verticalSizeClass == .compact
+    }
     private let rateOptions: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
     private var downloadQualityOptions: [DownloadQuality] {
@@ -373,6 +381,8 @@ struct PlayerView: View {
         Group {
             if showPlayerSettings {
                 Color.clear.ignoresSafeArea()
+            } else if isIPadLandscape && showLyrics {
+                iPadLandscapeLyricsView
             } else if coverPlayerStyle == .appleMusic {
                 ZStack {
                     ReferencePlaybackView(
@@ -731,6 +741,155 @@ struct PlayerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .allowsHitTesting(false)
+    }
+
+    // MARK: - iPad 横屏歌词
+
+    /// 横屏时将唱片与歌词并排展示，竖屏继续使用各自的原有播放器布局。
+    private var iPadLandscapeLyricsView: some View {
+        GeometryReader { geo in
+            ZStack {
+                background
+                    .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    iPadLandscapeLyricsHeader
+
+                    HStack(alignment: .center, spacing: 34) {
+                        iPadLandscapeArtwork(
+                            size: min(geo.size.height * 0.52, geo.size.width * 0.32)
+                        )
+                        .frame(maxWidth: geo.size.width * 0.43)
+
+                        LyricsSection(
+                            lyrics: lyrics,
+                            accent: lyricCurrentColor,
+                            secondary: lyricDimColor,
+                            gradientStart: lyricGradStart,
+                            gradientEnd: lyricGradEnd,
+                            baseFontSize: CGFloat(lyricFontSize) * CGFloat(lyricScale),
+                            lineSpacing: CGFloat(lyricLineSpacing),
+                            glowRadius: lyricGlowRadius,
+                            showTranslation: lyricTranslation,
+                            alignment: lyricAlign,
+                            offsetX: CGFloat(lyricOffsetX),
+                            anchor: lyricAnchor,
+                            glowColorOverride: lyricGlowColor,
+                            blurStart: CGFloat(lyricBlurStart),
+                            blurAmount: CGFloat(lyricBlurAmount),
+                            tilt: CGFloat(lyricTilt),
+                            tiltY: CGFloat(lyricTiltY),
+                            lyricOffset: CGFloat(lyricOffset)
+                        ) { line in
+                            BeansHaptics.tap()
+                            seekToLyric(line)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .padding(.horizontal, 34)
+                    .padding(.top, 4)
+                    .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
+                }
+
+                controlDeck(bottomInset: geo.safeAreaInsets.bottom)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
+        }
+    }
+
+    private var iPadLandscapeLyricsHeader: some View {
+        HStack(spacing: 14) {
+            Button {
+                BeansHaptics.tap()
+                closePlayer()
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(playerButtonText)
+                    .frame(width: 42, height: 42)
+                    .background { playerButtonSurface(size: 42) }
+                    .clipShape(Circle())
+            }
+            .buttonStyle(GlassPressButtonStyle())
+
+            Spacer(minLength: 0)
+
+            VStack(spacing: 3) {
+                Text(song?.name ?? "未在播放")
+                    .font(BeansFont.appFont(15, .semibold))
+                    .foregroundStyle(playerButtonText)
+                    .lineLimit(1)
+                Text(song?.artists ?? "")
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(playerButtonSecondaryText)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: 430)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 4) {
+                Button {
+                    guard let song else { return }
+                    toggleLocalFavorite(song)
+                } label: {
+                    Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(localLibrary.containsSong(song) ? controlAccent : playerButtonText)
+                        .frame(width: 42, height: 42)
+                }
+                .buttonStyle(GlassPressButtonStyle())
+
+                Button {
+                    BeansHaptics.tap()
+                    showNativeMoreActions = true
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(playerButtonText)
+                        .frame(width: 42, height: 42)
+                }
+                .buttonStyle(GlassPressButtonStyle())
+            }
+        }
+        .padding(.horizontal, 30)
+        .padding(.top, 8)
+        .frame(height: 64)
+    }
+
+    @ViewBuilder
+    private func iPadLandscapeArtwork(size: CGFloat) -> some View {
+        VStack(spacing: 14) {
+            if coverPlayerStyle == .vinyl {
+                VinylTurntableView(
+                    coverURL: song?.coverURL,
+                    isPlaying: playerVisualsActive,
+                    trackId: song?.id,
+                    size: size,
+                    onTap: { toggleLyrics() },
+                    onNextTrack: { player.next() },
+                    onPreviousTrack: { player.previous() }
+                )
+            } else {
+                CoverImage(url: song?.coverURL, size: size, cornerRadius: 18)
+                    .frame(width: size, height: size)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .shadow(color: .black.opacity(0.38), radius: 24, y: 12)
+            }
+
+            VStack(spacing: 4) {
+                Text(song?.name ?? "未在播放")
+                    .font(BeansFont.appFont(18, .bold))
+                    .foregroundStyle(playerButtonText)
+                    .lineLimit(1)
+                Text(song?.album ?? song?.artists ?? "")
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(playerButtonSecondaryText)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: size + 56)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
