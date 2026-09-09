@@ -309,12 +309,12 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 经典封面依赖高系统播放器交互，低于 iOS 26 时不提供该选项。
+    /// iPad 使用专用的横竖屏播放器布局，不提供经典封面布局。
     static var availableCases: [BeansCoverPlayerStyle] {
-        if #available(iOS 26.0, *) {
-            return allCases
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            return [.appleMusic, .vinyl]
         }
-        return [.appleMusic, .vinyl]
+        return allCases
     }
 
     static func resolved(rawValue: String) -> BeansCoverPlayerStyle {
