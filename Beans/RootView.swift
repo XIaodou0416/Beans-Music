@@ -798,7 +798,7 @@ struct RootView: View {
     private func loadSidebarPlaylists() async {
         var loaded: [Playlist] = []
 
-        if platformPrefs.isEnabled(.qq), qqAuth.isLoggedIn {
+        if platformPrefs.isEnabled(SearchProvider.qq), qqAuth.isLoggedIn {
             let accountID = qqAuth.rawUin.isEmpty ? qqAuth.playlistUin : qqAuth.rawUin
             if let cached = SyncedPlaylistCache.shared.cachedPlaylists(source: .qq, accountID: accountID) {
                 loaded.append(contentsOf: cached.playlists)
@@ -814,7 +814,7 @@ struct RootView: View {
             }
         }
 
-        if platformPrefs.isEnabled(.kugou), kugouAuth.isLoggedIn {
+        if platformPrefs.isEnabled(SearchProvider.kugou), kugouAuth.isLoggedIn {
             let accountID = kugouAuth.userId
             if let cached = SyncedPlaylistCache.shared.cachedPlaylists(source: .kugou, accountID: accountID) {
                 loaded.append(contentsOf: cached.playlists)
