@@ -180,8 +180,7 @@ struct ProfileView: View {
                 .padding(.horizontal, isNativeClean ? 24 : 16)
                 .padding(.top, isNativeClean ? 14 : 8)
                 .padding(.bottom, 190)
-                .frame(maxWidth: 860)
-                .frame(maxWidth: .infinity)
+                .beansAdaptiveContentWidth()
             }
             .beansScrollIndicatorsHidden()
         }
@@ -1560,8 +1559,7 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 40)
-                    .frame(maxWidth: 860)
-                    .frame(maxWidth: .infinity)
+                    .beansAdaptiveContentWidth()
                 }
                 .beansScrollIndicatorsHidden()
             }
@@ -3216,8 +3214,7 @@ struct EqualizerSettingsView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 32)
-                    .frame(maxWidth: 680)
-                    .frame(maxWidth: .infinity)
+                    .beansAdaptiveContentWidth(compact: 680, regular: 980)
                 }
                 .beansScrollIndicatorsHidden()
             }

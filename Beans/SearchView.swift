@@ -90,6 +90,7 @@ struct SearchView: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
 
@@ -118,6 +119,10 @@ struct SearchView: View {
 
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
+
+    private var usesTabletHotSearchLayout: Bool {
+        horizontalSizeClass == .regular
     }
 
     var body: some View {
@@ -443,7 +448,18 @@ struct SearchView: View {
             if hotWords.isEmpty {
                 LoadingStateView()
             } else {
-                if #available(iOS 16, *) {
+                if usesTabletHotSearchLayout {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                        alignment: .leading,
+                        spacing: 12
+                    ) {
+                        ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
+                            hotTag(index: index, word: word)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                } else if #available(iOS 16, *) {
                     FlowLayout(spacing: 10) {
                         ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
                             hotTag(index: index, word: word)

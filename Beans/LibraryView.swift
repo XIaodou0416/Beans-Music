@@ -174,8 +174,7 @@ struct LibraryView: View {
                 .padding(.horizontal, isNativeClean ? 24 : 16)
                 .padding(.top, isNativeClean ? 20 : 8)
                 .padding(.bottom, 190)
-                .frame(maxWidth: 860)
-                .frame(maxWidth: .infinity)
+                .beansAdaptiveContentWidth()
             }
             .beansScrollIndicatorsHidden()
         }

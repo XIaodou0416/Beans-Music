@@ -2,6 +2,11 @@ import SwiftUI
 import CoreImage.CIFilterBuiltins
 
 extension View {
+    /// 在紧凑宽度保持手机排版，在规则宽度适当放宽内容区域。
+    func beansAdaptiveContentWidth(compact: CGFloat = 860, regular: CGFloat = 1100) -> some View {
+        modifier(BeansAdaptiveContentWidthModifier(compact: compact, regular: regular))
+    }
+
     /// 横向卡片列表的滚动裁剪兼容：高系统允许卡片自然延伸，旧系统保持系统默认裁剪。
     @ViewBuilder
     func beansCompatScrollClipDisabled() -> some View {
@@ -10,6 +15,19 @@ extension View {
         } else {
             self
         }
+    }
+}
+
+private struct BeansAdaptiveContentWidthModifier: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    let compact: CGFloat
+    let regular: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: horizontalSizeClass == .regular ? regular : compact)
+            .frame(maxWidth: .infinity)
     }
 }
 

@@ -25,8 +25,7 @@ struct ThirdPartySourceManagerSheet: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
-                .frame(maxWidth: 860)
-                .frame(maxWidth: .infinity)
+                .beansAdaptiveContentWidth()
             }
             .background(GlassBackdrop())
             .navigationTitle(beansLocalized("自定义音源", "Custom Sources"))
@@ -569,8 +568,7 @@ private struct SourceEditorSheet: View {
                     editorCard
                 }
                 .padding(16)
-                .frame(maxWidth: 860)
-                .frame(maxWidth: .infinity)
+                .beansAdaptiveContentWidth()
             }
             .background(GlassBackdrop())
             .navigationTitle(beansLocalized("编辑音源", "Edit Source"))
