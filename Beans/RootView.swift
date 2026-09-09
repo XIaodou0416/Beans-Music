@@ -127,8 +127,8 @@ struct RootView: View {
     }
 
     private var usesSystemPlayerDismissal: Bool {
-        // iOS 18 及以上使用系统播放器交互，避免整页自定义手势拦截顶部控件。
-        if #available(iOS 18.0, *) { return true }
+        // iOS 26 及以上使用系统播放器交互，保留原生下划返回动画。
+        if #available(iOS 26.0, *) { return true }
         return false
     }
 
@@ -965,10 +965,9 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             .offset(y: usesSystemInteractiveDismissal ? 0 : dragOffset)
             .contentShape(Rectangle())
 
-            // 高系统交给系统处理交互式下拉；更低系统才使用兼容手势。
+            // iOS 26 及以上完全交给系统处理交互式下拉；更低系统才使用兼容手势。
             if usesSystemInteractiveDismissal {
                 playerSurface
-                    .simultaneousGesture(dismissGesture)
             } else {
                 playerSurface
                     .highPriorityGesture(dismissGesture)
