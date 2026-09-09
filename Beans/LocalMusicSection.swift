@@ -655,7 +655,7 @@ struct LocalSearchAddSheet: View {
                 .padding(.horizontal, 12)
                 if searching {
                     Spacer()
-                    ShimmerLoadingView(style: .compact)
+                    ProgressView().tint(Color.beansAmber)
                     Spacer()
                 } else if results.isEmpty {
                     Spacer()

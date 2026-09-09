@@ -318,8 +318,7 @@ struct DiscoverView: View {
                             if let image = phase.image {
                                 image.resizable().scaledToFit()
                             } else if phase.error == nil {
-                                ShimmerLoadingView(style: .row)
-                                    .frame(maxWidth: .infinity, minHeight: 60)
+                                ProgressView().frame(maxWidth: .infinity, minHeight: 60)
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: 180)
@@ -1136,7 +1135,9 @@ struct DiscoverView: View {
                         Image(systemName: icon)
                             .font(.system(size: 15, weight: .bold))
                         if let loadingKey, recommendationActionLoading == loadingKey {
-                            ShimmerLoadingView(style: .compact, accent: .white)
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(0.72)
                         }
                     }
                     .foregroundStyle(.white.opacity(0.92))
@@ -1297,8 +1298,9 @@ struct DiscoverView: View {
                 playlistSearchField
             }
             if playlistSearchLoading && visiblePersonalizedPlaylists.isEmpty {
-                ShimmerLoadingView(style: .row)
+                ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 88)
+                    .tint(Color.beansAmber)
             } else if visiblePersonalizedPlaylists.isEmpty {
                 EmptyStateView(icon: "music.note.list", text: playlistEmptyText)
             } else if isNativeClean && !playlistsExpanded {
@@ -1531,7 +1533,9 @@ struct DiscoverView: View {
             }
 
             if playlistSearchLoading {
-                ShimmerLoadingView(style: .compact)
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Color.beansAmber)
             } else if !playlistSearchText.isEmpty {
                 Button {
                     clearPlaylistSearch()
@@ -2483,7 +2487,9 @@ private struct HomeUnifiedSearchSheet: View {
             .frame(maxWidth: .infinity)
 
             ZStack {
-                ShimmerLoadingView(style: .compact)
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Color.beansAmber)
                     .opacity(searching ? 1 : 0)
             }
             .frame(width: 20, height: 22)

@@ -227,8 +227,7 @@ private struct VersionLogCard: View {
                     } else if phase.error != nil {
                         EmptyView()
                     } else {
-                        ShimmerLoadingView(style: .row)
-                            .frame(maxWidth: .infinity, minHeight: 80)
+                        ProgressView().frame(maxWidth: .infinity, minHeight: 80)
                     }
                 }
                 .frame(maxWidth: .infinity)

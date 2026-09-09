@@ -79,13 +79,15 @@ struct PlaylistSquareView: View {
                             }
 
                             if isSearching && isSearchLoading {
-                                ShimmerLoadingView(style: .page)
+                                ProgressView()
                                     .frame(maxWidth: .infinity, minHeight: 180)
+                                    .tint(Color.beansAmber)
                             } else if isSearching {
                                 searchGrid
                             } else if isLoading && playlists.isEmpty {
-                                ShimmerLoadingView(style: .page)
+                                ProgressView()
                                     .frame(maxWidth: .infinity, minHeight: 180)
+                                    .tint(Color.beansAmber)
                             } else if let errorMessage, playlists.isEmpty {
                                 ErrorStateView(message: errorMessage) {
                                     Task { await load(force: true) }
@@ -396,9 +398,10 @@ struct PlaylistSquareView: View {
     @ViewBuilder
     private var neteaseLoadMoreFooter: some View {
         if isLoadingMore {
-            ShimmerLoadingView(style: .compact)
+            ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
+                .tint(Color.beansAmber)
         } else if neteaseHasMore {
             Color.clear
                 .frame(height: 2)

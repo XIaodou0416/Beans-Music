@@ -83,7 +83,7 @@ struct LoginView: View {
             if let key {
                 QRCodeView(text: NetEaseAPI.shared.qrLoginURL(key: key))
             } else {
-                ShimmerLoadingView(style: .compact)
+                ProgressView().tint(Color.beansAmber)
             }
             if status == .expired || isError {
                 VStack(spacing: 10) {

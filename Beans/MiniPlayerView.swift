@@ -18,6 +18,7 @@ struct MiniPlayerView: View {
     var presentation: Presentation = .dock
     var transitionNamespace: Namespace.ID?
     @State private var miniLyrics: [LyricLine] = []
+    @State private var isAppeared = false
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
 
     private var currentLyricLine: LyricLine? {
@@ -42,6 +43,20 @@ struct MiniPlayerView: View {
         playerBarSurface
             .simultaneousGesture(expandGesture)
             .transitionSource(in: transitionNamespace)
+            .opacity(isAppeared ? 1 : 0)
+            .scaleEffect(isAppeared ? 1 : 0.96, anchor: .bottom)
+            .offset(y: isAppeared ? 0 : 14)
+            .onAppear {
+                withAnimation(BeansMotion.appearance) {
+                    isAppeared = true
+                }
+            }
+            .onChange(of: player.currentSong?.identityKey) { _ in
+                isAppeared = false
+                withAnimation(BeansMotion.trackSwap) {
+                    isAppeared = true
+                }
+            }
             .task(id: player.currentSong?.identityKey) {
                 await loadMiniLyrics()
             }
@@ -111,13 +126,15 @@ struct MiniPlayerView: View {
                     .font(.system(size: presentation.isInline ? 10 : 13, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
+                    .id(player.currentSong?.identityKey ?? "empty-title")
 
                 Text(currentLyricLine?.text ?? player.currentSong?.artists ?? "")
                     .font(.system(size: presentation.isInline ? 8 : 10))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .animation(.easeInOut(duration: 0.25), value: currentLyricLine?.text)
+                    .id(currentLyricLine?.id.uuidString ?? "empty-lyric")
+                    .animation(BeansMotion.imageReveal, value: currentLyricLine?.text)
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }

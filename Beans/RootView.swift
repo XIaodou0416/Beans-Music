@@ -165,8 +165,8 @@ struct RootView: View {
                 playerPresentation
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
-        .animation(.easeInOut(duration: 0.22), value: selection)
+        .animation(BeansMotion.trackSwap, value: player.currentSong?.id)
+        .animation(BeansMotion.tabSelection, value: selection)
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
@@ -328,7 +328,8 @@ struct RootView: View {
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 } else {
-                    ShimmerLoadingView(style: .compact)
+                    ProgressView()
+                        .tint(Color.beansAmber)
                     Text("正在连接下载服务器…")
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
@@ -487,8 +488,8 @@ struct RootView: View {
             legacyFloatingTabBar
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
-        .animation(.easeInOut(duration: 0.25), value: selection)
-        .animation(.easeInOut(duration: 0.25), value: player.currentSong?.identityKey)
+        .animation(BeansMotion.tabSelection, value: selection)
+        .animation(BeansMotion.trackSwap, value: player.currentSong?.identityKey)
     }
 
     @ViewBuilder
@@ -541,6 +542,7 @@ struct BeansNowPlayingPresentation<Content: View>: View {
     var body: some View {
         GeometryReader { proxy in
             let isPhone = proxy.size.width < 720
+            let dragProgress = min(max(dragOffset / max(proxy.size.height * 0.72, 1), 0), 1)
             let playerSurface = ZStack(alignment: .top) {
                 content
 
@@ -550,6 +552,16 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .offset(y: usesSystemInteractiveDismissal ? 0 : dragOffset)
+            .scaleEffect(
+                usesSystemInteractiveDismissal ? 1 : 1 - dragProgress * 0.055,
+                anchor: .top
+            )
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: usesSystemInteractiveDismissal ? 0 : dragProgress * 28,
+                    style: .continuous
+                )
+            )
             .contentShape(Rectangle())
 
             // iOS 26 以下的 fullScreenCover 不稳定提供完整的下拉返回区域，
@@ -785,6 +797,7 @@ private struct GlassTabBar: View {
                 }
             }
             .contentShape(Rectangle())
+            .animation(isDragging ? nil : BeansMotion.tabSelection, value: selection)
             .gesture(dragGesture(cellW: cellW, count: count))
         }
         .frame(height: contentHeight)
@@ -822,8 +835,10 @@ private struct GlassTabBar: View {
         .foregroundStyle(isSelected
                          ? AnyShapeStyle(Color.beansAmber)
                          : AnyShapeStyle(Color.primary.opacity(0.8)))
+        .scaleEffect(isSelected ? 1.025 : 1)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
+        .animation(BeansMotion.tabSelection, value: isSelected)
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
             guard item.tab == .discover else { return }
             BeansHaptics.select()
@@ -952,8 +967,7 @@ private struct UpdatePromptOverlay: View {
                                 if let image = phase.image {
                                     image.resizable().scaledToFit()
                                 } else if phase.error == nil {
-                                    ShimmerLoadingView(style: .row)
-                                        .frame(maxWidth: .infinity, minHeight: 70)
+                                    ProgressView().frame(maxWidth: .infinity, minHeight: 70)
                                 }
                             }
                             .frame(maxWidth: .infinity)
@@ -1141,11 +1155,10 @@ private struct RemoteAnnouncementOverlay: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     } else {
                         AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image.resizable().scaledToFit()
-                        } else if phase.error == nil {
-                            ShimmerLoadingView(style: .row)
-                                .frame(maxWidth: .infinity, minHeight: 80)
+                            if let image = phase.image {
+                                image.resizable().scaledToFit()
+                            } else if phase.error == nil {
+                                ProgressView().frame(maxWidth: .infinity, minHeight: 80)
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: 220)

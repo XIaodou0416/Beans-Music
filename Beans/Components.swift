@@ -78,8 +78,10 @@ struct GlassPressButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
-            .brightness(configuration.isPressed ? 0.025 : 0)
-            .animation(.spring(response: 0.24, dampingFraction: 0.82), value: configuration.isPressed)
+            .offset(y: configuration.isPressed ? 1 : 0)
+            .brightness(configuration.isPressed ? 0.02 : 0)
+            .opacity(configuration.isPressed ? 0.94 : 1)
+            .animation(BeansMotion.press, value: configuration.isPressed)
     }
 }
 
@@ -518,17 +520,21 @@ struct CoverImage: View {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
+                            .transition(.opacity.combined(with: .scale(scale: 0.97)))
                     } else if url == nil || imageLoader.didFail {
                         placeholderIcon
+                            .transition(.opacity)
                     } else {
                         ZStack {
                             placeholderIcon
-                            ShimmerLoadingView(style: .compact)
+                            ProgressView().tint(Color.beansAmber)
                         }
+                        .transition(.opacity)
                     }
                 }
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .animation(BeansMotion.imageReveal, value: imageLoader.image != nil)
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .onAppear { imageLoader.load(url: url) }
@@ -836,107 +842,15 @@ struct ErrorStateView: View {
 }
 
 struct LoadingStateView: View {
-    var body: some View {
-        ShimmerLoadingView(style: .page)
-    }
-}
-
-/// 统一的流光加载组件。页面使用骨架，局部加载使用紧凑指示器，避免布局尺寸跳变。
-struct ShimmerLoadingView: View {
-    enum Style {
-        case page
-        case row
-        case compact
-    }
-
-    var style: Style = .compact
-    var accent: Color = Color.beansAmber
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var shimmerOffset: CGFloat = -1.6
+    @EnvironmentObject private var theme: ThemeStore
 
     var body: some View {
-        content
-            .onAppear {
-                guard !reduceMotion else { return }
-                shimmerOffset = -1.6
-                withAnimation(.linear(duration: 1.35).repeatForever(autoreverses: false)) {
-                    shimmerOffset = 1.6
-                }
-            }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch style {
-        case .page:
-            VStack(alignment: .leading, spacing: 14) {
-                shimmerBlock(width: 132, height: 18, cornerRadius: 6)
-                HStack(spacing: 12) {
-                    shimmerBlock(width: 76, height: 76, cornerRadius: 14)
-                    VStack(alignment: .leading, spacing: 10) {
-                        shimmerBlock(width: 190, height: 14, cornerRadius: 5)
-                        shimmerBlock(width: 124, height: 12, cornerRadius: 5)
-                        shimmerBlock(width: 156, height: 10, cornerRadius: 5)
-                    }
-                }
-                shimmerBlock(width: nil, height: 112, cornerRadius: 16)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 28)
+        let _ = theme.accent
+        ProgressView()
+            .controlSize(.large)
+            .tint(Color.beansAmber)
             .frame(maxWidth: .infinity)
-        case .row:
-            HStack(spacing: 10) {
-                shimmerBlock(width: 34, height: 34, cornerRadius: 8)
-                VStack(alignment: .leading, spacing: 7) {
-                    shimmerBlock(width: 132, height: 10, cornerRadius: 4)
-                    shimmerBlock(width: 88, height: 8, cornerRadius: 4)
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity)
-        case .compact:
-            Capsule(style: .continuous)
-                .fill(accent.opacity(0.22))
-                .frame(width: 28, height: 5)
-                .overlay {
-                    GeometryReader { proxy in
-                        LinearGradient(
-                            colors: [.clear, accent.opacity(0.9), .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: max(proxy.size.width * 0.55, 12))
-                        .offset(x: shimmerOffset * proxy.size.width)
-                    }
-                    .clipShape(Capsule(style: .continuous))
-                }
-                .frame(width: 28, height: 5)
-        }
-    }
-
-    private func shimmerBlock(width: CGFloat?, height: CGFloat, cornerRadius: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.beansComment.opacity(0.14))
-            .frame(maxWidth: width == nil ? .infinity : nil)
-            .frame(width: width, height: height)
-            .overlay {
-                GeometryReader { proxy in
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            accent.opacity(0.42),
-                            .clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(width: max(proxy.size.width * 0.46, 44))
-                    .rotationEffect(.degrees(18))
-                    .offset(x: shimmerOffset * proxy.size.width)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            }
+            .padding(.vertical, 40)
     }
 }
 
@@ -1050,9 +964,10 @@ struct SectionEntrance: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 14)
+            .offset(y: appeared ? 0 : 16)
+            .scaleEffect(appeared ? 1 : 0.985, anchor: .top)
             .onAppear {
-                withAnimation(.easeOut(duration: 0.5).delay(delay)) {
+                withAnimation(BeansMotion.appearance.delay(delay)) {
                     appeared = true
                 }
             }
@@ -1114,7 +1029,8 @@ struct ToastView: View {
             .padding(.bottom, 92)
             .opacity(center.message == nil ? 0 : 1)
             .offset(y: center.message == nil ? 16 : 0)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: center.message)
+            .scaleEffect(center.message == nil ? 0.96 : 1)
+            .animation(BeansMotion.toast, value: center.message)
             .allowsHitTesting(false)
     }
 }

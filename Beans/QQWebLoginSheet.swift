@@ -29,12 +29,8 @@ struct QQWebLoginPanel: View {
                     .padding(.horizontal, 20)
 
                 if !pageLoaded {
-                    VStack(spacing: 10) {
-                        ShimmerLoadingView(style: .compact)
-                        Text("正在加载 QQ 音乐…")
-                            .font(BeansFont.appFont(12))
-                            .foregroundStyle(Color.beansComment)
-                    }
+                    ProgressView("正在加载 QQ 音乐…")
+                        .tint(Color.beansAmber)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -52,7 +48,7 @@ struct QQWebLoginPanel: View {
             } label: {
                 HStack(spacing: 6) {
                     if syncing {
-                        ShimmerLoadingView(style: .compact, accent: .white)
+                        ProgressView().tint(.white)
                     } else {
                         Image(systemName: "arrow.triangle.2.circlepath")
                     }
