@@ -1051,7 +1051,6 @@ struct DiscoverView: View {
                                     .frame(width: isNativeClean ? 156 : 108, alignment: .leading)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 5)
-                                    .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
                                 Text(song.artists.isEmpty ? song.album : song.artists)
                                     .font(BeansFont.appFont(10))
                                     .foregroundStyle(Color.beansComment)

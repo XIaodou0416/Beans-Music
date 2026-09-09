@@ -935,7 +935,7 @@ struct PlayerView: View {
 
             Button {
                 BeansHaptics.tap()
-                showNativeMoreActions = true
+                openMoreActions()
             } label: {
                 VStack(spacing: 2) {
                     Text(LocalizedStringKey(player.isBuffering ? "加载中…" : (player.isPlaying ? "正在播放" : "已暂停")))
@@ -1035,6 +1035,13 @@ struct PlayerView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .beansCardShadow(radius: 14, y: 8)
+    }
+
+    private func openMoreActions() {
+        showNativeMoreActions = false
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+            showMoreActions = true
+        }
     }
 
     private func moreActionRow(_ title: String, systemName: String, action: @escaping () -> Void) -> some View {
@@ -2183,7 +2190,7 @@ struct PlayerView: View {
                 deckGrabber
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, playerButtonStyle == .appleMusic ? 24 : 32)
         .padding(.top, 10)
         .padding(.bottom, max(12, bottomInset + 4))
         .frame(maxWidth: .infinity)
@@ -2367,6 +2374,7 @@ struct PlayerView: View {
                 Spacer(minLength: 0)
                 queueButton
             }
+            .padding(.horizontal, 8)
             // 中间主控制组：上一曲 / 播放暂停 / 下一曲 真正居中
             HStack(spacing: 16) {
                 deckButton(icon: "backward.fill", expand: false, part: .previous) {

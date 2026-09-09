@@ -299,19 +299,34 @@ struct Layoutable: ViewModifier {
 
     func body(content: Content) -> some View {
         let entry = data[part.rawValue] ?? PlayerLayoutStore.defaultEntry(for: part)
+        let displayEntry = normalizedEntry(entry)
         content
-            .scaleEffect(entry.scale)
-            .offset(x: entry.x, y: entry.y)
+            .scaleEffect(displayEntry.scale)
+            .offset(x: displayEntry.x, y: displayEntry.y)
             .gesture(
                 enabled
                     ? DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             var e = data[part.rawValue] ?? PlayerLayoutStore.defaultEntry(for: part)
-                            e.x = value.translation.width
+                            e.x = normalizedX(value.translation.width)
                             e.y = value.translation.height
                             data[part.rawValue] = e
                         }
                     : nil
             )
+    }
+
+    private func normalizedEntry(_ entry: PlayerLayoutEntry) -> PlayerLayoutEntry {
+        var normalized = entry
+        normalized.x = normalizedX(entry.x)
+        if part == .loop || part == .queue {
+            normalized.scale = min(max(entry.scale, 0.82), 1.15)
+        }
+        return normalized
+    }
+
+    private func normalizedX(_ value: CGFloat) -> CGFloat {
+        guard part == .loop || part == .queue else { return value }
+        return min(max(value, -24), 24)
     }
 }

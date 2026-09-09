@@ -99,6 +99,8 @@ final class PlayerManager: NSObject, ObservableObject {
     private var sleepTimer: Timer?
     private var lastCountedSongID: String?
     private var wasPlayingBeforeInterruption = false
+    private var interruptionInProgress = false
+    private var interruptionResumeWorkItem: DispatchWorkItem?
     private var lastPublishedProgress: Double = -1
     private var lastPersistedProgress: Double = -1
     private var lastNowPlayingArtworkKey: String?
@@ -195,6 +197,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     deinit {
+        interruptionResumeWorkItem?.cancel()
         if let equalizerSettingsObserver {
             NotificationCenter.default.removeObserver(equalizerSettingsObserver)
         }
@@ -1723,18 +1726,37 @@ final class PlayerManager: NSObject, ObservableObject {
               let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
         switch type {
         case .began:
-            wasPlayingBeforeInterruption = isPlaying
+            interruptionResumeWorkItem?.cancel()
+            interruptionResumeWorkItem = nil
+            interruptionInProgress = true
+            wasPlayingBeforeInterruption = isPlaying || player?.timeControlStatus == .playing
             // 开启「与其他音频同时播放」时，不被其他 App 音频中断，保持继续播放
             guard !mixesWithOthers else { return }
             player?.pause()
             isPlaying = false
+            updateNowPlaying()
         case .ended:
             // 中断结束后系统可能停用了音频会话，重新激活避免无声
             sessionConfigured = false
             configureAudioSession()
+            let shouldResume = interruptionInProgress && wasPlayingBeforeInterruption
+            interruptionInProgress = false
             wasPlayingBeforeInterruption = false
-            isPlaying = false
-            updateNowPlaying()
+            guard shouldResume, let player else {
+                isPlaying = false
+                updateNowPlaying()
+                return
+            }
+            // 音频会话恢复可能晚于通知本身，留出一个 run loop 让系统完成激活。
+            let resume = DispatchWorkItem { [weak self, weak player] in
+                guard let self, let player, self.player === player else { return }
+                guard self.currentSong != nil else { return }
+                player.playImmediately(atRate: Float(self.rate))
+                self.isPlaying = true
+                self.updateNowPlaying()
+            }
+            interruptionResumeWorkItem = resume
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: resume)
         @unknown default:
             break
         }
