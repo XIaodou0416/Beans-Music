@@ -167,8 +167,7 @@ struct FeedbackSheet: View {
                         } label: {
                             HStack(spacing: 8) {
                                 if isSubmitting {
-                                    ProgressView()
-                                        .tint(.white)
+                                    ShimmerLoadingView(style: .compact, accent: .white)
                                 } else {
                                     Image(systemName: "paperplane.fill")
                                 }
@@ -271,8 +270,7 @@ struct FeedbackSheet: View {
                                 showDeleteConfirmation = true
                             } label: {
                                 if deletingFeedbackID == entry.feedbackID {
-                                    ProgressView()
-                                        .controlSize(.small)
+                                    ShimmerLoadingView(style: .compact)
                                 } else {
                                     Image(systemName: "trash")
                                 }
@@ -367,7 +365,7 @@ struct FeedbackSheet: View {
                         if let image = phase.image {
                             image.resizable().scaledToFill()
                         } else if phase.error == nil {
-                            ProgressView()
+                            ShimmerLoadingView(style: .compact)
                         } else {
                             Image(systemName: "photo")
                                 .foregroundStyle(Color.beansComment)

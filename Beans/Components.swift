@@ -523,7 +523,7 @@ struct CoverImage: View {
                     } else {
                         ZStack {
                             placeholderIcon
-                            ProgressView().tint(Color.beansAmber)
+                            ShimmerLoadingView(style: .compact)
                         }
                     }
                 }
@@ -836,35 +836,82 @@ struct ErrorStateView: View {
 }
 
 struct LoadingStateView: View {
-    @EnvironmentObject private var theme: ThemeStore
+    var body: some View {
+        ShimmerLoadingView(style: .page)
+    }
+}
+
+/// 统一的流光加载组件。页面使用骨架，局部加载使用紧凑指示器，避免布局尺寸跳变。
+struct ShimmerLoadingView: View {
+    enum Style {
+        case page
+        case row
+        case compact
+    }
+
+    var style: Style = .compact
+    var accent: Color = Color.beansAmber
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shimmerOffset: CGFloat = -1.6
 
     var body: some View {
-        let _ = theme.accent
-        VStack(alignment: .leading, spacing: 14) {
-            shimmerBlock(width: 132, height: 18, cornerRadius: 6)
-
-            HStack(spacing: 12) {
-                shimmerBlock(width: 76, height: 76, cornerRadius: 14)
-                VStack(alignment: .leading, spacing: 10) {
-                    shimmerBlock(width: 190, height: 14, cornerRadius: 5)
-                    shimmerBlock(width: 124, height: 12, cornerRadius: 5)
-                    shimmerBlock(width: 156, height: 10, cornerRadius: 5)
+        content
+            .onAppear {
+                guard !reduceMotion else { return }
+                shimmerOffset = -1.6
+                withAnimation(.linear(duration: 1.35).repeatForever(autoreverses: false)) {
+                    shimmerOffset = 1.6
                 }
             }
+    }
 
-            shimmerBlock(width: nil, height: 112, cornerRadius: 16)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 28)
-        .frame(maxWidth: .infinity)
-        .onAppear {
-            guard !reduceMotion else { return }
-            shimmerOffset = -1.6
-            withAnimation(.linear(duration: 1.35).repeatForever(autoreverses: false)) {
-                shimmerOffset = 1.6
+    @ViewBuilder
+    private var content: some View {
+        switch style {
+        case .page:
+            VStack(alignment: .leading, spacing: 14) {
+                shimmerBlock(width: 132, height: 18, cornerRadius: 6)
+                HStack(spacing: 12) {
+                    shimmerBlock(width: 76, height: 76, cornerRadius: 14)
+                    VStack(alignment: .leading, spacing: 10) {
+                        shimmerBlock(width: 190, height: 14, cornerRadius: 5)
+                        shimmerBlock(width: 124, height: 12, cornerRadius: 5)
+                        shimmerBlock(width: 156, height: 10, cornerRadius: 5)
+                    }
+                }
+                shimmerBlock(width: nil, height: 112, cornerRadius: 16)
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 28)
+            .frame(maxWidth: .infinity)
+        case .row:
+            HStack(spacing: 10) {
+                shimmerBlock(width: 34, height: 34, cornerRadius: 8)
+                VStack(alignment: .leading, spacing: 7) {
+                    shimmerBlock(width: 132, height: 10, cornerRadius: 4)
+                    shimmerBlock(width: 88, height: 8, cornerRadius: 4)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity)
+        case .compact:
+            Capsule(style: .continuous)
+                .fill(accent.opacity(0.22))
+                .frame(width: 28, height: 5)
+                .overlay {
+                    GeometryReader { proxy in
+                        LinearGradient(
+                            colors: [.clear, accent.opacity(0.9), .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: max(proxy.size.width * 0.55, 12))
+                        .offset(x: shimmerOffset * proxy.size.width)
+                    }
+                    .clipShape(Capsule(style: .continuous))
+                }
+                .frame(width: 28, height: 5)
         }
     }
 
@@ -878,7 +925,7 @@ struct LoadingStateView: View {
                     LinearGradient(
                         colors: [
                             .clear,
-                            Color.white.opacity(0.42),
+                            accent.opacity(0.42),
                             .clear
                         ],
                         startPoint: .top,

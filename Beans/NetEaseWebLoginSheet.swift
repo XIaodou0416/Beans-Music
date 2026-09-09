@@ -32,8 +32,12 @@ struct NetEaseWebLoginPanel: View {
                     .padding(.horizontal, 20)
 
                 if !pageLoaded {
-                    ProgressView("正在加载网易云音乐…")
-                        .tint(Color.beansAmber)
+                    VStack(spacing: 10) {
+                        ShimmerLoadingView(style: .compact)
+                        Text("正在加载网易云音乐…")
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansComment)
+                    }
                 }
             }
             .frame(maxHeight: .infinity)
@@ -51,7 +55,7 @@ struct NetEaseWebLoginPanel: View {
             } label: {
                 HStack(spacing: 6) {
                     if syncing {
-                        ProgressView().tint(.white)
+                        ShimmerLoadingView(style: .compact, accent: .white)
                     } else {
                         Image(systemName: "arrow.triangle.2.circlepath")
                     }

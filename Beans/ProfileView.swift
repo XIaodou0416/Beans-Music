@@ -294,7 +294,7 @@ struct ProfileView: View {
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 } else {
-                    ProgressView()
+                    ShimmerLoadingView(style: .compact)
                         .tint(Color.beansAmber)
                     Text("正在连接下载服务器…")
                         .font(BeansFont.appFont(12))

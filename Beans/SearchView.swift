@@ -288,9 +288,7 @@ struct SearchView: View {
             .frame(height: 32)
             .frame(maxWidth: .infinity)
             ZStack {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(Color.beansAmber)
+                ShimmerLoadingView(style: .compact)
                     .opacity(searching ? 1 : 0)
             }
             .frame(width: 20, height: 22)
@@ -589,9 +587,7 @@ struct SearchView: View {
                     .padding(.bottom, 180)
                 }
                 .overlay(alignment: .top) {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(Color.beansAmber)
+                    ShimmerLoadingView(style: .compact)
                         .padding(.top, 10)
                         .opacity(searching ? 1 : 0)
                 }
@@ -659,9 +655,7 @@ struct SearchView: View {
                     .padding(.bottom, 180)
                 }
                 .overlay(alignment: .top) {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(Color.beansAmber)
+                    ShimmerLoadingView(style: .compact)
                         .padding(.top, 10)
                         .opacity(searching ? 1 : 0)
                 }
@@ -730,9 +724,7 @@ struct SearchView: View {
                     .padding(.bottom, 180)
                 }
                 .overlay(alignment: .top) {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(Color.beansAmber)
+                    ShimmerLoadingView(style: .compact)
                         .padding(.top, 10)
                         .opacity(searching ? 1 : 0)
                 }

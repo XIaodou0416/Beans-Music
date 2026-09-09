@@ -64,7 +64,7 @@ struct KugouLoginSheet: View {
             if let qr {
                 QRCodeView(text: qr.url)
             } else {
-                ProgressView().tint(Color.beansAmber)
+                ShimmerLoadingView(style: .compact)
             }
             if status == .expired || isError {
                 VStack(spacing: 10) {

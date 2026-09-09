@@ -328,8 +328,7 @@ struct RootView: View {
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 } else {
-                    ProgressView()
-                        .tint(Color.beansAmber)
+                    ShimmerLoadingView(style: .compact)
                     Text("正在连接下载服务器…")
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
@@ -953,7 +952,8 @@ private struct UpdatePromptOverlay: View {
                                 if let image = phase.image {
                                     image.resizable().scaledToFit()
                                 } else if phase.error == nil {
-                                    ProgressView().frame(maxWidth: .infinity, minHeight: 70)
+                                    ShimmerLoadingView(style: .row)
+                                        .frame(maxWidth: .infinity, minHeight: 70)
                                 }
                             }
                             .frame(maxWidth: .infinity)
@@ -1141,10 +1141,11 @@ private struct RemoteAnnouncementOverlay: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     } else {
                         AsyncImage(url: url) { phase in
-                            if let image = phase.image {
-                                image.resizable().scaledToFit()
-                            } else if phase.error == nil {
-                                ProgressView().frame(maxWidth: .infinity, minHeight: 80)
+                        if let image = phase.image {
+                            image.resizable().scaledToFit()
+                        } else if phase.error == nil {
+                            ShimmerLoadingView(style: .row)
+                                .frame(maxWidth: .infinity, minHeight: 80)
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: 220)
