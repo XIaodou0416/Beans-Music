@@ -83,7 +83,8 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Beans.app Payload/
-          ditto -c -k --sequesterRsrc --keepParent Payload Beans-unsigned.ipa
+          # 使用普通 ZIP，避免将 macOS 资源元数据带入 IPA，提升第三方签名器兼容性。
+          zip -qry Beans-unsigned.ipa Payload
           unzip -t Beans-unsigned.ipa
           test -d Payload/Beans.app
           test -f Payload/Beans.app/Info.plist
