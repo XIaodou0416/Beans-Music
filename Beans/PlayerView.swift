@@ -182,7 +182,7 @@ struct PlayerView: View {
     }
 
     private var coverPlayerStyle: BeansCoverPlayerStyle {
-        return BeansCoverPlayerStyle(rawValue: coverPlayerStyleRaw) ?? .appleMusic
+        BeansCoverPlayerStyle.resolved(rawValue: coverPlayerStyleRaw)
     }
 
     private enum VinylLayoutDefaults {
@@ -2689,7 +2689,7 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Text("编辑模式：顶部、经典封面、歌词和底部控件都可调")
+                Text("编辑模式：顶部栏、封面、歌词和底部控件都可调")
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(palette.secondary)
             }
@@ -4094,8 +4094,8 @@ struct PlayerSettingsSheet: View {
             Text("播放器风格")
                 .font(BeansFont.appFont(13, .semibold))
                 .foregroundStyle(Color.beansLabel)
-            ForEach(BeansCoverPlayerStyle.allCases) { style in
-                let selected = coverPlayerStyleRaw == style.rawValue
+            ForEach(BeansCoverPlayerStyle.availableCases) { style in
+                let selected = coverPlayerStyle == style
                 Button {
                     coverPlayerStyleRaw = style.rawValue
                     BeansHaptics.select()
@@ -4731,7 +4731,7 @@ struct PlayerSettingsSheet: View {
                         }
                     }
                 }
-            ), caption: "开启后回到播放页，可拖动顶部栏、经典封面、歌词和底部控件")
+            ), caption: "开启后回到播放页，可拖动顶部栏、封面、歌词和底部控件")
             Divider().opacity(0.5)
             settingToggle("显示底部指示线", isOn: $deckGrabberEnabled,
                           caption: "关闭后隐藏指示线，仍可上滑呼出评论区")

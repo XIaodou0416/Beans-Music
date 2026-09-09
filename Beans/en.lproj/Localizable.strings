@@ -83,7 +83,7 @@
 "本地音乐库" = "Local Music Library";
 "本软件完全免费，全部功能开源 · GitHub：XIaodou0416/Beans-Music" = "This app is free and open source · GitHub: XIaodou0416/Beans-Music";
 "壁纸模糊" = "Wallpaper Blur";
-"编辑模式：顶部、经典封面、歌词和底部控件都可调" = "Edit mode: top bar, classic cover, lyrics, and bottom controls can all be adjusted.";
+"编辑模式：顶部栏、封面、歌词和底部控件都可调" = "Edit mode: top bar, cover, lyrics, and bottom controls can all be adjusted.";
 "标题区高度" = "Title Area Height";
 "标准" = "Standard";
 "冰蓝极光" = "Ice Blue Aurora";
@@ -383,7 +383,7 @@
 "居中" = "Centered";
 "开启后播放器封面界面也使用这张自定义背景" = "Also use this custom background on the player cover page";
 "开启后播放时封面自动匀速旋转" = "Rotate the cover smoothly during playback";
-"开启后回到播放页，可拖动顶部栏、经典封面、歌词和底部控件" = "After enabling, return to the player to drag the top bar, classic cover, lyrics, and bottom controls.";
+"开启后回到播放页，可拖动顶部栏、封面、歌词和底部控件" = "After enabling, return to the player to drag the top bar, cover, lyrics, and bottom controls.";
 "开启上下渐变字" = "Enable Vertical Text Gradient";
 "开启文字背景发光" = "Enable Text Background Glow";
 "开始使用" = "Get Started";

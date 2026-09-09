@@ -308,6 +308,19 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
         case .vinyl: return "opticaldisc"
         }
     }
+
+    /// 经典封面依赖高系统播放器交互，低于 iOS 26 时不提供该选项。
+    static var availableCases: [BeansCoverPlayerStyle] {
+        if #available(iOS 26.0, *) {
+            return allCases
+        }
+        return [.appleMusic, .vinyl]
+    }
+
+    static func resolved(rawValue: String) -> BeansCoverPlayerStyle {
+        let stored = BeansCoverPlayerStyle(rawValue: rawValue) ?? .appleMusic
+        return availableCases.contains(stored) ? stored : .appleMusic
+    }
 }
 
 // MARK: - 全局主题（ObservableObject：一处修改，全 App 即时联动）
