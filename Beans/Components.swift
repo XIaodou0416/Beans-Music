@@ -837,14 +837,59 @@ struct ErrorStateView: View {
 
 struct LoadingStateView: View {
     @EnvironmentObject private var theme: ThemeStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shimmerOffset: CGFloat = -1.6
 
     var body: some View {
         let _ = theme.accent
-        ProgressView()
-            .controlSize(.large)
-            .tint(Color.beansAmber)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
+        VStack(alignment: .leading, spacing: 14) {
+            shimmerBlock(width: 132, height: 18, cornerRadius: 6)
+
+            HStack(spacing: 12) {
+                shimmerBlock(width: 76, height: 76, cornerRadius: 14)
+                VStack(alignment: .leading, spacing: 10) {
+                    shimmerBlock(width: 190, height: 14, cornerRadius: 5)
+                    shimmerBlock(width: 124, height: 12, cornerRadius: 5)
+                    shimmerBlock(width: 156, height: 10, cornerRadius: 5)
+                }
+            }
+
+            shimmerBlock(width: nil, height: 112, cornerRadius: 16)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 28)
+        .frame(maxWidth: .infinity)
+        .onAppear {
+            guard !reduceMotion else { return }
+            shimmerOffset = -1.6
+            withAnimation(.linear(duration: 1.35).repeatForever(autoreverses: false)) {
+                shimmerOffset = 1.6
+            }
+        }
+    }
+
+    private func shimmerBlock(width: CGFloat?, height: CGFloat, cornerRadius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Color.beansComment.opacity(0.14))
+            .frame(maxWidth: width == nil ? .infinity : nil)
+            .frame(width: width, height: height)
+            .overlay {
+                GeometryReader { proxy in
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            Color.white.opacity(0.42),
+                            .clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(width: max(proxy.size.width * 0.46, 44))
+                    .rotationEffect(.degrees(18))
+                    .offset(x: shimmerOffset * proxy.size.width)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            }
     }
 }
 
