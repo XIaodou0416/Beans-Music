@@ -309,11 +309,8 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
         }
     }
 
-    /// iPad 使用专用的横竖屏播放器布局，不提供经典封面布局。
+    /// 播放器设置中显示全部可用的封面样式。
     static var availableCases: [BeansCoverPlayerStyle] {
-        if UIDevice.current.userInterfaceIdiom == .pad {
-            return [.appleMusic, .vinyl]
-        }
         return allCases
     }
 
