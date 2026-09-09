@@ -378,8 +378,6 @@ struct PlayerView: View {
         Group {
             if showPlayerSettings {
                 Color.clear.ignoresSafeArea()
-            } else if isIPadLandscape(in: rootGeometry.size) && showLyrics {
-                iPadLandscapeLyricsView
             } else if coverPlayerStyle == .appleMusic {
                 ZStack {
                     ReferencePlaybackView(
@@ -438,6 +436,8 @@ struct PlayerView: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
                     }
                 }
+            } else if isIPadLandscape(in: rootGeometry.size) && showLyrics {
+                iPadLandscapeLyricsView
             } else if coverPlayerStyle == .vinyl {
                 GeometryReader { geo in
                     ZStack {
