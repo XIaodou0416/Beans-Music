@@ -63,6 +63,9 @@ struct PlayerView: View {
     @AppStorage("beans.playerPrimaryButtonColorHex") private var playerPrimaryButtonColorHex = ""
     /// 播放器顶部与底部控制按钮的统一样式
     @AppStorage("beans.playerButtonStyle") private var playerButtonStyleRaw = BeansPlayerButtonStyle.glass.rawValue
+    @AppStorage("beans.appleMusic.primaryHex") private var appleMusicPrimaryHex = ""
+    @AppStorage("beans.appleMusic.secondaryHex") private var appleMusicSecondaryHex = ""
+    @AppStorage("beans.appleMusic.accentHex") private var appleMusicAccentHex = ""
     @AppStorage("beans.lyricTranslation") private var lyricTranslation = true
     /// 进度条样式：0 流光 / 1 辉光 / 2 极光 / 3 波浪
     @AppStorage("beans.progressBarStyle") private var progressBarStyle = 0
@@ -183,6 +186,34 @@ struct PlayerView: View {
 
     private var coverPlayerStyle: BeansCoverPlayerStyle {
         BeansCoverPlayerStyle.resolved(rawValue: coverPlayerStyleRaw)
+    }
+
+    private var classicPlayerFeaturesAvailable: Bool {
+        if #available(iOS 26.0, *) {
+            return true
+        }
+        return false
+    }
+
+    private var landscapeApplePrimaryColor: Color {
+        if appleMusicPrimaryHex.hasPrefix("#"), let color = Color(hex: appleMusicPrimaryHex) {
+            return color
+        }
+        return .white
+    }
+
+    private var landscapeAppleSecondaryColor: Color {
+        if appleMusicSecondaryHex.hasPrefix("#"), let color = Color(hex: appleMusicSecondaryHex) {
+            return color
+        }
+        return .white.opacity(0.58)
+    }
+
+    private var landscapeAppleAccentColor: Color {
+        if appleMusicAccentHex.hasPrefix("#"), let color = Color(hex: appleMusicAccentHex) {
+            return color
+        }
+        return Color(red: 1.0, green: 0.28, blue: 0.36)
     }
 
     private enum VinylLayoutDefaults {
@@ -713,22 +744,24 @@ struct PlayerView: View {
                 CoverBlurBackground(url: song?.coverURL, scheme: colorScheme)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            AmbientGlowView(
-                accent: palette.accent,
-                secondary: palette.secondary,
-                isPlaying: playerVisualsActive,
-                dustMode: playerDustMode,
-                dustDensity: playerDustDensity,
-                dustSize: playerDustSize,
-                breath: playerBreath
-            )
-            if djVisualEnabled {
-                DJVisualView(
+            if classicPlayerFeaturesAvailable {
+                AmbientGlowView(
                     accent: palette.accent,
                     secondary: palette.secondary,
                     isPlaying: playerVisualsActive,
-                    intensity: djVisualIntensity
+                    dustMode: playerDustMode,
+                    dustDensity: playerDustDensity,
+                    dustSize: playerDustSize,
+                    breath: playerBreath
                 )
+                if djVisualEnabled {
+                    DJVisualView(
+                        accent: palette.accent,
+                        secondary: palette.secondary,
+                        isPlaying: playerVisualsActive,
+                        intensity: djVisualIntensity
+                    )
+                }
             }
             LinearGradient(
                 colors: colorScheme == .dark
@@ -790,7 +823,7 @@ struct PlayerView: View {
                     .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
                 }
 
-                controlDeck(bottomInset: geo.safeAreaInsets.bottom)
+                iPadLandscapeControlDeck(bottomInset: geo.safeAreaInsets.bottom)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
                 if layoutMode {
@@ -812,7 +845,86 @@ struct PlayerView: View {
         }
     }
 
+    @ViewBuilder
     private var iPadLandscapeLyricsHeader: some View {
+        switch coverPlayerStyle {
+        case .appleMusic:
+            iPadLandscapeAppleMusicLyricsHeader
+        case .vinyl:
+            vinylLyricsHeader
+                .padding(.horizontal, 30)
+                .padding(.top, 8)
+                .frame(maxWidth: .infinity)
+                .frame(height: 64)
+        case .classic:
+            iPadLandscapeClassicLyricsHeader
+        }
+    }
+
+    private var iPadLandscapeAppleMusicLyricsHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                BeansHaptics.tap()
+                toggleLyrics()
+            } label: {
+                CoverImage(url: song?.coverURL, size: 48, cornerRadius: 10)
+                    .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(song?.name ?? "未在播放")
+                    .font(BeansFont.appFont(15, .semibold))
+                    .foregroundStyle(landscapeApplePrimaryColor)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(subtitle)
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(landscapeAppleSecondaryColor)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 0) {
+                Button {
+                    BeansHaptics.tap()
+                    if let song {
+                        toggleLocalFavorite(song)
+                    }
+                } label: {
+                    Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(localLibrary.containsSong(song) ? landscapeAppleAccentColor : landscapeApplePrimaryColor.opacity(0.78))
+                        .frame(width: 38, height: 38)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Menu {
+                    Button("定时关闭") { showSleepTimer = true }
+                    Button("添加到本地歌单") { showAddToLocalPlaylist = true }
+                    if downloadFeatureUnlocked {
+                        Button("下载歌曲") { showDownloadPicker = true }
+                    }
+                    Button("播放器设置") { openPlayerSettings() }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(landscapeApplePrimaryColor.opacity(0.78))
+                        .frame(width: 38, height: 38)
+                        .contentShape(Rectangle())
+                }
+            }
+        }
+        .padding(.horizontal, 30)
+        .padding(.top, 8)
+        .frame(maxWidth: .infinity)
+        .frame(height: 64)
+    }
+
+    private var iPadLandscapeClassicLyricsHeader: some View {
         HStack(spacing: 14) {
             Button {
                 BeansHaptics.tap()
@@ -870,6 +982,103 @@ struct PlayerView: View {
         .padding(.horizontal, 30)
         .padding(.top, 8)
         .frame(height: 64)
+    }
+
+    @ViewBuilder
+    private func iPadLandscapeControlDeck(bottomInset: CGFloat) -> some View {
+        switch coverPlayerStyle {
+        case .appleMusic:
+            iPadLandscapeAppleMusicControlDeck(bottomInset: bottomInset)
+        case .vinyl, .classic:
+            controlDeck(bottomInset: bottomInset)
+        }
+    }
+
+    private func iPadLandscapeAppleMusicControlDeck(bottomInset: CGFloat) -> some View {
+        VStack(spacing: 15) {
+            ReferenceScrubber()
+
+            HStack(spacing: 28) {
+                Button {
+                    BeansHaptics.tap()
+                    player.previous()
+                } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(landscapeApplePrimaryColor)
+                        .frame(width: 42, height: 42)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    BeansHaptics.tap()
+                    player.togglePlayPause()
+                } label: {
+                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24)
+                        .frame(width: 66, height: 66)
+                        .foregroundStyle(landscapeApplePrimaryColor)
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+
+                Button {
+                    BeansHaptics.tap()
+                    player.next()
+                } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(landscapeApplePrimaryColor)
+                        .frame(width: 42, height: 42)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: 320)
+
+            HStack(spacing: 48) {
+                iPadLandscapeAppleMusicActionButton(icon: "quote.bubble", active: true) {
+                    toggleLyrics()
+                }
+                iPadLandscapeAppleMusicActionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
+                    player.togglePlayMode()
+                }
+                iPadLandscapeAppleMusicActionButton(icon: "list.bullet") {
+                    showQueue = true
+                }
+            }
+            .frame(maxWidth: 420)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, max(14, bottomInset + 4))
+        .gesture(
+            DragGesture(minimumDistance: 25)
+                .onEnded { value in
+                    guard value.translation.height < -54,
+                          abs(value.translation.height) > abs(value.translation.width) else { return }
+                    BeansHaptics.medium()
+                    showComments = true
+                }
+        )
+    }
+
+    private func iPadLandscapeAppleMusicActionButton(
+        icon: String,
+        active: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            BeansHaptics.tap()
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(active ? landscapeAppleAccentColor : landscapeApplePrimaryColor.opacity(0.78))
+                .frame(width: 58, height: 58)
+                .background { BeansGlass(shape: Circle(), forceLiquid: true) }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -3960,6 +4169,13 @@ struct PlayerSettingsSheet: View {
         BeansCoverPlayerStyle.resolved(rawValue: coverPlayerStyleRaw)
     }
 
+    private var classicPlayerFeaturesAvailable: Bool {
+        if #available(iOS 26.0, *) {
+            return true
+        }
+        return false
+    }
+
     private var tiltYText: String {
         if lyricTiltY == 0 { return "关闭" }
         return lyricTiltY > 0 ? "右倾 \(lyricTiltY)°" : "左倾 \(-lyricTiltY)°"
@@ -4204,8 +4420,10 @@ struct PlayerSettingsSheet: View {
                 LazyVStack(spacing: 12) {
                     playingCard
                     appleMusicCard
-                    lyricDisplayCard
-                    lyricEffectCard
+                    if classicPlayerFeaturesAvailable {
+                        lyricDisplayCard
+                        lyricEffectCard
+                    }
                     layoutCard
                     coverCard
                 }
@@ -4368,7 +4586,10 @@ struct PlayerSettingsSheet: View {
                 Divider().opacity(0.35)
                 settingToggle("播放失败自动下一首", isOn: $autoSkipOnFailure,
                               caption: "当前歌曲解析失败或播放地址失效时，自动跳到下一首")
-                Divider().opacity(0.35)
+            }
+
+            if classicPlayerFeaturesAvailable {
+                Divider().opacity(0.5)
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("进度条颜色")
@@ -4394,41 +4615,44 @@ struct PlayerSettingsSheet: View {
                     }
                     .buttonStyle(.plain)
                 }
-            }
-            Divider().opacity(0.5)
-            Text("进度条样式")
-                .font(BeansFont.appFont(13, .semibold))
-                .foregroundStyle(Color.beansLabel)
-            progressStyleGrid
-            Divider().opacity(0.5)
-            settingSlider("背景光晕强度", valueText: "\(Int((breath * 100).rounded()))%") {
-                Slider(value: $breath, in: 0...1, step: 0.05)
-                    .tint(Color.beansAmber)
-            }
-            Divider().opacity(0.5)
-            dustModeSelector
-            if playerDustModeRaw == BeansPlayerDustMode.snow.rawValue {
-                settingSlider("浮尘密度", valueText: String(format: "%.1fx", playerDustDensity)) {
-                    Slider(value: $playerDustDensity, in: 0.4...2.6, step: 0.1)
+                Divider().opacity(0.5)
+                Text("进度条样式")
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                progressStyleGrid
+                Divider().opacity(0.5)
+                settingSlider("背景光晕强度", valueText: "\(Int((breath * 100).rounded()))%") {
+                    Slider(value: $breath, in: 0...1, step: 0.05)
                         .tint(Color.beansAmber)
                 }
-                settingSlider("浮尘大小", valueText: String(format: "%.1fx", playerDustSize)) {
-                    Slider(value: $playerDustSize, in: 0.8...2.8, step: 0.1)
-                        .tint(Color.beansAmber)
-                }
-            }
-            Divider().opacity(0.5)
-            CompactSettingGroup {
-                settingToggle("DJ 节奏脉冲光效", isOn: $djVisualEnabled,
-                              caption: "封面背后随节拍扩散光环")
-                if djVisualEnabled {
-                    Divider().opacity(0.35)
-                    settingSlider("光效强度", valueText: "\(Int((djVisualIntensity * 100).rounded()))%") {
-                        Slider(value: $djVisualIntensity, in: 0...1, step: 0.05)
+                Divider().opacity(0.5)
+                dustModeSelector
+                if playerDustModeRaw == BeansPlayerDustMode.snow.rawValue {
+                    settingSlider("浮尘密度", valueText: String(format: "%.1fx", playerDustDensity)) {
+                        Slider(value: $playerDustDensity, in: 0.4...2.6, step: 0.1)
+                            .tint(Color.beansAmber)
+                    }
+                    settingSlider("浮尘大小", valueText: String(format: "%.1fx", playerDustSize)) {
+                        Slider(value: $playerDustSize, in: 0.8...2.8, step: 0.1)
                             .tint(Color.beansAmber)
                     }
                 }
-                Divider().opacity(0.35)
+                Divider().opacity(0.5)
+                CompactSettingGroup {
+                    settingToggle("DJ 节奏脉冲光效", isOn: $djVisualEnabled,
+                                  caption: "封面背后随节拍扩散光环")
+                    if djVisualEnabled {
+                        Divider().opacity(0.35)
+                        settingSlider("光效强度", valueText: "\(Int((djVisualIntensity * 100).rounded()))%") {
+                            Slider(value: $djVisualIntensity, in: 0...1, step: 0.05)
+                                .tint(Color.beansAmber)
+                        }
+                    }
+                }
+            }
+
+            Divider().opacity(0.5)
+            CompactSettingGroup {
                 settingToggle("与其他音频同时播放", isOn: $mixesWithOthers,
                               caption: "开启后可与其他 App 的音频同时播放")
                     .onChange(of: mixesWithOthers) { value in
@@ -4440,7 +4664,7 @@ struct PlayerSettingsSheet: View {
                     .onChange(of: nowPlayingEnabled) { value in
                         player.setNowPlayingEnabled(value)
                     }
-                }
+            }
         }
     }
 
@@ -4793,12 +5017,14 @@ struct PlayerSettingsSheet: View {
     private var coverCard: some View {
         settingCard("封面", isExpanded: $coverExpanded) {
             coverPlayerStyleSelector
-            Divider().opacity(0.5)
-            settingToggle("圆形封面模式", isOn: $circularCover,
-                          caption: "播放器封面与歌词页左上角封面显示为圆形")
-            Divider().opacity(0.5)
-            settingToggle("圆形封面旋转", isOn: $circularCoverSpin,
-                          caption: "开启后播放时封面自动匀速旋转")
+            if classicPlayerFeaturesAvailable {
+                Divider().opacity(0.5)
+                settingToggle("圆形封面模式", isOn: $circularCover,
+                              caption: "播放器封面与歌词页左上角封面显示为圆形")
+                Divider().opacity(0.5)
+                settingToggle("圆形封面旋转", isOn: $circularCoverSpin,
+                              caption: "开启后播放时封面自动匀速旋转")
+            }
             Divider().opacity(0.5)
             CompactSettingGroup {
                 Text("封面页文字颜色")

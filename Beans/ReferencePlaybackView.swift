@@ -598,7 +598,7 @@ struct ReferencePlaybackView: View {
     }
 }
 
-private struct ReferenceScrubber: View {
+struct ReferenceScrubber: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
     @State private var scrubbing = false
