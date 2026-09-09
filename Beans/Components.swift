@@ -78,10 +78,8 @@ struct GlassPressButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
-            .offset(y: configuration.isPressed ? 1 : 0)
-            .brightness(configuration.isPressed ? 0.02 : 0)
-            .opacity(configuration.isPressed ? 0.94 : 1)
-            .animation(BeansMotion.press, value: configuration.isPressed)
+            .brightness(configuration.isPressed ? 0.025 : 0)
+            .animation(.spring(response: 0.24, dampingFraction: 0.82), value: configuration.isPressed)
     }
 }
 
@@ -520,21 +518,17 @@ struct CoverImage: View {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
-                            .transition(.opacity.combined(with: .scale(scale: 0.97)))
                     } else if url == nil || imageLoader.didFail {
                         placeholderIcon
-                            .transition(.opacity)
                     } else {
                         ZStack {
                             placeholderIcon
                             ProgressView().tint(Color.beansAmber)
                         }
-                        .transition(.opacity)
                     }
                 }
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .animation(BeansMotion.imageReveal, value: imageLoader.image != nil)
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .onAppear { imageLoader.load(url: url) }
@@ -964,10 +958,9 @@ struct SectionEntrance: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 16)
-            .scaleEffect(appeared ? 1 : 0.985, anchor: .top)
+            .offset(y: appeared ? 0 : 14)
             .onAppear {
-                withAnimation(BeansMotion.appearance.delay(delay)) {
+                withAnimation(.easeOut(duration: 0.5).delay(delay)) {
                     appeared = true
                 }
             }
@@ -1029,8 +1022,7 @@ struct ToastView: View {
             .padding(.bottom, 92)
             .opacity(center.message == nil ? 0 : 1)
             .offset(y: center.message == nil ? 16 : 0)
-            .scaleEffect(center.message == nil ? 0.96 : 1)
-            .animation(BeansMotion.toast, value: center.message)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: center.message)
             .allowsHitTesting(false)
     }
 }
