@@ -542,6 +542,7 @@ struct PlayerView: View {
                     .padding(.top, 62)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                     .zIndex(120)
+                    .allowsHitTesting(false)
             }
         }
         .task(id: song?.identityKey) {
