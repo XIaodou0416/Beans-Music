@@ -10,8 +10,6 @@ struct PlayerView: View {
     @EnvironmentObject private var favorites: FavoritesStore
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Binding var isPresented: Bool
 
     @State private var lyrics: [LyricLine] = []
@@ -131,10 +129,8 @@ struct PlayerView: View {
 
     private var song: Song? { player.currentSong }
 
-    private var isIPadLandscape: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
-            && horizontalSizeClass == .regular
-            && verticalSizeClass == .compact
+    private func isIPadLandscape(in size: CGSize) -> Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && size.width > size.height
     }
     private let rateOptions: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
@@ -378,10 +374,11 @@ struct PlayerView: View {
 
     var body: some View {
         let _ = theme.accent
+        GeometryReader { rootGeometry in
         Group {
             if showPlayerSettings {
                 Color.clear.ignoresSafeArea()
-            } else if isIPadLandscape && showLyrics {
+            } else if isIPadLandscape(in: rootGeometry.size) && showLyrics {
                 iPadLandscapeLyricsView
             } else if coverPlayerStyle == .appleMusic {
                 ZStack {
@@ -527,6 +524,7 @@ struct PlayerView: View {
                     }
                 }
             }
+        }
         }
         .background {
             HighRefreshConfigurator()

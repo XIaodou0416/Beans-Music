@@ -38,6 +38,8 @@ struct DiscoverView: View {
     private var availableSections: [String] { SectionOrderStore.homeDefaults }
     /// 首页数据源：记住上次选择，下次打开仍保持该平台（默认网易云）
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
+    /// 每日推荐的旧版歌曲列表样式，默认使用新版推荐卡片。
+    @AppStorage("beans.home.dailySongsListStyle") private var dailySongsListStyle = false
     @AppStorage("beans.homeGreetingText") private var homeGreetingText = ""
     @AppStorage("beans.homeGreetingSize") private var homeGreetingSize = 30.0
     @AppStorage("beans.homeGreetingHeight") private var homeGreetingHeight = 0.0
@@ -600,16 +602,14 @@ struct DiscoverView: View {
         let preferredIDs = [19_723_756, 3_779_629, 2_884_035, 3_778_678, 60_198]
         let byID = Dictionary(uniqueKeysWithValues: topLists.map { ($0.id, $0) })
         let preferred = preferredIDs.compactMap { byID[$0] }
-        if !preferred.isEmpty {
-            return preferred
-        }
-        var list = topLists
+        let preferredIDSet = Set(preferred.map { $0.id })
+        var list = preferred + topLists.filter { !preferredIDSet.contains($0.id) }
         if let hot = list.first(where: { $0.name.contains("热歌榜") }),
            let idx = list.firstIndex(where: { $0.id == hot.id }), idx != 0 {
             list.remove(at: idx)
             list.insert(hot, at: 0)
         }
-        return list
+        return Array(list.prefix(10))
     }
 
     /// 每平台排行榜最多 10 个（收起只显示前 3，展开显示前 10）
@@ -845,7 +845,9 @@ struct DiscoverView: View {
 
     @ViewBuilder
     private var dailySection: some View {
-        if source == .netease {
+        if dailySongsListStyle {
+            dailySongsListSection
+        } else if source == .netease {
             neteaseRecommendationCards
         } else if source == .qq {
             qqRecommendationCard
@@ -853,6 +855,60 @@ struct DiscoverView: View {
             kugouRecommendationCards
         } else {
             dailySongCards
+        }
+    }
+
+    /// 直接按歌曲行展示每日推荐，保留播放全部、随机播放和查看全部入口。
+    private var dailySongsListSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(
+                title: beansLocalized("每日推荐", "Daily Recommendations"),
+                trailing: dailySongs.isEmpty ? nil : beansLocalized("查看全部", "See All"),
+                onTrailingTap: {
+                    BeansHaptics.tap()
+                    openRoute(DiscoverRoute.dailySongs(dailySongs))
+                }
+            )
+
+            if dailySongs.isEmpty {
+                EmptyStateView(icon: "sparkles", text: beansLocalized("今日推荐暂时没有内容", "Daily recommendations are unavailable"))
+            } else {
+                HStack(spacing: 10) {
+                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                        BeansHaptics.tap()
+                        player.play(songs: dailySongs, startAt: 0)
+                    }
+                    GlassButton(title: "随机播放", systemName: "shuffle") {
+                        BeansHaptics.tap()
+                        player.play(songs: dailySongs, startAt: Int.random(in: 0..<dailySongs.count))
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(dailySongs.enumerated()), id: \.element.identityKey) { index, song in
+                        SongCell(song: song, glassRow: true) {
+                            BeansHaptics.tap()
+                            player.play(songs: dailySongs, startAt: index)
+                        }
+                        if index < dailySongs.count - 1 {
+                            Divider().overlay(Color.beansComment.opacity(0.12))
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background {
+                    if isNativeClean {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.primary.opacity(0.04))
+                    } else {
+                        BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .beansCardShadow(radius: 8, y: 3)
+            }
         }
     }
 

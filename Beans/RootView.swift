@@ -120,12 +120,29 @@ struct RootView: View {
 
     var body: some View {
         let _ = theme.accent
-        ZStack {
+        GeometryReader { proxy in
+            let isPadLandscape = usesPadSidebar && proxy.size.width > proxy.size.height
 
-            // iPad 始终使用侧边栏；iOS 26 以上交给系统绘制液态侧栏。
-            if usesPadSidebar {
-                if #available(iOS 26.0, *) {
-                    nativeTabs
+            ZStack {
+                if isPadLandscape {
+                    if #available(iOS 26.0, *) {
+                        nativeTabs(isPadLandscape: true)
+                            .modifier(
+                                MiniPlayerAccessoryModifier(
+                                    isActive: player.currentSong != nil,
+                                    showPlayer: $showPlayer,
+                                    clock: player.clock,
+                                    colorScheme: colorScheme,
+                                    transitionNamespace: nowPlayingTransition
+                                )
+                            )
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    } else {
+                        iPadSidebarRoot
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+                } else if #available(iOS 26.0, *) {
+                    nativeTabs(isPadLandscape: false)
                         .modifier(
                             MiniPlayerAccessoryModifier(
                                 isActive: player.currentSong != nil,
@@ -135,23 +152,16 @@ struct RootView: View {
                                 transitionNamespace: nowPlayingTransition
                             )
                         )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else {
-                    iPadSidebarRoot
+                    legacyRootTabs
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-            } else if #available(iOS 26.0, *) {
-                nativeTabs
-                    .modifier(
-                        MiniPlayerAccessoryModifier(
-                            isActive: player.currentSong != nil,
-                            showPlayer: $showPlayer,
-                            clock: player.clock,
-                            colorScheme: colorScheme,
-                            transitionNamespace: nowPlayingTransition
-                        )
-                    )
-            } else {
-                legacyRootTabs
             }
+            .animation(
+                .spring(response: 0.42, dampingFraction: 0.86, blendDuration: 0.08),
+                value: isPadLandscape
+            )
         }
         .background {
             TabBarAppearanceConfigurator(
@@ -434,20 +444,20 @@ struct RootView: View {
         }
     }
 
-    /// iOS 26 的系统 Tab 容器：iPad 使用系统侧边栏，iPhone 保持底栏。
+    /// iOS 26 的系统 Tab 容器：仅 iPad 横屏使用系统侧边栏。
     @available(iOS 26.0, *)
     @ViewBuilder
-    private var nativeTabs: some View {
-        if usesPadSidebar {
-            nativeTabContent
+    private func nativeTabs(isPadLandscape: Bool) -> some View {
+        if isPadLandscape {
+            nativeTabContent(isPadLandscape: true)
                 .tabViewStyle(.sidebarAdaptable)
         } else {
-            nativeTabContent
+            nativeTabContent(isPadLandscape: false)
         }
     }
 
     @available(iOS 26.0, *)
-    private var nativeTabContent: some View {
+    private func nativeTabContent(isPadLandscape: Bool) -> some View {
         TabView(selection: $selection) {
             Tab(value: .discover) {
                 DiscoverView()
@@ -482,7 +492,7 @@ struct RootView: View {
             }
         }
         .tint(Color.beansAmber)
-        .tabBarMinimizeBehavior(usesPadSidebar || player.currentSong == nil ? .never : .onScrollDown)
+        .tabBarMinimizeBehavior(isPadLandscape || player.currentSong == nil ? .never : .onScrollDown)
     }
 
     private func nativeTabTitle(_ tab: RootTab) -> LocalizedStringKey {

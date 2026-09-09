@@ -1269,6 +1269,7 @@ struct SettingsView: View {
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
+    @AppStorage("beans.home.dailySongsListStyle") private var dailySongsListStyle = false
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
     @ObservedObject private var equalizer = BeansEqualizer.shared
     @AppStorage(ThirdPartyAudioQuality.storageKey) private var thirdPartyAudioQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
@@ -2336,6 +2337,8 @@ struct SettingsView: View {
                 Toggle("隐藏顶部平台列表", isOn: $hidePlatformPicker)
                     .font(BeansFont.appFont(13))
                 Toggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
+                    .font(BeansFont.appFont(13))
+                Toggle("每日推荐显示歌曲列表", isOn: $dailySongsListStyle)
                     .font(BeansFont.appFont(13))
 
                 HStack {
