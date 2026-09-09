@@ -40,8 +40,7 @@ enum RootTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 底部栏只保留主要内容入口；“我的”从主页右上角头像进入。
-    static let bottomTabs: [RootTab] = [.discover, .playlists, .library, .search]
+    static let bottomTabs: [RootTab] = [.discover, .playlists, .library, .profile, .search]
 }
 
 struct RootView: View {
@@ -436,6 +435,12 @@ struct RootView: View {
                 LibraryView()
             } label: {
                 nativeTabLabel(.library)
+            }
+
+            Tab(value: .profile) {
+                ProfileView()
+            } label: {
+                nativeTabLabel(.profile)
             }
 
             // Keep search as the system-owned trailing action so iOS can
