@@ -421,6 +421,7 @@ struct RootView: View {
 
     /// iOS 26 的系统 Tab 容器：iPad 使用系统侧边栏，iPhone 保持底栏。
     @available(iOS 26.0, *)
+    @ViewBuilder
     private var nativeTabs: some View {
         if usesPadSidebar {
             nativeTabContent
