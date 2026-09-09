@@ -108,6 +108,10 @@ struct RootView: View {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
 
+    private var usesPadSidebar: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
     private var usesSystemPlayerDismissal: Bool {
         // iOS 26+ 使用 1.6.5.1 的系统播放器下拉交互；旧系统使用兼容性手势。
         if #available(iOS 26.0, *) { return true }
@@ -415,9 +419,19 @@ struct RootView: View {
         }
     }
 
-    /// iOS 26 的系统 Tab 容器，提供原生底栏、搜索槽位和收缩行为。
+    /// iOS 26 的系统 Tab 容器：iPad 使用系统侧边栏，iPhone 保持底栏。
     @available(iOS 26.0, *)
     private var nativeTabs: some View {
+        if usesPadSidebar {
+            nativeTabContent
+                .tabViewStyle(.sidebarAdaptable)
+        } else {
+            nativeTabContent
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private var nativeTabContent: some View {
         TabView(selection: $selection) {
             Tab(value: .discover) {
                 DiscoverView()
@@ -452,7 +466,7 @@ struct RootView: View {
             }
         }
         .tint(Color.beansAmber)
-        .tabBarMinimizeBehavior(player.currentSong == nil ? .never : .onScrollDown)
+        .tabBarMinimizeBehavior(usesPadSidebar || player.currentSong == nil ? .never : .onScrollDown)
     }
 
     private func nativeTabTitle(_ tab: RootTab) -> LocalizedStringKey {
