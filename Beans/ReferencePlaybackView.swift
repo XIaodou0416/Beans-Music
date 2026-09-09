@@ -214,7 +214,7 @@ struct ReferencePlaybackView: View {
             if lyrics.isEmpty {
                 emptyLyricsView
             } else {
-                LyricsSection(
+                KumoneLyricsSection(
                     lyrics: lyrics,
                     accent: primaryColor,
                     secondary: secondaryColor,

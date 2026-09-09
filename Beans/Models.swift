@@ -444,9 +444,16 @@ enum LyricParser {
     private static func parseCore(_ raw: String, offset: Double) -> [LyricLine] {
         var lines: [LyricLine] = []
         for line in raw.components(separatedBy: .newlines) {
-            parseTimes(in: line).forEach { time in
-                let text = line.replacingOccurrences(of: #"\[\d{2}:\d{2}(\.\d{1,3})?\]"#, with: "", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            let times = parseTimes(in: line)
+            guard !times.isEmpty else { continue }
+            let text = line.replacingOccurrences(of: #"\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+
+            // Word-level timestamps in an LRC line are not separate display rows.
+            // Keep one row at the first timestamp so tapping it starts the sentence.
+            let lineTimes = hasInlineTimestamps(in: line) ? [times.min()!] : times
+            lineTimes.forEach { time in
                 lines.append(LyricLine(time: max(0, time + offset), text: text))
             }
         }
@@ -483,6 +490,25 @@ enum LyricParser {
             times.append(minutes * 60 + seconds + fraction)
         }
         return times
+    }
+
+    private static func hasInlineTimestamps(in line: String) -> Bool {
+        let pattern = #"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+        let source = line as NSString
+        let matches = regex.matches(in: line, range: NSRange(line.startIndex..., in: line))
+        guard matches.count > 1 else { return false }
+
+        for pair in zip(matches, matches.dropFirst()) {
+            let start = pair.0.range.location + pair.0.range.length
+            let length = pair.1.range.location - start
+            guard length > 0 else { continue }
+            let between = source.substring(with: NSRange(location: start, length: length))
+            if !between.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return true
+            }
+        }
+        return false
     }
 }
 

@@ -1893,7 +1893,7 @@ struct PlayerView: View {
                 if lyrics.isEmpty {
                     emptyLyricsView
                 } else {
-                    LyricsSection(
+                    KumoneLyricsSection(
                         lyrics: lyrics,
                         accent: lyricCurrentColor,
                         secondary: lyricDimColor,
@@ -3668,6 +3668,145 @@ struct LyricsSection: View {
         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
     }
 
+}
+
+struct KumoneLyricsSection: View {
+    @EnvironmentObject private var player: PlayerManager
+
+    let lyrics: [LyricLine]
+    let accent: Color
+    let secondary: Color
+    var gradientStart: Color? = nil
+    var gradientEnd: Color? = nil
+    var baseFontSize: CGFloat = 17
+    var lineSpacing: CGFloat = 24
+    var glowRadius: CGFloat = 0
+    var showTranslation: Bool = false
+    var alignment: HorizontalAlignment = .center
+    var offsetX: CGFloat = 0
+    var anchor: UnitPoint = .center
+    var glowColorOverride: Color? = nil
+    var blurStart: CGFloat = 1
+    var blurAmount: CGFloat = 0
+    var tilt: CGFloat = 0
+    var tiltY: CGFloat = 0
+    var lyricOffset: CGFloat = 0
+
+    @State private var activeIndex: Int?
+    @State private var isUserScrolling = false
+    @State private var resumeTask: Task<Void, Never>?
+
+    private var currentIndex: Int? {
+        LyricTimeline.activeIndex(
+            in: lyrics,
+            at: player.lyricProgress,
+            userOffset: Double(lyricOffset)
+        )
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                LazyVStack(alignment: alignment, spacing: lineSpacing) {
+                    Color.clear.frame(height: 200)
+                    ForEach(Array(lyrics.enumerated()), id: \.element.id) { index, line in
+                        lyricLine(line, isActive: index == activeIndex)
+                            .id(index)
+                    }
+                    Color.clear.frame(height: 240)
+                }
+                .padding(.horizontal, alignment == .leading ? 24 : 18)
+            }
+            .offset(x: offsetX)
+            .beansScrollIndicatorsHidden()
+            .rotation3DEffect(.degrees(Double(tilt)), axis: (x: 1, y: 0, z: 0), anchor: .bottom, perspective: 0.5)
+            .rotation3DEffect(.degrees(Double(tiltY)), axis: (x: 0, y: 1, z: 0), anchor: .center, perspective: 0.5)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black, location: 0.12),
+                        .init(color: .black, location: 0.85),
+                        .init(color: .clear, location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .onChange(of: currentIndex) { index in
+                guard index != activeIndex else { return }
+                activeIndex = index
+                guard !isUserScrolling, let index else { return }
+                withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
+                    proxy.scrollTo(index, anchor: anchor)
+                }
+            }
+            .onAppear {
+                adoptCursor(proxy: proxy)
+            }
+            .onChange(of: player.currentSong?.identityKey) { _ in
+                activeIndex = nil
+                resumeTask?.cancel()
+            }
+            .onChange(of: lyrics.count) { _ in
+                adoptCursor(proxy: proxy)
+            }
+            .simultaneousGesture(
+                DragGesture()
+                    .onChanged { _ in
+                        guard !isUserScrolling else { return }
+                        isUserScrolling = true
+                        resumeTask?.cancel()
+                        resumeTask = Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 3_000_000_000)
+                            guard !Task.isCancelled else { return }
+                            isUserScrolling = false
+                        }
+                    }
+            )
+            .onDisappear {
+                resumeTask?.cancel()
+            }
+        }
+    }
+
+    private func adoptCursor(proxy: ScrollViewProxy) {
+        let index = currentIndex
+        activeIndex = index
+        guard let index else { return }
+        DispatchQueue.main.async {
+            proxy.scrollTo(index, anchor: anchor)
+        }
+    }
+
+    private func lyricLine(_ line: LyricLine, isActive: Bool) -> some View {
+        Button {
+            BeansHaptics.tap()
+            player.seek(to: LyricTiming.seekTime(for: line, userOffset: Double(lyricOffset)))
+        } label: {
+            VStack(alignment: alignment, spacing: 5) {
+                Text(line.text.isEmpty ? " " : line.text)
+                    .font(BeansFont.appFont(isActive ? baseFontSize + 4 : baseFontSize, isActive ? .bold : .semibold))
+                    .foregroundStyle(isActive ? accent : secondary.opacity(0.45))
+                    .blur(radius: isActive ? 0 : 0.6)
+                    .scaleEffect(isActive ? 1.02 : 1, anchor: alignment == .leading ? .leading : .center)
+                    .multilineTextAlignment(alignment == .leading ? .leading : .center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if showTranslation, isActive, let translation = line.translation, !translation.isEmpty {
+                    Text(translation)
+                        .font(BeansFont.appFont(baseFontSize * 0.7, .medium))
+                        .foregroundStyle(secondary.opacity(0.7))
+                        .multilineTextAlignment(alignment == .leading ? .leading : .center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isActive)
+    }
 }
 
 // MARK: - 歌词渐变预设（一键组合：渐变起止色 + 发光强度）
