@@ -15,7 +15,7 @@ enum RootTab: String, CaseIterable, Identifiable {
         switch self {
         case .discover: return "主页"
         case .playlists: return "精选"
-        case .library: return "音乐库"
+        case .library: return "歌单"
         case .profile: return "我的"
         case .search: return "搜索"
         }
@@ -43,6 +43,12 @@ enum RootTab: String, CaseIterable, Identifiable {
     static let bottomTabs: [RootTab] = [.discover, .playlists, .library, .profile, .search]
 }
 
+private struct SidebarPlaylistGroup: Identifiable {
+    let id: String
+    let title: String
+    let playlists: [Playlist]
+}
+
 struct RootView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
@@ -50,6 +56,9 @@ struct RootView: View {
     @EnvironmentObject private var favorites: FavoritesStore
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+    @ObservedObject private var localLibrary = LocalLibraryStore.shared
+    @ObservedObject private var qqAuth = QQMusicAuth.shared
+    @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var selection: RootTab = .discover
@@ -85,6 +94,11 @@ struct RootView: View {
     @State private var showUpdateDownloadError = false
     @State private var showRemoteAnnouncement = false
     @State private var showHomePlatformMenu = false
+    @State private var sidebarRemotePlaylists: [Playlist] = []
+    @State private var sidebarLocalPlaylist: LocalPlaylist?
+    @State private var sidebarPlaylist: Playlist?
+    @State private var showSidebarQueue = false
+    @State private var sidebarPlaylistsExpanded = true
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
     }
@@ -125,22 +139,8 @@ struct RootView: View {
 
             ZStack {
                 if isPadLandscape {
-                    if #available(iOS 26.0, *) {
-                        nativeTabs(isPadLandscape: true)
-                            .modifier(
-                                MiniPlayerAccessoryModifier(
-                                    isActive: player.currentSong != nil,
-                                    showPlayer: $showPlayer,
-                                    clock: player.clock,
-                                    colorScheme: colorScheme,
-                                    transitionNamespace: nowPlayingTransition
-                                )
-                            )
-                            .transition(.move(edge: .leading).combined(with: .opacity))
-                    } else {
-                        iPadSidebarRoot
-                            .transition(.move(edge: .leading).combined(with: .opacity))
-                    }
+                    iPadSidebarRoot
+                        .transition(.opacity.combined(with: .scale(scale: 0.985)))
                 } else if #available(iOS 26.0, *) {
                     nativeTabs(isPadLandscape: false)
                         .modifier(
@@ -152,10 +152,10 @@ struct RootView: View {
                                 transitionNamespace: nowPlayingTransition
                             )
                         )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(.opacity.combined(with: .scale(scale: 0.985)))
                 } else {
                     legacyRootTabs
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(.opacity.combined(with: .scale(scale: 0.985)))
                 }
             }
             .animation(
@@ -225,6 +225,23 @@ struct RootView: View {
         }
         .sheet(isPresented: $showWhatsNew) {
             WhatsNewSheet()
+        }
+        .sheet(item: $sidebarLocalPlaylist) { playlist in
+            LocalPlaylistDetailSheet(playlistID: playlist.id)
+                .environmentObject(player)
+                .environmentObject(auth)
+                .environmentObject(theme)
+        }
+        .sheet(item: $sidebarPlaylist) { playlist in
+            PlaylistView(playlist: playlist)
+                .environmentObject(player)
+                .environmentObject(auth)
+                .environmentObject(theme)
+        }
+        .sheet(isPresented: $showSidebarQueue) {
+            QueueView()
+                .environmentObject(player)
+                .environmentObject(theme)
         }
         .task(id: disclaimerAccepted) {
             guard disclaimerAccepted else { return }
@@ -518,8 +535,7 @@ struct RootView: View {
         }
     }
 
-    /// iOS 15-25 的 iPad 侧栏兼容实现。页面仍复用原有 Tab 内容，
-    /// 只替换导航承载方式，并把迷你播放器固定在内容区底部。
+    /// iPad 横屏侧栏：页面复用原有 Tab 内容，歌单与播放列表固定在左侧。
     private var iPadSidebarRoot: some View {
         GeometryReader { proxy in
             HStack(spacing: 0) {
@@ -557,25 +573,265 @@ struct RootView: View {
     }
 
     private var iPadSidebar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Spacer(minLength: 20)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("音乐")
+                    .font(BeansFont.appFont(30, .bold))
+                    .foregroundStyle(Color.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 6)
 
-            ForEach(RootTab.bottomTabs) { tab in
-                iPadSidebarItem(tab)
-            }
-
-            Spacer(minLength: 20)
-        }
-        .padding(.horizontal, 12)
-        .background {
-            Rectangle()
-                .fill(.regularMaterial)
-                .overlay(alignment: .trailing) {
-                    Rectangle()
-                        .fill(Color.primary.opacity(0.08))
-                        .frame(width: 0.5)
+                ForEach(RootTab.bottomTabs) { tab in
+                    iPadSidebarItem(tab)
                 }
+
+                Divider()
+                    .overlay(Color.primary.opacity(0.12))
+                    .padding(.vertical, 8)
+
+                sidebarSectionHeader("歌单", isExpanded: $sidebarPlaylistsExpanded)
+
+                if sidebarPlaylistsExpanded {
+                    Button {
+                        selectSidebarTab(.library)
+                    } label: {
+                        sidebarSystemRow(title: "所有歌单", systemName: "square.grid.2x2")
+                    }
+                    .buttonStyle(.plain)
+
+                    if !localLibrary.playlists.isEmpty {
+                        sidebarSubheading("本地歌单")
+                        ForEach(Array(localLibrary.playlists.prefix(5))) { playlist in
+                            sidebarLocalPlaylistRow(playlist)
+                        }
+                    }
+
+                    ForEach(sidebarRemotePlaylistGroups) { group in
+                        sidebarSubheading(group.title)
+                        ForEach(Array(group.playlists.prefix(5))) { playlist in
+                            sidebarRemotePlaylistRow(playlist)
+                        }
+                    }
+
+                    if localLibrary.playlists.isEmpty && sidebarRemotePlaylistGroups.isEmpty {
+                        Text("暂无已同步歌单")
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.primary.opacity(0.48))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                    }
+                }
+
+                Divider()
+                    .overlay(Color.primary.opacity(0.12))
+                    .padding(.vertical, 8)
+
+                sidebarSectionHeader("播放列表", isExpanded: .constant(true), showsToggle: false)
+                Button {
+                    BeansHaptics.tap()
+                    showSidebarQueue = true
+                } label: {
+                    sidebarSystemRow(title: "所有播放列表", systemName: "list.number")
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 24)
         }
+        .task(id: "\(auth.user?.uid ?? 0)-\(qqAuth.isLoggedIn)-\(kugouAuth.userId)") {
+            await loadSidebarPlaylists()
+        }
+        .background {
+            if #available(iOS 26.0, *) {
+                Rectangle()
+                    .fill(.clear)
+                    .glassEffect(.regular, in: .rect)
+            } else {
+                Rectangle()
+                    .fill(.regularMaterial)
+            }
+        }
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.08))
+                .frame(width: 0.5)
+        }
+    }
+
+    private var sidebarRemotePlaylistGroups: [SidebarPlaylistGroup] {
+        var groups: [SidebarPlaylistGroup] = []
+        let netease = auth.playlists.filter { $0.source == .netease }
+        let qq = sidebarRemotePlaylists.filter { $0.source == .qq }
+        let kugou = sidebarRemotePlaylists.filter { $0.source == .kugou }
+        if !netease.isEmpty {
+            groups.append(SidebarPlaylistGroup(id: "netease", title: "网易云音乐", playlists: netease))
+        }
+        if !qq.isEmpty {
+            groups.append(SidebarPlaylistGroup(id: "qq", title: "QQ音乐", playlists: qq))
+        }
+        if !kugou.isEmpty {
+            groups.append(SidebarPlaylistGroup(id: "kugou", title: "酷狗音乐", playlists: kugou))
+        }
+        return groups
+    }
+
+    private func sidebarSectionHeader(
+        _ title: String,
+        isExpanded: Binding<Bool>,
+        showsToggle: Bool = true
+    ) -> some View {
+        Button {
+            guard showsToggle else { return }
+            BeansHaptics.select()
+            withAnimation(.spring(response: 0.30, dampingFraction: 0.86)) {
+                isExpanded.wrappedValue.toggle()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(BeansFont.appFont(19, .bold))
+                    .foregroundStyle(Color.primary)
+                Spacer(minLength: 0)
+                if showsToggle {
+                    Image(systemName: isExpanded.wrappedValue ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.beansAmber)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
+        .disabled(!showsToggle)
+    }
+
+    private func sidebarSubheading(_ title: String) -> some View {
+        Text(title)
+            .font(BeansFont.appFont(11, .semibold))
+            .foregroundStyle(Color.primary.opacity(0.48))
+            .padding(.leading, 14)
+            .padding(.top, 7)
+            .padding(.bottom, 1)
+    }
+
+    private func sidebarSystemRow(title: String, systemName: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemName)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.beansAmber)
+                .frame(width: 26, height: 26)
+            Text(title)
+                .font(BeansFont.appFont(14, .medium))
+                .foregroundStyle(Color.primary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 42)
+        .contentShape(Rectangle())
+    }
+
+    private func sidebarLocalPlaylistRow(_ playlist: LocalPlaylist) -> some View {
+        Button {
+            BeansHaptics.tap()
+            selectSidebarTab(.library)
+            sidebarLocalPlaylist = playlist
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "music.note.list")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 26, height: 26)
+                    .background(Color.beansAmber.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(playlist.name)
+                        .font(BeansFont.appFont(13, .medium))
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+                    Text(beansSongCountText(playlist.songs.count))
+                        .font(BeansFont.appFont(10))
+                        .foregroundStyle(Color.primary.opacity(0.48))
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 46)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func sidebarRemotePlaylistRow(_ playlist: Playlist) -> some View {
+        Button {
+            BeansHaptics.tap()
+            selectSidebarTab(.library)
+            sidebarPlaylist = playlist
+        } label: {
+            HStack(spacing: 12) {
+                CoverImage(url: playlist.coverURL, size: 30, cornerRadius: 7)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(playlist.name)
+                        .font(BeansFont.appFont(13, .medium))
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+                    Text(beansSongCountText(playlist.trackCount))
+                        .font(BeansFont.appFont(10))
+                        .foregroundStyle(Color.primary.opacity(0.48))
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 46)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func selectSidebarTab(_ tab: RootTab) {
+        guard selection != tab else { return }
+        withAnimation(.spring(response: 0.30, dampingFraction: 0.82)) {
+            selection = tab
+        }
+    }
+
+    @MainActor
+    private func loadSidebarPlaylists() async {
+        var loaded: [Playlist] = []
+
+        if platformPrefs.isEnabled(.qq), qqAuth.isLoggedIn {
+            let accountID = qqAuth.rawUin.isEmpty ? qqAuth.playlistUin : qqAuth.rawUin
+            if let cached = SyncedPlaylistCache.shared.cachedPlaylists(source: .qq, accountID: accountID) {
+                loaded.append(contentsOf: cached.playlists)
+                if !SyncedPlaylistCache.shared.isFresh(cached),
+                   let list = try? await QQMusicAPI.shared.userPlaylists(uin: qqAuth.uin), !list.isEmpty {
+                    loaded = loaded.filter { $0.source != .qq }
+                    loaded.append(contentsOf: list)
+                    SyncedPlaylistCache.shared.savePlaylists(list, source: .qq, accountID: accountID)
+                }
+            } else if let list = try? await QQMusicAPI.shared.userPlaylists(uin: qqAuth.uin), !list.isEmpty {
+                loaded.append(contentsOf: list)
+                SyncedPlaylistCache.shared.savePlaylists(list, source: .qq, accountID: accountID)
+            }
+        }
+
+        if platformPrefs.isEnabled(.kugou), kugouAuth.isLoggedIn {
+            let accountID = kugouAuth.userId
+            if let cached = SyncedPlaylistCache.shared.cachedPlaylists(source: .kugou, accountID: accountID) {
+                loaded.append(contentsOf: cached.playlists)
+                if !SyncedPlaylistCache.shared.isFresh(cached),
+                   let list = try? await KugouMusicAPI.shared.userPlaylists(), !list.isEmpty {
+                    loaded = loaded.filter { $0.source != .kugou }
+                    loaded.append(contentsOf: list)
+                    SyncedPlaylistCache.shared.savePlaylists(list, source: .kugou, accountID: accountID)
+                }
+            } else if let list = try? await KugouMusicAPI.shared.userPlaylists(), !list.isEmpty {
+                loaded.append(contentsOf: list)
+                SyncedPlaylistCache.shared.savePlaylists(list, source: .kugou, accountID: accountID)
+            }
+        }
+
+        var seen = Set<String>()
+        sidebarRemotePlaylists = loaded.filter { seen.insert("\($0.source.rawValue)-\($0.id)").inserted }
     }
 
     private func iPadSidebarItem(_ tab: RootTab) -> some View {

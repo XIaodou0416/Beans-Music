@@ -38,7 +38,7 @@ struct DiscoverView: View {
     private var availableSections: [String] { SectionOrderStore.homeDefaults }
     /// 首页数据源：记住上次选择，下次打开仍保持该平台（默认网易云）
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
-    /// 每日推荐的旧版歌曲列表样式，默认使用新版推荐卡片。
+    /// 每日推荐的旧版横向歌曲卡样式，默认使用新版推荐卡片。
     @AppStorage("beans.home.dailySongsListStyle") private var dailySongsListStyle = false
     @AppStorage("beans.homeGreetingText") private var homeGreetingText = ""
     @AppStorage("beans.homeGreetingSize") private var homeGreetingSize = 30.0
@@ -846,7 +846,7 @@ struct DiscoverView: View {
     @ViewBuilder
     private var dailySection: some View {
         if dailySongsListStyle {
-            dailySongsListSection
+            dailySongCards
         } else if source == .netease {
             neteaseRecommendationCards
         } else if source == .qq {
@@ -855,60 +855,6 @@ struct DiscoverView: View {
             kugouRecommendationCards
         } else {
             dailySongCards
-        }
-    }
-
-    /// 直接按歌曲行展示每日推荐，保留播放全部、随机播放和查看全部入口。
-    private var dailySongsListSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(
-                title: beansLocalized("每日推荐", "Daily Recommendations"),
-                trailing: dailySongs.isEmpty ? nil : beansLocalized("查看全部", "See All"),
-                onTrailingTap: {
-                    BeansHaptics.tap()
-                    openRoute(DiscoverRoute.dailySongs(dailySongs))
-                }
-            )
-
-            if dailySongs.isEmpty {
-                EmptyStateView(icon: "sparkles", text: beansLocalized("今日推荐暂时没有内容", "Daily recommendations are unavailable"))
-            } else {
-                HStack(spacing: 10) {
-                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
-                        BeansHaptics.tap()
-                        player.play(songs: dailySongs, startAt: 0)
-                    }
-                    GlassButton(title: "随机播放", systemName: "shuffle") {
-                        BeansHaptics.tap()
-                        player.play(songs: dailySongs, startAt: Int.random(in: 0..<dailySongs.count))
-                    }
-                    Spacer(minLength: 0)
-                }
-
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(dailySongs.enumerated()), id: \.element.identityKey) { index, song in
-                        SongCell(song: song, glassRow: true) {
-                            BeansHaptics.tap()
-                            player.play(songs: dailySongs, startAt: index)
-                        }
-                        if index < dailySongs.count - 1 {
-                            Divider().overlay(Color.beansComment.opacity(0.12))
-                        }
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background {
-                    if isNativeClean {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.primary.opacity(0.04))
-                    } else {
-                        BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .beansCardShadow(radius: 8, y: 3)
-            }
         }
     }
 
@@ -1083,7 +1029,7 @@ struct DiscoverView: View {
                             player.play(songs: dailySongs, startAt: index)
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
-                                CoverImage(url: song.coverURL, size: isNativeClean ? 156 : 108, cornerRadius: 6)
+                                CoverImage(url: song.coverURL, size: isNativeClean ? 156 : 108, cornerRadius: isNativeClean ? 14 : 16)
                                     .overlay(alignment: .topLeading) {
                                     if showSongVIPBadge, song.isVIP {
                                             Text("VIP")
@@ -1099,11 +1045,13 @@ struct DiscoverView: View {
                                         dailyPlayStateBadge(for: song)
                                     }
                                 Text(song.name)
-                                    .font(BeansFont.appFont(12, .medium))
-                                .foregroundStyle(Color.beansLabel)
-                                .lineLimit(1)
-                                .font(BeansFont.appFont(isNativeClean ? 15 : 12, isNativeClean ? .bold : .medium))
-                                .frame(width: isNativeClean ? 156 : 108, alignment: .leading)
+                                    .font(BeansFont.appFont(isNativeClean ? 15 : 12, isNativeClean ? .bold : .medium))
+                                    .foregroundStyle(Color.beansLabel)
+                                    .lineLimit(1)
+                                    .frame(width: isNativeClean ? 156 : 108, alignment: .leading)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
                                 Text(song.artists.isEmpty ? song.album : song.artists)
                                     .font(BeansFont.appFont(10))
                                     .foregroundStyle(Color.beansComment)
@@ -1124,14 +1072,13 @@ struct DiscoverView: View {
                                 .font(BeansFont.appFont(11, .semibold))
                         }
                         .foregroundStyle(Color.beansLabel)
-                        .frame(width: isNativeClean ? 58 : 56, height: isNativeClean ? 96 : 84)
+                            .frame(width: isNativeClean ? 72 : 68, height: isNativeClean ? 132 : 96)
                         .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
                     }
                     .buttonStyle(GlassPressButtonStyle(scale: 0.94))
                     Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                 }
                 .padding(.vertical, 2)
-                .frame(height: isNativeClean ? 202 : 152)
             }
             .beansCompatScrollClipDisabled()
             // 保留首页左侧起始边距，右侧滚动时才延伸到屏幕边缘。

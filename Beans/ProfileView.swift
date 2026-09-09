@@ -2338,7 +2338,7 @@ struct SettingsView: View {
                     .font(BeansFont.appFont(13))
                 Toggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
                     .font(BeansFont.appFont(13))
-                Toggle("每日推荐显示歌曲列表", isOn: $dailySongsListStyle)
+                Toggle("每日推荐使用旧版样式", isOn: $dailySongsListStyle)
                     .font(BeansFont.appFont(13))
 
                 HStack {
