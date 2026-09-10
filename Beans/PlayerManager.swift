@@ -311,10 +311,7 @@ final class PlayerManager: NSObject, ObservableObject {
     func next(manual: Bool = true) {
         guard ensurePlaybackAllowed() else { return }
         guard !queue.isEmpty else { return }
-        if playMode == .repeatOne && manual {
-            restartCurrent()
-            return
-        }
+        // 单曲循环只影响自然播放结束；用户手动点击下一首时始终切换歌曲。
         advance()
         loadCurrent()
     }

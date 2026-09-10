@@ -92,6 +92,8 @@ struct FeedbackSheet: View {
                                 TextEditor(text: $problem)
                                     .font(BeansFont.appFont(13))
                                     .foregroundStyle(Color.beansLabel)
+                                    .beansScrollContentBackgroundHidden()
+                                    .background(Color.clear)
                                     .frame(minHeight: 120)
                                     .padding(7)
                             }

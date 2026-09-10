@@ -122,33 +122,14 @@ struct ArtistHomeSheet: View {
                 .padding(.horizontal, 16)
             if !hotSongs.isEmpty {
                 HStack(spacing: 10) {
-                    Button {
+                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, forceLiquid: true) {
                         BeansHaptics.tap()
                         player.play(songs: displayedHotSongs, startAt: 0)
-                        dismiss()
-                    } label: {
-                        Label("播放全部", systemImage: "play.fill")
-                            .font(BeansFont.appFont(13, .semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 9)
-                            .background(Capsule().fill(Color.beansAmber))
                     }
-                    .buttonStyle(.plain)
-                    Button {
+                    GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                         BeansHaptics.tap()
                         player.play(songs: displayedHotSongs.shuffled(), startAt: 0)
-                        dismiss()
-                    } label: {
-                        Label("随机播放", systemImage: "shuffle")
-                            .font(BeansFont.appFont(13, .semibold))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 9)
-                            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
-                            .overlay { Capsule().strokeBorder(Color.beansAmber.opacity(0.5), lineWidth: 1) }
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 2)

@@ -1342,6 +1342,17 @@ struct SettingsView: View {
         thirdPartyAudioQualityOptions.map(\.rawValue).joined(separator: ",")
     }
 
+    @ViewBuilder
+    private func liquidQualityOptionBackground(selected: Bool) -> some View {
+        ZStack {
+            BeansGlass(shape: Capsule(), forceLiquid: true)
+            if selected {
+                Capsule()
+                    .fill(Color.beansAmber.opacity(0.16))
+            }
+        }
+    }
+
     private func normalizeThirdPartyAudioQualitySelection() {
         let valid = thirdPartyAudioQualityOptions.first(where: { $0.rawValue == thirdPartyAudioQualityRaw }) ?? thirdPartyAudioQualityOptions.first ?? .kb320
         if valid.rawValue != thirdPartyAudioQualityRaw {
@@ -1395,12 +1406,7 @@ struct SettingsView: View {
                             .padding(.horizontal, 12)
                             .frame(height: 31)
                             .background {
-                                Capsule()
-                                    .fill(selected ? Color.beansAmber.opacity(0.14) : Color.beansLabel.opacity(0.055))
-                            }
-                            .overlay {
-                                Capsule()
-                                    .strokeBorder(selected ? Color.beansAmber.opacity(0.42) : Color.beansLabel.opacity(0.08), lineWidth: 0.8)
+                                liquidQualityOptionBackground(selected: selected)
                             }
                         }
                         .buttonStyle(.plain)
@@ -2651,12 +2657,7 @@ struct SettingsView: View {
                                     .padding(.horizontal, 12)
                                     .frame(height: 31)
                                     .background {
-                                        Capsule()
-                                            .fill(selected ? Color.beansAmber.opacity(0.14) : Color.beansLabel.opacity(0.055))
-                                    }
-                                    .overlay {
-                                        Capsule()
-                                            .strokeBorder(selected ? Color.beansAmber.opacity(0.42) : Color.beansLabel.opacity(0.08), lineWidth: 0.8)
+                                        liquidQualityOptionBackground(selected: selected)
                                     }
                                 }
                                 .buttonStyle(.plain)

@@ -101,6 +101,9 @@ struct DiscoverView: View {
     @State private var activeLoadKey: String?
     @State private var lastLoadedKey = ""
     @State private var lastLoadedAt = Date.distantPast
+    /// 登录后让对应平台绕过缓存重新拉取主页数据。
+    @State private var forceHomeReload = false
+    @State private var homeReloadToken = 0
     /// 首次启动免责声明：确认进入后若加载失败自动刷新
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 网易云歌单广场当前分类（「全部」展示官方精品歌单）
@@ -190,9 +193,14 @@ struct DiscoverView: View {
             .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
                 homePlatformSelectionMenu
             }
-            .task(id: "\(source.rawValue)-\(homeRenderingPaused)") {
+            .task(id: "\(source.rawValue)-\(homeRenderingPaused)-\(homeReloadToken)") {
                 guard !homeRenderingPaused else { return }
-                await load(force: false)
+                let force = forceHomeReload
+                let reloadToken = homeReloadToken
+                await load(force: force)
+                if force, reloadToken == homeReloadToken {
+                    forceHomeReload = false
+                }
             }
             .onAppear {
                 guard !homeRenderingPaused else { return }
@@ -1757,9 +1765,13 @@ struct DiscoverView: View {
         }
     }
 
+    @MainActor
     private func reloadAfterLoginUpdate(_ provider: SearchProvider) {
+        // 登录态会改变推荐内容和会员状态，先切到对应平台，再绕过旧快照刷新。
+        forceHomeReload = true
+        homeReloadToken += 1
         if source == provider {
-            Task { await load(force: true) }
+            // 刷新令牌会重启 .task，避免在当前视图生命周期中遗留旧缓存。
         } else {
             homeSourceRaw = provider.rawValue
         }
