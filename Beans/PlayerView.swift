@@ -798,7 +798,7 @@ struct PlayerView: View {
                     }
                     .padding(.horizontal, 34)
                     .padding(.top, 4)
-                    .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
+                    .padding(.bottom, iPadLandscapeControlsReservedHeight + geo.safeAreaInsets.bottom)
                 }
 
                 iPadLandscapeControlDeck(bottomInset: geo.safeAreaInsets.bottom)
@@ -947,11 +947,7 @@ struct PlayerView: View {
         case .appleMusic:
             iPadLandscapeAppleMusicLyricsHeader
         case .vinyl:
-            vinylLyricsHeader
-                .padding(.horizontal, 30)
-                .padding(.top, 8)
-                .frame(maxWidth: .infinity)
-                .frame(height: 64)
+            iPadLandscapeVinylLyricsHeader
         case .classic:
             iPadLandscapeClassicLyricsHeader
         }
@@ -1009,6 +1005,81 @@ struct PlayerView: View {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(landscapeApplePrimaryColor.opacity(0.78))
+                        .frame(width: 38, height: 38)
+                        .contentShape(Rectangle())
+                }
+            }
+        }
+        .padding(.horizontal, 30)
+        .padding(.top, 8)
+        .frame(maxWidth: .infinity)
+        .frame(height: 64)
+    }
+
+    private var iPadLandscapeVinylLyricsHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                BeansHaptics.tap()
+                toggleLyrics()
+            } label: {
+                CoverImage(url: song?.coverURL, size: 48, cornerRadius: 10)
+                    .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 7) {
+                    Text(song?.name ?? "未在播放")
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(albumTitleForeground)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if showSongVIPBadge, song?.isVIP == true {
+                        Text("VIP")
+                            .font(BeansFont.appFont(8, .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1.5)
+                            .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
+                    }
+                }
+                Text(subtitle)
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(albumArtistForeground)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openArtistHome() }
+            }
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 0) {
+                Button {
+                    BeansHaptics.tap()
+                    if let song {
+                        toggleLocalFavorite(song)
+                    }
+                } label: {
+                    Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(localLibrary.containsSong(song) ? albumTitleColor : albumTitleForeground.opacity(0.78))
+                        .frame(width: 38, height: 38)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Menu {
+                    Button("定时关闭") { showSleepTimer = true }
+                    Button("添加到本地歌单") { showAddToLocalPlaylist = true }
+                    if downloadFeatureUnlocked {
+                        Button("下载歌曲") { showDownloadPicker = true }
+                    }
+                    Button("播放器设置") { openPlayerSettings() }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(albumTitleForeground.opacity(0.78))
                         .frame(width: 38, height: 38)
                         .contentShape(Rectangle())
                 }
@@ -2494,9 +2565,18 @@ struct PlayerView: View {
 
     // MARK: - 底部控制栏（旧式悬浮布局：进度 / 主控制）
 
-    /// 底部控制栏估算高度（单行控制后降低，给歌词视口更多空间）
-    /// 底部控制栏预留高度（越小歌词视口越大；需 >= 控制栏实际高度避免遮挡；可视化开启时控制栏更高）
     private var deckInset: CGFloat { 102 }
+
+    private var iPadLandscapeControlsReservedHeight: CGFloat {
+        switch coverPlayerStyle {
+        case .appleMusic:
+            return 238
+        case .vinyl:
+            return 136
+        case .classic:
+            return 148
+        }
+    }
 
     @ViewBuilder
     private func controlDeck(bottomInset: CGFloat) -> some View {

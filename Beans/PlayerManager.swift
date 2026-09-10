@@ -118,7 +118,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var playbackRecoveryInFlightSongKey: String?
     /// 同一首歌的多个 AVFoundation 失败回调只允许弹一次提示并自动切歌一次。
     private var finalizedFailureSongKey: String?
-    /// 播放失败后延迟自动切歌，避免失败回调刚到就立刻跳过歌曲。
+    /// 播放失败后安排到下一个主线程周期切歌，避免 AVFoundation 回调中同步重入。
     private var failureAutoSkipWorkItem: DispatchWorkItem?
     /// QQ 官方地址返回成功但实际不可播放时，只切换到第三方一次，避免官方/第三方之间循环。
     private var qqThirdPartyFallbackSongKey: String?
@@ -1309,8 +1309,8 @@ final class PlayerManager: NSObject, ObservableObject {
         let failureMessage: String
         if shouldAutoSkip && queue.count > 1 {
             failureMessage = beansLocalized(
-                "播放失败：\(playbackFailureMessage(for: failedSong, reason: reason))，10秒后自动切换到下一首",
-                "Playback failed: \(playbackFailureMessage(for: failedSong, reason: reason, english: true)). The next song will start in 10 seconds."
+                "播放失败：\(playbackFailureMessage(for: failedSong, reason: reason))，已自动切换到下一首",
+                "Playback failed: \(playbackFailureMessage(for: failedSong, reason: reason, english: true)). Switched to the next song automatically."
             )
         } else {
             failureMessage = message ?? beansLocalized(
@@ -1337,7 +1337,7 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         failureAutoSkipWorkItem?.cancel()
         failureAutoSkipWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: workItem)
+        DispatchQueue.main.async(execute: workItem)
     }
 
     private func playbackFailureMessage(for song: Song, reason: String, english: Bool = false) -> String {
