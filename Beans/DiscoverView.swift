@@ -1894,7 +1894,7 @@ struct QQTopListDetailView: View {
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
                                 }
-                                GlassButton(title: "随机播放", systemName: "shuffle") {
+                                GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                                     guard !filteredTracks.isEmpty else { return }
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))
@@ -2003,7 +2003,7 @@ struct QQPlaylistSongsSheet: View {
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
                                 }
-                                GlassButton(title: "随机播放", systemName: "shuffle") {
+                                GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                                     guard !filteredTracks.isEmpty else { return }
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))
@@ -2083,7 +2083,7 @@ struct DailySongsSheet: View {
                                 BeansHaptics.tap()
                                 player.play(songs: filteredSongs, startAt: 0)
                             }
-                            GlassButton(title: "随机播放", systemName: "shuffle") {
+                            GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                                 guard !filteredSongs.isEmpty else { return }
                                 BeansHaptics.tap()
                                 player.play(songs: filteredSongs, startAt: Int.random(in: 0..<filteredSongs.count))
@@ -2161,7 +2161,7 @@ struct TopListDetailView: View {
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
                                 }
-                                GlassButton(title: "随机播放", systemName: "shuffle") {
+                                GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                                     guard !filteredTracks.isEmpty else { return }
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))
@@ -2303,7 +2303,7 @@ struct KugouTopListDetailView: View {
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
                                 }
-                                GlassButton(title: "随机播放", systemName: "shuffle") {
+                                GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                                     guard !filteredTracks.isEmpty else { return }
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))

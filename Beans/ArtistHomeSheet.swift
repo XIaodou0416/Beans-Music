@@ -145,7 +145,8 @@ struct ArtistHomeSheet: View {
                             .foregroundStyle(Color.beansAmber)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
-                            .background(Capsule().strokeBorder(Color.beansAmber.opacity(0.5), lineWidth: 1))
+                            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
+                            .overlay { Capsule().strokeBorder(Color.beansAmber.opacity(0.5), lineWidth: 1) }
                     }
                     .buttonStyle(.plain)
                 }

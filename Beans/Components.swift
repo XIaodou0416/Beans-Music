@@ -762,6 +762,7 @@ struct GlassButton: View {
     let title: String
     var systemName: String?
     var prominent = false
+    var forceLiquid = false
     let action: () -> Void
 
     private var isNativeClean: Bool {
@@ -787,6 +788,8 @@ struct GlassButton: View {
                         BeansGlass(shape: Capsule(), forceLiquid: true)
                         Capsule().fill(Color.beansAmber.opacity(0.78))
                     }
+                } else if forceLiquid {
+                    BeansGlass(shape: Capsule(), forceLiquid: true)
                 } else if isNativeClean {
                     Capsule().fill(Color.primary.opacity(0.055))
                 } else {
@@ -794,7 +797,7 @@ struct GlassButton: View {
                 }
             }
             .overlay {
-                if isNativeClean && !prominent {
+                if isNativeClean && !prominent && !forceLiquid {
                     Capsule().strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.7)
                 }
             }

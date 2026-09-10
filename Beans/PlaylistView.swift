@@ -114,7 +114,7 @@ struct PlaylistView: View {
                 GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
                     player.play(songs: displayedTracks, startAt: 0)
                 }
-                GlassButton(title: "随机播放", systemName: "shuffle") {
+                GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                     if !displayedTracks.isEmpty {
                         player.play(songs: displayedTracks, startAt: Int.random(in: 0..<displayedTracks.count))
                     }

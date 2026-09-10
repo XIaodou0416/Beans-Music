@@ -421,7 +421,7 @@ struct LocalPlaylistDetailSheet: View {
                                     guard !songs.isEmpty else { return }
                                     player.play(songs: songs, startAt: 0)
                                 }
-                                GlassButton(title: "随机播放", systemName: "shuffle") {
+                                GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                                     let songs = visibleSongs.map(\.element)
                                     guard !songs.isEmpty else { return }
                                     player.play(songs: songs.shuffled(), startAt: 0)

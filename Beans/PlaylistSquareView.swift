@@ -215,10 +215,15 @@ struct PlaylistSquareView: View {
                             .padding(.horizontal, 13)
                             .padding(.vertical, 7)
                             .background {
-                                Capsule().fill(selectedCategory == category.id ? Color.beansAmber : Color.primary.opacity(0.06))
+                                ZStack {
+                                    BeansGlass(shape: Capsule(), forceLiquid: true)
+                                    if selectedCategory == category.id {
+                                        Capsule().fill(Color.beansAmber.opacity(0.78))
+                                    }
+                                }
                             }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(GlassPressButtonStyle(scale: 0.95))
                 }
             }
         }
@@ -227,13 +232,14 @@ struct PlaylistSquareView: View {
     private var playlistGrid: some View {
         LazyVGrid(
             columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 16)],
-            alignment: .leading,
+            alignment: .center,
             spacing: 18
         ) {
             ForEach(visiblePlaylists) { playlist in
                 NavigationLink(destination: PlaylistView(playlist: playlist)) {
                     playlistCard(playlist, showsContainer: false)
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
                 .buttonStyle(GlassPressButtonStyle(scale: 0.97))
             }
         }
@@ -242,7 +248,7 @@ struct PlaylistSquareView: View {
     private func playlistCard(_ playlist: Playlist, showsContainer: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             CoverImage(url: playlist.coverURL, size: 150, cornerRadius: isNativeClean ? 14 : 16)
-                Text(playlist.name)
+            Text(playlist.name)
                 .font(BeansFont.appFont(13, .medium))
                 .foregroundStyle(Color.beansLabel)
                 .lineLimit(2)
@@ -269,8 +275,8 @@ struct PlaylistSquareView: View {
             .opacity(playlist.trackCount > 0 || !playlist.creatorName.isEmpty ? 1 : 0)
             .frame(height: 14, alignment: .leading)
         }
+        .frame(width: 150, alignment: .leading)
         .padding(isNativeClean || source == .netease ? 0 : 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             if showsContainer {
                 if usesSolidSurface {
@@ -285,6 +291,7 @@ struct PlaylistSquareView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func formatPlaylistPlayCount(_ count: Int) -> String {
@@ -303,13 +310,14 @@ struct PlaylistSquareView: View {
             } else {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 16)],
-                    alignment: .leading,
+                    alignment: .center,
                     spacing: 18
                 ) {
                     ForEach(searchResults) { playlist in
                         NavigationLink(destination: PlaylistView(playlist: playlist)) {
                             playlistCard(playlist)
                         }
+                        .frame(maxWidth: .infinity, alignment: .center)
                         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
                     }
                 }
