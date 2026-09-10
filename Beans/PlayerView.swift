@@ -1063,7 +1063,7 @@ struct PlayerView: View {
                 } label: {
                     Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(localLibrary.containsSong(song) ? albumTitleColor : albumTitleForeground.opacity(0.78))
+                        .foregroundStyle(localLibrary.containsSong(song) ? albumTitleColor : albumTitleColor.opacity(0.78))
                         .frame(width: 38, height: 38)
                         .contentShape(Rectangle())
                 }
