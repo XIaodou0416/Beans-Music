@@ -793,29 +793,7 @@ struct PlayerView: View {
                         )
                         .frame(maxWidth: geo.size.width * 0.43)
 
-                        LyricsSection(
-                            lyrics: lyrics,
-                            accent: lyricCurrentColor,
-                            secondary: lyricDimColor,
-                            gradientStart: lyricGradStart,
-                            gradientEnd: lyricGradEnd,
-                            baseFontSize: CGFloat(lyricFontSize) * CGFloat(lyricScale),
-                            lineSpacing: CGFloat(lyricLineSpacing),
-                            glowRadius: lyricGlowRadius,
-                            showTranslation: lyricTranslation,
-                            alignment: lyricAlign,
-                            offsetX: CGFloat(lyricOffsetX),
-                            anchor: lyricAnchor,
-                            glowColorOverride: lyricGlowColor,
-                            blurStart: CGFloat(lyricBlurStart),
-                            blurAmount: CGFloat(lyricBlurAmount),
-                            tilt: CGFloat(lyricTilt),
-                            tiltY: CGFloat(lyricTiltY),
-                            lyricOffset: CGFloat(lyricOffset)
-                        ) { line in
-                            BeansHaptics.tap()
-                            seekToLyric(line)
-                        }
+                        iPadLandscapeLyricsColumn(geo: geo)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .padding(.horizontal, 34)
@@ -842,6 +820,124 @@ struct PlayerView: View {
                     .zIndex(60)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func iPadLandscapeLyricsColumn(geo: GeometryProxy) -> some View {
+        switch coverPlayerStyle {
+        case .appleMusic:
+            AppleMusicLyricsSection(
+                lyrics: lyrics,
+                primary: landscapeApplePrimaryColor,
+                secondary: landscapeAppleSecondaryColor,
+                lyricOffset: CGFloat(lyricOffset)
+            ) { line in
+                BeansHaptics.tap()
+                seekToLyric(line)
+            }
+        case .vinyl:
+            iPadLandscapeVinylLyricsColumn(geo: geo)
+        case .classic:
+            LyricsSection(
+                lyrics: lyrics,
+                accent: lyricCurrentColor,
+                secondary: lyricDimColor,
+                gradientStart: lyricGradStart,
+                gradientEnd: lyricGradEnd,
+                baseFontSize: CGFloat(lyricFontSize) * CGFloat(lyricScale),
+                lineSpacing: CGFloat(lyricLineSpacing),
+                glowRadius: lyricGlowRadius,
+                showTranslation: lyricTranslation,
+                alignment: lyricAlign,
+                offsetX: CGFloat(lyricOffsetX),
+                anchor: lyricAnchor,
+                glowColorOverride: lyricGlowColor,
+                blurStart: CGFloat(lyricBlurStart),
+                blurAmount: CGFloat(lyricBlurAmount),
+                tilt: CGFloat(lyricTilt),
+                tiltY: CGFloat(lyricTiltY),
+                lyricOffset: CGFloat(lyricOffset)
+            ) { line in
+                BeansHaptics.tap()
+                seekToLyric(line)
+            }
+        }
+    }
+
+    private func iPadLandscapeVinylLyricsColumn(geo: GeometryProxy) -> some View {
+        Group {
+            if lyrics.isEmpty {
+                vinylEmptyLyricsView
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 34) {
+                            Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(VinylLayoutDefaults.lyricTopRows), vinylLyricsViewportHeight * 0.18))
+                            ForEach(lyrics.indices, id: \.self) { index in
+                                vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
+                                    .id(index)
+                                    .background {
+                                        GeometryReader { rowGeometry in
+                                            Color.clear.preference(
+                                                key: LyricCenterPreferenceKey.self,
+                                                value: [index: rowGeometry.frame(in: .named("iPadVinylLyricsViewport")).midY]
+                                            )
+                                        }
+                                    }
+                            }
+                            Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(VinylLayoutDefaults.lyricBottomRows), vinylLyricsViewportHeight * 0.18))
+                        }
+                        .padding(.horizontal, 28)
+                    }
+                    .coordinateSpace(name: "iPadVinylLyricsViewport")
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0.0),
+                                .init(color: .black, location: 0.12),
+                                .init(color: .black, location: 0.84),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .background {
+                        GeometryReader { viewport in
+                            Color.clear
+                                .onAppear { vinylLyricsViewportHeight = viewport.size.height }
+                                .onChange(of: viewport.size.height) { vinylLyricsViewportHeight = $0 }
+                        }
+                    }
+                    .onPreferenceChange(LyricCenterPreferenceKey.self) { centers in
+                        vinylUpdateFocusedLyric(from: centers)
+                    }
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 4)
+                            .onChanged { _ in
+                                vinylIsDraggingLyrics = true
+                                vinylLyricsResumeTask?.cancel()
+                            }
+                            .onEnded { _ in
+                                vinylScheduleLyricsResume(proxy: proxy)
+                            }
+                    )
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                            vinylScrollToCurrentLyric(proxy: proxy, animated: false)
+                        }
+                    }
+                    .onChange(of: vinylCurrentLyricIndex) { _ in
+                        guard !vinylIsDraggingLyrics else { return }
+                        vinylScrollToCurrentLyric(proxy: proxy, animated: true)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onDisappear {
+            vinylLyricsResumeTask?.cancel()
         }
     }
 

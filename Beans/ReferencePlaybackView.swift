@@ -670,6 +670,195 @@ struct ReferenceScrubber: View {
     }
 }
 
+struct AppleMusicLyricsSection: View {
+    @EnvironmentObject private var player: PlayerManager
+
+    let lyrics: [LyricLine]
+    let primary: Color
+    let secondary: Color
+    let lyricOffset: CGFloat
+    let onTapLine: (LyricLine) -> Void
+
+    @State private var lyricCenters: [UUID: CGFloat] = [:]
+    @State private var focusedLyricID: UUID?
+    @State private var viewportHeight: CGFloat = 0
+    @State private var isDraggingLyrics = false
+    @State private var resumeTask: Task<Void, Never>?
+
+    private var currentPlaybackLyricIndex: Int? {
+        guard !lyrics.isEmpty else { return nil }
+        let progress = LyricTiming.effectiveProgress(player.lyricProgress, userOffset: Double(lyricOffset))
+        var low = 0
+        var high = lyrics.count - 1
+        var answer: Int?
+        while low <= high {
+            let mid = (low + high) / 2
+            if lyrics[mid].time <= progress {
+                answer = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return answer
+    }
+
+    private var currentPlaybackLyricID: UUID? {
+        guard let index = currentPlaybackLyricIndex, lyrics.indices.contains(index) else { return nil }
+        return lyrics[index].id
+    }
+
+    private var currentVisualLyricID: UUID? {
+        isDraggingLyrics ? (focusedLyricID ?? currentPlaybackLyricID) : currentPlaybackLyricID
+    }
+
+    var body: some View {
+        Group {
+            if lyrics.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "quote.bubble")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(secondary.opacity(0.5))
+                    Text("暂无歌词")
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(primary.opacity(0.86))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 26) {
+                            Color.clear.frame(height: max(88, viewportHeight * 0.30))
+                            ForEach(lyrics) { line in
+                                lyricLine(line, isFocused: line.id == currentVisualLyricID)
+                                    .id(line.id)
+                                    .background {
+                                        GeometryReader { rowGeometry in
+                                            Color.clear.preference(
+                                                key: ReferenceLyricCenterKey.self,
+                                                value: [line.id: rowGeometry.frame(in: .named("iPadAppleLyricsViewport")).midY]
+                                            )
+                                        }
+                                    }
+                            }
+                            Color.clear.frame(height: max(110, viewportHeight * 0.34))
+                        }
+                        .padding(.horizontal, 28)
+                    }
+                    .coordinateSpace(name: "iPadAppleLyricsViewport")
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0.0),
+                                .init(color: .black, location: 0.12),
+                                .init(color: .black, location: 0.84),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .background {
+                        GeometryReader { viewport in
+                            Color.clear
+                                .onAppear { viewportHeight = viewport.size.height }
+                                .onChange(of: viewport.size.height) { viewportHeight = $0 }
+                        }
+                    }
+                    .onPreferenceChange(ReferenceLyricCenterKey.self) { centers in
+                        lyricCenters = centers
+                        updateFocusedLyric(from: centers)
+                    }
+                    .simultaneousGesture(lyricsDragGesture(proxy: proxy))
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                            scrollToPlaybackLyric(proxy: proxy, animated: false)
+                        }
+                    }
+                    .onChange(of: currentPlaybackLyricID) { _ in
+                        guard !isDraggingLyrics else { return }
+                        scrollToPlaybackLyric(proxy: proxy, animated: true)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onDisappear { resumeTask?.cancel() }
+    }
+
+    private func lyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
+        Button {
+            BeansHaptics.tap()
+            onTapLine(line)
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(line.text.isEmpty ? " " : line.text)
+                        .font(BeansFont.appFont(isFocused ? 27 : 23, isFocused ? .bold : .semibold))
+                        .foregroundStyle(primary.opacity(isFocused ? 1 : 0.36))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if isFocused && isDraggingLyrics {
+                        Spacer(minLength: 8)
+                        Text(beansTimeString(line.time))
+                            .font(BeansFont.appFont(11, .semibold, .monospaced))
+                            .foregroundStyle(secondary.opacity(0.82))
+                    }
+                }
+                if isFocused, let translation = line.translation, !translation.isEmpty {
+                    Text(translation)
+                        .font(BeansFont.appFont(15, .medium))
+                        .foregroundStyle(secondary.opacity(0.72))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .scaleEffect(isFocused ? 1.06 : 0.84, anchor: .leading)
+            .blur(radius: isFocused ? 0 : 0.7)
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: isFocused)
+    }
+
+    private func updateFocusedLyric(from centers: [UUID: CGFloat]) {
+        guard viewportHeight > 0, !centers.isEmpty else { return }
+        let center = viewportHeight / 2
+        focusedLyricID = centers.min { abs($0.value - center) < abs($1.value - center) }?.key
+    }
+
+    private func scrollToPlaybackLyric(proxy: ScrollViewProxy, animated: Bool) {
+        guard let id = currentPlaybackLyricID else { return }
+        let action = { proxy.scrollTo(id, anchor: .center) }
+        if animated {
+            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.38)) { action() }
+        } else {
+            action()
+        }
+    }
+
+    private func lyricsDragGesture(proxy: ScrollViewProxy) -> some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { _ in
+                isDraggingLyrics = true
+                resumeTask?.cancel()
+                updateFocusedLyric(from: lyricCenters)
+            }
+            .onEnded { _ in
+                resumeTask?.cancel()
+                if let id = focusedLyricID {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                        proxy.scrollTo(id, anchor: .center)
+                    }
+                }
+                resumeTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    guard !Task.isCancelled else { return }
+                    isDraggingLyrics = false
+                }
+            }
+    }
+}
+
 private struct ReferenceVolumeControl: View {
     let accent: Color
     let secondary: Color
