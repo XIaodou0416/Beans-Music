@@ -94,6 +94,9 @@ final class PlayerManager: NSObject, ObservableObject {
     private var systemPlaybackPrepared = false
     private var routeObserverInstalled = false
     private var interruptionObserverInstalled = false
+    private var secondaryAudioHintObserverInstalled = false
+    private var mediaServicesObserverInstalled = false
+    private var applicationAudioObserverInstalled = false
     private var remoteCommandsInstalled = false
     private var playOrder: [Int] = []
     private var orderPosition = 0
@@ -102,10 +105,15 @@ final class PlayerManager: NSObject, ObservableObject {
     private var wasPlayingBeforeInterruption = false
     private var interruptionInProgress = false
     private var interruptionResumeWorkItem: DispatchWorkItem?
+    private var audioRecoveryWorkItem: DispatchWorkItem?
+    private var shouldResumeAfterAudioLoss = false
+    private var audioLossInProgress = false
     private var lastNowPlayingRefreshUptime = 0.0
     private var lastPublishedProgress: Double = -1
     private var lastPersistedProgress: Double = -1
     private var lastNowPlayingArtworkKey: String?
+    private var nowPlayingSongKey: String?
+    private var nowPlayingInfo: [String: Any] = [:]
     /// 酷狗高音质地址在部分账号/系统上会返回但无法由 AVPlayer 打开；每首歌只自动降级一次。
     private var kugouStandardFallbackSongKey: String?
     /// 第三方地址偶发过期或节点不可用时，按失败域名重试，避免同一节点反复进入播放器。
@@ -200,6 +208,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
     deinit {
         interruptionResumeWorkItem?.cancel()
+        audioRecoveryWorkItem?.cancel()
         if let equalizerSettingsObserver {
             NotificationCenter.default.removeObserver(equalizerSettingsObserver)
         }
@@ -283,9 +292,11 @@ final class PlayerManager: NSObject, ObservableObject {
             return
         }
         if player.timeControlStatus == .playing {
-            player.pause()
+            clearAudioRecoveryIntent()
             isPlaying = false
+            player.pause()
         } else {
+            clearAudioRecoveryIntent()
             player.playImmediately(atRate: Float(rate))
             isPlaying = true
         }
@@ -481,8 +492,9 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func pausePlayback() {
-        player?.pause()
+        clearAudioRecoveryIntent()
         isPlaying = false
+        player?.pause()
         updateNowPlaying()
     }
 
@@ -539,6 +551,9 @@ final class PlayerManager: NSObject, ObservableObject {
     private func loadCurrent(resumeAt: Double? = nil, forceKugouStandard: Bool = false) {
         guard ensurePlaybackAllowed() else { return }
         guard let song = currentSong else { return }
+        audioRecoveryWorkItem?.cancel()
+        audioRecoveryWorkItem = nil
+        clearAudioRecoveryIntent()
         loadGeneration += 1
         let generation = loadGeneration
         thirdPartyRetryExcludedHostsBySong.removeValue(forKey: song.identityKey)
@@ -1157,6 +1172,24 @@ final class PlayerManager: NSObject, ObservableObject {
             guard let self else { return }
             self.performOnMain { [weak self] in
                 guard let self, self.player === player else { return }
+                if player.timeControlStatus == .paused, self.isPlaying {
+                    if self.mixesWithOthers,
+                       !self.interruptionInProgress,
+                       item.status == .readyToPlay {
+                        // 某些外部音频只会让 AVPlayer 暂停，不会发出完整的 interruption
+                        // 通知；保留播放意图，等系统音频会话释放后自动恢复。
+                        self.rememberAudioPlaybackIntent()
+                        self.isPlaying = false
+                        self.refreshNowPlayingOwnership()
+                        self.scheduleAudioRecovery(reason: "外部音频暂停播放器", delay: 0.25)
+                    } else if self.audioLossInProgress {
+                        self.isPlaying = false
+                        self.refreshNowPlayingOwnership()
+                    }
+                }
+                if player.timeControlStatus == .playing, self.audioLossInProgress {
+                    self.isPlaying = true
+                }
                 if player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
                     self.isBuffering = true
                     self.playbackStallWorkItem?.cancel()
@@ -1456,6 +1489,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
     private func stopPlaybackIfBackendBlocked(showToast: Bool = false) {
         guard defaults.bool(forKey: BeansBackendSettings.blockedKey) else { return }
+        clearAudioRecoveryIntent()
         loadGeneration += 1
         playbackConfirmationWorkItem?.cancel()
         failureAutoSkipWorkItem?.cancel()
@@ -1705,9 +1739,11 @@ final class PlayerManager: NSObject, ObservableObject {
             return
         }
         sessionConfigured = false
-        configureAudioSession()
-        if isPlaying, player?.timeControlStatus != .playing {
-            player?.playImmediately(atRate: Float(rate))
+        if isPlaying || player?.timeControlStatus == .playing {
+            rememberAudioPlaybackIntent()
+        }
+        if shouldResumeAfterAudioLoss || isPlaying || player?.timeControlStatus == .playing {
+            scheduleAudioRecovery(reason: "音频路由变化", delay: 0.12)
         }
     }
 
@@ -1716,11 +1752,42 @@ final class PlayerManager: NSObject, ObservableObject {
     private func observeInterruptions() {
         guard !interruptionObserverInstalled else { return }
         interruptionObserverInstalled = true
+        let session = AVAudioSession.sharedInstance()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleInterruption(_:)),
             name: AVAudioSession.interruptionNotification,
-            object: AVAudioSession.sharedInstance()
+            object: session
+        )
+        guard !secondaryAudioHintObserverInstalled else { return }
+        secondaryAudioHintObserverInstalled = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSecondaryAudioHint(_:)),
+            name: AVAudioSession.silenceSecondaryAudioHintNotification,
+            object: session
+        )
+        guard !mediaServicesObserverInstalled else { return }
+        mediaServicesObserverInstalled = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMediaServicesReset(_:)),
+            name: AVAudioSession.mediaServicesWereResetNotification,
+            object: nil
+        )
+        guard !applicationAudioObserverInstalled else { return }
+        applicationAudioObserverInstalled = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleApplicationWillResignActive(_:)),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleApplicationDidBecomeActive(_:)),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
         )
     }
 
@@ -1732,44 +1799,176 @@ final class PlayerManager: NSObject, ObservableObject {
             return
         }
         guard let info = notification.userInfo,
-              let rawType = info[AVAudioSessionInterruptionTypeKey] as? UInt,
-              let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
+              let rawValue = info[AVAudioSessionInterruptionTypeKey] else { return }
+        let rawType: UInt
+        if let number = rawValue as? NSNumber {
+            rawType = number.uintValue
+        } else if let value = rawValue as? UInt {
+            rawType = value
+        } else {
+            return
+        }
+        guard let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
         switch type {
         case .began:
             interruptionResumeWorkItem?.cancel()
             interruptionResumeWorkItem = nil
             interruptionInProgress = true
-            wasPlayingBeforeInterruption = isPlaying || player?.timeControlStatus == .playing
-            // 开启「与其他音频同时播放」时，不被其他 App 音频中断，保持继续播放
-            guard !mixesWithOthers else { return }
-            player?.pause()
-            isPlaying = false
-            updateNowPlaying()
-        case .ended:
-            // 中断结束后系统可能停用了音频会话，重新激活避免无声
-            sessionConfigured = false
-            configureAudioSession()
-            let shouldResume = interruptionInProgress && wasPlayingBeforeInterruption
-            interruptionInProgress = false
-            wasPlayingBeforeInterruption = false
-            guard shouldResume, let player else {
+            rememberAudioPlaybackIntent()
+            // 混音模式下系统可能只暂停 AVPlayer 而不改变我们的状态；恢复统一交给
+            // 结束通知和次级音频提示，避免在系统仍占用音频会话时抢先播放。
+            if !mixesWithOthers {
                 isPlaying = false
+                player?.pause()
                 updateNowPlaying()
-                return
+            } else {
+                refreshNowPlayingOwnership()
             }
-            // 音频会话恢复可能晚于通知本身，留出一个 run loop 让系统完成激活。
-            let resume = DispatchWorkItem { [weak self, weak player] in
-                guard let self, let player, self.player === player else { return }
-                guard self.currentSong != nil else { return }
-                player.playImmediately(atRate: Float(self.rate))
-                self.isPlaying = true
-                self.updateNowPlaying()
-            }
-            interruptionResumeWorkItem = resume
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: resume)
+        case .ended:
+            sessionConfigured = false
+            guard interruptionInProgress || shouldResumeAfterAudioLoss else { return }
+            scheduleAudioRecovery(reason: "系统音频中断结束", delay: 0.18)
         @unknown default:
             break
         }
+    }
+
+    /// 开启混音后，视频/语音类音频通常只发送这个通知，不发送完整 interruption ended 回调。
+    @objc private func handleSecondaryAudioHint(_ notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.handleSecondaryAudioHint(notification)
+            }
+            return
+        }
+        guard mixesWithOthers else { return }
+        let rawValue = notification.userInfo?[AVAudioSessionSilenceSecondaryAudioHintTypeKey]
+        let rawType: UInt?
+        if let number = rawValue as? NSNumber {
+            rawType = number.uintValue
+        } else {
+            rawType = rawValue as? UInt
+        }
+        // 系统定义 began=1、ended=0；使用原始值兼容旧系统 SDK。
+        if rawType == 1 {
+            rememberAudioPlaybackIntent()
+            refreshNowPlayingOwnership()
+        } else {
+            sessionConfigured = false
+            scheduleAudioRecovery(reason: "次级音频结束", delay: 0.12)
+        }
+    }
+
+    @objc private func handleMediaServicesReset(_ notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.handleMediaServicesReset(notification)
+            }
+            return
+        }
+        sessionConfigured = false
+        guard currentSong != nil else { return }
+        rememberAudioPlaybackIntent()
+        scheduleAudioRecovery(reason: "系统音频服务重置", delay: 0.2)
+    }
+
+    @objc private func handleApplicationWillResignActive(_ notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.handleApplicationWillResignActive(notification)
+            }
+            return
+        }
+        guard isPlaying || player?.timeControlStatus == .playing else { return }
+        rememberAudioPlaybackIntent()
+    }
+
+    @objc private func handleApplicationDidBecomeActive(_ notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.handleApplicationDidBecomeActive(notification)
+            }
+            return
+        }
+        guard currentSong != nil else { return }
+        sessionConfigured = false
+        if shouldResumeAfterAudioLoss || isPlaying || player?.timeControlStatus == .playing {
+            scheduleAudioRecovery(reason: "应用重新激活", delay: 0.12)
+        }
+    }
+
+    private func rememberAudioPlaybackIntent() {
+        guard currentSong != nil else { return }
+        let active = isPlaying || player?.timeControlStatus == .playing || player?.rate != 0
+        if active {
+            shouldResumeAfterAudioLoss = true
+            wasPlayingBeforeInterruption = true
+        }
+        audioLossInProgress = true
+    }
+
+    private func clearAudioRecoveryIntent() {
+        shouldResumeAfterAudioLoss = false
+        audioLossInProgress = false
+        interruptionInProgress = false
+        wasPlayingBeforeInterruption = false
+        audioRecoveryWorkItem?.cancel()
+        audioRecoveryWorkItem = nil
+        interruptionResumeWorkItem?.cancel()
+        interruptionResumeWorkItem = nil
+    }
+
+    private func scheduleAudioRecovery(reason: String, delay: TimeInterval, attempt: Int = 0) {
+        guard currentSong != nil else { return }
+        guard shouldResumeAfterAudioLoss || isPlaying || player?.timeControlStatus == .playing else { return }
+        audioRecoveryWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.recoverAudioSession(reason: reason, attempt: attempt)
+        }
+        audioRecoveryWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func recoverAudioSession(reason: String, attempt: Int) {
+        guard currentSong != nil else { return }
+        let session = AVAudioSession.sharedInstance()
+        if mixesWithOthers, session.secondaryAudioShouldBeSilencedHint {
+            scheduleAudioRecovery(
+                reason: reason,
+                delay: min(0.8, 0.18 + Double(attempt) * 0.08),
+                attempt: attempt + 1
+            )
+            return
+        }
+
+        sessionConfigured = false
+        guard Self.applyAudioMixPreference(mixesWithOthers) else {
+            scheduleAudioRecovery(reason: reason, delay: 0.35, attempt: attempt + 1)
+            return
+        }
+
+        guard let currentPlayer = player else {
+            let resume = progress
+            clearAudioRecoveryIntent()
+            loadCurrent(resumeAt: resume)
+            return
+        }
+        if currentPlayer.currentItem == nil || currentPlayer.currentItem?.status == .failed {
+            let resume = progress
+            clearAudioRecoveryIntent()
+            loadCurrent(resumeAt: resume)
+            return
+        }
+
+        currentPlayer.playImmediately(atRate: Float(rate))
+        isPlaying = true
+        isBuffering = false
+        audioLossInProgress = false
+        shouldResumeAfterAudioLoss = false
+        interruptionInProgress = false
+        wasPlayingBeforeInterruption = false
+        BeansLogger.shared.log("音频会话恢复：\(reason)｜歌曲=\(currentSong?.name ?? "?")", level: .debug)
+        refreshNowPlayingOwnership()
     }
 
     // MARK: - 播放历史与统计
@@ -1854,6 +2053,7 @@ final class PlayerManager: NSObject, ObservableObject {
             return
         }
         guard let song = currentSong else { return }
+        let sameSong = nowPlayingSongKey == song.identityKey
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: song.name,
             MPMediaItemPropertyArtist: song.artists,
@@ -1863,20 +2063,26 @@ final class PlayerManager: NSObject, ObservableObject {
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? rate : 0.0,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
+        if sameSong, let artwork = nowPlayingInfo[MPMediaItemPropertyArtwork] {
+            info[MPMediaItemPropertyArtwork] = artwork
+        }
         if let artworkURL = song.coverURL {
             let artworkKey = song.identityKey + "|" + artworkURL.absoluteString
             if let cached = Self.nowPlayingArtworkCache.object(forKey: artworkURL as NSURL) {
                 info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cached.size) { _ in cached }
             } else if lastNowPlayingArtworkKey != artworkKey {
                 lastNowPlayingArtworkKey = artworkKey
-                Task { [weak self] in
+                DispatchQueue.global(qos: .utility).async { [weak self] in
                     if let data = try? Data(contentsOf: artworkURL), let image = UIImage(data: data) {
                         Self.nowPlayingArtworkCache.setObject(image, forKey: artworkURL as NSURL)
+                        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                         DispatchQueue.main.async {
-                            guard let self, self.nowPlayingEnabled else { return }
-                            var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-                            updated[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                            MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
+                            guard let self,
+                                  self.nowPlayingEnabled,
+                                  self.currentSong?.identityKey == song.identityKey else { return }
+                            self.nowPlayingSongKey = song.identityKey
+                            self.nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
+                            self.publishNowPlayingInfo()
                         }
                     }
                 }
@@ -1884,34 +2090,39 @@ final class PlayerManager: NSObject, ObservableObject {
         } else {
             lastNowPlayingArtworkKey = nil
         }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-        // 混音模式不再关闭系统正在播放状态；重新声明播放状态，避免切换音频会话后被清空。
-        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+        nowPlayingSongKey = song.identityKey
+        nowPlayingInfo = info
+        publishNowPlayingInfo()
     }
 
     /// 混音播放时只更新锁屏所需的轻量字段，避免重复下载或解码封面。
     /// 系统的 Now Playing 信息是全局单例，其他音乐 App 播放后需要重新声明当前内容。
     private func refreshNowPlayingOwnership() {
         guard nowPlayingEnabled, let song = currentSong else { return }
-        var info: [String: Any] = [
-            MPMediaItemPropertyTitle: song.name,
-            MPMediaItemPropertyArtist: song.artists,
-            MPMediaItemPropertyAlbumTitle: song.album,
-            MPMediaItemPropertyPlaybackDuration: max(duration, song.duration),
-            MPNowPlayingInfoPropertyElapsedPlaybackTime: progress,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? rate : 0.0,
-            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
-        ]
+        guard nowPlayingSongKey == song.identityKey, !nowPlayingInfo.isEmpty else {
+            updateNowPlaying()
+            return
+        }
+        nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = progress
+        nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? rate : 0.0
+        nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = max(duration, song.duration)
         if let artworkURL = song.coverURL,
            let cached = Self.nowPlayingArtworkCache.object(forKey: artworkURL as NSURL) {
-            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cached.size) { _ in cached }
+            nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cached.size) { _ in cached }
         }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        publishNowPlayingInfo()
+    }
+
+    private func publishNowPlayingInfo() {
+        guard nowPlayingEnabled, !nowPlayingInfo.isEmpty else { return }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
         MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
     }
 
     private func clearNowPlayingInfo() {
         lastNowPlayingArtworkKey = nil
+        nowPlayingSongKey = nil
+        nowPlayingInfo = [:]
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         MPNowPlayingInfoCenter.default().playbackState = .stopped
     }
@@ -1931,6 +2142,7 @@ final class PlayerManager: NSObject, ObservableObject {
             self.performOnMain { [weak self] in
                 guard let self else { return }
                 guard self.ensurePlaybackAllowed() else { return }
+                self.clearAudioRecoveryIntent()
                 self.player?.playImmediately(atRate: Float(self.rate))
                 self.isPlaying = true
                 self.updateNowPlaying()
@@ -1941,8 +2153,9 @@ final class PlayerManager: NSObject, ObservableObject {
             guard let self else { return .commandFailed }
             self.performOnMain { [weak self] in
                 guard let self else { return }
-                self.player?.pause()
+                self.clearAudioRecoveryIntent()
                 self.isPlaying = false
+                self.player?.pause()
                 self.updateNowPlaying()
             }
             return .success
