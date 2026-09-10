@@ -106,6 +106,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var interruptionInProgress = false
     private var interruptionResumeWorkItem: DispatchWorkItem?
     private var audioRecoveryWorkItem: DispatchWorkItem?
+    private var audioSessionWatchdogTimer: Timer?
     private var shouldResumeAfterAudioLoss = false
     private var audioLossInProgress = false
     private var lastNowPlayingRefreshUptime = 0.0
@@ -209,6 +210,7 @@ final class PlayerManager: NSObject, ObservableObject {
     deinit {
         interruptionResumeWorkItem?.cancel()
         audioRecoveryWorkItem?.cancel()
+        audioSessionWatchdogTimer?.invalidate()
         if let equalizerSettingsObserver {
             NotificationCenter.default.removeObserver(equalizerSettingsObserver)
         }
@@ -295,10 +297,12 @@ final class PlayerManager: NSObject, ObservableObject {
             clearAudioRecoveryIntent()
             isPlaying = false
             player.pause()
+            stopAudioSessionWatchdog()
         } else {
             clearAudioRecoveryIntent()
             player.playImmediately(atRate: Float(rate))
             isPlaying = true
+            startAudioSessionWatchdogIfNeeded()
         }
         savePersistedPlaybackState()
         updateNowPlaying()
@@ -495,6 +499,7 @@ final class PlayerManager: NSObject, ObservableObject {
         clearAudioRecoveryIntent()
         isPlaying = false
         player?.pause()
+        stopAudioSessionWatchdog()
         updateNowPlaying()
     }
 
@@ -553,6 +558,7 @@ final class PlayerManager: NSObject, ObservableObject {
         guard let song = currentSong else { return }
         audioRecoveryWorkItem?.cancel()
         audioRecoveryWorkItem = nil
+        stopAudioSessionWatchdog()
         clearAudioRecoveryIntent()
         loadGeneration += 1
         let generation = loadGeneration
@@ -1254,6 +1260,7 @@ final class PlayerManager: NSObject, ObservableObject {
         isPlaying = true
         isBuffering = false
         loadFailed = false
+        startAudioSessionWatchdogIfNeeded()
         // 修复：播放次数原先在 loadCurrent 里预计数，URL 加载失败/手动重试也会 +1，
         // 导致统计异常；改为真正开始播放时计数，且同一首歌同一会话只计一次。
         if let song = currentSong, lastCountedSongID != song.identityKey {
@@ -1341,6 +1348,7 @@ final class PlayerManager: NSObject, ObservableObject {
         loadFailed = true
         isBuffering = false
         isPlaying = false
+        stopAudioSessionWatchdog()
         guard let failedSong = song,
               currentSong?.identityKey == failedSong.identityKey,
               finalizedFailureSongKey != failedSong.identityKey else {
@@ -1581,6 +1589,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func removeCurrentObservers() {
+        stopAudioSessionWatchdog()
         if let timeObserver {
             player?.removeTimeObserver(timeObserver)
         }
@@ -1918,6 +1927,67 @@ final class PlayerManager: NSObject, ObservableObject {
         interruptionResumeWorkItem = nil
     }
 
+    /// 混音播放时，部分应用既不发送完整中断通知，也会暂停 AVPlayer 的时间回调。
+    /// 用主线程定时器补足这条通知链，同时重新发布系统正在播放信息。
+    private func startAudioSessionWatchdogIfNeeded() {
+        guard mixesWithOthers,
+              currentSong != nil,
+              audioSessionWatchdogTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.performOnMain { [weak self] in
+                self?.handleAudioSessionWatchdogTick()
+            }
+        }
+        audioSessionWatchdogTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopAudioSessionWatchdog() {
+        audioSessionWatchdogTimer?.invalidate()
+        audioSessionWatchdogTimer = nil
+    }
+
+    private func handleAudioSessionWatchdogTick() {
+        guard mixesWithOthers, currentSong != nil else {
+            stopAudioSessionWatchdog()
+            return
+        }
+        guard let currentPlayer = player else {
+            stopAudioSessionWatchdog()
+            return
+        }
+
+        let itemReady = currentPlayer.currentItem?.status == .readyToPlay
+        let playerIsPlaying = currentPlayer.timeControlStatus == .playing
+        let playerIsPaused = currentPlayer.timeControlStatus == .paused
+
+        if playerIsPaused, itemReady, !interruptionInProgress {
+            if !shouldResumeAfterAudioLoss {
+                rememberAudioPlaybackIntent()
+            }
+            if isPlaying {
+                isPlaying = false
+                refreshNowPlayingOwnership()
+            }
+        }
+
+        let session = AVAudioSession.sharedInstance()
+        let otherAudioIsActive = session.isOtherAudioPlaying || session.secondaryAudioShouldBeSilencedHint
+        if shouldResumeAfterAudioLoss, !playerIsPlaying, itemReady, !otherAudioIsActive {
+            scheduleAudioRecovery(reason: "外部音频结束", delay: 0)
+        }
+
+        // 其它应用可能已经覆盖系统唯一的 Now Playing 槽位；播放期间持续重发，
+        // 结束后也能立即恢复封面、控制中心和灵动岛内容。
+        if playerIsPlaying || (shouldResumeAfterAudioLoss && !otherAudioIsActive) {
+            let uptime = ProcessInfo.processInfo.systemUptime
+            if uptime - lastNowPlayingRefreshUptime >= 0.6 {
+                lastNowPlayingRefreshUptime = uptime
+                refreshNowPlayingOwnership()
+            }
+        }
+    }
+
     private func scheduleAudioRecovery(reason: String, delay: TimeInterval, attempt: Int = 0) {
         guard currentSong != nil else { return }
         guard shouldResumeAfterAudioLoss || isPlaying || player?.timeControlStatus == .playing else { return }
@@ -1932,7 +2002,8 @@ final class PlayerManager: NSObject, ObservableObject {
     private func recoverAudioSession(reason: String, attempt: Int) {
         guard currentSong != nil else { return }
         let session = AVAudioSession.sharedInstance()
-        if mixesWithOthers, session.secondaryAudioShouldBeSilencedHint {
+        if mixesWithOthers,
+           session.isOtherAudioPlaying || session.secondaryAudioShouldBeSilencedHint {
             scheduleAudioRecovery(
                 reason: reason,
                 delay: min(0.8, 0.18 + Double(attempt) * 0.08),
@@ -1968,6 +2039,7 @@ final class PlayerManager: NSObject, ObservableObject {
         interruptionInProgress = false
         wasPlayingBeforeInterruption = false
         BeansLogger.shared.log("音频会话恢复：\(reason)｜歌曲=\(currentSong?.name ?? "?")", level: .debug)
+        startAudioSessionWatchdogIfNeeded()
         refreshNowPlayingOwnership()
     }
 
@@ -2156,6 +2228,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 self.clearAudioRecoveryIntent()
                 self.isPlaying = false
                 self.player?.pause()
+                self.stopAudioSessionWatchdog()
                 self.updateNowPlaying()
             }
             return .success
@@ -2192,6 +2265,11 @@ final class PlayerManager: NSObject, ObservableObject {
         defaults.set(enabled, forKey: audioMixKey)
         sessionConfigured = false
         configureAudioSession()
+        if enabled, isPlaying || player?.timeControlStatus == .playing {
+            startAudioSessionWatchdogIfNeeded()
+        } else if !enabled {
+            stopAudioSessionWatchdog()
+        }
         updateNowPlaying()
     }
 
