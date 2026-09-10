@@ -8,6 +8,7 @@ final class HighRefreshKeeper {
     static let defaultsKey = "beans.enableHighRefresh"
 
     private var displayLink: CADisplayLink?
+    private var wasRunningBeforeTemporaryPause = false
 
     private init() {}
 
@@ -31,6 +32,20 @@ final class HighRefreshKeeper {
 
     func attach(to view: UIView) {
         _ = view
+        start()
+    }
+
+    /// 设置页展开大量控件时暂停空转的显示链接，避免低系统滚动时额外占用主线程。
+    func suspendTemporarily() {
+        guard displayLink != nil else { return }
+        wasRunningBeforeTemporaryPause = true
+        stop()
+    }
+
+    func resumeAfterTemporaryPause() {
+        guard wasRunningBeforeTemporaryPause else { return }
+        wasRunningBeforeTemporaryPause = false
+        guard UserDefaults.standard.bool(forKey: Self.defaultsKey) else { return }
         start()
     }
 

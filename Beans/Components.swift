@@ -1,6 +1,18 @@
 import SwiftUI
 import CoreImage.CIFilterBuiltins
 
+private struct BeansSettingsPerformanceModeKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// 设置页在旧系统上使用轻量表面，避免展开大量控件时反复合成材质。
+    var beansSettingsPerformanceMode: Bool {
+        get { self[BeansSettingsPerformanceModeKey.self] }
+        set { self[BeansSettingsPerformanceModeKey.self] = newValue }
+    }
+}
+
 extension View {
     /// 在紧凑宽度保持手机排版，在规则宽度适当放宽内容区域。
     func beansAdaptiveContentWidth(compact: CGFloat = 860, regular: CGFloat = 1100) -> some View {
@@ -198,6 +210,7 @@ struct WallpaperImage: View {
 struct BeansGlass<S: Shape>: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
+    @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
 
     let shape: S
     var forceLiquid = false
@@ -210,7 +223,8 @@ struct BeansGlass<S: Shape>: View {
         forceLiquid || uiStyle == .liquid || (uiStyle == .nativeClean && !appleSolidSurface)
     }
 
-    var body: some View {
+    @ViewBuilder
+    private var regularBody: some View {
         Group {
             if isLiquid {
                 if #available(iOS 26, *) {
@@ -239,6 +253,22 @@ struct BeansGlass<S: Shape>: View {
         }
         // iOS 26 的玻璃容器只负责绘制背景，不能拦截设置控件的触摸。
         .allowsHitTesting(false)
+    }
+
+    var body: some View {
+        if settingsPerformanceMode {
+            if #available(iOS 26, *) {
+                regularBody
+            } else {
+                // 旧系统的 Material 在长设置页滚动时会触发高成本的实时合成。
+                // 使用不改变层级的纯色表面，保留卡片边界但避免掉帧。
+                shape
+                    .fill(Color.beansGlassFill.opacity(0.86))
+                    .allowsHitTesting(false)
+            }
+        } else {
+            regularBody
+        }
     }
 }
 

@@ -1575,6 +1575,9 @@ struct SettingsView: View {
         .preferredColorScheme(themeMode.colorScheme)
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
+            if #unavailable(iOS 26) {
+                HighRefreshKeeper.shared.suspendTemporarily()
+            }
         }
         .sheet(isPresented: $showWallpaperPicker) {
             WallpaperPhotoPicker { data in
@@ -1598,6 +1601,7 @@ struct SettingsView: View {
         .sheet(isPresented: $showChangelog) {
             ChangelogListView()
                 .environmentObject(theme)
+                .environment(\.beansSettingsPerformanceMode, true)
         }
         .fileExporter(
             isPresented: $showExportBackup,
@@ -1648,7 +1652,11 @@ struct SettingsView: View {
         }
         .onDisappear {
             homeRenderingPaused = false
+            if #unavailable(iOS 26) {
+                HighRefreshKeeper.shared.resumeAfterTemporaryPause()
+            }
         }
+        .environment(\.beansSettingsPerformanceMode, true)
     }
 
     /// 主题相关设置统一归组，避免平台和排行榜外观选项散落在设置页。

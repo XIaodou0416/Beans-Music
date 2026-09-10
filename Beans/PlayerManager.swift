@@ -102,6 +102,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var wasPlayingBeforeInterruption = false
     private var interruptionInProgress = false
     private var interruptionResumeWorkItem: DispatchWorkItem?
+    private var lastNowPlayingRefreshUptime = 0.0
     private var lastPublishedProgress: Double = -1
     private var lastPersistedProgress: Double = -1
     private var lastNowPlayingArtworkKey: String?
@@ -1238,6 +1239,15 @@ final class PlayerManager: NSObject, ObservableObject {
                         self.savePersistedPlaybackState()
                     }
                 }
+                // 其他音频 App 播放时可能会覆盖系统唯一的 Now Playing 信息。
+                // 混音模式下定期重发轻量状态，让 Beans 继续保持锁屏/灵动岛控制权。
+                let uptime = ProcessInfo.processInfo.systemUptime
+                if self.isPlaying,
+                   self.mixesWithOthers,
+                   uptime - self.lastNowPlayingRefreshUptime >= 0.6 {
+                    self.lastNowPlayingRefreshUptime = uptime
+                    self.refreshNowPlayingOwnership()
+                }
             }
             if let itemDuration = player.currentItem?.duration, itemDuration.isNumeric {
                 let seconds = itemDuration.seconds
@@ -1651,10 +1661,11 @@ final class PlayerManager: NSObject, ObservableObject {
         do {
             let session = AVAudioSession.sharedInstance()
             // 「与其他音频同时播放」开关：开启时 mixWithOthers，打开其他音频软件也能继续播放；关闭则自动暂停
+            let options: AVAudioSession.CategoryOptions = mixesWithOthers ? [.mixWithOthers] : []
             if mixesWithOthers {
-                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+                try session.setCategory(.playback, mode: .default, policy: .longFormAudio, options: options)
             } else {
-                try session.setCategory(.playback, mode: .default)
+                try session.setCategory(.playback, mode: .default, policy: .longFormAudio, options: options)
             }
             try session.setActive(true)
             return true
@@ -1850,6 +1861,7 @@ final class PlayerManager: NSObject, ObservableObject {
             MPMediaItemPropertyPlaybackDuration: max(duration, song.duration),
             MPNowPlayingInfoPropertyElapsedPlaybackTime: progress,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? rate : 0.0,
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
         if let artworkURL = song.coverURL {
             let artworkKey = song.identityKey + "|" + artworkURL.absoluteString
@@ -1857,13 +1869,15 @@ final class PlayerManager: NSObject, ObservableObject {
                 info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cached.size) { _ in cached }
             } else if lastNowPlayingArtworkKey != artworkKey {
                 lastNowPlayingArtworkKey = artworkKey
-                Task {
+                Task { [weak self] in
                     if let data = try? Data(contentsOf: artworkURL), let image = UIImage(data: data) {
                         Self.nowPlayingArtworkCache.setObject(image, forKey: artworkURL as NSURL)
-                        guard self.nowPlayingEnabled else { return }
-                        var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-                        updated[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                        MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
+                        DispatchQueue.main.async {
+                            guard let self, self.nowPlayingEnabled else { return }
+                            var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+                            updated[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                            MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
+                        }
                     }
                 }
             }
@@ -1872,6 +1886,27 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         // 混音模式不再关闭系统正在播放状态；重新声明播放状态，避免切换音频会话后被清空。
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+    }
+
+    /// 混音播放时只更新锁屏所需的轻量字段，避免重复下载或解码封面。
+    /// 系统的 Now Playing 信息是全局单例，其他音乐 App 播放后需要重新声明当前内容。
+    private func refreshNowPlayingOwnership() {
+        guard nowPlayingEnabled, let song = currentSong else { return }
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: song.name,
+            MPMediaItemPropertyArtist: song.artists,
+            MPMediaItemPropertyAlbumTitle: song.album,
+            MPMediaItemPropertyPlaybackDuration: max(duration, song.duration),
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: progress,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? rate : 0.0,
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+        ]
+        if let artworkURL = song.coverURL,
+           let cached = Self.nowPlayingArtworkCache.object(forKey: artworkURL as NSURL) {
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cached.size) { _ in cached }
+        }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
     }
 

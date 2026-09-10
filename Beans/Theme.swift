@@ -857,15 +857,28 @@ extension LinearGradient {
 
 struct BeansCardShadowModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
     var radius: CGFloat
     var y: CGFloat
 
     func body(content: Content) -> some View {
-        content.shadow(
-            color: colorScheme == .dark ? .black.opacity(0.35) : .black.opacity(0.08),
-            radius: radius,
-            y: y
-        )
+        if settingsPerformanceMode {
+            if #available(iOS 26, *) {
+                content.shadow(
+                    color: colorScheme == .dark ? .black.opacity(0.35) : .black.opacity(0.08),
+                    radius: radius,
+                    y: y
+                )
+            } else {
+                content
+            }
+        } else {
+            content.shadow(
+                color: colorScheme == .dark ? .black.opacity(0.35) : .black.opacity(0.08),
+                radius: radius,
+                y: y
+            )
+        }
     }
 }
 
