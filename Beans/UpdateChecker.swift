@@ -4,7 +4,10 @@ struct UpdateChecker {
     static let repoPath = "XIaodou0416/Beans-Music"
     static let releasePageURL = URL(string: "https://github.com/\(repoPath)/releases/latest")!
     private static let latestAPI = URL(string: "https://api.github.com/repos/\(repoPath)/releases/latest")!
+    private static let releasesAPI = URL(string: "https://api.github.com/repos/\(repoPath)/releases?per_page=100")!
     private static let serverUpdateAPI = URL(string: "http://189.24.78.193/beans/update.json")!
+    private static let serverHistoryAPI = URL(string: "http://189.24.78.193/beans/updates.json")!
+    private static let minimumHistoryVersion = "1.6.5"
     private static let suppressedVersionKey = "beans.updateCheck.suppressedVersion"
 
     struct ReleaseInfo {
@@ -81,6 +84,14 @@ struct UpdateChecker {
         )
     }
 
+    static func fetchHistory() async throws -> [ReleaseInfo] {
+        if let serverHistory = try? await fetchServerHistory(), !serverHistory.isEmpty {
+            return serverHistory.filter { !isNewer(minimumHistoryVersion, than: $0.version) }
+        }
+        let githubHistory = try await fetchGitHubHistory()
+        return githubHistory.filter { !isNewer(minimumHistoryVersion, than: $0.version) }
+    }
+
     /// 优先读取 Beans 后端发布配置，失败时由 fetchLatest 回退 GitHub。
     private static func fetchServerLatest() async throws -> ReleaseInfo {
         var request = URLRequest(url: serverUpdateAPI)
@@ -95,6 +106,59 @@ struct UpdateChecker {
         guard !payload.version.isEmpty else {
             throw URLError(.cannotParseResponse)
         }
+        return releaseInfo(from: payload)
+    }
+
+    private static func fetchServerHistory() async throws -> [ReleaseInfo] {
+        var request = URLRequest(url: serverHistoryAPI)
+        request.timeoutInterval = 8
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("Beans-Music/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        let payload = try JSONDecoder().decode(ServerUpdateHistoryPayload.self, from: data)
+        let records = payload.updates.isEmpty
+            ? payload.latest.map { [$0] } ?? []
+            : payload.updates
+        return records
+            .filter { !$0.version.isEmpty }
+            .map { releaseInfo(from: $0) }
+    }
+
+    private static func fetchGitHubHistory() async throws -> [ReleaseInfo] {
+        var request = URLRequest(url: releasesAPI)
+        request.timeoutInterval = 8
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("Beans-Music/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        let releases = try JSONDecoder().decode([GitHubReleasePayload].self, from: data)
+        return releases.compactMap { release in
+            guard !release.draft, !release.prerelease,
+                  let tag = release.tagName,
+                  let htmlURL = URL(string: release.htmlURL) else { return nil }
+            let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+            let assetURL = release.assets
+                .compactMap { URL(string: $0.browserDownloadURL) }
+                .first(where: { $0.pathExtension.lowercased() == "ipa" })
+            return ReleaseInfo(
+                version: version,
+                name: release.name ?? tag,
+                body: release.body ?? "",
+                htmlURL: htmlURL,
+                assetURL: assetURL,
+                notesImageURL: nil,
+                notesTextColorHex: nil
+            )
+        }
+    }
+
+    private static func releaseInfo(from payload: ServerUpdatePayload) -> ReleaseInfo {
         let assetURL = payload.ipaURL.flatMap(URL.init(string:))
         return ReleaseInfo(
             version: payload.version,
@@ -155,5 +219,60 @@ private struct ServerUpdatePayload: Decodable {
         } else {
             notes = []
         }
+    }
+}
+
+private struct ServerUpdateHistoryPayload: Decodable {
+    let latest: ServerUpdatePayload?
+    let updates: [ServerUpdatePayload]
+
+    enum CodingKeys: String, CodingKey {
+        case latest
+        case updates
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        latest = try container.decodeIfPresent(ServerUpdatePayload.self, forKey: .latest)
+        updates = try container.decodeIfPresent([ServerUpdatePayload].self, forKey: .updates) ?? []
+    }
+}
+
+private struct GitHubReleasePayload: Decodable {
+    let tagName: String?
+    let name: String?
+    let body: String?
+    let htmlURL: String
+    let draft: Bool
+    let prerelease: Bool
+    let assets: [GitHubAsset]
+
+    enum CodingKeys: String, CodingKey {
+        case tagName = "tag_name"
+        case name
+        case body
+        case htmlURL = "html_url"
+        case draft
+        case prerelease
+        case assets
+    }
+
+    struct GitHubAsset: Decodable {
+        let browserDownloadURL: String
+
+        enum CodingKeys: String, CodingKey {
+            case browserDownloadURL = "browser_download_url"
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tagName = try container.decodeIfPresent(String.self, forKey: .tagName)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        body = try container.decodeIfPresent(String.self, forKey: .body)
+        htmlURL = try container.decode(String.self, forKey: .htmlURL)
+        draft = try container.decodeIfPresent(Bool.self, forKey: .draft) ?? false
+        prerelease = try container.decodeIfPresent(Bool.self, forKey: .prerelease) ?? false
+        assets = try container.decodeIfPresent([GitHubAsset].self, forKey: .assets) ?? []
     }
 }

@@ -49,11 +49,19 @@ enum ChangelogStore {
     /// 更新日志从 GitHub Releases 读取；网络不可用时继续显示内置历史记录。
     static func fetchRemoteLatest() async -> VersionLog? {
         guard let remote = try? await UpdateChecker.fetchLatest() else { return nil }
+        return versionLog(from: remote)
+    }
+
+    static func fetchRemoteHistory() async -> [VersionLog] {
+        guard let remoteLogs = try? await UpdateChecker.fetchHistory() else { return [] }
+        return remoteLogs.map { versionLog(from: $0) }
+    }
+
+    private static func versionLog(from remote: UpdateChecker.ReleaseInfo) -> VersionLog {
         let notes = remote.body
             .split(whereSeparator: { $0 == "\n" || $0 == "\r" })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        guard !remote.version.isEmpty else { return nil }
         return VersionLog(
             id: "server-\(remote.version)",
             version: remote.version,
@@ -67,61 +75,77 @@ enum ChangelogStore {
 
     static let logs: [VersionLog] = [
         VersionLog(
-            id: "1.5.8",
-            version: "1.5.8",
-            title: "歌单同步、主页与播放器全面优化",
-            features: [
-                "新增网易云音乐、QQ音乐、酷狗音乐歌单一键同步到本地",
-                "本地歌单支持编辑和搜索，批量选择歌曲后可添加到其他本地歌单",
-                "新增 QQ 音乐热门歌单展示",
-                "主页问候语支持自定义文字、颜色、大小、发光、专属字体、底部横线和上下渐变，并可逐行选择渐变颜色",
-                "播放器支持左右滑动切换歌曲，新增顶部三平台排序、隐藏主页刷新/用户名/排序按钮",
-                "播放器按钮图标样式新增，播放器设置界面重新整理分组和控件排版",
-                "主页、音乐库、我的、设置页增加 iPad 最大宽度适配",
-                "播放列表、最近播放和日志界面背景同步主页壁纸"
-            ],
-            fixes: [
-                "修复 QQ 音乐喜欢列表不显示的问题",
-                "修复最近播放、日志、本地歌单和播放列表不同步主页壁纸的问题",
-                "修复设置页掉帧问题；如果本次仍然掉帧，建议更换设备",
-                "修复 iOS 15 编译兼容问题"
-            ]
-        ),
-        VersionLog(
-            id: "1.5.6",
-            version: "1.5.6",
-            title: "播放器体验优化",
-            features: [
-                "封面页歌名、歌手和预览歌词支持渐变、高光及高光强度调节",
-                "播放页背景浮尘新增开关，默认关闭；动态浮尘支持密度和大小调节",
-                "全局上传壁纸自动同步到播放器封面页背景",
-                "播放页支持从顶部下划关闭，并加入缩放、淡出动画"
-            ],
-            fixes: [
-                "修复酷狗排行榜歌曲封面缺失或未归一化的问题",
-                "提高内置音源搜索上限",
-                "播放器设置打开后不再默认展开播放和歌词显示分组"
-            ]
-        ),
-        VersionLog(
-            id: "1.5.5",
-            version: "1.5.5",
-            title: "播放流畅度与发热优化",
+            id: "1.6.7",
+            version: "1.6.7",
+            title: "主页、播放器与缓存体验优化",
             notices: [
-                "从 1.5.4 版本开始，播放器设置已从右上角删除，改为点击中间歌曲正在播放的标题打开。"
+                "建议更新时卸载后重新安装，不要覆盖安装，否则可能出现部分问题。",
+                "不是最新版请不要反馈问题，旧版本不再维护。",
+                "本软件不提供下载服务，请支持官方网易云音乐、QQ 音乐和酷狗音乐平台。"
             ],
             features: [
-                "优化播放中全局刷新策略，移除高刷保持器的常驻空转刷新，降低设置页、我的页面和播放器页面的发热与掉帧",
-                "本地壁纸、歌词背景、设置页缩略图改为复用解码缓存，减少滚动和切换设置时的重复图片解码",
-                "锁屏/系统正在播放封面增加缓存，避免播放状态变化时反复下载和刷新同一张封面",
-                "聆澜内置音源支持多密钥池，当前密钥未命中时自动切换下一个，并记住最近可用密钥",
-                "播放器设置新增封面页歌名、歌手、预览歌词与未播放歌词颜色调节"
+                "新增“新碟上架”和“歌手”板块",
+                "新增歌单搜索，并将歌单广场独立为单独页面",
+                "“我的”入口移至右上角，支持自定义昵称和头像",
+                "新增灵动岛与控制中心显示开关",
+                "新增多项缓存机制，提升加载速度和使用体验",
+                "优化底部栏动画，适配 Apple Music 风格的自动收缩效果",
+                "Apple Music 风格主页新增磨砂背景",
+                "账号入口移至设置页面",
+                "修改默认强调色",
+                "优化音源播放与切歌速度",
+                "更新底部栏图标样式",
+                "移除歌单液态容器"
             ],
             fixes: [
-                "修复播放中进度更新过于频繁导致非播放器页面也跟随重绘的问题",
-                "修复重新上传歌词背景或恢复壁纸后，部分位置可能继续显示旧图片缓存的问题",
-                "修复酷狗排行榜详情歌曲封面链接未归一化，并在官网榜单缺封面时自动用移动端榜单数据补齐封面",
-                "优化巨魔安装场景下播放中切换页面的刷新与解码负担"
+                "修复低版本系统无法调节进度条的问题",
+                "修复歌词与音乐进度不同步的问题",
+                "修复自定义排序后重新打开应用失效的问题"
+            ]
+        ),
+        VersionLog(
+            id: "1.6.6",
+            version: "1.6.6",
+            title: "歌单广场与播放体验优化",
+            features: [
+                "新增网易云和 QQ 音乐歌单广场搜索功能",
+                "优化歌曲封面缓存",
+                "优化歌词滑动后不返回当前播放位置的问题",
+                "优化整体流畅性，低系统表现以实际测试为准",
+                "优化网易云私人漫游问题，遇到问题可使用心动模式",
+                "简化搜索界面，移除均衡器注释",
+                "更换酷狗音乐歌单广场接口",
+                "整体以优化和问题修复为主"
+            ],
+            fixes: [
+                "修复 QQ 音乐本身有会员但无法播放的问题",
+                "修复 iOS 26 以下系统无法返回的问题"
+            ]
+        ),
+        VersionLog(
+            id: "1.6.5.1",
+            version: "1.6.5.1",
+            title: "音源与歌单体验修复",
+            features: [
+                "修复歌单页播放器无法返回的问题",
+                "删除内置音源功能和填写密钥（可从密钥后台复制链接导入）",
+                "持续优化 QQ 音源问题",
+                "增加歌单、主页和排行榜缓存，减少重复加载"
+            ],
+            fixes: [
+                "软件不提供任何下载服务，不会导入音源的可在群里反馈"
+            ]
+        ),
+        VersionLog(
+            id: "1.6.5",
+            version: "1.6.5",
+            title: "音源播放修复",
+            features: [
+                "新增网易云免费音源"
+            ],
+            fixes: [
+                "修复 QQ 音乐音源不能播放的问题",
+                "修复自定义导入音源不能播放的问题"
             ]
         ),
     ]
@@ -170,20 +194,20 @@ struct WhatsNewSheet: View {
 
 struct ChangelogListView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var remoteLog: VersionLog?
+    @State private var remoteLogs: [VersionLog] = []
 
     var body: some View {
+        let remoteVersions = Set(remoteLogs.map(\.version))
         BeansNavigationStack {
             ZStack {
                 GlassBackdrop(customColor: ThemeStore.shared.backgroundSyncAll ? ThemeStore.shared.customBackground : nil)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        if let remoteLog {
-                            VersionLogCard(log: remoteLog)
+                        ForEach(remoteLogs) { log in
+                            VersionLogCard(log: log)
                         }
                         ForEach(ChangelogStore.logs.filter { log in
-                            guard let remoteLog else { return true }
-                            return log.version != remoteLog.version
+                            !remoteVersions.contains(log.version)
                         }) { log in
                             VersionLogCard(log: log)
                         }
@@ -202,7 +226,7 @@ struct ChangelogListView: View {
         }
         .modifier(BeansSheetModifier(detents: [.medium, .large]))
         .task {
-            remoteLog = await ChangelogStore.fetchRemoteLatest()
+            remoteLogs = await ChangelogStore.fetchRemoteHistory()
         }
     }
 }
