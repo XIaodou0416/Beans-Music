@@ -465,7 +465,7 @@ struct ReferencePlaybackView: View {
 
     private var currentPlaybackLyricIndex: Int? {
         guard !lyrics.isEmpty else { return nil }
-        let progress = LyricTiming.effectiveProgress(player.lyricProgress, userOffset: lyricOffset)
+        let progress = LyricTiming.effectiveProgress(clock.progress, userOffset: lyricOffset)
         var low = 0
         var high = lyrics.count - 1
         var answer: Int?
@@ -672,6 +672,7 @@ struct ReferenceScrubber: View {
 
 struct AppleMusicLyricsSection: View {
     @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var clock: PlaybackClock
 
     let lyrics: [LyricLine]
     let primary: Color
@@ -687,7 +688,7 @@ struct AppleMusicLyricsSection: View {
 
     private var currentPlaybackLyricIndex: Int? {
         guard !lyrics.isEmpty else { return nil }
-        let progress = LyricTiming.effectiveProgress(player.lyricProgress, userOffset: Double(lyricOffset))
+        let progress = LyricTiming.effectiveProgress(clock.progress, userOffset: Double(lyricOffset))
         var low = 0
         var high = lyrics.count - 1
         var answer: Int?

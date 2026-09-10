@@ -407,9 +407,7 @@ struct PlayerView: View {
         let _ = theme.accent
         GeometryReader { rootGeometry in
         Group {
-            if showPlayerSettings {
-                Color.clear.ignoresSafeArea()
-            } else if isIPadLandscape(in: rootGeometry.size) && showLyrics {
+            if isIPadLandscape(in: rootGeometry.size) && showLyrics {
                 iPadLandscapeLyricsView
             } else if coverPlayerStyle == .appleMusic {
                 ZStack {
@@ -645,24 +643,10 @@ struct PlayerView: View {
                 CommentsSheet(song: song)
             }
         }
-        .overlay {
-            if showPlayerSettings {
-                PlayerSettingsSheet(onDismiss: closePlayerSettings)
-                    .environmentObject(theme)
-                    .environmentObject(player)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
-                    .background(Color.clear)
-                    .contentShape(Rectangle())
-                    .allowsHitTesting(true)
-                    .transition(
-                        .asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .move(edge: .bottom).combined(with: .opacity)
-                        )
-                    )
-                    .zIndex(100)
-            }
+        .fullScreenCover(isPresented: $showPlayerSettings) {
+            PlayerSettingsSheet(onDismiss: closePlayerSettings)
+                .environmentObject(theme)
+                .environmentObject(player)
         }
         .sheet(item: $shareFile, onDismiss: cleanupSharedFile) { item in
             ShareSheet(items: [item.url])
@@ -1873,7 +1857,7 @@ struct PlayerView: View {
 
     private var vinylCurrentLyricIndex: Int? {
         guard !lyrics.isEmpty else { return nil }
-        let progress = LyricTiming.effectiveProgress(player.lyricProgress, userOffset: lyricOffset)
+        let progress = LyricTiming.effectiveProgress(clock.progress, userOffset: lyricOffset)
         var low = 0
         var high = lyrics.count - 1
         var answer: Int?
@@ -2389,7 +2373,7 @@ struct PlayerView: View {
         var answer: Int?
         while low <= high {
             let mid = (low + high) / 2
-            if lyrics[mid].time <= LyricTiming.effectiveProgress(player.lyricProgress, userOffset: lyricOffset) {
+            if lyrics[mid].time <= LyricTiming.effectiveProgress(clock.progress, userOffset: lyricOffset) {
                 answer = mid
                 low = mid + 1
             } else {
@@ -3946,7 +3930,7 @@ struct LyricsSection: View {
         var answer: Int?
         while low <= high {
             let mid = (low + high) / 2
-            if lyrics[mid].time <= LyricTiming.effectiveProgress(player.lyricProgress, userOffset: Double(lyricOffset)) {
+            if lyrics[mid].time <= LyricTiming.effectiveProgress(clock.progress, userOffset: Double(lyricOffset)) {
                 answer = mid
                 low = mid + 1
             } else {
@@ -5340,7 +5324,11 @@ private struct PlayerSettingsLiquidGlass<S: Shape>: View {
             } else {
                 switch uiStyle {
                 case .clear, .liquid:
-                    shape.fill(.ultraThinMaterial)
+                    if #available(iOS 26, *) {
+                        shape.fill(.ultraThinMaterial)
+                    } else {
+                        shape.fill(Color.beansGlassFill.opacity(0.88))
+                    }
                 case .compact:
                     shape.fill(Color.beansGlassFill.opacity(0.74))
                 case .nativeClean:

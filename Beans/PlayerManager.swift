@@ -77,7 +77,8 @@ final class PlayerManager: NSObject, ObservableObject {
     /// 每次用户主动拖动进度或点击歌词都会递增，歌词视图据此立即重新定位。
     @Published private(set) var seekRevision = 0
     /// 歌词统一使用的播放游标，和播放器时间观察器使用同一个时间源。
-    @Published private(set) var lyricProgress: Double = 0
+    /// 高频游标不再触发整个播放器模型发布，由 PlaybackClock 驱动进度条与歌词局部刷新。
+    private(set) var lyricProgress: Double = 0
 
     private var player: AVPlayer?
     private var timeObserver: Any?
@@ -331,23 +332,19 @@ final class PlayerManager: NSObject, ObservableObject {
         savePersistedPlaybackState()
     }
 
-    /// 歌词点击专用的精确跳转：暂停后等待 AVPlayer 完成定位，再恢复原播放状态。
-    /// 普通进度条继续使用 seek(to:) 的即时拖动逻辑。
+    /// 歌词点击专用的精确跳转。
+    /// 保持 AVPlayer 的当前播放意图，避免连续点歌词时上一笔跳转留下暂停状态。
     func seekPrecisely(to seconds: Double) {
         let knownDuration = max(duration, currentSong?.duration ?? seconds)
         let target = knownDuration > 0
             ? max(0, min(seconds, knownDuration))
             : max(0, seconds)
-        let shouldResume = isPlaying
+        let shouldKeepPlaying = isPlaying || player?.timeControlStatus == .playing
         let seekSongKey = currentSong?.identityKey
         seekRevision &+= 1
         let revision = seekRevision
         progress = target
         lyricProgress = target
-        if shouldResume {
-            player?.pause()
-            isPlaying = false
-        }
         player?.seek(
             to: CMTime(seconds: target, preferredTimescale: 600),
             toleranceBefore: .zero,
@@ -359,7 +356,9 @@ final class PlayerManager: NSObject, ObservableObject {
                       self.currentSong?.identityKey == seekSongKey,
                       self.seekRevision == revision else { return }
                 self.progress = target
-                if shouldResume {
+                self.lyricProgress = target
+                self.lastPublishedProgress = target
+                if shouldKeepPlaying {
                     self.player?.playImmediately(atRate: Float(self.rate))
                     self.isPlaying = true
                 }
