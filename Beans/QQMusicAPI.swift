@@ -1244,12 +1244,36 @@ final class QQMusicAPI {
         }
     }
 
-    /// QQ 每日推荐：热歌/新歌/飙升 三榜混合，按日期种子确定性打乱，每日轮换且与单个榜单内容区分
+    /// QQ 每日推荐：登录账号优先使用 QQ 个性化猜你喜欢接口。
+    /// 未登录或接口临时不可用时回退到 QQ 的最新歌曲接口，最后才使用公开榜单兜底。
     func recommendSongs(limit: Int = 30) async throws -> [Song] {
-        let day = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 0
+        let targetLimit = max(1, limit)
+        let qqAuth = QQMusicAuth.shared
+        if qqAuth.isLoggedIn {
+            do {
+                let personalized = try await personalizedRecommendSongs(
+                    limit: targetLimit,
+                    cookie: qqAuth.cookieHeader
+                )
+                if !personalized.isEmpty {
+                    BeansLogger.shared.log("QQ 每日推荐使用账号个性化接口 count=\(personalized.count)", level: .info)
+                    return personalized
+                }
+                BeansLogger.shared.log("QQ 个性化每日推荐为空，改用最新歌曲兜底", level: .warn)
+            } catch {
+                BeansLogger.shared.log("QQ 个性化每日推荐失败 error=\(error.localizedDescription)，改用最新歌曲兜底", level: .warn)
+            }
+        }
+
+        if let latest = try? await latestRecommendSongs(limit: targetLimit), !latest.isEmpty {
+            BeansLogger.shared.log("QQ 每日推荐使用最新歌曲兜底 count=\(latest.count)", level: .info)
+            return latest
+        }
+
+        // 最终兜底：公开榜单在接口波动时仍能让主页保留可播放内容。
         var songs: [Song] = []
         var seen = Set<String>()
-        let per = max(8, (limit + 2) / 3)
+        let per = max(8, (targetLimit + 2) / 3)
         for topid in [26, 27, 62] {
             guard let list = try? await topListSongs(topid: topid, limit: per) else { continue }
             for song in list where !seen.contains(song.identityKey) {
@@ -1257,9 +1281,57 @@ final class QQMusicAPI {
                 songs.append(song)
             }
         }
-        var rng = SeededRNG(state: UInt64(day) &* 2654435761)
-        songs.shuffle(using: &rng)
-        return Array(songs.prefix(limit))
+        songs.shuffle()
+        return Array(songs.prefix(targetLimit))
+    }
+
+    /// QQ 当前账号“猜你喜欢”推荐，结果随账号听歌行为变化。
+    private func personalizedRecommendSongs(limit: Int, cookie: String) async throws -> [Song] {
+        let payload: [String: Any] = [
+            "comm": ["ct": 24, "cv": 0, "uin": QQMusicAuth.shared.uin],
+            "recommend": [
+                "module": "music.radioProxy.MbTrackRadioSvr",
+                "method": "get_radio_track",
+                "param": [
+                    "id": 99,
+                    "num": limit,
+                    "from": 0,
+                    "scene": 0,
+                    "song_ids": [],
+                ],
+            ],
+        ]
+        let json = try await musicu(payload, cookie: cookie, timeout: 12)
+        return parseRecommendedSongs(
+            nestedArray(json, path: ["recommend", "data", "tracks"]),
+            limit: limit
+        )
+    }
+
+    /// 未登录时使用 QQ 最新歌曲接口，避免把固定榜单伪装成账号推荐。
+    private func latestRecommendSongs(limit: Int) async throws -> [Song] {
+        let payload: [String: Any] = [
+            "comm": ["ct": 24, "cv": 0],
+            "new_song": [
+                "module": "newsong.NewSongServer",
+                "method": "get_new_song_info",
+                "param": ["type": 5],
+            ],
+        ]
+        let json = try await musicu(payload, timeout: 12)
+        let tracks = nestedArray(json, path: ["new_song", "data", "songlist"])
+            + nestedArray(json, path: ["new_song", "data", "list"])
+        return parseRecommendedSongs(tracks, limit: limit)
+    }
+
+    private func parseRecommendedSongs(_ items: [[String: Any]], limit: Int) -> [Song] {
+        var seen = Set<String>()
+        return items.compactMap { item in
+            song(from: Self.unwrapQQSong(item))
+        }
+        .filter { seen.insert($0.identityKey).inserted }
+        .prefix(max(1, limit))
+        .map { $0 }
     }
 
     /// QQ 音乐新碟上架，使用 musicu 的 NewAlbumServer。
