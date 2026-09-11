@@ -1543,18 +1543,17 @@ final class PlayerManager: NSObject, ObservableObject {
         var format = "未知"
         if let track = item?.asset.tracks(withMediaType: .audio).first,
            let rawDescription = track.formatDescriptions.first {
-            if let description = rawDescription as? CMAudioFormatDescription {
-                let streamPointer = CMAudioFormatDescriptionGetStreamBasicDescription(description)
-                if let streamPointer {
-                    let stream = streamPointer.pointee
-                    let formatID = audioFormatIdentifier(stream.mFormatID)
-                    format = "\(formatID) \(Int(stream.mSampleRate))Hz \(stream.mChannelsPerFrame)ch"
-                } else {
-                    BeansLogger.shared.log(
-                        "音频输出诊断：无法读取音频格式描述 context=\(context)",
-                        level: .debug
-                    )
-                }
+            let description = rawDescription as! CMAudioFormatDescription
+            let streamPointer = CMAudioFormatDescriptionGetStreamBasicDescription(description)
+            if let streamPointer {
+                let stream = streamPointer.pointee
+                let formatID = audioFormatIdentifier(stream.mFormatID)
+                format = "\(formatID) \(Int(stream.mSampleRate))Hz \(stream.mChannelsPerFrame)ch"
+            } else {
+                BeansLogger.shared.log(
+                    "音频输出诊断：无法读取音频格式描述 context=\(context)",
+                    level: .debug
+                )
             }
         }
         BeansLogger.shared.log(
