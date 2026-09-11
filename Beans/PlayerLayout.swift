@@ -27,15 +27,22 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// 黑胶歌词现在拆成顶部信息和歌词文字两个独立组件，旧整体项不再显示在编辑器中。
-    static var editableCases: [PlayerLayoutPart] {
-        allCases.filter {
-            $0 != .vinylLyric
-                && $0 != .vinylAlbum
-                && $0 != .vinylLyricsHeader
-                && $0 != .vinylLyricsText
-        }
+    static var classicEditableCases: [PlayerLayoutPart] {
+        [
+            .topBack, .topTitle, .topFavorite, .cover, .title, .previewLyric,
+            .progress, .controls, .loop, .previous, .playPause, .next, .queue,
+            .lyric, .grabber,
+        ]
     }
+
+    static var vinylEditableCases: [PlayerLayoutPart] {
+        [
+            .vinylAlbum, .vinylLyricsHeader, .vinylLyricsText,
+            .progress, .controls, .loop, .previous, .playPause, .next, .queue,
+        ]
+    }
+
+    static var editableCases: [PlayerLayoutPart] { classicEditableCases }
 }
 
 /// Apple Music 播放页实时调试组件。
@@ -172,6 +179,111 @@ enum PlayerLayoutStore {
     }
 }
 
+/// 黑胶播放器使用独立存储，避免经典播放器的偏移影响唱盘布局。
+enum VinylPlayerLayoutStore {
+    private static let dataKey = "beans.vinylPlayer.layoutData"
+    private static var pendingSave: DispatchWorkItem?
+
+    static func load() -> [String: PlayerLayoutEntry] {
+        guard let raw = UserDefaults.standard.string(forKey: dataKey),
+              let data = raw.data(using: .utf8),
+              let dict = try? JSONDecoder().decode([String: PlayerLayoutEntry].self, from: data) else {
+            return [:]
+        }
+        return dict
+    }
+
+    static func save(_ dict: [String: PlayerLayoutEntry]) {
+        pendingSave?.cancel()
+        let snapshot = dict
+        let work = DispatchWorkItem {
+            guard let data = try? JSONEncoder().encode(snapshot),
+                  let raw = String(data: data, encoding: .utf8) else { return }
+            UserDefaults.standard.set(raw, forKey: dataKey)
+        }
+        pendingSave = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+
+    static func reset() {
+        pendingSave?.cancel()
+        UserDefaults.standard.removeObject(forKey: dataKey)
+    }
+
+    static func defaultEntry(for part: PlayerLayoutPart) -> PlayerLayoutEntry {
+        switch part {
+        case .vinylAlbum:
+            return PlayerLayoutEntry(y: 20)
+        case .vinylLyricsHeader:
+            return PlayerLayoutEntry(y: 30)
+        case .vinylLyricsText:
+            return PlayerLayoutEntry(y: -52)
+        case .progress:
+            return PlayerLayoutEntry(y: -20)
+        case .controls:
+            return PlayerLayoutEntry(y: 1, scale: 1.1)
+        case .loop:
+            return PlayerLayoutEntry(x: -5, scale: 1.08)
+        case .queue:
+            return PlayerLayoutEntry(x: 5, scale: 1.08)
+        default:
+            return PlayerLayoutEntry()
+        }
+    }
+}
+
+/// iPad 横屏布局与竖屏布局完全独立。
+enum IPadLandscapeLayoutPart: String, CaseIterable, Identifiable {
+    case header = "顶部区域"
+    case artwork = "左侧封面"
+    case lyrics = "右侧歌词"
+    case progress = "进度条"
+    case controls = "播放控件"
+
+    var id: String { rawValue }
+}
+
+enum IPadLandscapeLayoutStore {
+    typealias LayoutData = [String: [String: PlayerLayoutEntry]]
+
+    private static let dataKey = "beans.player.iPadLandscapeLayoutData"
+    private static var pendingSave: DispatchWorkItem?
+
+    static func load() -> LayoutData {
+        guard let raw = UserDefaults.standard.string(forKey: dataKey),
+              let data = raw.data(using: .utf8),
+              let stored = try? JSONDecoder().decode(LayoutData.self, from: data) else {
+            return [:]
+        }
+        return stored
+    }
+
+    static func save(_ layouts: LayoutData) {
+        pendingSave?.cancel()
+        let snapshot = layouts
+        let work = DispatchWorkItem {
+            guard let data = try? JSONEncoder().encode(snapshot),
+                  let raw = String(data: data, encoding: .utf8) else { return }
+            UserDefaults.standard.set(raw, forKey: dataKey)
+        }
+        pendingSave = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+
+    static func entry(
+        for part: IPadLandscapeLayoutPart,
+        style: BeansCoverPlayerStyle,
+        in layouts: LayoutData
+    ) -> PlayerLayoutEntry {
+        layouts[style.rawValue]?[part.rawValue] ?? PlayerLayoutEntry()
+    }
+
+    static func reset() {
+        pendingSave?.cancel()
+        UserDefaults.standard.removeObject(forKey: dataKey)
+    }
+}
+
 /// Apple Music 播放页布局存储。
 final class AppleMusicLayoutStore: ObservableObject {
     static let shared = AppleMusicLayoutStore()
@@ -296,18 +408,35 @@ struct Layoutable: ViewModifier {
     let enabled: Bool
     /// 布局数据（双向绑定，实时保存）
     @Binding var data: [String: PlayerLayoutEntry]
+    let defaultEntry: PlayerLayoutEntry?
+    let appliesTransform: Bool
+
+    init(
+        part: PlayerLayoutPart,
+        enabled: Bool,
+        data: Binding<[String: PlayerLayoutEntry]>,
+        defaultEntry: PlayerLayoutEntry? = nil,
+        appliesTransform: Bool = true
+    ) {
+        self.part = part
+        self.enabled = enabled
+        _data = data
+        self.defaultEntry = defaultEntry
+        self.appliesTransform = appliesTransform
+    }
 
     func body(content: Content) -> some View {
-        let entry = data[part.rawValue] ?? PlayerLayoutStore.defaultEntry(for: part)
+        let fallback = defaultEntry ?? PlayerLayoutStore.defaultEntry(for: part)
+        let entry = appliesTransform ? (data[part.rawValue] ?? fallback) : PlayerLayoutEntry()
         let displayEntry = normalizedEntry(entry)
         content
             .scaleEffect(displayEntry.scale)
             .offset(x: displayEntry.x, y: displayEntry.y)
-            .gesture(
-                enabled
+            .simultaneousGesture(
+                enabled && appliesTransform
                     ? DragGesture(minimumDistance: 0)
                         .onChanged { value in
-                            var e = data[part.rawValue] ?? PlayerLayoutStore.defaultEntry(for: part)
+                            var e = data[part.rawValue] ?? fallback
                             e.x = normalizedX(value.translation.width)
                             e.y = value.translation.height
                             data[part.rawValue] = e
@@ -328,5 +457,50 @@ struct Layoutable: ViewModifier {
     private func normalizedX(_ value: CGFloat) -> CGFloat {
         guard part == .loop || part == .queue else { return value }
         return min(max(value, -24), 24)
+    }
+}
+
+/// iPad 横屏组件的位置与大小调整。
+struct IPadLandscapeLayoutable: ViewModifier {
+    let part: IPadLandscapeLayoutPart
+    let style: BeansCoverPlayerStyle
+    let enabled: Bool
+    @Binding var data: IPadLandscapeLayoutStore.LayoutData
+    let appliesTransform: Bool
+
+    init(
+        part: IPadLandscapeLayoutPart,
+        style: BeansCoverPlayerStyle,
+        enabled: Bool,
+        data: Binding<IPadLandscapeLayoutStore.LayoutData>,
+        appliesTransform: Bool = true
+    ) {
+        self.part = part
+        self.style = style
+        self.enabled = enabled
+        _data = data
+        self.appliesTransform = appliesTransform
+    }
+
+    func body(content: Content) -> some View {
+        let entry = appliesTransform
+            ? IPadLandscapeLayoutStore.entry(for: part, style: style, in: data)
+            : PlayerLayoutEntry()
+        content
+            .scaleEffect(entry.scale)
+            .offset(x: entry.x, y: entry.y)
+            .simultaneousGesture(
+                enabled && appliesTransform
+                    ? DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            var styleData = data[style.rawValue] ?? [:]
+                            var updated = styleData[part.rawValue] ?? PlayerLayoutEntry()
+                            updated.x = value.translation.width
+                            updated.y = value.translation.height
+                            styleData[part.rawValue] = updated
+                            data[style.rawValue] = styleData
+                        }
+                    : nil
+            )
     }
 }

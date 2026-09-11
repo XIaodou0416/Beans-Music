@@ -969,14 +969,8 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             if usesSystemInteractiveDismissal {
                 playerSurface
             } else {
-                ZStack(alignment: .top) {
-                    playerSurface
-                    Color.clear
-                        .frame(maxWidth: .infinity)
-                        .frame(height: BeansNowPlayingPresentationMetrics.verticalStartZone)
-                        .contentShape(Rectangle())
-                        .simultaneousGesture(dismissGesture)
-                }
+                playerSurface
+                    .simultaneousGesture(dismissGesture)
             }
         }
         .onAppear { dragOffset = 0 }

@@ -77,9 +77,14 @@ struct PlayerView: View {
     @AppStorage("beans.playerLayoutMode") private var layoutMode = false
     @AppStorage("beans.playerLayoutSelectedPart") private var layoutPartRaw = PlayerLayoutPart.progress.rawValue
     @State private var layoutData: [String: PlayerLayoutEntry] = PlayerLayoutStore.load()
+    @State private var vinylLayoutData: [String: PlayerLayoutEntry] = VinylPlayerLayoutStore.load()
+    @State private var iPadLandscapeLayoutData = IPadLandscapeLayoutStore.load()
     @State private var layoutPart: PlayerLayoutPart = .progress
     @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
     @State private var appleLayoutPart: AppleMusicLayoutPart = .cover
+    @State private var iPadLandscapeLayoutPart: IPadLandscapeLayoutPart = .artwork
+    @State private var layoutEditorStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
+    @State private var layoutEditorUsesIPadLandscape = false
     @State private var layoutPreviewShowLyrics = false
     /// 调整页使用真实播放器视口比例，避免 iPad 预览与实际布局不一致。
     @State private var playerViewportSize: CGSize = .zero
@@ -193,6 +198,19 @@ struct PlayerView: View {
         BeansCoverPlayerStyle.resolved(rawValue: coverPlayerStyleRaw)
     }
 
+    private var layoutEditorStyle: BeansCoverPlayerStyle {
+        BeansCoverPlayerStyle.resolved(rawValue: layoutEditorStyleRaw)
+    }
+
+    /// 编辑页预览使用正在编辑的样式，正常播放页始终使用用户当前选择的样式。
+    private var layoutRenderingStyle: BeansCoverPlayerStyle {
+        layoutMode ? layoutEditorStyle : coverPlayerStyle
+    }
+
+    private var layoutRenderingShowLyrics: Bool {
+        layoutMode ? layoutPreviewShowLyrics : showLyrics
+    }
+
     private var classicPlayerFeaturesAvailable: Bool {
         true
     }
@@ -226,12 +244,6 @@ struct PlayerView: View {
     }
 
     private enum VinylLayoutDefaults {
-        static let albumY: CGFloat = 20
-        static let controlsY: CGFloat = 1
-        static let controlsScale: CGFloat = 1.1
-        static let progressY: CGFloat = -20
-        static let lyricsHeaderY: CGFloat = 30
-        static let lyricsTextY: CGFloat = -52
         static let lyricTopRows = 3
         static let lyricBottomRows = 3
     }
@@ -448,16 +460,6 @@ struct PlayerView: View {
                         }
                     )
 
-                    if layoutMode && usesAppleMusicOverlayLayoutEditor {
-                        appleMusicLayoutToolbar
-                            .contentShape(Rectangle())
-                            .frame(maxWidth: .infinity)
-                            .frame(maxHeight: .infinity, alignment: .top)
-                            .padding(.top, 54)
-                            .transition(.opacity)
-                            .zIndex(60)
-                    }
-
                     if showMoreActions {
                         Color.black.opacity(0.001)
                             .ignoresSafeArea()
@@ -487,15 +489,6 @@ struct PlayerView: View {
                         controlDeck(bottomInset: geo.safeAreaInsets.bottom)
                             .frame(maxWidth: .infinity)
                             .frame(maxHeight: .infinity, alignment: .bottom)
-
-                        if layoutMode && usesAppleMusicOverlayLayoutEditor {
-                            layoutToolbar
-                                .contentShape(Rectangle())
-                                .frame(maxWidth: .infinity)
-                                .frame(maxHeight: .infinity, alignment: .top)
-                                .padding(.top, 54)
-                                .transition(.opacity)
-                        }
 
                         if showMoreActions {
                             Color.black.opacity(0.001)
@@ -527,20 +520,12 @@ struct PlayerView: View {
                             content(geo: geo)
                         }
                         .foregroundStyle(palette.text)
+                        .zIndex(10)
 
                         controlDeck(bottomInset: geo.safeAreaInsets.bottom)
                             .frame(maxWidth: .infinity)
                             .frame(maxHeight: .infinity, alignment: .bottom)
-
-                        // 布局编辑工具栏：组件选择 + X/Y/Z 滑杆 + 恢复默认 + 完成
-                        if layoutMode && usesAppleMusicOverlayLayoutEditor {
-                            layoutToolbar
-                                .contentShape(Rectangle())
-                                .frame(maxWidth: .infinity)
-                                .frame(maxHeight: .infinity, alignment: .top)
-                                .padding(.top, 54)
-                                .transition(.opacity)
-                        }
+                            .zIndex(9)
 
                         if showMoreActions {
                             Color.black.opacity(0.001)
@@ -620,6 +605,12 @@ struct PlayerView: View {
         .onChange(of: layoutData) { newValue in
             PlayerLayoutStore.save(newValue)
         }
+        .onChange(of: vinylLayoutData) { newValue in
+            VinylPlayerLayoutStore.save(newValue)
+        }
+        .onChange(of: iPadLandscapeLayoutData) { newValue in
+            IPadLandscapeLayoutStore.save(newValue)
+        }
         .onAppear {
             layoutPart = PlayerLayoutPart(rawValue: layoutPartRaw) ?? .progress
             showLyrics = lastLyricsPage
@@ -646,22 +637,15 @@ struct PlayerView: View {
         }
         .onChange(of: layoutMode) { enabled in
             if enabled {
+                layoutEditorStyleRaw = coverPlayerStyle.rawValue
+                selectInitialLayoutPart(for: coverPlayerStyle)
+                layoutEditorUsesIPadLandscape = UIDevice.current.userInterfaceIdiom == .pad
+                    && playerViewportSize.width > playerViewportSize.height
                 layoutPreviewShowLyrics = false
             }
         }
-        .sheet(isPresented: Binding(
-            get: { layoutMode && !usesAppleMusicOverlayLayoutEditor },
-            set: { presented in
-                if !presented { layoutMode = false }
-            }
-        )) {
-            Group {
-                if coverPlayerStyle == .appleMusic {
-                    appleMusicLayoutToolbar
-                } else {
-                    playerLayoutToolbar
-                }
-            }
+        .sheet(isPresented: $layoutMode) {
+            unifiedPlayerLayoutEditor
             .environmentObject(theme)
             .environmentObject(player)
             .environmentObject(clock)
@@ -753,7 +737,7 @@ struct PlayerView: View {
                 colors: [palette.backgroundTop, palette.backgroundBottom],
                 startPoint: .top, endPoint: .bottom
             )
-            if !lyricBackgroundImagePath.isEmpty && (showLyrics || lyricBackgroundSyncCover) {
+            if !lyricBackgroundImagePath.isEmpty && (layoutRenderingShowLyrics || lyricBackgroundSyncCover) {
                 lyricPlayerBackgroundLayer
             } else if theme.backgroundSyncAll, let image = theme.customBackgroundImage(for: colorScheme) {
                 WallpaperImage(image: image)
@@ -810,15 +794,33 @@ struct PlayerView: View {
 
                 VStack(spacing: 0) {
                     iPadLandscapeLyricsHeader
+                        .modifier(IPadLandscapeLayoutable(
+                            part: .header,
+                            style: layoutRenderingStyle,
+                            enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                            data: $iPadLandscapeLayoutData
+                        ))
 
                     HStack(alignment: .center, spacing: 34) {
                         iPadLandscapeArtwork(
                             size: min(geo.size.height * 0.52, geo.size.width * 0.32)
                         )
                         .frame(maxWidth: geo.size.width * 0.43)
+                        .modifier(IPadLandscapeLayoutable(
+                            part: .artwork,
+                            style: layoutRenderingStyle,
+                            enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                            data: $iPadLandscapeLayoutData
+                        ))
 
                         iPadLandscapeLyricsColumn(geo: geo)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .modifier(IPadLandscapeLayoutable(
+                                part: .lyrics,
+                                style: layoutRenderingStyle,
+                                enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                                data: $iPadLandscapeLayoutData
+                            ))
                     }
                     .padding(.horizontal, 34)
                     .padding(.top, 4)
@@ -828,28 +830,13 @@ struct PlayerView: View {
                 iPadLandscapeControlDeck(bottomInset: geo.safeAreaInsets.bottom)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
-                if layoutMode && usesAppleMusicOverlayLayoutEditor {
-                    Group {
-                        if coverPlayerStyle == .appleMusic {
-                            appleMusicLayoutToolbar
-                        } else {
-                            layoutToolbar
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .frame(maxWidth: .infinity)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 54)
-                    .transition(.opacity)
-                    .zIndex(60)
-                }
             }
         }
     }
 
     @ViewBuilder
     private func iPadLandscapeLyricsColumn(geo: GeometryProxy) -> some View {
-        switch coverPlayerStyle {
+        switch layoutRenderingStyle {
         case .appleMusic:
             AppleMusicLyricsSection(
                 lyrics: lyrics,
@@ -968,7 +955,7 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var iPadLandscapeLyricsHeader: some View {
-        switch coverPlayerStyle {
+        switch layoutRenderingStyle {
         case .appleMusic:
             iPadLandscapeAppleMusicLyricsHeader
         case .vinyl:
@@ -1178,67 +1165,81 @@ struct PlayerView: View {
 
     @ViewBuilder
     private func iPadLandscapeControlDeck(bottomInset: CGFloat) -> some View {
-        switch coverPlayerStyle {
+        switch layoutRenderingStyle {
         case .appleMusic:
             iPadLandscapeAppleMusicControlDeck(bottomInset: bottomInset)
         case .vinyl, .classic:
-            controlDeck(bottomInset: bottomInset)
+            controlDeck(bottomInset: bottomInset, appliesPortraitLayout: false)
         }
     }
 
     private func iPadLandscapeAppleMusicControlDeck(bottomInset: CGFloat) -> some View {
         VStack(spacing: 15) {
             ReferenceScrubber()
+                .modifier(IPadLandscapeLayoutable(
+                    part: .progress,
+                    style: layoutRenderingStyle,
+                    enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                    data: $iPadLandscapeLayoutData
+                ))
 
-            HStack(spacing: 28) {
-                Button {
-                    BeansHaptics.tap()
-                    player.previous()
-                } label: {
-                    Image(systemName: "backward.fill")
-                        .font(.system(size: 25, weight: .semibold))
-                        .foregroundStyle(landscapeApplePrimaryColor)
-                        .frame(width: 42, height: 42)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+            VStack(spacing: 10) {
+                HStack(spacing: 28) {
+                    Button {
+                        BeansHaptics.tap()
+                        player.previous()
+                    } label: {
+                        Image(systemName: "backward.fill")
+                            .font(.system(size: 25, weight: .semibold))
+                            .foregroundStyle(landscapeApplePrimaryColor)
+                            .frame(width: 42, height: 42)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
 
-                Button {
-                    BeansHaptics.tap()
-                    player.togglePlayPause()
-                } label: {
-                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24)
-                        .frame(width: 66, height: 66)
-                        .foregroundStyle(landscapeApplePrimaryColor)
-                }
-                .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+                    Button {
+                        BeansHaptics.tap()
+                        player.togglePlayPause()
+                    } label: {
+                        PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24)
+                            .frame(width: 66, height: 66)
+                            .foregroundStyle(landscapeApplePrimaryColor)
+                    }
+                    .buttonStyle(GlassPressButtonStyle(scale: 0.92))
 
-                Button {
-                    BeansHaptics.tap()
-                    player.next()
-                } label: {
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 25, weight: .semibold))
-                        .foregroundStyle(landscapeApplePrimaryColor)
-                        .frame(width: 42, height: 42)
-                        .contentShape(Rectangle())
+                    Button {
+                        BeansHaptics.tap()
+                        player.next()
+                    } label: {
+                        Image(systemName: "forward.fill")
+                            .font(.system(size: 25, weight: .semibold))
+                            .foregroundStyle(landscapeApplePrimaryColor)
+                            .frame(width: 42, height: 42)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .frame(maxWidth: 320)
+
+                HStack(spacing: 48) {
+                    iPadLandscapeAppleMusicActionButton(icon: "quote.bubble", active: true) {
+                        toggleLyrics()
+                    }
+                    iPadLandscapeAppleMusicActionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
+                        player.togglePlayMode()
+                    }
+                    iPadLandscapeAppleMusicActionButton(icon: "list.bullet") {
+                        showQueue = true
+                    }
+                }
+                .frame(maxWidth: 420)
             }
-            .frame(maxWidth: 320)
-
-            HStack(spacing: 48) {
-                iPadLandscapeAppleMusicActionButton(icon: "quote.bubble", active: true) {
-                    toggleLyrics()
-                }
-                iPadLandscapeAppleMusicActionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
-                    player.togglePlayMode()
-                }
-                iPadLandscapeAppleMusicActionButton(icon: "list.bullet") {
-                    showQueue = true
-                }
-            }
-            .frame(maxWidth: 420)
+            .modifier(IPadLandscapeLayoutable(
+                part: .controls,
+                style: layoutRenderingStyle,
+                enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                data: $iPadLandscapeLayoutData
+            ))
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -1276,7 +1277,7 @@ struct PlayerView: View {
     @ViewBuilder
     private func iPadLandscapeArtwork(size: CGFloat) -> some View {
         VStack(spacing: 14) {
-            if coverPlayerStyle == .vinyl {
+            if layoutRenderingStyle == .vinyl {
                 VinylTurntableView(
                     coverURL: song?.coverURL,
                     isPlaying: playerVisualsActive,
@@ -1287,7 +1288,7 @@ struct PlayerView: View {
                     onPreviousTrack: { player.previous() }
                 )
             } else {
-                let isCircular = coverPlayerStyle == .classic && circularCover
+                let isCircular = layoutRenderingStyle == .classic && circularCover
                 let cornerRadius = isCircular ? size / 2 : 18
                 if isCircular {
                     CoverImage(url: song?.coverURL, size: size, cornerRadius: cornerRadius)
@@ -1503,15 +1504,15 @@ struct PlayerView: View {
         ZStack {
             if song == nil {
                 placeholderView
-            } else if coverPlayerStyle == .vinyl {
-                if showLyrics {
+            } else if layoutRenderingStyle == .vinyl {
+                if layoutRenderingShowLyrics {
                     vinylLyricsPanel(geo: geo)
                         .transition(.opacity)
                 } else {
                     vinylAlbumPanel(geo: geo)
                         .transition(.opacity)
                 }
-            } else if showLyrics {
+            } else if layoutRenderingShowLyrics {
                 lyricsPanel(geo: geo)
                     .transition(.opacity)
             } else {
@@ -1520,7 +1521,7 @@ struct PlayerView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeInOut(duration: 0.22), value: showLyrics)
+        .animation(.easeInOut(duration: 0.22), value: layoutRenderingShowLyrics)
     }
 
     /// 封面尺寸：固定算法，与布局时序无关
@@ -1531,7 +1532,7 @@ struct PlayerView: View {
     /// 专辑模式：封面居中 + 歌名/歌手 + 轻点提示（VStack 自动居中）
     @ViewBuilder
     private func albumPanel(geo: GeometryProxy) -> some View {
-        switch coverPlayerStyle {
+        switch layoutRenderingStyle {
         case .classic, .appleMusic:
             classicAlbumPanel(geo: geo)
         case .vinyl:
@@ -1568,7 +1569,12 @@ struct PlayerView: View {
         }
         .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .offset(y: VinylLayoutDefaults.albumY)
+        .modifier(Layoutable(
+            part: .vinylAlbum,
+            enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+            data: $vinylLayoutData,
+            defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .vinylAlbum)
+        ))
     }
 
     private var vinylCompactHeader: some View {
@@ -1683,7 +1689,12 @@ struct PlayerView: View {
             vinylLyricsHeader
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
-                .offset(y: VinylLayoutDefaults.lyricsHeaderY)
+                .modifier(Layoutable(
+                    part: .vinylLyricsHeader,
+                    enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                    data: $vinylLayoutData,
+                    defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .vinylLyricsHeader)
+                ))
                 .zIndex(3)
 
             Spacer(minLength: 0)
@@ -1759,7 +1770,12 @@ struct PlayerView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: vinylLyricsViewportHeightLimit(in: geo))
-            .offset(y: VinylLayoutDefaults.lyricsTextY)
+            .modifier(Layoutable(
+                part: .vinylLyricsText,
+                enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                data: $vinylLayoutData,
+                defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .vinylLyricsText)
+            ))
             .zIndex(1)
 
             Spacer(minLength: 0)
@@ -2637,7 +2653,7 @@ struct PlayerView: View {
     private var deckInset: CGFloat { 102 }
 
     private var iPadLandscapeControlsReservedHeight: CGFloat {
-        switch coverPlayerStyle {
+        switch layoutRenderingStyle {
         case .appleMusic:
             return 238
         case .vinyl:
@@ -2648,27 +2664,76 @@ struct PlayerView: View {
     }
 
     @ViewBuilder
-    private func controlDeck(bottomInset: CGFloat) -> some View {
+    private func controlDeck(bottomInset: CGFloat, appliesPortraitLayout: Bool = true) -> some View {
         VStack(spacing: 0) {
-            if coverPlayerStyle == .vinyl {
+            if layoutRenderingStyle == .vinyl {
                 vinylProgress
-                .offset(y: VinylLayoutDefaults.progressY)
+                    .modifier(Layoutable(
+                        part: .progress,
+                        enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                        data: $vinylLayoutData,
+                        defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .progress),
+                        appliesTransform: appliesPortraitLayout
+                    ))
+                    .modifier(IPadLandscapeLayoutable(
+                        part: .progress,
+                        style: layoutRenderingStyle,
+                        enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                        data: $iPadLandscapeLayoutData,
+                        appliesTransform: !appliesPortraitLayout
+                    ))
 
-                vinylControlRow
-                    .scaleEffect(VinylLayoutDefaults.controlsScale)
-                    .offset(y: VinylLayoutDefaults.controlsY)
+                vinylControlRow(appliesPortraitLayout: appliesPortraitLayout)
+                    .modifier(Layoutable(
+                        part: .controls,
+                        enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                        data: $vinylLayoutData,
+                        defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .controls),
+                        appliesTransform: appliesPortraitLayout
+                    ))
+                    .modifier(IPadLandscapeLayoutable(
+                        part: .controls,
+                        style: layoutRenderingStyle,
+                        enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                        data: $iPadLandscapeLayoutData,
+                        appliesTransform: !appliesPortraitLayout
+                    ))
             } else {
                 progressBlock(
                     styleOverride: playerButtonStyle == .appleMusic ? 0 : nil,
                     accentOverride: playerButtonStyle == .appleMusic ? .white.opacity(0.92) : nil
                 )
-                .modifier(Layoutable(part: .progress, enabled: layoutMode, data: $layoutData))
+                .modifier(Layoutable(
+                    part: .progress,
+                    enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                    data: $layoutData,
+                    appliesTransform: appliesPortraitLayout
+                ))
+                .modifier(IPadLandscapeLayoutable(
+                    part: .progress,
+                    style: layoutRenderingStyle,
+                    enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                    data: $iPadLandscapeLayoutData,
+                    appliesTransform: !appliesPortraitLayout
+                ))
 
-                deckRow
-                    .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
+                deckRow(appliesPortraitLayout: appliesPortraitLayout)
+                    .modifier(Layoutable(
+                        part: .controls,
+                        enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                        data: $layoutData,
+                        appliesTransform: appliesPortraitLayout
+                    ))
+                    .modifier(IPadLandscapeLayoutable(
+                        part: .controls,
+                        style: layoutRenderingStyle,
+                        enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                        data: $iPadLandscapeLayoutData,
+                        appliesTransform: !appliesPortraitLayout
+                    ))
             }
-            if coverPlayerStyle != .vinyl {
-                deckGrabber
+            if layoutRenderingStyle != .vinyl {
+                deckGrabber(appliesPortraitLayout: appliesPortraitLayout)
             }
         }
         .padding(.horizontal, playerButtonStyle == .appleMusic ? 24 : 32)
@@ -2678,13 +2743,18 @@ struct PlayerView: View {
     }
 
     /// 黑胶样式控制行：左侧循环/上一首，中间播放，右侧下一首/播放列表。
-    private var vinylControlRow: some View {
+    private func vinylControlRow(appliesPortraitLayout: Bool = true) -> some View {
         HStack(spacing: 0) {
             HStack(spacing: 6) {
-                vinylSideControl(icon: player.playMode.icon, active: player.playMode == .shuffle) {
+                vinylSideControl(
+                    icon: player.playMode.icon,
+                    active: player.playMode == .shuffle,
+                    part: .loop,
+                    appliesPortraitLayout: appliesPortraitLayout
+                ) {
                     player.togglePlayMode()
                 }
-                vinylTransportControl(icon: "backward.fill", size: 25) {
+                vinylTransportControl(icon: "backward.fill", size: 25, part: .previous, appliesPortraitLayout: appliesPortraitLayout) {
                     player.previous()
                 }
             }
@@ -2701,12 +2771,19 @@ struct PlayerView: View {
             }
             .buttonStyle(.plain)
             .frame(width: 76)
+            .modifier(Layoutable(
+                part: .playPause,
+                enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                data: $vinylLayoutData,
+                defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .playPause),
+                appliesTransform: appliesPortraitLayout
+            ))
 
             HStack(spacing: 6) {
-                vinylTransportControl(icon: "forward.fill", size: 25) {
+                vinylTransportControl(icon: "forward.fill", size: 25, part: .next, appliesPortraitLayout: appliesPortraitLayout) {
                     player.next()
                 }
-                vinylSideControl(icon: "list.bullet") {
+                vinylSideControl(icon: "list.bullet", part: .queue, appliesPortraitLayout: appliesPortraitLayout) {
                     showQueue = true
                 }
             }
@@ -2716,7 +2793,13 @@ struct PlayerView: View {
         .frame(maxWidth: .infinity, minHeight: 64)
     }
 
-    private func vinylSideControl(icon: String, active: Bool = false, action: @escaping () -> Void) -> some View {
+    private func vinylSideControl(
+        icon: String,
+        active: Bool = false,
+        part: PlayerLayoutPart,
+        appliesPortraitLayout: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button {
             BeansHaptics.tap()
             action()
@@ -2728,9 +2811,22 @@ struct PlayerView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .modifier(Layoutable(
+            part: part,
+            enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+            data: $vinylLayoutData,
+            defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: part),
+            appliesTransform: appliesPortraitLayout
+        ))
     }
 
-    private func vinylTransportControl(icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+    private func vinylTransportControl(
+        icon: String,
+        size: CGFloat,
+        part: PlayerLayoutPart,
+        appliesPortraitLayout: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button {
             BeansHaptics.tap()
             action()
@@ -2741,6 +2837,13 @@ struct PlayerView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .modifier(Layoutable(
+            part: part,
+            enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+            data: $vinylLayoutData,
+            defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: part),
+            appliesTransform: appliesPortraitLayout
+        ))
     }
 
     private var vinylProgress: some View {
@@ -2750,7 +2853,8 @@ struct PlayerView: View {
     /// 底部指示线：只有在指示线附近上滑才呼出评论区（避免误触控制按钮）
     /// 指示线可关闭（透明但保留热区，仍可上滑呼出评论区）
     /// 布局模式下可直接拖动调整位置（与底部其他组件一致），滑杆同步可用
-    private var deckGrabber: some View {
+    private func deckGrabber(appliesPortraitLayout: Bool = true) -> some View {
+        let entry = appliesPortraitLayout ? grabberEntry : PlayerLayoutEntry()
         Capsule()
             .fill(deckGrabberEnabled ? palette.secondary.opacity(0.5) : .clear)
             .frame(width: 40, height: 5)
@@ -2762,10 +2866,10 @@ struct PlayerView: View {
             .padding(.top, 6)
             .padding(.bottom, 8)
             .contentShape(Rectangle())
-            .scaleEffect(grabberEntry.scale)
-            .offset(x: grabberEntry.x, y: grabberEntry.y)
+            .scaleEffect(entry.scale)
+            .offset(x: entry.x, y: entry.y)
             .gesture(
-                layoutMode
+                layoutMode && appliesPortraitLayout && !layoutEditorUsesIPadLandscape
                     ? AnyGesture(DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             layoutPart = .grabber
@@ -2835,35 +2939,35 @@ struct PlayerView: View {
 
     // MARK: - 合并控制行（循环 / 上一曲 / 播放暂停 / 下一曲 / 播放列表 平行排列，播放键居中）
 
-    private var deckRow: some View {
+    private func deckRow(appliesPortraitLayout: Bool = true) -> some View {
         Group {
             if playerButtonStyle == .appleMusic {
-                appleMusicDeckRow
+                appleMusicDeckRow(appliesPortraitLayout: appliesPortraitLayout)
             } else {
-                legacyDeckRow
+                legacyDeckRow(appliesPortraitLayout: appliesPortraitLayout)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 6)
     }
 
-    private var legacyDeckRow: some View {
+    private func legacyDeckRow(appliesPortraitLayout: Bool = true) -> some View {
         ZStack {
             // 两侧对称：循环模式 / 播放列表
             HStack {
-                modeButton
+                modeButton(appliesPortraitLayout: appliesPortraitLayout)
                 Spacer(minLength: 0)
-                queueButton
+                queueButton(appliesPortraitLayout: appliesPortraitLayout)
             }
             .padding(.horizontal, 8)
             // 中间主控制组：上一曲 / 播放暂停 / 下一曲 真正居中
             HStack(spacing: 16) {
-                deckButton(icon: "backward.fill", expand: false, part: .previous) {
+                deckButton(icon: "backward.fill", expand: false, part: .previous, appliesPortraitLayout: appliesPortraitLayout) {
                     BeansHaptics.tap()
                     player.previous()
                 }
-                playButton
-                deckButton(icon: "forward.fill", expand: false, part: .next) {
+                playButton(appliesPortraitLayout: appliesPortraitLayout)
+                deckButton(icon: "forward.fill", expand: false, part: .next, appliesPortraitLayout: appliesPortraitLayout) {
                     BeansHaptics.tap()
                     player.next()
                 }
@@ -2871,12 +2975,12 @@ struct PlayerView: View {
         }
     }
 
-    private var appleMusicDeckRow: some View {
+    private func appleMusicDeckRow(appliesPortraitLayout: Bool = true) -> some View {
         ZStack {
             HStack {
-                modeButton
+                modeButton(appliesPortraitLayout: appliesPortraitLayout)
                 Spacer(minLength: 0)
-                queueButton
+                queueButton(appliesPortraitLayout: appliesPortraitLayout)
             }
             HStack(spacing: 26) {
                 Button {
@@ -2886,23 +2990,33 @@ struct PlayerView: View {
                     Image(systemName: "backward.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(playerButtonText)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 46, height: 46)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .modifier(Layoutable(part: .previous, enabled: layoutMode, data: $layoutData))
+                .modifier(Layoutable(
+                    part: .previous,
+                    enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                    data: $layoutData,
+                    appliesTransform: appliesPortraitLayout
+                ))
 
                 Button {
                     BeansHaptics.tap()
                     player.togglePlayPause()
                 } label: {
-                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 20)
+                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22)
                         .foregroundStyle(playerButtonStyle == .appleMusic ? Color.white : Color.black)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 46, height: 46)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .modifier(Layoutable(part: .controls, enabled: layoutMode, data: $layoutData))
+                .modifier(Layoutable(
+                    part: .playPause,
+                    enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                    data: $layoutData,
+                    appliesTransform: appliesPortraitLayout
+                ))
 
                 Button {
                     BeansHaptics.tap()
@@ -2911,11 +3025,16 @@ struct PlayerView: View {
                     Image(systemName: "forward.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(playerButtonText)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 46, height: 46)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .modifier(Layoutable(part: .next, enabled: layoutMode, data: $layoutData))
+                .modifier(Layoutable(
+                    part: .next,
+                    enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                    data: $layoutData,
+                    appliesTransform: appliesPortraitLayout
+                ))
             }
         }
     }
@@ -2980,7 +3099,7 @@ struct PlayerView: View {
     }
 
     /// 循环 / 随机播放按钮（随机模式高亮）
-    private var modeButton: some View {
+    private func modeButton(appliesPortraitLayout: Bool = true) -> some View {
         Button {
             BeansHaptics.select()
             player.togglePlayMode()
@@ -2995,11 +3114,16 @@ struct PlayerView: View {
                 .clipShape(Circle())
         }
         .buttonStyle(GlassPressButtonStyle())
-                .modifier(Layoutable(part: .loop, enabled: layoutMode, data: $layoutData))
+        .modifier(Layoutable(
+            part: .loop,
+            enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+            data: $layoutData,
+            appliesTransform: appliesPortraitLayout
+        ))
     }
 
     /// 播放列表按钮
-    private var queueButton: some View {
+    private func queueButton(appliesPortraitLayout: Bool = true) -> some View {
         Button {
             BeansHaptics.tap()
             showQueue = true
@@ -3014,10 +3138,22 @@ struct PlayerView: View {
                 .clipShape(Circle())
         }
         .buttonStyle(GlassPressButtonStyle())
-        .modifier(Layoutable(part: .queue, enabled: layoutMode, data: $layoutData))
+        .modifier(Layoutable(
+            part: .queue,
+            enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+            data: $layoutData,
+            appliesTransform: appliesPortraitLayout
+        ))
     }
 
-    private func deckButton(icon: String, accent: Bool = false, expand: Bool = true, part: PlayerLayoutPart? = nil, action: @escaping () -> Void) -> some View {
+    private func deckButton(
+        icon: String,
+        accent: Bool = false,
+        expand: Bool = true,
+        part: PlayerLayoutPart? = nil,
+        appliesPortraitLayout: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
         Button {
             BeansHaptics.tap()
             action()
@@ -3035,10 +3171,15 @@ struct PlayerView: View {
         }
         .buttonStyle(GlassPressButtonStyle())
         .frame(maxWidth: expand ? .infinity : nil)
-        .modifier(Layoutable(part: part ?? .controls, enabled: layoutMode && part != nil, data: $layoutData))
+        .modifier(Layoutable(
+            part: part ?? .controls,
+            enabled: layoutMode && part != nil && !layoutEditorUsesIPadLandscape,
+            data: $layoutData,
+            appliesTransform: appliesPortraitLayout
+        ))
     }
 
-    private var playButton: some View {
+    private func playButton(appliesPortraitLayout: Bool = true) -> some View {
         Button {
             BeansHaptics.tap()
             player.togglePlayPause()
@@ -3054,7 +3195,12 @@ struct PlayerView: View {
                 .clipShape(Circle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.9))
-        .modifier(Layoutable(part: .playPause, enabled: layoutMode, data: $layoutData))
+        .modifier(Layoutable(
+            part: .playPause,
+            enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+            data: $layoutData,
+            appliesTransform: appliesPortraitLayout
+        ))
     }
 
 
@@ -3321,6 +3467,7 @@ struct PlayerView: View {
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(palette.secondary)
             }
+            .frame(height: 52)
         }
         .padding(14)
         .background {
@@ -3354,7 +3501,7 @@ struct PlayerView: View {
                             background
                                 .ignoresSafeArea()
 
-                            if coverPlayerStyle == .vinyl {
+                            if layoutRenderingStyle == .vinyl {
                                 content(geo: previewGeometry)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 controlDeck(bottomInset: previewGeometry.safeAreaInsets.bottom)
@@ -3467,10 +3614,313 @@ struct PlayerView: View {
     private var playerPreviewCanvasSize: CGSize {
         let viewport = playerViewportSize
         if viewport.width > 1, viewport.height > 1 {
+            if layoutMode,
+               UIDevice.current.userInterfaceIdiom == .pad,
+               !layoutEditorUsesIPadLandscape {
+                return CGSize(width: min(viewport.width, viewport.height), height: max(viewport.width, viewport.height))
+            }
             return viewport
         }
         let fallback = UIScreen.main.bounds.size
         return CGSize(width: max(fallback.width, 320), height: max(fallback.height, 568))
+    }
+
+    private var unifiedPlayerLayoutEditor: some View {
+        BeansNavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("自定义布局")
+                            .font(BeansFont.appFont(20, .bold))
+                        Spacer()
+                        Button("完成") {
+                            BeansHaptics.select()
+                            layoutMode = false
+                        }
+                        .font(BeansFont.appFont(14, .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                    }
+
+                    layoutEditorStylePicker
+
+                    if UIDevice.current.userInterfaceIdiom == .pad {
+                        Picker("预览方向", selection: $layoutEditorUsesIPadLandscape) {
+                            Text("竖屏").tag(false)
+                            Text("横屏").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                        iPadLandscapeLayoutPreview
+                    } else if layoutEditorStyle == .appleMusic {
+                        appleMusicLayoutPreview
+                    } else {
+                        playerLayoutPreview
+                    }
+
+                    Picker("预览页面", selection: $layoutPreviewShowLyrics) {
+                        Text("封面").tag(false)
+                        Text("歌词").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+
+                    layoutEditorPartPicker
+                    layoutEditorSliders
+                    if layoutEditorStyle == .appleMusic {
+                        appleMusicAppearanceControls
+                    }
+
+                    HStack(spacing: 18) {
+                        Button {
+                            resetUnifiedLayoutPart()
+                            BeansHaptics.success()
+                        } label: {
+                            Label("恢复当前", systemImage: "arrow.counterclockwise")
+                        }
+                        .foregroundStyle(Color.beansAmber)
+                        .buttonStyle(.plain)
+
+                        Spacer()
+
+                        Button {
+                            resetUnifiedLayoutStyle()
+                            BeansHaptics.success()
+                        } label: {
+                            Label("恢复此样式", systemImage: "arrow.counterclockwise.circle")
+                        }
+                        .foregroundStyle(Color.beansAmber)
+                        .buttonStyle(.plain)
+                    }
+
+                    Text(layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad
+                         ? "当前调整只保存到 iPad 横屏布局"
+                         : "当前调整只保存到所选播放器样式的竖屏布局")
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .frame(maxWidth: 780)
+                .frame(maxWidth: .infinity)
+            }
+            .background { GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil) }
+            .navigationTitle("播放器布局")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var layoutEditorStylePicker: some View {
+        HStack(spacing: 8) {
+            ForEach(BeansCoverPlayerStyle.allCases) { style in
+                let selected = layoutEditorStyle == style
+                Button {
+                    layoutEditorStyleRaw = style.rawValue
+                    selectInitialLayoutPart(for: style)
+                    BeansHaptics.select()
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: style.icon)
+                            .font(.system(size: 17, weight: .semibold))
+                        Text(LocalizedStringKey(style.title))
+                            .font(BeansFont.appFont(12, .semibold))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(selected ? Color.white : Color.beansLabel)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(
+                        selected ? Color.beansAmber : Color.primary.opacity(0.055),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var layoutEditorPartPicker: some View {
+        if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+            layoutPartChips(IPadLandscapeLayoutPart.allCases.map { ($0.rawValue, $0) }) { part in
+                iPadLandscapeLayoutPart = part
+            } selected: { iPadLandscapeLayoutPart == $0 }
+        } else {
+            switch layoutEditorStyle {
+            case .appleMusic:
+                layoutPartChips(AppleMusicLayoutPart.allCases.map { ($0.rawValue, $0) }) { part in
+                    appleLayoutPart = part
+                } selected: { appleLayoutPart == $0 }
+            case .vinyl:
+                layoutPartChips(PlayerLayoutPart.vinylEditableCases.map { ($0.rawValue, $0) }) { part in
+                    layoutPart = part
+                    layoutPartRaw = part.rawValue
+                } selected: { layoutPart == $0 }
+            case .classic:
+                layoutPartChips(PlayerLayoutPart.classicEditableCases.map { ($0.rawValue, $0) }) { part in
+                    layoutPart = part
+                    layoutPartRaw = part.rawValue
+                } selected: { layoutPart == $0 }
+            }
+        }
+    }
+
+    private func layoutPartChips<T: Identifiable>(
+        _ parts: [(String, T)],
+        onSelect: @escaping (T) -> Void,
+        selected: @escaping (T) -> Bool
+    ) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(parts.enumerated()), id: \.offset) { item in
+                    let title = item.element.0
+                    let part = item.element.1
+                    Button {
+                        onSelect(part)
+                        BeansHaptics.select()
+                    } label: {
+                        Text(LocalizedStringKey(title))
+                            .font(BeansFont.appFont(12, .semibold))
+                            .foregroundStyle(selected(part) ? Color.white : Color.beansLabel)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 8)
+                            .background(
+                                selected(part) ? Color.beansAmber : Color.primary.opacity(0.055),
+                                in: Capsule()
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var layoutEditorSliders: some View {
+        VStack(spacing: 8) {
+            layoutSlider("X", value: unifiedLayoutEntryBinding.x, range: unifiedLayoutXRange)
+            layoutSlider("Y", value: unifiedLayoutEntryBinding.y, range: unifiedLayoutYRange)
+            layoutSlider("大小", value: unifiedLayoutEntryBinding.scale, range: 0.3...1.5, step: 0.05, format: "%.2f")
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var unifiedLayoutEntryBinding: Binding<PlayerLayoutEntry> {
+        Binding(
+            get: {
+                if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                    return IPadLandscapeLayoutStore.entry(
+                        for: iPadLandscapeLayoutPart,
+                        style: layoutEditorStyle,
+                        in: iPadLandscapeLayoutData
+                    )
+                }
+                switch layoutEditorStyle {
+                case .appleMusic:
+                    return appleLayout.entry(for: appleLayoutPart)
+                case .vinyl:
+                    return vinylLayoutData[layoutPart.rawValue]
+                        ?? VinylPlayerLayoutStore.defaultEntry(for: layoutPart)
+                case .classic:
+                    return layoutData[layoutPart.rawValue]
+                        ?? PlayerLayoutStore.defaultEntry(for: layoutPart)
+                }
+            },
+            set: { value in
+                if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                    var styleData = iPadLandscapeLayoutData[layoutEditorStyle.rawValue] ?? [:]
+                    styleData[iPadLandscapeLayoutPart.rawValue] = value
+                    iPadLandscapeLayoutData[layoutEditorStyle.rawValue] = styleData
+                    return
+                }
+                switch layoutEditorStyle {
+                case .appleMusic:
+                    appleLayout.set(value, for: appleLayoutPart)
+                case .vinyl:
+                    vinylLayoutData[layoutPart.rawValue] = value
+                case .classic:
+                    layoutData[layoutPart.rawValue] = value
+                }
+            }
+        )
+    }
+
+    private var unifiedLayoutXRange: ClosedRange<CGFloat> {
+        if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad { return -300...300 }
+        if layoutEditorStyle == .appleMusic { return -240...240 }
+        return layoutXRange
+    }
+
+    private var unifiedLayoutYRange: ClosedRange<CGFloat> {
+        if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad { return -240...240 }
+        if layoutEditorStyle == .appleMusic { return -300...300 }
+        return layoutYRange
+    }
+
+    private func selectInitialLayoutPart(for style: BeansCoverPlayerStyle) {
+        switch style {
+        case .appleMusic:
+            appleLayoutPart = .cover
+        case .vinyl:
+            layoutPart = .vinylAlbum
+            layoutPartRaw = layoutPart.rawValue
+        case .classic:
+            layoutPart = .cover
+            layoutPartRaw = layoutPart.rawValue
+        }
+    }
+
+    private func resetUnifiedLayoutPart() {
+        if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+            var styleData = iPadLandscapeLayoutData[layoutEditorStyle.rawValue] ?? [:]
+            styleData.removeValue(forKey: iPadLandscapeLayoutPart.rawValue)
+            iPadLandscapeLayoutData[layoutEditorStyle.rawValue] = styleData
+            return
+        }
+        switch layoutEditorStyle {
+        case .appleMusic:
+            appleLayout.reset(appleLayoutPart)
+        case .vinyl:
+            vinylLayoutData.removeValue(forKey: layoutPart.rawValue)
+        case .classic:
+            resetCurrentLayoutPart()
+        }
+    }
+
+    private func resetUnifiedLayoutStyle() {
+        if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+            iPadLandscapeLayoutData[layoutEditorStyle.rawValue] = nil
+            return
+        }
+        switch layoutEditorStyle {
+        case .appleMusic:
+            appleLayout.resetAll()
+        case .vinyl:
+            vinylLayoutData = [:]
+        case .classic:
+            layoutData = [:]
+        }
+    }
+
+    private var iPadLandscapeLayoutPreview: some View {
+        GeometryReader { geometry in
+            let canvasSize = CGSize(width: 844, height: 390)
+            let scale = min((geometry.size.width - 16) / canvasSize.width, (geometry.size.height - 16) / canvasSize.height)
+            ZStack {
+                iPadLandscapeLyricsView
+                    .frame(width: canvasSize.width, height: canvasSize.height)
+                    .scaleEffect(max(0.01, scale))
+                    .frame(width: canvasSize.width * scale, height: canvasSize.height * scale)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
+        }
+        .frame(height: 320)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+        }
     }
 
     private func appleLayoutChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -5265,32 +5715,6 @@ struct PlayerSettingsSheet: View {
             Toggle("显示封面页歌词预览", isOn: $appleShowLyricPreview)
                 .font(BeansFont.appFont(13, .medium))
                 .tint(Color.beansAmber)
-            Button {
-                coverPlayerStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
-                playerButtonStyleRaw = BeansPlayerButtonStyle.appleMusic.rawValue
-                layoutMode = true
-                BeansHaptics.select()
-                if let onDismiss {
-                    onDismiss()
-                } else {
-                    dismiss()
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "play.rectangle.on.rectangle")
-                    Text("调整 Apple Music 布局")
-                }
-                .font(BeansFont.appFont(13, .semibold))
-                .foregroundStyle(Color.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(Color.black, in: Capsule())
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-            Text("Apple Music 的显示、颜色、背景和各组件 X / Y / 大小将在独立调整页中设置，不会遮挡播放器控件。")
-                .font(BeansFont.appFont(12))
-                .foregroundStyle(Color.beansComment)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -5495,22 +5919,34 @@ struct PlayerSettingsSheet: View {
 
     /// 布局卡片：播放器自定义布局 / 指示线 / 歌词对齐
     private var layoutCard: some View {
-        settingCard("布局", isExpanded: $layoutExpanded) {
-            settingToggle("播放器自定义布局", isOn: Binding(
-                get: { layoutMode },
-                set: { newValue in
-                    layoutMode = newValue
-                    // This view is an overlay inside the player. Close only the
-                    // settings overlay so vinyl and Apple Music stay on the player.
-                    if newValue {
-                        if let onDismiss {
-                            onDismiss()
-                        } else {
-                            dismiss()
-                        }
-                    }
+        settingCard("自定义布局", isExpanded: $layoutExpanded) {
+            Button {
+                layoutMode = true
+                BeansHaptics.select()
+                if let onDismiss {
+                    onDismiss()
+                } else {
+                    dismiss()
                 }
-            ), caption: "开启后回到播放页，可拖动顶部栏、封面、歌词和底部控件")
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "slider.horizontal.3")
+                    Text("打开播放器布局编辑器")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .font(BeansFont.appFont(13, .semibold))
+                .foregroundStyle(Color.beansLabel)
+                .padding(.horizontal, 12)
+                .frame(height: 42)
+                .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+            Text("Apple Music、黑胶唱盘、经典封面和 iPad 横屏布局分别保存。")
+                .font(BeansFont.appFont(12))
+                .foregroundStyle(Color.beansComment)
+                .fixedSize(horizontal: false, vertical: true)
             Divider().opacity(0.5)
             settingToggle("显示底部指示线", isOn: $deckGrabberEnabled,
                           caption: "关闭后隐藏指示线，仍可上滑呼出评论区")
