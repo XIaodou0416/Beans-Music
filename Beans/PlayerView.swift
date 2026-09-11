@@ -439,16 +439,6 @@ struct PlayerView: View {
                         }
                     )
 
-                    if layoutMode {
-                        appleMusicLayoutToolbar
-                            .contentShape(Rectangle())
-                            .frame(maxWidth: .infinity)
-                            .frame(maxHeight: .infinity, alignment: .top)
-                            .padding(.top, 54)
-                            .transition(.opacity)
-                            .zIndex(60)
-                    }
-
                     if showMoreActions {
                         Color.black.opacity(0.001)
                             .ignoresSafeArea()
@@ -626,6 +616,16 @@ struct PlayerView: View {
         .onChange(of: layoutPartRaw) { rawValue in
             layoutPart = PlayerLayoutPart(rawValue: rawValue) ?? .progress
         }
+        .sheet(isPresented: Binding(
+            get: { layoutMode && coverPlayerStyle == .appleMusic },
+            set: { presented in
+                if !presented { layoutMode = false }
+            }
+        )) {
+            appleMusicLayoutToolbar
+                .environmentObject(theme)
+                .environmentObject(player)
+        }
         .sheet(isPresented: $showQueue) {
             QueueView()
                 .environmentObject(player)
@@ -788,14 +788,8 @@ struct PlayerView: View {
                 iPadLandscapeControlDeck(bottomInset: geo.safeAreaInsets.bottom)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
-                if layoutMode {
-                    Group {
-                        if coverPlayerStyle == .appleMusic {
-                            appleMusicLayoutToolbar
-                        } else {
-                            layoutToolbar
-                        }
-                    }
+                if layoutMode && coverPlayerStyle != .appleMusic {
+                    layoutToolbar
                     .contentShape(Rectangle())
                     .frame(maxWidth: .infinity)
                     .frame(maxHeight: .infinity, alignment: .top)
@@ -3099,7 +3093,7 @@ struct PlayerView: View {
     private var appleMusicLayoutToolbar: some View {
         VStack(spacing: 10) {
             HStack {
-                Text("Apple Music 实时布局")
+                Text("Apple Music 布局调整")
                     .font(BeansFont.appFont(15, .bold))
                 Spacer()
                 Button {
@@ -3150,7 +3144,7 @@ struct PlayerView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    Text("X / Y / 大小和 Apple Music 外观会立即同步到当前播放页")
+                    Text("调整后保存，关闭此页即可回到播放器查看效果")
                         .font(BeansFont.appFont(11))
                         .foregroundStyle(palette.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -4923,7 +4917,7 @@ struct PlayerSettingsSheet: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "play.rectangle.on.rectangle")
-                    Text("进入 Apple Music 悬浮调试")
+                    Text("调整 Apple Music 布局")
                 }
                 .font(BeansFont.appFont(13, .semibold))
                 .foregroundStyle(Color.white)
@@ -4932,7 +4926,7 @@ struct PlayerSettingsSheet: View {
                 .background(Color.black, in: Capsule())
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-            Text("Apple Music 的显示、颜色、背景和每个组件的 X / Y / 大小，请在播放页顶部的悬浮调试中调整。")
+            Text("Apple Music 的显示、颜色、背景和各组件 X / Y / 大小将在独立调整页中设置，不会遮挡播放器控件。")
                 .font(BeansFont.appFont(12))
                 .foregroundStyle(Color.beansComment)
                 .fixedSize(horizontal: false, vertical: true)
