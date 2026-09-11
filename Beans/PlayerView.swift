@@ -78,6 +78,7 @@ struct PlayerView: View {
     @State private var layoutPart: PlayerLayoutPart = .progress
     @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
     @State private var appleLayoutPart: AppleMusicLayoutPart = .cover
+    @State private var layoutPreviewShowLyrics = false
     /// 歌词布局：对齐样式 / 水平偏移 / 垂直重心（底部更多或顶部更多歌词）
     @AppStorage("beans.lyricAlignRaw") private var lyricAlignRaw = "center"
     @AppStorage("beans.lyricOffsetX") private var lyricOffsetX = 0.0
@@ -632,6 +633,11 @@ struct PlayerView: View {
         }
         .onChange(of: layoutPartRaw) { rawValue in
             layoutPart = PlayerLayoutPart(rawValue: rawValue) ?? .progress
+        }
+        .onChange(of: layoutMode) { enabled in
+            if enabled {
+                layoutPreviewShowLyrics = false
+            }
         }
         .sheet(isPresented: Binding(
             get: { layoutMode && coverPlayerStyle == .appleMusic && !usesAppleMusicOverlayLayoutEditor },
@@ -3188,7 +3194,7 @@ struct PlayerView: View {
         .padding(.horizontal, 12)
     }
 
-    /// 布局编辑不再覆盖播放器；在独立页面中保留一个不可操作的真实预览，便于低系统直观看到偏移和缩放结果。
+    /// 低系统使用固定尺寸画布缩小完整播放器，避免预览区域变窄后只渲染出歌词页的一部分。
     private var appleMusicLayoutPreview: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -3201,28 +3207,71 @@ struct PlayerView: View {
                     .foregroundStyle(Color.beansAmber)
             }
 
-            ReferencePlaybackView(
-                song: song,
-                lyrics: lyrics,
-                showLyrics: Binding(get: { showLyrics }, set: { _ in }),
-                onFavorite: {},
-                onQueue: {},
-                onComments: {},
-                onSleepTimer: {},
-                onAddToLocalPlaylist: {},
-                onDownload: {},
-                onPlayerSettings: {}
-            )
-            .frame(height: 255)
+            GeometryReader { geometry in
+                let canvasSize = appleMusicPreviewCanvasSize
+                let availableWidth = max(1, geometry.size.width - 16)
+                let availableHeight = max(1, geometry.size.height - 16)
+                let scale = min(
+                    availableWidth / canvasSize.width,
+                    availableHeight / canvasSize.height
+                )
+
+                ZStack {
+                    ReferencePlaybackView(
+                        song: song,
+                        lyrics: lyrics,
+                        showLyrics: $layoutPreviewShowLyrics,
+                        onFavorite: {
+                            guard let song else { return }
+                            toggleLocalFavorite(song)
+                        },
+                        onQueue: {
+                            showQueue = true
+                        },
+                        onComments: {
+                            if song != nil { showComments = true }
+                        },
+                        onSleepTimer: {
+                            showSleepTimer = true
+                        },
+                        onAddToLocalPlaylist: {
+                            showAddToLocalPlaylist = true
+                        },
+                        onDownload: {
+                            showDownloadPicker = true
+                        },
+                        onPlayerSettings: {
+                            openPlayerSettings()
+                        }
+                    )
+                    .frame(width: canvasSize.width, height: canvasSize.height)
+                    .scaleEffect(scale)
+                    .frame(
+                        width: canvasSize.width * scale,
+                        height: canvasSize.height * scale
+                    )
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
+            }
+            .frame(height: 360)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
             }
-            .allowsHitTesting(false)
         }
         .padding(10)
         .background(Color.black.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var appleMusicPreviewCanvasSize: CGSize {
+        let screen = UIScreen.main.bounds.size
+        let shortSide = max(min(screen.width, screen.height), 320)
+        let longSide = max(screen.width, screen.height)
+        let width = min(shortSide, 430)
+        let aspect = longSide / max(shortSide, 1)
+        return CGSize(width: width, height: width * min(max(aspect, 1.8), 2.25))
     }
 
     private func appleLayoutChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
