@@ -33,6 +33,7 @@ struct FeedbackSheet: View {
     @State private var problem = ""
     @State private var attachments: [FeedbackAttachment] = []
     @State private var showPhotoPicker = false
+    @State private var showFileImporter = false
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var feedbackToDelete: FeedbackHistoryEntry?
@@ -113,18 +114,21 @@ struct FeedbackSheet: View {
                                         .foregroundStyle(Color.beansComment)
                                 }
                                 Spacer()
-                                Button {
-                                    showPhotoPicker = true
+                                Menu {
+                                    Button(beansLocalized("从照片或视频选择", "Choose from Photos")) {
+                                        showPhotoPicker = true
+                                    }
+                                    Button(beansLocalized("从文件选择", "Choose from Files")) {
+                                        showFileImporter = true
+                                    }
                                 } label: {
                                     Image(systemName: "plus")
                                         .font(.system(size: 14, weight: .bold))
                                         .foregroundStyle(Color.beansAmber)
                                         .frame(width: 32, height: 32)
-                                        .background {
-                                            BeansSurface(shape: Circle())
-                                        }
+                                        .background { BeansSurface(shape: Circle()) }
                                 }
-                                .buttonStyle(.plain)
+                                .menuStyle(.borderlessButton)
                                 .accessibilityLabel(beansLocalized("添加附件", "Add attachment"))
                             }
 
@@ -206,6 +210,18 @@ struct FeedbackSheet: View {
                 Task { @MainActor in
                     await importPhotoResults(results)
                 }
+            }
+        }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.image, .movie],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                urls.forEach(addAttachment)
+            case .failure:
+                errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
             }
         }
         .alert(beansLocalized("提交失败", "Submission failed"), isPresented: Binding(
@@ -437,6 +453,10 @@ struct FeedbackSheet: View {
                 errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
                 continue
             }
+            guard data.count <= 50 * 1024 * 1024 else {
+                errorMessage = beansLocalized("单个附件不能超过 50 MB。", "Each attachment must be 50 MB or smaller.")
+                continue
+            }
 
             let fileExtension = contentType.preferredFilenameExtension
                 ?? (contentType.conforms(to: UTType.movie) ? "mov" : "jpg")
@@ -555,10 +575,12 @@ private enum FeedbackAttachmentStore {
             .appendingPathComponent("BeansFeedbackUploads", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
+            guard data.count <= 50 * 1024 * 1024 else { return nil }
             let destination = directory
                 .appendingPathComponent(UUID().uuidString)
                 .appendingPathExtension(sourceURL.pathExtension)
-            try FileManager.default.copyItem(at: sourceURL, to: destination)
+            try data.write(to: destination, options: .atomic)
             return destination
         } catch {
             return nil

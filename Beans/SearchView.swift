@@ -998,12 +998,16 @@ struct AlbumDetailView: View {
                     )
                 }
             case .kugou:
-                result = await searchFallbackSongs(
-                    queries: [albumSearchQuery, album.name],
-                    search: { query in
-                        (try? await KugouMusicAPI.shared.searchSongs(keyword: query, limit: 100)) ?? []
-                    }
-                )
+                let albumID = album.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                let direct = (try? await KugouMusicAPI.shared.albumSongs(albumID: albumID)) ?? []
+                result = direct.isEmpty
+                    ? await searchFallbackSongs(
+                        queries: [albumSearchQuery, album.name],
+                        search: { query in
+                            (try? await KugouMusicAPI.shared.searchSongs(keyword: query, limit: 100)) ?? []
+                        }
+                    )
+                    : direct
             }
             if !result.isEmpty {
                 cache.save(result, for: cacheKey)

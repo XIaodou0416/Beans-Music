@@ -868,67 +868,118 @@ struct DiscoverView: View {
 
     private var qqRecommendationCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if !isNativeClean {
-                SectionHeader(title: "推荐")
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
+            SectionHeader(title: "每日推荐")
+            VStack(spacing: 4) {
+                ForEach(Array(dailySongs.prefix(6).enumerated()), id: \.element.identityKey) { index, song in
+                    qqRecommendationRow(song: song, index: index)
+                }
+                if dailySongs.isEmpty {
+                    LoadingStateView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 22)
+                } else if dailySongs.count > 6 {
                     Button {
                         BeansHaptics.tap()
                         openRoute(DiscoverRoute.dailySongs(dailySongs))
                     } label: {
-                        let cardWidth = isNativeClean ? 380.0 : 360.0
-                        let cardHeight = isNativeClean ? 172.0 : 160.0
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: isNativeClean ? 18 : 16, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(red: 0.10, green: 0.58, blue: 0.43), Color(red: 0.12, green: 0.38, blue: 0.74)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                            if let coverURL = dailySongs.first?.coverURL {
-                                CoverImage(url: coverURL, size: cardHeight - 16, cornerRadius: 6)
-                                    .overlay {
-                                        LinearGradient(
-                                            colors: [.clear, .black.opacity(0.18)],
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        )
-                                    }
-                                    .padding(8)
-                                    .frame(width: cardWidth, alignment: .trailing)
-                            }
-                            VStack(alignment: .leading, spacing: 8) {
-                                Image(systemName: "calendar")
-                                    .font(.system(size: 17, weight: .bold))
-                                    .foregroundStyle(.white.opacity(0.92))
-                                Spacer(minLength: 0)
-                                Text("每日推荐")
-                                    .font(BeansFont.appFont(isNativeClean ? 22 : 20, .bold))
-                                    .foregroundStyle(.white)
-                                Text(dailyRecommendationSubtitle)
-                                    .font(BeansFont.appFont(12, .semibold))
-                                    .foregroundStyle(.white.opacity(0.80))
-                                    .lineLimit(2)
-                                    .minimumScaleFactor(0.82)
-                            }
-                            .padding(16)
-                            .frame(width: cardWidth - cardHeight + 12, height: cardHeight, alignment: .leading)
-                        }
-                        .frame(width: cardWidth, height: cardHeight)
-                        .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 18 : 16, style: .continuous))
-                        .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 14, x: 0, y: 7)
+                        Text(beansLocalized("查看全部 \(dailySongs.count) 首", "View all \(dailySongs.count) songs"))
+                            .font(BeansFont.appFont(12, .medium))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
                     }
-                    .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-                    .padding(.vertical, 3)
-                    Color.clear.frame(width: 0, height: 1)
+                    .buttonStyle(.plain)
                 }
-                .frame(height: isNativeClean ? 178 : 166)
             }
-            .beansCompatScrollClipDisabled()
-            .padding(.trailing, isNativeClean ? -24 : 0)
+        }
+    }
+
+    private func qqRecommendationRow(song: Song, index: Int) -> some View {
+        let metadata = [song.artists, song.album]
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+        let isCurrent = player.currentSong?.identityKey == song.identityKey && player.isPlaying
+
+        return Button {
+            BeansHaptics.tap()
+            player.play(songs: dailySongs, startAt: index)
+        } label: {
+            HStack(spacing: 12) {
+                Group {
+                    if let coverURL = song.coverURL {
+                        AsyncImage(url: coverURL) { phase in
+                            if let image = phase.image {
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            } else if phase.error != nil {
+                                qqRecommendationPlaceholder
+                            } else {
+                                ZStack {
+                                    qqRecommendationPlaceholder
+                                    ProgressView()
+                                        .controlSize(.small)
+                                }
+                            }
+                        }
+                    } else {
+                        qqRecommendationPlaceholder
+                    }
+                }
+                .frame(width: 112, height: 68)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(song.name)
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                        .lineLimit(1)
+                    if !metadata.isEmpty {
+                        Text(metadata)
+                            .font(BeansFont.appFont(12, .regular))
+                            .foregroundStyle(Color.beansComment)
+                            .lineLimit(1)
+                    }
+                    Text(song.formattedDuration)
+                        .font(BeansFont.appFont(11, .regular))
+                        .foregroundStyle(Color.beansComment.opacity(0.82))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if isCurrent {
+                    NowPlayingIndicator()
+                        .frame(width: 24, height: 24)
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(width: 34, height: 34)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+        .background {
+            if isNativeClean {
+                Color.clear
+            } else {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
+    }
+
+    private var qqRecommendationPlaceholder: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color.beansAmber.opacity(0.46), Color.beansAmber.opacity(0.16)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            Image(systemName: "music.note")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(.white.opacity(0.82))
         }
     }
 

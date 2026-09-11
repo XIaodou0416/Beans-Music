@@ -22,8 +22,6 @@ struct PlayerView: View {
     @State private var showDownloadPicker = false
     @State private var showMoreActions = false
     @State private var showNativeMoreActions = false
-    @State private var showMoreSettingsHint = false
-    @AppStorage("beans.playerMoreSettingsHintSeen") private var playerMoreSettingsHintSeen = false
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
     /// 下载完成后直接弹原生分享（用户自行选择保存或转发）
     @State private var shareFile: ShareFileItem?
@@ -85,6 +83,7 @@ struct PlayerView: View {
     @State private var iPadLandscapeLayoutPart: IPadLandscapeLayoutPart = .artwork
     @State private var layoutEditorStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
     @State private var layoutEditorUsesIPadLandscape = false
+    @State private var layoutPreviewDeviceRaw = PlayerPreviewDevice.iPhone.rawValue
     @State private var layoutPreviewShowLyrics = false
     /// 调整页使用真实播放器视口比例，避免 iPad 预览与实际布局不一致。
     @State private var playerViewportSize: CGSize = .zero
@@ -560,20 +559,6 @@ struct PlayerView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
-        .overlay(alignment: .top) {
-            if showMoreSettingsHint {
-                Text("点击顶部中间正在播放的标题，可打开更多设置")
-                    .font(BeansFont.appFont(13, .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(.black.opacity(0.58), in: Capsule())
-                    .padding(.top, 62)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                    .zIndex(120)
-                    .allowsHitTesting(false)
-            }
-        }
         .task(id: song?.identityKey) {
             let songKey = song?.identityKey ?? ""
             dominantColor = nil
@@ -616,17 +601,6 @@ struct PlayerView: View {
             showLyrics = lastLyricsPage
             if let path = LyricBackgroundStore.restoreFromBackup(), lyricBackgroundImagePath != path {
                 lyricBackgroundImagePath = path
-            }
-            if !playerMoreSettingsHintSeen {
-                playerMoreSettingsHintSeen = true
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
-                    showMoreSettingsHint = true
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.2) {
-                    withAnimation(.easeOut(duration: 0.22)) {
-                        showMoreSettingsHint = false
-                    }
-                }
             }
         }
         .onChange(of: showLyrics) { newValue in
@@ -1029,42 +1003,44 @@ struct PlayerView: View {
     }
 
     private var iPadLandscapeVinylLyricsHeader: some View {
-        HStack(spacing: 12) {
-            Button {
-                BeansHaptics.tap()
-                toggleLyrics()
-            } label: {
-                CoverImage(url: song?.coverURL, size: 48, cornerRadius: 10)
-                    .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+        HStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Button {
+                    BeansHaptics.tap()
+                    toggleLyrics()
+                } label: {
+                    CoverImage(url: song?.coverURL, size: 48, cornerRadius: 10)
+                        .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.94))
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 7) {
-                    Text(song?.name ?? "未在播放")
-                        .font(BeansFont.appFont(15, .semibold))
-                        .foregroundStyle(albumTitleForeground)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 7) {
+                        Text(song?.name ?? "未在播放")
+                            .font(BeansFont.appFont(15, .semibold))
+                            .foregroundStyle(albumTitleForeground)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        if showSongVIPBadge, song?.isVIP == true {
+                            Text("VIP")
+                                .font(BeansFont.appFont(8, .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1.5)
+                                .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
+                        }
+                    }
+                    Text(subtitle)
+                        .font(BeansFont.appFont(12, .medium))
+                        .foregroundStyle(albumArtistForeground)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    if showSongVIPBadge, song?.isVIP == true {
-                        Text("VIP")
-                            .font(BeansFont.appFont(8, .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1.5)
-                            .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
-                    }
+                        .contentShape(Rectangle())
+                        .onTapGesture { openArtistHome() }
                 }
-                Text(subtitle)
-                    .font(BeansFont.appFont(12, .medium))
-                    .foregroundStyle(albumArtistForeground)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .contentShape(Rectangle())
-                    .onTapGesture { openArtistHome() }
+                .layoutPriority(1)
             }
-
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 0) {
                 Button {
@@ -1096,11 +1072,11 @@ struct PlayerView: View {
                         .contentShape(Rectangle())
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 30)
         .padding(.top, 8)
-        .frame(maxWidth: .infinity)
-        .frame(height: 64)
+        .frame(maxWidth: .infinity, minHeight: 64, maxHeight: 64)
     }
 
     private var iPadLandscapeClassicLyricsHeader: some View {
@@ -1362,45 +1338,59 @@ struct PlayerView: View {
 
             Spacer(minLength: 0)
 
-            Button {
-                BeansHaptics.tap()
-                openMoreActions()
-            } label: {
-                VStack(spacing: 2) {
-                    Text(LocalizedStringKey(player.isBuffering ? "加载中…" : (player.isPlaying ? "正在播放" : "已暂停")))
-                        .font(BeansFont.appFont(12, .semibold))
-                        .foregroundStyle(palette.secondary)
-                        .lineLimit(1)
-                    Text(song?.album ?? "Beans Music")
-                        .font(BeansFont.appFont(10))
-                        .foregroundStyle(palette.secondary.opacity(0.85))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                .frame(minWidth: 118, maxWidth: 190)
-                .contentShape(Rectangle())
+            VStack(spacing: 2) {
+                Text(LocalizedStringKey(player.isBuffering ? "加载中…" : (player.isPlaying ? "正在播放" : "已暂停")))
+                    .font(BeansFont.appFont(12, .semibold))
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
+                Text(song?.album ?? "Beans Music")
+                    .font(BeansFont.appFont(10))
+                    .foregroundStyle(palette.secondary.opacity(0.85))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+            .frame(minWidth: 118, maxWidth: 190)
             .modifier(Layoutable(part: .topTitle, enabled: layoutMode, data: $layoutData))
 
             Spacer(minLength: 0)
-            Button {
-                BeansHaptics.tap()
-                if let song {
-                    toggleLocalFavorite(song)
-                }
-            } label: {
-                Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(localLibrary.containsSong(song) ? Color(red: 0.95, green: 0.33, blue: 0.42) : playerButtonText)
-                    .frame(width: 38, height: 38)
-                    .background {
-                        playerButtonSurface(size: 38, active: localLibrary.containsSong(song))
+            HStack(spacing: 0) {
+                Button {
+                    BeansHaptics.tap()
+                    if let song {
+                        toggleLocalFavorite(song)
                     }
-                    .clipShape(Circle())
+                } label: {
+                    Image(systemName: localLibrary.containsSong(song) ? "heart.fill" : "heart")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(localLibrary.containsSong(song) ? Color(red: 0.95, green: 0.33, blue: 0.42) : playerButtonText)
+                        .frame(width: 38, height: 38)
+                        .background {
+                            playerButtonSurface(size: 38, active: localLibrary.containsSong(song))
+                        }
+                        .clipShape(Circle())
+                }
+                .buttonStyle(GlassPressButtonStyle())
+                .modifier(Layoutable(part: .topFavorite, enabled: false, data: $layoutData))
+
+                Menu {
+                    Button("定时关闭") { showSleepTimer = true }
+                    Button("添加到本地歌单") { showAddToLocalPlaylist = true }
+                    if downloadFeatureUnlocked {
+                        Button("下载歌曲") { showDownloadPicker = true }
+                    }
+                    Button("播放器设置") { openPlayerSettings() }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(playerButtonText)
+                        .frame(width: 38, height: 38)
+                        .background {
+                            playerButtonSurface(size: 38)
+                        }
+                        .clipShape(Circle())
+                }
+                .buttonStyle(GlassPressButtonStyle())
             }
-            .buttonStyle(GlassPressButtonStyle())
-            .modifier(Layoutable(part: .topFavorite, enabled: false, data: $layoutData))
         }
         .padding(.horizontal, 20)
         .padding(.top, 2)
@@ -3525,12 +3515,24 @@ struct PlayerView: View {
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .clipped()
             }
-            .frame(height: 340)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frame(height: layoutPreviewDevice == .iPhone ? 360 : 320)
+            .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 32 : 26, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 28 : 22, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+                RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 28 : 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.24), lineWidth: 1)
             }
+            .overlay(alignment: .top) {
+                if layoutPreviewDevice == .iPhone {
+                    Capsule()
+                        .fill(Color.black.opacity(0.95))
+                        .frame(width: 86, height: 16)
+                        .padding(.top, 10)
+                        .allowsHitTesting(false)
+                }
+            }
+            .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
+            .frame(maxWidth: layoutPreviewDevice == .iPhone ? 230 : 430)
         }
         .padding(10)
         .background(Color.black.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -3596,12 +3598,24 @@ struct PlayerView: View {
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .clipped()
             }
-            .frame(height: 360)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frame(height: layoutPreviewDevice == .iPhone ? 380 : 330)
+            .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 32 : 26, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 28 : 22, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+                RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 28 : 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.24), lineWidth: 1)
             }
+            .overlay(alignment: .top) {
+                if layoutPreviewDevice == .iPhone {
+                    Capsule()
+                        .fill(Color.black.opacity(0.95))
+                        .frame(width: 86, height: 16)
+                        .padding(.top, 10)
+                        .allowsHitTesting(false)
+                }
+            }
+            .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
+            .frame(maxWidth: layoutPreviewDevice == .iPhone ? 230 : 430)
         }
         .padding(10)
         .background(Color.black.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -3612,6 +3626,15 @@ struct PlayerView: View {
     }
 
     private var playerPreviewCanvasSize: CGSize {
+        if layoutPreviewDevice == .iPad {
+            if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                return CGSize(width: 844, height: 390)
+            }
+            return CGSize(width: 768, height: 1024)
+        }
+        if layoutPreviewDevice == .iPhone {
+            return CGSize(width: 390, height: 844)
+        }
         let viewport = playerViewportSize
         if viewport.width > 1, viewport.height > 1 {
             if layoutMode,
@@ -3650,6 +3673,12 @@ struct PlayerView: View {
                         }
                         .pickerStyle(.segmented)
                     }
+
+                    Picker("预览设备", selection: $layoutPreviewDeviceRaw) {
+                        Text("iPhone").tag(PlayerPreviewDevice.iPhone.rawValue)
+                        Text("iPad").tag(PlayerPreviewDevice.iPad.rawValue)
+                    }
+                    .pickerStyle(.segmented)
 
                     if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
                         iPadLandscapeLayoutPreview
@@ -3737,6 +3766,10 @@ struct PlayerView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private var layoutPreviewDevice: PlayerPreviewDevice {
+        PlayerPreviewDevice(rawValue: layoutPreviewDeviceRaw) ?? .iPhone
     }
 
     @ViewBuilder
@@ -3915,12 +3948,15 @@ struct PlayerView: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
             .clipped()
         }
-        .frame(height: 320)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(height: layoutPreviewDevice == .iPhone ? 350 : 320)
+        .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 32 : 26, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 28 : 22, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 28 : 22, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.24), lineWidth: 1)
         }
+        .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
+        .frame(maxWidth: layoutPreviewDevice == .iPhone ? 230 : 430)
     }
 
     private func appleLayoutChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

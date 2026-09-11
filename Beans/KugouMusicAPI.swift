@@ -256,32 +256,89 @@ final class KugouMusicAPI {
         return Array(rows.compactMap(Self.mapCompleteTrack).prefix(max(limit, 1)))
     }
 
-    /// 酷狗没有稳定统一的新碟接口时，从每日推荐聚合专辑卡片。
+    /// 加载独立的专辑列表；推荐歌曲仅作为接口不可用时的兜底。
     func newAlbums(limit: Int = 18) async throws -> [Album] {
-        let songs = try await everydayRecommend(limit: max(limit * 3, 30))
+        let target = min(max(limit, 1), 50)
+        if let direct = try? await independentAlbumList(limit: target), !direct.isEmpty {
+            return direct
+        }
+        let songs = try await everydayRecommend(limit: max(target * 3, 30))
         var seen = Set<String>()
         return songs.compactMap { song in
             guard !song.album.isEmpty else { return nil }
             let key = "\(song.album)|\(song.artists)"
             guard seen.insert(key).inserted else { return nil }
             return Album(id: "kugou-\(key)", name: song.album, artistName: song.artists, coverURL: song.coverURL, source: .kugou, trackCount: nil)
-        }.prefix(max(1, limit)).map { $0 }
+        }.prefix(target).map { $0 }
     }
 
-    /// 酷狗歌手板块使用推荐歌曲中的官方歌手与头像聚合，接口失败时返回空数组。
+    /// 加载独立歌手列表；不从推荐歌曲字段拼接歌手。
     func topArtists(limit: Int = 18) async throws -> [Artist] {
-        let songs = try await everydayRecommend(limit: max(limit * 3, 30))
-        var result: [Artist] = []
-        var seen = Set<String>()
-        for song in songs {
-            for raw in song.artists.split(separator: "/") {
-                let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !name.isEmpty, seen.insert(name).inserted else { continue }
-                result.append(Artist(id: "kugou-name-\(name)", name: name, coverURL: song.coverURL, source: .kugou))
-                if result.count >= max(1, limit) { return result }
-            }
+        let target = min(max(limit, 1), 50)
+        if let direct = try? await independentArtistList(limit: target), !direct.isEmpty {
+            return direct
         }
-        return result
+        return try await upstreamSearchArtists(keyword: "热门歌手", limit: target)
+    }
+
+    private func independentAlbumList(limit: Int) async throws -> [Album] {
+        var components = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/album/list")!
+        components.queryItems = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "page", value: "1"),
+            URLQueryItem(name: "pagesize", value: "\(limit)"),
+            URLQueryItem(name: "sort", value: "2"),
+            URLQueryItem(name: "area_code", value: "1"),
+        ]
+        let json = try await getJSON(components.url!, ua: Self.browserUA)
+        let rows = Self.deepArrays(json, names: ["info", "albums", "albumlist", "list", "data"])
+        let albums = rows.compactMap { item -> Album? in
+            let id = Self.string(item["albumid"] ?? item["album_id"] ?? item["id"])
+            let name = Self.clean(Self.string(item["albumname"] ?? item["album_name"] ?? item["name"] ?? item["title"]))
+            guard !id.isEmpty, !name.isEmpty else { return nil }
+            let artist = Self.clean(Self.string(item["singername"] ?? item["artistname"] ?? item["author_name"] ?? item["artist"]))
+            let cover = Self.normalizeURL(Self.string(item["imgurl"] ?? item["img_url"] ?? item["album_img"] ?? item["pic"])
+                .replacingOccurrences(of: "{size}", with: "400"))
+            return Album(id: id, name: name, artistName: artist, coverURL: URL(string: cover), source: .kugou, trackCount: Self.int(item["songcount"] ?? item["song_count"]))
+        }
+        BeansLogger.shared.log("酷狗独立新碟列表：返回 \(albums.count) 个", level: .debug)
+        return Array(albums.prefix(limit))
+    }
+
+    private func independentArtistList(limit: Int) async throws -> [Artist] {
+        var components = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/singer/list")!
+        components.queryItems = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "page", value: "1"),
+            URLQueryItem(name: "pagesize", value: "\(limit)"),
+            URLQueryItem(name: "classid", value: "88"),
+        ]
+        let json = try await getJSON(components.url!, ua: Self.browserUA)
+        let rows = Self.deepArrays(json, names: ["info", "artists", "singers", "list", "data"])
+        let artists = rows.compactMap { item -> Artist? in
+            let id = Self.string(item["singerid"] ?? item["singer_id"] ?? item["author_id"] ?? item["id"])
+            let name = Self.clean(Self.string(item["singername"] ?? item["singer_name"] ?? item["author_name"] ?? item["name"]))
+            guard !id.isEmpty, !name.isEmpty else { return nil }
+            let cover = Self.normalizeURL(Self.string(item["avatar"] ?? item["imgurl"] ?? item["img_url"] ?? item["pic"]).replacingOccurrences(of: "{size}", with: "400"))
+            return Artist(id: id, name: name, coverURL: URL(string: cover), source: .kugou)
+        }
+        BeansLogger.shared.log("酷狗独立歌手列表：返回 \(artists.count) 个", level: .debug)
+        return Array(artists.prefix(limit))
+    }
+
+    func albumSongs(albumID: String, page: Int = 1, limit: Int = 100) async throws -> [Song] {
+        let id = albumID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty, Int(id) != nil else { return [] }
+        var components = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/album/songs")!
+        components.queryItems = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "albumid", value: id),
+            URLQueryItem(name: "page", value: "\(max(page, 1))"),
+            URLQueryItem(name: "pagesize", value: "\(min(max(limit, 1), 100))"),
+        ]
+        let json = try await getJSON(components.url!, ua: Self.browserUA)
+        let rows = Self.deepArrays(json, names: ["info", "songs", "songlist", "list", "data"])
+        return rows.compactMap(Self.mapCompleteTrack)
     }
 
     /// 酷狗自有移动端搜索接口：搜索结果携带 hash、专辑和封面，可直接复用酷狗播放地址解析。
