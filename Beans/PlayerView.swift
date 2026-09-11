@@ -34,9 +34,11 @@ struct PlayerView: View {
     @State private var pickedArtistName = ""
     @State private var showArtistPicker = false
     @State private var vinylFocusedLyricIndex: Int?
+    @State private var vinylSelectedLyricIndex: Int?
     @State private var vinylLyricsViewportHeight: CGFloat = 0
     @State private var vinylIsDraggingLyrics = false
     @State private var vinylLyricsResumeTask: Task<Void, Never>?
+    @State private var vinylLyricTapTask: Task<Void, Never>?
     @AppStorage("beans.djVisual") private var djVisualEnabled = false
     @AppStorage("beans.djVisualIntensity") private var djVisualIntensity = 0.8
     @State private var dominantColor: RGBColor?
@@ -79,6 +81,8 @@ struct PlayerView: View {
     @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
     @State private var appleLayoutPart: AppleMusicLayoutPart = .cover
     @State private var layoutPreviewShowLyrics = false
+    /// 调整页使用真实播放器视口比例，避免 iPad 预览与实际布局不一致。
+    @State private var playerViewportSize: CGSize = .zero
     /// 歌词布局：对齐样式 / 水平偏移 / 垂直重心（底部更多或顶部更多歌词）
     @AppStorage("beans.lyricAlignRaw") private var lyricAlignRaw = "center"
     @AppStorage("beans.lyricOffsetX") private var lyricOffsetX = 0.0
@@ -190,10 +194,7 @@ struct PlayerView: View {
     }
 
     private var classicPlayerFeaturesAvailable: Bool {
-        if #available(iOS 26.0, *) {
-            return true
-        }
-        return false
+        true
     }
 
     private var usesAppleMusicOverlayLayoutEditor: Bool {
@@ -487,7 +488,7 @@ struct PlayerView: View {
                             .frame(maxWidth: .infinity)
                             .frame(maxHeight: .infinity, alignment: .bottom)
 
-                        if layoutMode && coverPlayerStyle != .vinyl {
+                        if layoutMode && usesAppleMusicOverlayLayoutEditor {
                             layoutToolbar
                                 .contentShape(Rectangle())
                                 .frame(maxWidth: .infinity)
@@ -532,7 +533,7 @@ struct PlayerView: View {
                             .frame(maxHeight: .infinity, alignment: .bottom)
 
                         // 布局编辑工具栏：组件选择 + X/Y/Z 滑杆 + 恢复默认 + 完成
-                        if layoutMode {
+                        if layoutMode && usesAppleMusicOverlayLayoutEditor {
                             layoutToolbar
                                 .contentShape(Rectangle())
                                 .frame(maxWidth: .infinity)
@@ -562,6 +563,12 @@ struct PlayerView: View {
                 }
             }
         }
+        .onAppear {
+            playerViewportSize = rootGeometry.size
+        }
+        .onChange(of: rootGeometry.size) { newSize in
+            playerViewportSize = newSize
+        }
         }
         .background {
             HighRefreshConfigurator()
@@ -589,10 +596,13 @@ struct PlayerView: View {
                 coverDrag = .zero
                 lyrics = []
                 vinylFocusedLyricIndex = nil
+                vinylSelectedLyricIndex = nil
                 vinylIsDraggingLyrics = false
                 vinylLyricsViewportHeight = 0
                 vinylLyricsResumeTask?.cancel()
                 vinylLyricsResumeTask = nil
+                vinylLyricTapTask?.cancel()
+                vinylLyricTapTask = nil
                 let shouldPulse = !animatedSongKey.isEmpty && animatedSongKey != songKey
                 animatedSongKey = songKey
                 coverSwitchPulse = shouldPulse
@@ -640,15 +650,21 @@ struct PlayerView: View {
             }
         }
         .sheet(isPresented: Binding(
-            get: { layoutMode && coverPlayerStyle == .appleMusic && !usesAppleMusicOverlayLayoutEditor },
+            get: { layoutMode && !usesAppleMusicOverlayLayoutEditor },
             set: { presented in
                 if !presented { layoutMode = false }
             }
         )) {
-            appleMusicLayoutToolbar
-                .environmentObject(theme)
-                .environmentObject(player)
-                .environmentObject(clock)
+            Group {
+                if coverPlayerStyle == .appleMusic {
+                    appleMusicLayoutToolbar
+                } else {
+                    playerLayoutToolbar
+                }
+            }
+            .environmentObject(theme)
+            .environmentObject(player)
+            .environmentObject(clock)
         }
         .sheet(isPresented: $showQueue) {
             QueueView()
@@ -812,7 +828,7 @@ struct PlayerView: View {
                 iPadLandscapeControlDeck(bottomInset: geo.safeAreaInsets.bottom)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
-                if layoutMode && (coverPlayerStyle != .appleMusic || usesAppleMusicOverlayLayoutEditor) {
+                if layoutMode && usesAppleMusicOverlayLayoutEditor {
                     Group {
                         if coverPlayerStyle == .appleMusic {
                             appleMusicLayoutToolbar
@@ -883,7 +899,7 @@ struct PlayerView: View {
                         LazyVStack(alignment: .leading, spacing: 34) {
                             Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(VinylLayoutDefaults.lyricTopRows), vinylLyricsViewportHeight * 0.18))
                             ForEach(lyrics.indices, id: \.self) { index in
-                                vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
+                                vinylLyricLine(lyrics[index], index: index, isFocused: vinylCurrentVisualIndex == index, proxy: proxy)
                                     .id(index)
                                     .background {
                                         GeometryReader { rowGeometry in
@@ -946,6 +962,7 @@ struct PlayerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onDisappear {
             vinylLyricsResumeTask?.cancel()
+            vinylLyricTapTask?.cancel()
         }
     }
 
@@ -1680,7 +1697,7 @@ struct PlayerView: View {
                             LazyVStack(alignment: .leading, spacing: 34) {
                                 Color.clear.frame(height: max(vinylLyricsLineSlotHeight * CGFloat(VinylLayoutDefaults.lyricTopRows), vinylLyricsViewportHeight * 0.18))
                                 ForEach(lyrics.indices, id: \.self) { index in
-                                    vinylLyricLine(lyrics[index], isFocused: vinylCurrentVisualIndex == index)
+                                    vinylLyricLine(lyrics[index], index: index, isFocused: vinylCurrentVisualIndex == index, proxy: proxy)
                                         .id(index)
                                         .background {
                                             GeometryReader { rowGeometry in
@@ -1750,6 +1767,7 @@ struct PlayerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onDisappear {
             vinylLyricsResumeTask?.cancel()
+            vinylLyricTapTask?.cancel()
         }
     }
 
@@ -1844,39 +1862,80 @@ struct PlayerView: View {
         }
     }
 
-    private func vinylLyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
-        Button {
-            BeansHaptics.tap()
-            seekToLyric(line)
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(line.text.isEmpty ? " " : line.text)
-                        .font(BeansFont.appFont(isFocused ? 27 : 23, isFocused ? .bold : .semibold))
-                        .foregroundStyle(albumTitleForeground.opacity(isFocused ? 1 : 0.36))
-                        .fixedSize(horizontal: false, vertical: true)
-                    if isFocused, vinylIsDraggingLyrics {
-                        Spacer(minLength: 8)
-                        Text(beansTimeString(line.time))
-                            .font(BeansFont.appFont(11, .semibold, .monospaced))
-                            .foregroundStyle(albumArtistForeground.opacity(0.82))
+    private func vinylLyricLine(_ line: LyricLine, index: Int, isFocused: Bool, proxy: ScrollViewProxy) -> some View {
+        let isSelected = vinylSelectedLyricIndex == index || (vinylIsDraggingLyrics && isFocused)
+        let visualFocus = isFocused || isSelected
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(line.text.isEmpty ? " " : line.text)
+                    .font(BeansFont.appFont(visualFocus ? 27 : 23, visualFocus ? .bold : .semibold))
+                    .foregroundStyle(albumTitleForeground.opacity(visualFocus ? 1 : 0.36))
+                    .fixedSize(horizontal: false, vertical: true)
+                if isSelected {
+                    Spacer(minLength: 8)
+                    Text(beansTimeString(line.time))
+                        .font(BeansFont.appFont(11, .semibold, .monospaced))
+                        .foregroundStyle(albumArtistForeground.opacity(0.82))
+                    Button {
+                        vinylLyricTapTask?.cancel()
+                        playVinylLyric(line, index: index, proxy: proxy)
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(albumTitleColor)
+                            .frame(width: 24, height: 24)
+                            .background(albumTitleColor.opacity(0.14), in: Circle())
                     }
-                }
-                if isFocused, let translation = line.translation, !translation.isEmpty {
-                    Text(translation)
-                        .font(BeansFont.appFont(15, .medium))
-                        .foregroundStyle(albumArtistForeground.opacity(0.68))
-                        .fixedSize(horizontal: false, vertical: true)
+                    .buttonStyle(.plain)
                 }
             }
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .scaleEffect(isFocused ? 1.06 : 0.84, anchor: .leading)
-            .blur(radius: isFocused ? 0 : 0.7)
+            if visualFocus, let translation = line.translation, !translation.isEmpty {
+                Text(translation)
+                    .font(BeansFont.appFont(15, .medium))
+                    .foregroundStyle(albumArtistForeground.opacity(0.68))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .buttonStyle(.plain)
-        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: isFocused)
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .scaleEffect(visualFocus ? 1.06 : 0.84, anchor: .leading)
+        .blur(radius: visualFocus ? 0 : 0.7)
+        .onTapGesture {
+            scheduleVinylLyricSelection(index)
+        }
+        .simultaneousGesture(
+            TapGesture(count: 2)
+                .onEnded {
+                    vinylLyricTapTask?.cancel()
+                    playVinylLyric(line, index: index, proxy: proxy)
+                }
+        )
+        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: visualFocus)
+    }
+
+    private func scheduleVinylLyricSelection(_ index: Int) {
+        vinylLyricTapTask?.cancel()
+        vinylLyricTapTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                vinylSelectedLyricIndex = index
+            }
+            BeansHaptics.tap()
+        }
+    }
+
+    private func playVinylLyric(_ line: LyricLine, index: Int, proxy: ScrollViewProxy) {
+        vinylSelectedLyricIndex = index
+        vinylLyricsResumeTask?.cancel()
+        vinylIsDraggingLyrics = false
+        vinylFocusedLyricIndex = nil
+        BeansHaptics.tap()
+        seekToLyric(line)
+        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
+            proxy.scrollTo(index, anchor: vinylLyricsFocusAnchor)
+        }
     }
 
     private var vinylCurrentLyricIndex: Int? {
@@ -1920,7 +1979,9 @@ struct PlayerView: View {
     private func vinylUpdateFocusedLyric(from centers: [Int: CGFloat]) {
         guard vinylIsDraggingLyrics, vinylLyricsViewportHeight > 0, !centers.isEmpty else { return }
         let focusY = vinylLyricsViewportHeight * vinylLyricsFocusAnchor.y
-        vinylFocusedLyricIndex = centers.min { abs($0.value - focusY) < abs($1.value - focusY) }?.key
+        let nextIndex = centers.min { abs($0.value - focusY) < abs($1.value - focusY) }?.key
+        vinylFocusedLyricIndex = nextIndex
+        vinylSelectedLyricIndex = nextIndex
     }
 
     private func vinylScrollToCurrentLyric(proxy: ScrollViewProxy, animated: Bool) {
@@ -3194,7 +3255,141 @@ struct PlayerView: View {
         .padding(.horizontal, 12)
     }
 
-    /// 低系统使用固定尺寸画布缩小完整播放器，避免预览区域变窄后只渲染出歌词页的一部分。
+    /// 低系统使用独立调整页，保留完整播放器比例，避免控制条覆盖在播放页上导致误触。
+    private var playerLayoutToolbar: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("自定义布局")
+                    .font(BeansFont.appFont(15, .bold))
+                Spacer()
+                Button {
+                    BeansHaptics.select()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { layoutMode = false }
+                } label: {
+                    Text("完成")
+                        .font(BeansFont.appFont(13, .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 7)
+                        .background { BeansSurface(shape: Capsule()) }
+                }
+                .buttonStyle(.plain)
+            }
+
+            playerLayoutPreview
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(PlayerLayoutPart.editableCases) { part in
+                        Button {
+                            BeansHaptics.select()
+                            layoutPart = part
+                            layoutPartRaw = part.rawValue
+                        } label: {
+                            Text(LocalizedStringKey(part.rawValue))
+                                .font(BeansFont.appFont(12, .semibold))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .foregroundStyle(layoutPart == part ? Color.white : palette.secondary)
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 7)
+                                .background {
+                                    Capsule().fill(layoutPart == part ? Color.beansAmber : Color.beansGlassFill)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            layoutSlider("X", value: selectedLayoutEntry.x, range: layoutXRange)
+            layoutSlider("Y", value: selectedLayoutEntry.y, range: layoutYRange)
+            layoutSlider("大小", value: selectedLayoutEntry.scale, range: 0.3...1.5, step: 0.05, format: "%.2f")
+
+            HStack(spacing: 10) {
+                Button {
+                    resetCurrentLayoutPart()
+                    BeansHaptics.success()
+                } label: {
+                    Label("恢复默认", systemImage: "arrow.counterclockwise")
+                        .font(BeansFont.appFont(13, .medium))
+                        .foregroundStyle(Color.beansAmber)
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Text("拖动预览中的组件也可以调整位置")
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(palette.secondary)
+            }
+        }
+        .padding(14)
+        .background {
+            BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .padding(.horizontal, 12)
+    }
+
+    /// 经典与黑胶样式共用的完整播放器预览，使用实际播放器视口的宽高比例。
+    private var playerLayoutPreview: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("布局预览")
+                    .font(BeansFont.appFont(12, .semibold))
+                    .foregroundStyle(palette.text)
+                Spacer()
+                Text(coverPlayerStyle.title)
+                    .font(BeansFont.appFont(11, .medium))
+                    .foregroundStyle(Color.beansAmber)
+            }
+
+            GeometryReader { geometry in
+                let canvasSize = playerPreviewCanvasSize
+                let availableWidth = max(1, geometry.size.width - 16)
+                let availableHeight = max(1, geometry.size.height - 16)
+                let scale = min(availableWidth / canvasSize.width, availableHeight / canvasSize.height)
+
+                ZStack {
+                    GeometryReader { previewGeometry in
+                        ZStack {
+                            background
+                                .ignoresSafeArea()
+
+                            if coverPlayerStyle == .vinyl {
+                                content(geo: previewGeometry)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                controlDeck(bottomInset: previewGeometry.safeAreaInsets.bottom)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                            } else {
+                                VStack(spacing: 0) {
+                                    headerBar
+                                    content(geo: previewGeometry)
+                                }
+                                .foregroundStyle(palette.text)
+                                controlDeck(bottomInset: previewGeometry.safeAreaInsets.bottom)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                            }
+                        }
+                        .frame(width: canvasSize.width, height: canvasSize.height)
+                    }
+                    .frame(width: canvasSize.width, height: canvasSize.height)
+                    .scaleEffect(scale)
+                    .frame(width: canvasSize.width * scale, height: canvasSize.height * scale)
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
+            }
+            .frame(height: 340)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+            }
+        }
+        .padding(10)
+        .background(Color.black.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    /// 低系统使用完整播放器视口缩小预览，避免 iPad 预览比例与实际播放页不一致。
     private var appleMusicLayoutPreview: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -3266,12 +3461,16 @@ struct PlayerView: View {
     }
 
     private var appleMusicPreviewCanvasSize: CGSize {
-        let screen = UIScreen.main.bounds.size
-        let shortSide = max(min(screen.width, screen.height), 320)
-        let longSide = max(screen.width, screen.height)
-        let width = min(shortSide, 430)
-        let aspect = longSide / max(shortSide, 1)
-        return CGSize(width: width, height: width * min(max(aspect, 1.8), 2.25))
+        playerPreviewCanvasSize
+    }
+
+    private var playerPreviewCanvasSize: CGSize {
+        let viewport = playerViewportSize
+        if viewport.width > 1, viewport.height > 1 {
+            return viewport
+        }
+        let fallback = UIScreen.main.bounds.size
+        return CGSize(width: max(fallback.width, 320), height: max(fallback.height, 568))
     }
 
     private func appleLayoutChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -4039,6 +4238,9 @@ struct LyricsSection: View {
     @State private var resumeScrollTask: Task<Void, Never>?
     /// 歌词手动滚动时，以视口中心最近的一行作为视觉焦点。
     @State private var focusedIndex: Int?
+    /// 单击选中的歌词；双击或右侧按钮才执行跳转。
+    @State private var selectedLyricIndex: Int?
+    @State private var lyricTapTask: Task<Void, Never>?
     @State private var viewportHeight: CGFloat = 0
 
     /// 二分查找当前行（歌词按时间升序），避免逐行扫描降低 CPU
@@ -4064,7 +4266,7 @@ struct LyricsSection: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: lineSpacing) {
                     ForEach(Array(lyrics.enumerated()), id: \.element.id) { index, line in
-                        lyricRow(index: index, line: line)
+                        lyricRow(index: index, line: line, proxy: proxy)
                             .background {
                                 GeometryReader { rowGeometry in
                                     Color.clear.preference(
@@ -4084,23 +4286,21 @@ struct LyricsSection: View {
                                         .transition(.scale.combined(with: .opacity))
                                 }
                             }
-                            // 使用 SwiftUI 高级手势 API，避免 iOS 16 上手写组合手势抢占 ScrollView 的垂直滚动。
                             .onTapGesture {
                                 if selectionMode {
                                     withAnimation(.easeInOut(duration: 0.2)) { toggleSelect(index) }
                                 } else {
-                                    resumeScrollTask?.cancel()
-                                    isUserScrolling = false
-                                    focusedIndex = nil
-                                    onTapLine(line)
-                                    // 点击歌词后以所点行作为目标，避免 seek 完成前 currentIndex 仍停留在旧行。
-                                    DispatchQueue.main.async {
-                                        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
-                                            proxy.scrollTo(index, anchor: anchor)
-                                        }
-                                    }
+                                    scheduleLyricSelection(index)
                                 }
                             }
+                            .simultaneousGesture(
+                                TapGesture(count: 2)
+                                    .onEnded {
+                                        guard !selectionMode else { return }
+                                        lyricTapTask?.cancel()
+                                        playLyric(index: index, line: line, proxy: proxy)
+                                    }
+                            )
                             .onLongPressGesture(minimumDuration: 0.35) {
                                 BeansHaptics.medium()
                                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -4158,9 +4358,13 @@ struct LyricsSection: View {
             .onPreferenceChange(LyricCenterPreferenceKey.self) { positions in
                 guard viewportHeight > 0, !positions.isEmpty else { return }
                 let centerY = viewportHeight / 2
-                focusedIndex = positions.min {
+                let nextFocusedIndex = positions.min {
                     abs($0.value - centerY) < abs($1.value - centerY)
                 }?.key
+                focusedIndex = nextFocusedIndex
+                if isUserScrolling {
+                    selectedLyricIndex = nextFocusedIndex
+                }
             }
             .simultaneousGesture(
                 DragGesture(minimumDistance: 4)
@@ -4172,6 +4376,7 @@ struct LyricsSection: View {
                         resumeScrollTask?.cancel()
                         let selectedIndex = focusedIndex
                         if let selectedIndex {
+                            selectedLyricIndex = selectedIndex
                             withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.38)) {
                                 proxy.scrollTo(selectedIndex, anchor: .center)
                             }
@@ -4191,6 +4396,7 @@ struct LyricsSection: View {
             }
             .onChange(of: currentIndex) { newIndex in
                 guard let newIndex, !isUserScrolling else { return }
+                selectedLyricIndex = nil
                 withAnimation(.easeInOut(duration: 0.3)) {
                     proxy.scrollTo(newIndex, anchor: anchor)
                 }
@@ -4203,15 +4409,19 @@ struct LyricsSection: View {
                     }
                 }
             }
+            .onDisappear {
+                lyricTapTask?.cancel()
+                resumeScrollTask?.cancel()
+            }
         }
     }
 
     /// Apple Music 风格渐隐：当前行最大最亮，已播放行与未播放行按距离逐层变暗变淡
-    private func lyricRow(index: Int, line: LyricLine) -> some View {
+    private func lyricRow(index: Int, line: LyricLine, proxy: ScrollViewProxy) -> some View {
         let playbackIndex = currentIndex ?? 0
         // 手动滚动时，以视口中心行为清晰度焦点；颜色和渐变仍只跟随实际播放行。
         // 这样拖动歌词不会暂停播放，也不会让整页歌词一起变糊。
-        let visualIndex = isUserScrolling ? (focusedIndex ?? currentIndex) : currentIndex
+        let visualIndex = isUserScrolling ? (focusedIndex ?? currentIndex) : (selectedLyricIndex ?? currentIndex)
         let isCurrent = currentIndex != nil && index == playbackIndex
         let isFocused = index == visualIndex
         let isPlayed = (currentIndex ?? -1) >= 0 && index < playbackIndex
@@ -4270,15 +4480,54 @@ struct LyricsSection: View {
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
         .padding(.horizontal, alignment == .leading ? 40 : 36)
         .overlay(alignment: .trailing) {
-            if isUserScrolling && isFocused {
-                Text(beansTimeString(line.time))
-                    .font(BeansFont.appFont(11, .semibold, .monospaced))
-                    .foregroundStyle(secondary.opacity(0.82))
-                    .padding(.trailing, alignment == .leading ? 40 : 36)
-                    .transition(.opacity)
+            if selectedLyricIndex == index || (isUserScrolling && isFocused) {
+                HStack(spacing: 6) {
+                    Text(beansTimeString(line.time))
+                        .font(BeansFont.appFont(11, .semibold, .monospaced))
+                        .foregroundStyle(secondary.opacity(0.82))
+                    Button {
+                        lyricTapTask?.cancel()
+                        playLyric(index: index, line: line, proxy: proxy)
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(accent)
+                            .frame(width: 24, height: 24)
+                            .background(accent.opacity(0.14), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.trailing, alignment == .leading ? 34 : 28)
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
             }
         }
         .animation(.easeInOut(duration: 0.25), value: visualIndex)
+    }
+
+    private func scheduleLyricSelection(_ index: Int) {
+        lyricTapTask?.cancel()
+        lyricTapTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                selectedLyricIndex = index
+            }
+            BeansHaptics.tap()
+        }
+    }
+
+    private func playLyric(index: Int, line: LyricLine, proxy: ScrollViewProxy) {
+        selectedLyricIndex = index
+        resumeScrollTask?.cancel()
+        isUserScrolling = false
+        focusedIndex = nil
+        BeansHaptics.tap()
+        onTapLine(line)
+        DispatchQueue.main.async {
+            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
+                proxy.scrollTo(index, anchor: anchor)
+            }
+        }
     }
 
     private func toggleSelect(_ index: Int) {
@@ -4449,10 +4698,7 @@ struct PlayerSettingsSheet: View {
     }
 
     private var classicPlayerFeaturesAvailable: Bool {
-        if #available(iOS 26.0, *) {
-            return true
-        }
-        return false
+        true
     }
 
     private var tiltYText: String {

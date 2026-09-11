@@ -311,10 +311,7 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
 
     /// 播放器设置中显示全部可用的封面样式。
     static var availableCases: [BeansCoverPlayerStyle] {
-        if #available(iOS 26.0, *) {
-            return allCases
-        }
-        return allCases.filter { $0 != .classic }
+        allCases
     }
 
     static func resolved(rawValue: String) -> BeansCoverPlayerStyle {

@@ -45,9 +45,11 @@ struct ReferencePlaybackView: View {
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
     @State private var lyricCenters: [UUID: CGFloat] = [:]
     @State private var focusedLyricID: UUID?
+    @State private var selectedLyricID: UUID?
     @State private var lyricsViewportHeight: CGFloat = 0
     @State private var isDraggingLyrics = false
     @State private var resumeTask: Task<Void, Never>?
+    @State private var lyricTapTask: Task<Void, Never>?
 
     private func layoutEntry(_ part: AppleMusicLayoutPart) -> PlayerLayoutEntry {
         appleLayout.entry(for: part)
@@ -89,7 +91,10 @@ struct ReferencePlaybackView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
-        .onDisappear { resumeTask?.cancel() }
+        .onDisappear {
+            resumeTask?.cancel()
+            lyricTapTask?.cancel()
+        }
     }
 
     @ViewBuilder
@@ -233,7 +238,7 @@ struct ReferencePlaybackView: View {
                         LazyVStack(alignment: .leading, spacing: 26) {
                             Color.clear.frame(height: max(88, lyricsViewportHeight * 0.30))
                             ForEach(lyrics) { line in
-                                lyricLine(line, isFocused: line.id == currentVisualLyricID)
+                                lyricLine(line, isFocused: line.id == currentVisualLyricID, proxy: proxy)
                                     .id(line.id)
                                     .background {
                                         GeometryReader { rowGeometry in
@@ -497,44 +502,89 @@ struct ReferencePlaybackView: View {
         return parts.isEmpty ? "未知歌曲" : parts.joined(separator: " · ")
     }
 
-    private func lyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
-        Button {
-            BeansHaptics.tap()
-            player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
-        } label: {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(line.text.isEmpty ? " " : line.text)
-                        .font(BeansFont.appFont(isFocused ? 27 : 23, isFocused ? .bold : .semibold))
-                        .foregroundStyle(primaryColor.opacity(isFocused ? 1 : 0.36))
-                        .fixedSize(horizontal: false, vertical: true)
-                    if isFocused && isDraggingLyrics {
-                        Spacer(minLength: 8)
-                        Text(beansTimeString(line.time))
-                            .font(BeansFont.appFont(11, .semibold, .monospaced))
-                            .foregroundStyle(secondaryColor.opacity(0.82))
+    private func lyricLine(_ line: LyricLine, isFocused: Bool, proxy: ScrollViewProxy) -> some View {
+        let isSelected = selectedLyricID == line.id || (isDraggingLyrics && isFocused)
+        let visualFocus = isFocused || isSelected
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(line.text.isEmpty ? " " : line.text)
+                    .font(BeansFont.appFont(visualFocus ? 27 : 23, visualFocus ? .bold : .semibold))
+                    .foregroundStyle(primaryColor.opacity(visualFocus ? 1 : 0.36))
+                    .fixedSize(horizontal: false, vertical: true)
+                if isSelected {
+                    Spacer(minLength: 8)
+                    Text(beansTimeString(line.time))
+                        .font(BeansFont.appFont(11, .semibold, .monospaced))
+                        .foregroundStyle(secondaryColor.opacity(0.82))
+                    Button {
+                        lyricTapTask?.cancel()
+                        playLyric(line, proxy: proxy)
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(accentColor)
+                            .frame(width: 24, height: 24)
+                            .background(accentColor.opacity(0.14), in: Circle())
                     }
-                }
-                if isFocused, let translation = line.translation, !translation.isEmpty {
-                    Text(translation)
-                        .font(BeansFont.appFont(15, .medium))
-                        .foregroundStyle(secondaryColor.opacity(0.72))
-                        .fixedSize(horizontal: false, vertical: true)
+                    .buttonStyle(.plain)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .scaleEffect(isFocused ? 1.06 : 0.84, anchor: .leading)
-            .blur(radius: isFocused ? 0 : 0.7)
+            if visualFocus, let translation = line.translation, !translation.isEmpty {
+                Text(translation)
+                    .font(BeansFont.appFont(15, .medium))
+                    .foregroundStyle(secondaryColor.opacity(0.72))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .buttonStyle(.plain)
-        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: isFocused)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .scaleEffect(visualFocus ? 1.06 : 0.84, anchor: .leading)
+        .blur(radius: visualFocus ? 0 : 0.7)
+        .onTapGesture {
+            scheduleLyricSelection(line.id)
+        }
+        .simultaneousGesture(
+            TapGesture(count: 2)
+                .onEnded {
+                    lyricTapTask?.cancel()
+                    playLyric(line, proxy: proxy)
+                }
+        )
+        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: visualFocus)
+    }
+
+    private func scheduleLyricSelection(_ id: UUID) {
+        lyricTapTask?.cancel()
+        lyricTapTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                selectedLyricID = id
+            }
+            BeansHaptics.tap()
+        }
+    }
+
+    private func playLyric(_ line: LyricLine, proxy: ScrollViewProxy) {
+        selectedLyricID = line.id
+        resumeTask?.cancel()
+        isDraggingLyrics = false
+        focusedLyricID = nil
+        BeansHaptics.tap()
+        player.seek(to: LyricTiming.seekTime(for: line, userOffset: lyricOffset))
+        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
+            proxy.scrollTo(line.id, anchor: .center)
+        }
     }
 
     private func updateFocusedLyric(from centers: [UUID: CGFloat]) {
         guard lyricsViewportHeight > 0, !centers.isEmpty else { return }
         let center = lyricsViewportHeight / 2
-        focusedLyricID = centers.min { abs($0.value - center) < abs($1.value - center) }?.key
+        let nextID = centers.min { abs($0.value - center) < abs($1.value - center) }?.key
+        focusedLyricID = nextID
+        if isDraggingLyrics {
+            selectedLyricID = nextID
+        }
     }
 
     private func scrollToPlaybackLyric(proxy: ScrollViewProxy, animated: Bool) {
@@ -683,9 +733,11 @@ struct AppleMusicLyricsSection: View {
 
     @State private var lyricCenters: [UUID: CGFloat] = [:]
     @State private var focusedLyricID: UUID?
+    @State private var selectedLyricID: UUID?
     @State private var viewportHeight: CGFloat = 0
     @State private var isDraggingLyrics = false
     @State private var resumeTask: Task<Void, Never>?
+    @State private var lyricTapTask: Task<Void, Never>?
 
     private var currentPlaybackLyricIndex: Int? {
         guard !lyrics.isEmpty else { return nil }
@@ -732,7 +784,7 @@ struct AppleMusicLyricsSection: View {
                         LazyVStack(alignment: .leading, spacing: 26) {
                             Color.clear.frame(height: max(88, viewportHeight * 0.30))
                             ForEach(lyrics) { line in
-                                lyricLine(line, isFocused: line.id == currentVisualLyricID)
+                                lyricLine(line, isFocused: line.id == currentVisualLyricID, proxy: proxy)
                                     .id(line.id)
                                     .background {
                                         GeometryReader { rowGeometry in
@@ -785,47 +837,95 @@ struct AppleMusicLyricsSection: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onDisappear { resumeTask?.cancel() }
+        .onDisappear {
+            resumeTask?.cancel()
+            lyricTapTask?.cancel()
+        }
     }
 
-    private func lyricLine(_ line: LyricLine, isFocused: Bool) -> some View {
-        Button {
-            BeansHaptics.tap()
-            onTapLine(line)
-        } label: {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(line.text.isEmpty ? " " : line.text)
-                        .font(BeansFont.appFont(isFocused ? 27 : 23, isFocused ? .bold : .semibold))
-                        .foregroundStyle(primary.opacity(isFocused ? 1 : 0.36))
-                        .fixedSize(horizontal: false, vertical: true)
-                    if isFocused && isDraggingLyrics {
-                        Spacer(minLength: 8)
-                        Text(beansTimeString(line.time))
-                            .font(BeansFont.appFont(11, .semibold, .monospaced))
-                            .foregroundStyle(secondary.opacity(0.82))
+    private func lyricLine(_ line: LyricLine, isFocused: Bool, proxy: ScrollViewProxy) -> some View {
+        let isSelected = selectedLyricID == line.id || (isDraggingLyrics && isFocused)
+        let visualFocus = isFocused || isSelected
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(line.text.isEmpty ? " " : line.text)
+                    .font(BeansFont.appFont(visualFocus ? 27 : 23, visualFocus ? .bold : .semibold))
+                    .foregroundStyle(primary.opacity(visualFocus ? 1 : 0.36))
+                    .fixedSize(horizontal: false, vertical: true)
+                if isSelected {
+                    Spacer(minLength: 8)
+                    Text(beansTimeString(line.time))
+                        .font(BeansFont.appFont(11, .semibold, .monospaced))
+                        .foregroundStyle(secondary.opacity(0.82))
+                    Button {
+                        lyricTapTask?.cancel()
+                        playLyric(line, proxy: proxy)
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(primary)
+                            .frame(width: 24, height: 24)
+                            .background(primary.opacity(0.14), in: Circle())
                     }
-                }
-                if isFocused, let translation = line.translation, !translation.isEmpty {
-                    Text(translation)
-                        .font(BeansFont.appFont(15, .medium))
-                        .foregroundStyle(secondary.opacity(0.72))
-                        .fixedSize(horizontal: false, vertical: true)
+                    .buttonStyle(.plain)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .scaleEffect(isFocused ? 1.06 : 0.84, anchor: .leading)
-            .blur(radius: isFocused ? 0 : 0.7)
+            if visualFocus, let translation = line.translation, !translation.isEmpty {
+                Text(translation)
+                    .font(BeansFont.appFont(15, .medium))
+                    .foregroundStyle(secondary.opacity(0.72))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .buttonStyle(.plain)
-        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: isFocused)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .scaleEffect(visualFocus ? 1.06 : 0.84, anchor: .leading)
+        .blur(radius: visualFocus ? 0 : 0.7)
+        .onTapGesture {
+            scheduleLyricSelection(line.id)
+        }
+        .simultaneousGesture(
+            TapGesture(count: 2)
+                .onEnded {
+                    lyricTapTask?.cancel()
+                    playLyric(line, proxy: proxy)
+                }
+        )
+        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: visualFocus)
+    }
+
+    private func scheduleLyricSelection(_ id: UUID) {
+        lyricTapTask?.cancel()
+        lyricTapTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                selectedLyricID = id
+            }
+            BeansHaptics.tap()
+        }
+    }
+
+    private func playLyric(_ line: LyricLine, proxy: ScrollViewProxy) {
+        selectedLyricID = line.id
+        resumeTask?.cancel()
+        isDraggingLyrics = false
+        focusedLyricID = nil
+        BeansHaptics.tap()
+        onTapLine(line)
+        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)) {
+            proxy.scrollTo(line.id, anchor: .center)
+        }
     }
 
     private func updateFocusedLyric(from centers: [UUID: CGFloat]) {
         guard viewportHeight > 0, !centers.isEmpty else { return }
         let center = viewportHeight / 2
-        focusedLyricID = centers.min { abs($0.value - center) < abs($1.value - center) }?.key
+        let nextID = centers.min { abs($0.value - center) < abs($1.value - center) }?.key
+        focusedLyricID = nextID
+        if isDraggingLyrics {
+            selectedLyricID = nextID
+        }
     }
 
     private func scrollToPlaybackLyric(proxy: ScrollViewProxy, animated: Bool) {
@@ -848,6 +948,7 @@ struct AppleMusicLyricsSection: View {
             .onEnded { _ in
                 resumeTask?.cancel()
                 if let id = focusedLyricID {
+                    selectedLyricID = id
                     withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                         proxy.scrollTo(id, anchor: .center)
                     }
