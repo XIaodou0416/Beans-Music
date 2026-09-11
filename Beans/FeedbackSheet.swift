@@ -583,6 +583,12 @@ private struct FeedbackPhotoPicker: UIViewControllerRepresentable {
 
 private enum FeedbackAttachmentStore {
     static func copyToTemporaryDirectory(_ sourceURL: URL) -> URL? {
+        let didStartSecurityScope = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartSecurityScope {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("BeansFeedbackUploads", isDirectory: true)
         do {

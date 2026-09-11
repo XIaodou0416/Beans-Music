@@ -278,7 +278,17 @@ final class KugouMusicAPI {
         if let direct = try? await independentArtistList(limit: target), !direct.isEmpty {
             return direct
         }
-        return try await upstreamSearchArtists(keyword: "热门歌手", limit: target)
+        var artists: [Artist] = []
+        var seen = Set<String>()
+        for keyword in ["热门歌手", "华语歌手", "周杰伦", "Taylor Swift"] {
+            guard let batch = try? await upstreamSearchArtists(keyword: keyword, limit: target) else { continue }
+            for artist in batch where seen.insert(artist.id).inserted {
+                artists.append(artist)
+                if artists.count >= target { return artists }
+            }
+        }
+        BeansLogger.shared.log("酷狗音乐人兜底搜索仍为空", level: .debug)
+        return artists
     }
 
     private func independentAlbumList(limit: Int) async throws -> [Album] {

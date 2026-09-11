@@ -852,7 +852,9 @@ struct PlayerView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            toggleLyrics()
+            if layoutRenderingStyle != .classic {
+                toggleLyrics()
+            }
         }
     }
 
@@ -1102,7 +1104,13 @@ struct PlayerView: View {
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(playerButtonText)
                     .frame(width: 42, height: 42)
-                    .background { playerButtonSurface(size: 42) }
+                    .background {
+                        if layoutRenderingStyle == .classic {
+                            BeansGlass(shape: Circle())
+                        } else {
+                            playerButtonSurface(size: 42)
+                        }
+                    }
                     .clipShape(Circle())
             }
             .buttonStyle(GlassPressButtonStyle())
@@ -1132,6 +1140,11 @@ struct PlayerView: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(localLibrary.containsSong(song) ? controlAccent : playerButtonText)
                         .frame(width: 42, height: 42)
+                        .background {
+                            if layoutRenderingStyle == .classic {
+                                BeansGlass(shape: Circle())
+                            }
+                        }
                 }
                 .buttonStyle(GlassPressButtonStyle())
 
@@ -1143,6 +1156,11 @@ struct PlayerView: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(playerButtonText)
                         .frame(width: 42, height: 42)
+                        .background {
+                            if layoutRenderingStyle == .classic {
+                                BeansGlass(shape: Circle())
+                            }
+                        }
                 }
                 .buttonStyle(GlassPressButtonStyle())
             }
@@ -1175,13 +1193,15 @@ struct PlayerView: View {
                 data: $iPadLandscapeLayoutData
             ))
 
-            HStack(spacing: 12) {
+            HStack(spacing: 0) {
                 vinylSideControl(icon: player.playMode.icon, active: player.playMode == .shuffle, part: .loop, appliesPortraitLayout: false) {
                     player.togglePlayMode()
                 }
+                .frame(maxWidth: .infinity)
                 vinylTransportControl(icon: "backward.fill", size: 22, part: .previous, appliesPortraitLayout: false) {
                     player.previous()
                 }
+                .frame(maxWidth: .infinity)
                 Button {
                     BeansHaptics.tap()
                     player.togglePlayPause()
@@ -1192,12 +1212,15 @@ struct PlayerView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
                 vinylTransportControl(icon: "forward.fill", size: 22, part: .next, appliesPortraitLayout: false) {
                     player.next()
                 }
+                .frame(maxWidth: .infinity)
                 vinylSideControl(icon: "list.bullet", part: .queue, appliesPortraitLayout: false) {
                     showQueue = true
                 }
+                .frame(maxWidth: .infinity)
             }
             .foregroundStyle(layoutRenderingStyle == .classic ? playerButtonText : .white)
             .modifier(IPadLandscapeLayoutable(
@@ -2876,7 +2899,11 @@ struct PlayerView: View {
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(active ? Color.beansAmber : .white.opacity(0.86))
+                .foregroundStyle(
+                    active
+                        ? Color.beansAmber
+                        : (layoutRenderingStyle == .classic ? playerButtonSecondaryText : .white.opacity(0.86))
+                )
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -2903,6 +2930,7 @@ struct PlayerView: View {
         } label: {
             Image(systemName: icon)
                 .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(layoutRenderingStyle == .classic ? playerButtonText : .white)
                 .frame(width: 44, height: 58)
                 .contentShape(Rectangle())
         }
@@ -3011,7 +3039,7 @@ struct PlayerView: View {
 
     private func deckRow(appliesPortraitLayout: Bool = true) -> some View {
         Group {
-            if playerButtonStyle == .appleMusic {
+            if layoutRenderingStyle == .appleMusic {
                 appleMusicDeckRow(appliesPortraitLayout: appliesPortraitLayout)
             } else {
                 legacyDeckRow(appliesPortraitLayout: appliesPortraitLayout)
