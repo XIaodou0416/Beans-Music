@@ -866,6 +866,7 @@ struct DiscoverView: View {
         }
     }
 
+    @ViewBuilder
     private var qqRecommendationCards: some View {
         let cardHeight: CGFloat = isNativeClean ? 172 : 160
         VStack(alignment: .leading, spacing: 14) {
@@ -1064,6 +1065,7 @@ struct DiscoverView: View {
         return String(format: beansLocalized("%d 首 · 每天 6:00 更新", "%d songs · refreshes at 6:00 daily"), dailySongs.count)
     }
 
+    @ViewBuilder
     private func neteaseRecommendationCard(
         title: String,
         subtitle: String,
