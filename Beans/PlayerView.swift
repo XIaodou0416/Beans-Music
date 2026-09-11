@@ -625,6 +625,7 @@ struct PlayerView: View {
             appleMusicLayoutToolbar
                 .environmentObject(theme)
                 .environmentObject(player)
+                .environmentObject(clock)
         }
         .sheet(isPresented: $showQueue) {
             QueueView()
@@ -3109,6 +3110,7 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.plain)
             }
+            appleMusicLayoutPreview
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(AppleMusicLayoutPart.allCases) { part in
@@ -3144,7 +3146,7 @@ struct PlayerView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    Text("调整后保存，关闭此页即可回到播放器查看效果")
+                    Text("上方预览会同步显示当前调整，关闭此页后播放器也会保留相同布局")
                         .font(BeansFont.appFont(11))
                         .foregroundStyle(palette.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -3157,6 +3159,43 @@ struct PlayerView: View {
             BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .padding(.horizontal, 12)
+    }
+
+    /// 布局编辑不再覆盖播放器；在独立页面中保留一个不可操作的真实预览，便于低系统直观看到偏移和缩放结果。
+    private var appleMusicLayoutPreview: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("布局预览")
+                    .font(BeansFont.appFont(12, .semibold))
+                    .foregroundStyle(palette.text)
+                Spacer()
+                Text(appleLayoutPart.rawValue)
+                    .font(BeansFont.appFont(11, .medium))
+                    .foregroundStyle(Color.beansAmber)
+            }
+
+            ReferencePlaybackView(
+                song: song,
+                lyrics: lyrics,
+                showLyrics: Binding(get: { showLyrics }, set: { _ in }),
+                onFavorite: {},
+                onQueue: {},
+                onComments: {},
+                onSleepTimer: {},
+                onAddToLocalPlaylist: {},
+                onDownload: {},
+                onPlayerSettings: {}
+            )
+            .frame(height: 255)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+            }
+            .allowsHitTesting(false)
+        }
+        .padding(10)
+        .background(Color.black.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func appleLayoutChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
