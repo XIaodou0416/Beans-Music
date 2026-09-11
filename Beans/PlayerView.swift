@@ -3283,10 +3283,10 @@ struct PlayerView: View {
             player.togglePlayPause()
         } label: {
             PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22)
-                .foregroundStyle(playerButtonStyle == .appleMusic ? Color.black : Color.white)
+                .foregroundStyle(layoutRenderingStyle == .appleMusic ? Color.black : playerButtonText)
                 .frame(width: primaryPlayerButtonSize, height: primaryPlayerButtonSize)
                 .background {
-                    if playerButtonStyle != .appleMusic {
+                    if layoutRenderingStyle != .appleMusic {
                         playerButtonSurface(size: primaryPlayerButtonSize, primary: true, appleLiquid: true)
                     }
                 }
@@ -3618,7 +3618,7 @@ struct PlayerView: View {
                     }
                     .frame(width: canvasSize.width, height: canvasSize.height)
                     .scaleEffect(scale)
-                    .frame(width: canvasSize.width * scale, height: canvasSize.height * scale)
+                .frame(width: canvasSize.width * scale, height: canvasSize.height * scale, alignment: .center)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .clipped()
@@ -3700,7 +3700,8 @@ struct PlayerView: View {
                     .scaleEffect(scale)
                     .frame(
                         width: canvasSize.width * scale,
-                        height: canvasSize.height * scale
+                        height: canvasSize.height * scale,
+                        alignment: .center
                     )
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)

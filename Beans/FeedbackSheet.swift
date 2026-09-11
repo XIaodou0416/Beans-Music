@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
 
@@ -39,7 +40,7 @@ struct FeedbackSheet: View {
     @State private var problem = ""
     @State private var attachments: [FeedbackAttachment] = []
     @State private var showPhotoPicker = false
-    @State private var showFileImporter = false
+    @State private var showDocumentPicker = false
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var feedbackToDelete: FeedbackHistoryEntry?
@@ -125,7 +126,7 @@ struct FeedbackSheet: View {
                                         showPhotoPicker = true
                                     }
                                     Button(beansLocalized("从文件选择", "Choose from Files")) {
-                                        showFileImporter = true
+                                        showDocumentPicker = true
                                     }
                                 } label: {
                                     Image(systemName: "plus")
@@ -218,16 +219,9 @@ struct FeedbackSheet: View {
                 }
             }
         }
-        .fileImporter(
-            isPresented: $showFileImporter,
-            allowedContentTypes: [.data],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
+        .sheet(isPresented: $showDocumentPicker) {
+            FeedbackDocumentPicker { urls in
                 urls.forEach(addAttachment)
-            case .failure:
-                errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
             }
         }
         .alert(beansLocalized("提交失败", "Submission failed"), isPresented: Binding(
@@ -577,6 +571,35 @@ private struct FeedbackPhotoPicker: UIViewControllerRepresentable {
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             onPick(results)
             picker.dismiss(animated: true)
+        }
+    }
+}
+
+private struct FeedbackDocumentPicker: UIViewControllerRepresentable {
+    let onPick: ([URL]) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onPick: onPick)
+    }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: true)
+        picker.allowsMultipleSelection = true
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ picker: UIDocumentPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let onPick: ([URL]) -> Void
+
+        init(onPick: @escaping ([URL]) -> Void) {
+            self.onPick = onPick
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            onPick(urls)
         }
     }
 }
