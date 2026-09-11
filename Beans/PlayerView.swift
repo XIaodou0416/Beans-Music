@@ -3320,13 +3320,23 @@ struct PlayerView: View {
                 .font(BeansFont.appFont(12, .medium))
                 .foregroundStyle(palette.secondary)
                 .frame(width: 56, alignment: .leading)
-            Slider(value: value, in: range, step: step)
-                .tint(Color.beansAmber)
-                .transaction { transaction in transaction.animation = nil }
+            layoutValueSlider(title: title, value: value, range: range, step: step)
             Text(String(format: format, value.wrappedValue))
                 .font(BeansFont.appFont(11, .regular, .monospaced))
                 .foregroundStyle(palette.secondary)
                 .frame(width: 34, alignment: .trailing)
+        }
+    }
+
+    @ViewBuilder
+    private func layoutValueSlider(title: String, value: Binding<CGFloat>, range: ClosedRange<CGFloat>, step: CGFloat) -> some View {
+        if #available(iOS 26.0, *) {
+            Slider(value: value, in: range, step: step)
+                .tint(Color.beansAmber)
+                .transaction { transaction in transaction.animation = nil }
+        } else {
+            LegacyLayoutSlider(value: value, range: range, step: step, accessibilityLabel: title)
+                .frame(height: 36)
         }
     }
 
@@ -5280,6 +5290,74 @@ struct PlayerSettingsSheet: View {
         case 3: return "强烈"
         case 4: return "明亮"
         default: return "极亮"
+        }
+    }
+}
+
+private struct LegacyLayoutSlider: UIViewRepresentable {
+    @Binding var value: CGFloat
+    let range: ClosedRange<CGFloat>
+    let step: CGFloat
+    let accessibilityLabel: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(value: $value, range: range, step: step)
+    }
+
+    func makeUIView(context: Context) -> UISlider {
+        let slider = UISlider(frame: .zero)
+        slider.minimumValue = Float(range.lowerBound)
+        slider.maximumValue = Float(range.upperBound)
+        slider.minimumTrackTintColor = UIColor(Color.beansAmber)
+        slider.maximumTrackTintColor = UIColor(Color.beansAmber.opacity(0.24))
+        slider.accessibilityLabel = accessibilityLabel
+        slider.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
+        update(slider)
+        return slider
+    }
+
+    func updateUIView(_ slider: UISlider, context: Context) {
+        context.coordinator.value = $value
+        context.coordinator.range = range
+        context.coordinator.step = step
+        slider.minimumValue = Float(range.lowerBound)
+        slider.maximumValue = Float(range.upperBound)
+        slider.accessibilityLabel = accessibilityLabel
+        update(slider)
+    }
+
+    private func update(_ slider: UISlider) {
+        let clamped = min(max(value, range.lowerBound), range.upperBound)
+        let snapped: CGFloat
+        if step > 0 {
+            snapped = range.lowerBound + ((clamped - range.lowerBound) / step).rounded() * step
+        } else {
+            snapped = clamped
+        }
+        slider.setValue(Float(min(max(snapped, range.lowerBound), range.upperBound)), animated: false)
+    }
+
+    final class Coordinator: NSObject {
+        var value: Binding<CGFloat>
+        var range: ClosedRange<CGFloat>
+        var step: CGFloat
+
+        init(value: Binding<CGFloat>, range: ClosedRange<CGFloat>, step: CGFloat) {
+            self.value = value
+            self.range = range
+            self.step = step
+        }
+
+        @objc func valueChanged(_ sender: UISlider) {
+            let raw = CGFloat(sender.value)
+            let clamped = min(max(raw, range.lowerBound), range.upperBound)
+            let snapped: CGFloat
+            if step > 0 {
+                snapped = range.lowerBound + ((clamped - range.lowerBound) / step).rounded() * step
+            } else {
+                snapped = clamped
+            }
+            value.wrappedValue = min(max(snapped, range.lowerBound), range.upperBound)
         }
     }
 }

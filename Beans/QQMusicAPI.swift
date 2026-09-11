@@ -1288,23 +1288,39 @@ final class QQMusicAPI {
     /// QQ 当前账号“猜你喜欢”推荐，结果随账号听歌行为变化。
     private func personalizedRecommendSongs(limit: Int, cookie: String) async throws -> [Song] {
         let targetLimit = max(1, limit)
+        var songs = try await personalizedRadarSongs(limit: targetLimit, cookie: cookie)
+        guard songs.count < targetLimit else {
+            return Array(songs.prefix(targetLimit))
+        }
+
+        // The radio endpoint intentionally only returns a tiny batch. Use the
+        // public new-song response only to fill a short account recommendation.
+        if let latest = try? await latestRecommendSongs(limit: targetLimit) {
+            var seen = Set(songs.map(\.identityKey))
+            songs.append(contentsOf: latest.filter { seen.insert($0.identityKey).inserted })
+        }
+        return Array(songs.prefix(targetLimit))
+    }
+
+    /// QQ account recommendation stream. Each page contains about ten tracks
+    /// and supports paging, unlike the five-track radio response.
+    private func personalizedRadarSongs(limit: Int, cookie: String) async throws -> [Song] {
+        let targetLimit = max(1, limit)
         var songs: [Song] = []
         var seen = Set<String>()
-        var consumedSongIDs: [Int] = []
-        let maximumRounds = max(1, Int(ceil(Double(targetLimit) / 5.0)) + 1)
+        let maximumPages = max(3, Int(ceil(Double(targetLimit) / 10.0)) + 3)
 
-        for _ in 0..<maximumRounds where songs.count < targetLimit {
+        for page in 1...maximumPages where songs.count < targetLimit {
             let payload: [String: Any] = [
                 "comm": ["ct": 24, "cv": 0, "uin": QQMusicAuth.shared.uin],
                 "recommend": [
-                    "module": "music.radioProxy.MbTrackRadioSvr",
-                    "method": "get_radio_track",
+                    "module": "music.recommend.TrackRelationServer",
+                    "method": "GetRadarSong",
                     "param": [
-                        "id": 99,
-                        "num": min(5, targetLimit - songs.count),
-                        "from": songs.count,
-                        "scene": 0,
-                        "song_ids": consumedSongIDs,
+                        "Page": page,
+                        "ReqType": 0,
+                        "FavSongs": [],
+                        "EntranceSongs": [],
                     ],
                 ],
             ]
@@ -1312,22 +1328,32 @@ final class QQMusicAPI {
             do {
                 json = try await musicu(payload, cookie: cookie, timeout: 12)
             } catch {
-                // Keep the successfully fetched personalized tracks when a
-                // later page is transiently unavailable.
                 if songs.isEmpty { throw error }
                 break
             }
-            let page = parseRecommendedSongs(
-                nestedArray(json, path: ["recommend", "data", "tracks"]),
+            let pageSongs = parseRadarRecommendedSongs(
+                nestedArray(json, path: ["recommend", "data", "VecSongs"]),
                 limit: targetLimit - songs.count
             )
-            let additions = page.filter { seen.insert($0.identityKey).inserted }
-            guard !additions.isEmpty else { break }
+            let additions = pageSongs.filter { seen.insert($0.identityKey).inserted }
+            guard !additions.isEmpty else { continue }
             songs.append(contentsOf: additions)
-            consumedSongIDs.append(contentsOf: additions.map(\.id))
         }
 
         return Array(songs.prefix(targetLimit))
+    }
+
+    private func parseRadarRecommendedSongs(_ items: [[String: Any]], limit: Int) -> [Song] {
+        var seen = Set<String>()
+        return items.compactMap { item in
+            let track = (item["Track"] as? [String: Any])
+                ?? (item["track"] as? [String: Any])
+                ?? item
+            return song(from: Self.unwrapQQSong(track))
+        }
+        .filter { seen.insert($0.identityKey).inserted }
+        .prefix(max(1, limit))
+        .map { $0 }
     }
 
     /// 未登录时使用 QQ 最新歌曲接口，避免把固定榜单伪装成账号推荐。

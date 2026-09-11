@@ -342,6 +342,7 @@ struct ReferencePlaybackView: View {
         VStack(spacing: 15) {
             ReferenceScrubber()
                 .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.progress)))
+                .contentShape(Rectangle())
             HStack(spacing: 28) {
                 Button {
                     BeansHaptics.tap()
@@ -401,7 +402,7 @@ struct ReferencePlaybackView: View {
         .padding(.horizontal, 24)
         .padding(.top, 10)
         .padding(.bottom, max(14, bottomInset + 4))
-        .gesture(commentsGesture)
+        .simultaneousGesture(commentsGesture, including: .subviews)
     }
 
     private func referenceActionButton(icon: String, active: Bool = false, tint: Color = .white, action: @escaping () -> Void) -> some View {
@@ -626,7 +627,7 @@ struct ReferenceScrubber: View {
                 }
                 .frame(height: 30)
                 .contentShape(Rectangle())
-                .gesture(
+                .highPriorityGesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             if !scrubbing {

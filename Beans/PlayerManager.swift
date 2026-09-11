@@ -1701,12 +1701,13 @@ final class PlayerManager: NSObject, ObservableObject {
             let session = AVAudioSession.sharedInstance()
             // 「与其他音频同时播放」开关：开启时 mixWithOthers，打开其他音频软件也能继续播放；关闭则自动暂停
             let options: AVAudioSession.CategoryOptions = mixesWithOthers ? [.mixWithOthers] : []
-            if mixesWithOthers {
-                try session.setCategory(.playback, mode: .default, policy: .longFormAudio, options: options)
-            } else {
-                try session.setCategory(.playback, mode: .default, policy: .longFormAudio, options: options)
-            }
+            let policy: AVAudioSession.RouteSharingPolicy = mixesWithOthers ? .default : .longFormAudio
+            try session.setCategory(.playback, mode: .default, policy: policy, options: options)
             try session.setActive(true)
+            if mixesWithOthers, !session.categoryOptions.contains(.mixWithOthers) {
+                BeansLogger.shared.log("音频混合选项未生效", level: .warn)
+                return false
+            }
             return true
         } catch {
             BeansLogger.shared.log("音频会话配置失败：\(error.localizedDescription)", level: .error)
@@ -1859,6 +1860,8 @@ final class PlayerManager: NSObject, ObservableObject {
         // 系统定义 began=1、ended=0；使用原始值兼容旧系统 SDK。
         if rawType == 1 {
             rememberAudioPlaybackIntent()
+            sessionConfigured = false
+            scheduleAudioRecovery(reason: "次级音频开始", delay: 0.12)
             refreshNowPlayingOwnership()
         } else {
             sessionConfigured = false
@@ -1970,6 +1973,9 @@ final class PlayerManager: NSObject, ObservableObject {
         }
 
         let session = AVAudioSession.sharedInstance()
+        if !session.categoryOptions.contains(.mixWithOthers) {
+            sessionConfigured = Self.applyAudioMixPreference(true)
+        }
         let otherAudioIsActive = session.isOtherAudioPlaying || session.secondaryAudioShouldBeSilencedHint
         if shouldResumeAfterAudioLoss,
            !playerIsPlaying,
