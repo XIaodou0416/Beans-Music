@@ -2855,7 +2855,7 @@ struct PlayerView: View {
     /// 布局模式下可直接拖动调整位置（与底部其他组件一致），滑杆同步可用
     private func deckGrabber(appliesPortraitLayout: Bool = true) -> some View {
         let entry = appliesPortraitLayout ? grabberEntry : PlayerLayoutEntry()
-        Capsule()
+        return Capsule()
             .fill(deckGrabberEnabled ? palette.secondary.opacity(0.5) : .clear)
             .frame(width: 40, height: 5)
             .overlay {
