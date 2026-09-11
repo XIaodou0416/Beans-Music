@@ -1541,7 +1541,7 @@ final class PlayerManager: NSObject, ObservableObject {
         }.joined(separator: ",")
         var format = "未知"
         if let track = item?.asset.tracks(withMediaType: .audio).first,
-           let description = track.formatDescriptions.first as? CMAudioFormatDescription,
+           let description = track.formatDescriptions.first,
            let stream = CMAudioFormatDescriptionGetStreamBasicDescription(description)?.pointee {
             let formatID = String(bytes: [
                 UInt8((stream.mFormatID >> 24) & 0xff),
