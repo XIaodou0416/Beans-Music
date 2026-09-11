@@ -1177,7 +1177,6 @@ final class PlayerManager: NSObject, ObservableObject {
                 guard let self, self.player === player else { return }
                 if player.timeControlStatus == .paused, self.isPlaying {
                     if self.mixesWithOthers,
-                       !self.interruptionInProgress,
                        item.status == .readyToPlay {
                         // 某些外部音频只会让 AVPlayer 暂停，不会发出完整的 interruption
                         // 通知；保留播放意图，等系统音频会话释放后自动恢复。
@@ -1828,6 +1827,8 @@ final class PlayerManager: NSObject, ObservableObject {
                 player?.pause()
                 updateNowPlaying()
             } else {
+                sessionConfigured = false
+                scheduleAudioRecovery(reason: "mixed audio interruption", delay: 0.2)
                 refreshNowPlayingOwnership()
             }
         case .ended:
@@ -1958,7 +1959,7 @@ final class PlayerManager: NSObject, ObservableObject {
         let playerIsPlaying = currentPlayer.timeControlStatus == .playing
         let playerIsPaused = currentPlayer.timeControlStatus == .paused
 
-        if playerIsPaused, itemReady, !interruptionInProgress {
+        if playerIsPaused, itemReady, (!interruptionInProgress || mixesWithOthers) {
             if !shouldResumeAfterAudioLoss {
                 rememberAudioPlaybackIntent()
             }
@@ -1970,7 +1971,10 @@ final class PlayerManager: NSObject, ObservableObject {
 
         let session = AVAudioSession.sharedInstance()
         let otherAudioIsActive = session.isOtherAudioPlaying || session.secondaryAudioShouldBeSilencedHint
-        if shouldResumeAfterAudioLoss, !playerIsPlaying, itemReady, !otherAudioIsActive {
+        if shouldResumeAfterAudioLoss,
+           !playerIsPlaying,
+           itemReady,
+           (mixesWithOthers || !otherAudioIsActive) {
             scheduleAudioRecovery(reason: "外部音频结束", delay: 0)
         }
 
@@ -1999,7 +2003,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private func recoverAudioSession(reason: String, attempt: Int) {
         guard currentSong != nil else { return }
         let session = AVAudioSession.sharedInstance()
-        if mixesWithOthers,
+        if !mixesWithOthers,
            session.isOtherAudioPlaying || session.secondaryAudioShouldBeSilencedHint {
             scheduleAudioRecovery(
                 reason: reason,

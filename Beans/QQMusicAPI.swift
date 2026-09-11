@@ -1287,25 +1287,47 @@ final class QQMusicAPI {
 
     /// QQ 当前账号“猜你喜欢”推荐，结果随账号听歌行为变化。
     private func personalizedRecommendSongs(limit: Int, cookie: String) async throws -> [Song] {
-        let payload: [String: Any] = [
-            "comm": ["ct": 24, "cv": 0, "uin": QQMusicAuth.shared.uin],
-            "recommend": [
-                "module": "music.radioProxy.MbTrackRadioSvr",
-                "method": "get_radio_track",
-                "param": [
-                    "id": 99,
-                    "num": limit,
-                    "from": 0,
-                    "scene": 0,
-                    "song_ids": [],
+        let targetLimit = max(1, limit)
+        var songs: [Song] = []
+        var seen = Set<String>()
+        var consumedSongIDs: [Int] = []
+        let maximumRounds = max(1, Int(ceil(Double(targetLimit) / 5.0)) + 1)
+
+        for _ in 0..<maximumRounds where songs.count < targetLimit {
+            let payload: [String: Any] = [
+                "comm": ["ct": 24, "cv": 0, "uin": QQMusicAuth.shared.uin],
+                "recommend": [
+                    "module": "music.radioProxy.MbTrackRadioSvr",
+                    "method": "get_radio_track",
+                    "param": [
+                        "id": 99,
+                        "num": min(5, targetLimit - songs.count),
+                        "from": songs.count,
+                        "scene": 0,
+                        "song_ids": consumedSongIDs,
+                    ],
                 ],
-            ],
-        ]
-        let json = try await musicu(payload, cookie: cookie, timeout: 12)
-        return parseRecommendedSongs(
-            nestedArray(json, path: ["recommend", "data", "tracks"]),
-            limit: limit
-        )
+            ]
+            let json: [String: Any]
+            do {
+                json = try await musicu(payload, cookie: cookie, timeout: 12)
+            } catch {
+                // Keep the successfully fetched personalized tracks when a
+                // later page is transiently unavailable.
+                if songs.isEmpty { throw error }
+                break
+            }
+            let page = parseRecommendedSongs(
+                nestedArray(json, path: ["recommend", "data", "tracks"]),
+                limit: targetLimit - songs.count
+            )
+            let additions = page.filter { seen.insert($0.identityKey).inserted }
+            guard !additions.isEmpty else { break }
+            songs.append(contentsOf: additions)
+            consumedSongIDs.append(contentsOf: additions.map(\.id))
+        }
+
+        return Array(songs.prefix(targetLimit))
     }
 
     /// 未登录时使用 QQ 最新歌曲接口，避免把固定榜单伪装成账号推荐。
