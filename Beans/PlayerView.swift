@@ -1234,6 +1234,19 @@ struct PlayerView: View {
         .padding(.top, 6)
         .padding(.bottom, max(10, bottomInset + 2))
         .frame(maxWidth: .infinity)
+        .simultaneousGesture(
+            layoutRenderingStyle == .vinyl
+                ? AnyGesture(
+                    DragGesture(minimumDistance: 24)
+                        .onEnded { value in
+                            guard value.translation.height < -54,
+                                  abs(value.translation.height) > abs(value.translation.width) else { return }
+                            BeansHaptics.medium()
+                            showComments = true
+                        }
+                )
+                : nil
+        )
     }
 
     private func iPadLandscapeAppleMusicControlDeck(bottomInset: CGFloat) -> some View {
@@ -1662,6 +1675,15 @@ struct PlayerView: View {
         }
         .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24)
+                .onEnded { value in
+                    guard value.translation.height < -54,
+                          abs(value.translation.height) > abs(value.translation.width) else { return }
+                    BeansHaptics.medium()
+                    showComments = true
+                }
+        )
     }
 
     private var vinylCompactHeader: some View {
@@ -1743,7 +1765,7 @@ struct PlayerView: View {
                     .contentShape(Rectangle())
             }
         }
-        .frame(maxWidth: 420)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var vinylMiniLyricsPreview: some View {

@@ -378,7 +378,10 @@ final class BeansEqualizer: ObservableObject {
                         filterStates[stateIndex] = state
                         sample = filtered
                     }
-                    samples[sampleIndex] = sample.isFinite ? min(max(sample, -4), 4) : 0
+                    // Keep processed PCM inside the normalized range expected by
+                    // the output route; values above 1.0 can become audible
+                    // clipping, especially on headphones.
+                    samples[sampleIndex] = sample.isFinite ? min(max(sample, -0.98), 0.98) : 0
                 }
             }
         }

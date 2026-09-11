@@ -574,8 +574,10 @@ final class PlayerManager: NSObject, ObservableObject {
         thirdPartyPrefetchTask = nil
         qqThirdPartyFallbackSongKey = nil
         let initialProgress = max(0, min(resumeAt ?? 0, max(song.duration, 0)))
-        // 切歌立即暂停旧音频，避免新歌加载期间旧歌继续播放造成“切歌卡住”感
+        // 切歌时同时解除旧 item，避免旧音频在新播放器建立期间残留输出。
         player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        player = nil
         duration = song.duration
         progress = initialProgress
         lyricProgress = initialProgress
@@ -1148,6 +1150,7 @@ final class PlayerManager: NSObject, ObservableObject {
         player.automaticallyWaitsToMinimizeStalling = false
         player.rate = Float(rate)
         self.player = player
+        logAudioOutputEnvironment(context: "创建播放器", item: item)
         configureEqualizer(for: item)
         playbackConfirmed = false
         itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
@@ -1155,8 +1158,12 @@ final class PlayerManager: NSObject, ObservableObject {
             self.performOnMain { [weak self] in
                 guard let self,
                       self.player === player,
-                      self.currentSong?.identityKey == loadedSong.identityKey,
-                      item.status == .failed else { return }
+                      self.currentSong?.identityKey == loadedSong.identityKey else { return }
+                if item.status == .readyToPlay {
+                    self.logAudioOutputEnvironment(context: "音频就绪", item: item)
+                    return
+                }
+                guard item.status == .failed else { return }
                 self.logPlaybackFailure(
                     reason: "AVPlayerItem.status.failed",
                     item: item,
@@ -1499,6 +1506,7 @@ final class PlayerManager: NSObject, ObservableObject {
         failureAutoSkipWorkItem?.cancel()
         failureAutoSkipWorkItem = nil
         player?.pause()
+        player?.replaceCurrentItem(with: nil)
         removeCurrentObservers()
         player = nil
         isPlaying = false
@@ -1524,6 +1532,29 @@ final class PlayerManager: NSObject, ObservableObject {
         let path = url.path.isEmpty ? "/" : url.path
         let shortPath = path.count > 72 ? String(path.prefix(72)) + "..." : path
         return "\(host)\(shortPath)"
+    }
+
+    private func logAudioOutputEnvironment(context: String, item: AVPlayerItem? = nil) {
+        let session = AVAudioSession.sharedInstance()
+        let outputs = session.currentRoute.outputs.map { output in
+            "\(output.portType.rawValue):\(output.portName)"
+        }.joined(separator: ",")
+        var format = "未知"
+        if let track = item?.asset.tracks(withMediaType: .audio).first,
+           let description = track.formatDescriptions.first as? CMAudioFormatDescription,
+           let stream = CMAudioFormatDescriptionGetStreamBasicDescription(description)?.pointee {
+            let formatID = String(bytes: [
+                UInt8((stream.mFormatID >> 24) & 0xff),
+                UInt8((stream.mFormatID >> 16) & 0xff),
+                UInt8((stream.mFormatID >> 8) & 0xff),
+                UInt8(stream.mFormatID & 0xff)
+            ], encoding: .ascii) ?? "????"
+            format = "\(formatID) \(Int(stream.mSampleRate))Hz \(stream.mChannelsPerFrame)ch"
+        }
+        BeansLogger.shared.log(
+            "音频输出诊断：\(context)｜route=\(outputs.isEmpty ? "无" : outputs)｜sample=\(format)｜category=\(session.category)｜mode=\(session.mode.rawValue)",
+            level: .debug
+        )
     }
 
     private func playerItemStatusDescription(_ status: AVPlayerItem.Status) -> String {
