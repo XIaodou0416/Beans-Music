@@ -867,6 +867,7 @@ struct DiscoverView: View {
     }
 
     private var qqRecommendationCards: some View {
+        let cardHeight: CGFloat = isNativeClean ? 172 : 160
         VStack(alignment: .leading, spacing: 14) {
             if !isNativeClean {
                 SectionHeader(title: "推荐")
@@ -888,7 +889,7 @@ struct DiscoverView: View {
                     Color.clear.frame(width: 0, height: 1)
                 }
                 .padding(.vertical, 3)
-                .frame(height: isNativeClean ? 178 : 166)
+                .frame(height: cardHeight + 6)
             }
             .beansCompatScrollClipDisabled()
             .padding(.trailing, isNativeClean ? -24 : 0)
@@ -1073,10 +1074,16 @@ struct DiscoverView: View {
         emphasized: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
+        let cardWidth: CGFloat = title == "每日推荐" && source == .qq
+            ? (isNativeClean ? 304 : 278)
+            : (emphasized ? (isNativeClean ? 172 : 160) : (isNativeClean ? 160 : 148))
+        let cardHeight: CGFloat = title == "每日推荐" && source == .qq
+            ? (isNativeClean ? 172 : 160)
+            : (emphasized ? (isNativeClean ? 172 : 160) : (isNativeClean ? 160 : 148))
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
                 if let coverURL {
-                    CoverImage(url: coverURL, size: emphasized ? (isNativeClean ? 172 : 160) : (isNativeClean ? 160 : 148), cornerRadius: 6)
+                    CoverImage(url: coverURL, size: cardHeight, aspectRatio: cardWidth / cardHeight, cornerRadius: 6)
                         .overlay {
                             LinearGradient(
                                 colors: [.black.opacity(0.05), .black.opacity(0.62)],
@@ -1126,7 +1133,7 @@ struct DiscoverView: View {
                 }
                 .padding(14)
             }
-            .frame(width: emphasized ? (isNativeClean ? 172 : 160) : (isNativeClean ? 160 : 148), height: emphasized ? (isNativeClean ? 172 : 160) : (isNativeClean ? 160 : 148))
+            .frame(width: cardWidth, height: cardHeight)
             .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
             .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 16, x: 0, y: 8)
             .contentShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))

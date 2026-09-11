@@ -124,7 +124,7 @@ final class DownloadManager {
                 .replacingOccurrences(of: "/", with: "-")
                 .replacingOccurrences(of: ":", with: "-")
             let actualQuality = resolved.actualQuality
-            let ext = fileExtension(for: resolved.url, response: response, quality: actualQuality)
+            let ext = fileExtension(for: resolved.url, response: response, quality: actualQuality, fileURL: tempURL)
             let dest = dir.appendingPathComponent("\(safeName).\(ext)")
             try? FileManager.default.removeItem(at: dest)
             do {
@@ -243,7 +243,10 @@ final class DownloadManager {
         }
     }
 
-    private func fileExtension(for url: URL, response: URLResponse, quality: DownloadQuality) -> String {
+    private func fileExtension(for url: URL, response: URLResponse, quality: DownloadQuality, fileURL: URL) -> String {
+        if let detected = detectedAudioExtension(at: fileURL) {
+            return detected
+        }
         if let mimeType = response.mimeType?.lowercased() {
             if mimeType.contains("flac") { return "flac" }
             if mimeType.contains("mpeg") || mimeType.contains("mp3") { return "mp3" }
@@ -264,6 +267,27 @@ final class DownloadManager {
             return responseExtension
         }
         return quality.defaultFileExtension
+    }
+
+    private func detectedAudioExtension(at url: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        let header = (try? handle.read(upToCount: 16)) ?? Data()
+        guard header.count >= 4 else { return nil }
+        if header.starts(with: Data("fLaC".utf8)) { return "flac" }
+        if header.starts(with: Data("ID3".utf8)) { return "mp3" }
+        if header.starts(with: Data("OggS".utf8)) { return "ogg" }
+        if header.count >= 12,
+           header[0] == 0x52, header[1] == 0x49, header[2] == 0x46, header[3] == 0x46,
+           header[8] == 0x57, header[9] == 0x41, header[10] == 0x56, header[11] == 0x45 {
+            return "wav"
+        }
+        if header.count >= 8,
+           header[4] == 0x66, header[5] == 0x74, header[6] == 0x79, header[7] == 0x70 {
+            return "m4a"
+        }
+        if header[0] == 0xFF, (header[1] & 0xF6) == 0xF0 { return "aac" }
+        return nil
     }
 
     /// 防止接口返回 HTTP 200 的 JSON/HTML 错误页被保存为歌曲，并阻断音质降级。

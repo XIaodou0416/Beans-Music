@@ -435,6 +435,10 @@ struct FeedbackSheet: View {
             return
         }
         let contentType = UTType(filenameExtension: sourceURL.pathExtension) ?? .data
+        guard ((try? Data(contentsOf: sourceURL, options: .mappedIfSafe))?.isEmpty == false) else {
+            errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
+            return
+        }
         guard let copyURL = FeedbackAttachmentStore.copyToTemporaryDirectory(sourceURL) else {
             errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
             return

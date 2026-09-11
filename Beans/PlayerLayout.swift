@@ -10,7 +10,9 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
     case cover = "封面"
     case title = "歌名"
     case previewLyric = "预览歌词"
-    case vinylAlbum = "黑胶播放器"
+    case vinylCover = "黑胶封面"
+    case vinylTitle = "黑胶歌名歌手"
+    case vinylPreviewLyric = "黑胶预览歌词"
     /// 保留旧的整体黑胶歌词布局键，用于兼容已保存的用户设置。
     case vinylLyric = "黑胶歌词"
     case vinylLyricsHeader = "黑胶歌词顶部"
@@ -37,7 +39,7 @@ enum PlayerLayoutPart: String, CaseIterable, Identifiable {
 
     static var vinylEditableCases: [PlayerLayoutPart] {
         [
-            .vinylAlbum, .vinylLyricsHeader, .vinylLyricsText,
+            .vinylCover, .vinylTitle, .vinylPreviewLyric, .vinylLyricsHeader, .vinylLyricsText,
             .progress, .controls, .loop, .previous, .playPause, .next, .queue,
         ]
     }
@@ -158,10 +160,11 @@ enum PlayerLayoutStore {
         var migrated = dict
         var needsSave = false
 
-        if migrated[PlayerLayoutPart.vinylAlbum.rawValue] == PlayerLayoutEntry(x: 0, y: -8, scale: 1)
-            || migrated[PlayerLayoutPart.vinylAlbum.rawValue] == PlayerLayoutEntry(x: 0, y: -56, scale: 1)
-            || migrated[PlayerLayoutPart.vinylAlbum.rawValue] == PlayerLayoutEntry() {
-            migrated[PlayerLayoutPart.vinylAlbum.rawValue] = PlayerLayoutEntry(x: 0, y: 20, scale: 1)
+        let legacyVinylKey = "黑胶播放器"
+        if migrated[legacyVinylKey] == PlayerLayoutEntry(x: 0, y: -8, scale: 1)
+            || migrated[legacyVinylKey] == PlayerLayoutEntry(x: 0, y: -56, scale: 1)
+            || migrated[legacyVinylKey] == PlayerLayoutEntry() {
+            migrated[legacyVinylKey] = PlayerLayoutEntry(x: 0, y: 20, scale: 1)
             needsSave = true
         }
         if migrated[PlayerLayoutPart.vinylLyric.rawValue] == PlayerLayoutEntry(x: 0, y: -10, scale: 1)
@@ -213,10 +216,9 @@ enum PlayerLayoutStore {
     /// 各组件默认位置 / 大小（相对原始布局的偏移与缩放）
     static func defaultEntry(for part: PlayerLayoutPart) -> PlayerLayoutEntry {
         switch part {
-        case .topBack, .topTitle, .topFavorite, .cover, .title, .previewLyric:
+        case .topBack, .topTitle, .topFavorite, .cover, .title, .previewLyric,
+             .vinylCover, .vinylTitle, .vinylPreviewLyric:
             return PlayerLayoutEntry(x: 0, y: 0, scale: 1)
-        case .vinylAlbum:
-            return PlayerLayoutEntry(x: 0, y: 20, scale: 1)
         case .vinylLyric, .vinylLyricsHeader, .vinylLyricsText:
             return PlayerLayoutEntry()
         case .progress:
@@ -272,8 +274,10 @@ enum VinylPlayerLayoutStore {
 
     static func defaultEntry(for part: PlayerLayoutPart) -> PlayerLayoutEntry {
         switch part {
-        case .vinylAlbum:
+        case .vinylCover:
             return PlayerLayoutEntry(y: 20)
+        case .vinylTitle, .vinylPreviewLyric:
+            return PlayerLayoutEntry()
         case .vinylLyricsHeader:
             return PlayerLayoutEntry(y: 30)
         case .vinylLyricsText:

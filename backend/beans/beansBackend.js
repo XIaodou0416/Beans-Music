@@ -283,7 +283,12 @@ function createBeansRouter(options = {}) {
       if (!updated) {
         removeUploadedFiles(request.files);
       }
-      response.redirect('/beans/admin/feedback');
+      response.status(201).json({
+        ok: true,
+        feedback_id: feedbackID,
+        submitted_at: submittedAt,
+        download_unlocked: unlockDownload,
+      });
     }
   );
 

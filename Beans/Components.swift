@@ -548,6 +548,7 @@ private struct BeansDetailMiniPlayerModifier: ViewModifier {
 struct CoverImage: View {
     let url: URL?
     var size: CGFloat
+    var aspectRatio: CGFloat = 1
     var cornerRadius: CGFloat = 12
     /// 封面未加载时的提示文字（播放器大封面用：等待开始播放）；nil 显示中性图标
     var emptyHint: String? = nil
@@ -559,7 +560,7 @@ struct CoverImage: View {
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(Color.beansGlassFill)
-            .frame(width: size, height: size)
+            .frame(width: size * max(aspectRatio, 0.1), height: size)
             .overlay {
                 Group {
                     if let image = imageLoader.image {
@@ -575,7 +576,7 @@ struct CoverImage: View {
                         }
                     }
                 }
-                .frame(width: size, height: size)
+                .frame(width: size * max(aspectRatio, 0.1), height: size)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -601,7 +602,7 @@ struct CoverImage: View {
                     .foregroundStyle(Color.beansComment)
             }
         }
-        .frame(width: size, height: size)
+            .frame(width: size * max(aspectRatio, 0.1), height: size)
     }
 }
 

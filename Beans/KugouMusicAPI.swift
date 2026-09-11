@@ -282,7 +282,7 @@ final class KugouMusicAPI {
     }
 
     private func independentAlbumList(limit: Int) async throws -> [Album] {
-        var components = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/album/list")!
+        var components = URLComponents(string: "http://mobilecdn.kugou.com/api/v3/album/list")!
         components.queryItems = [
             URLQueryItem(name: "format", value: "json"),
             URLQueryItem(name: "page", value: "1"),
@@ -306,7 +306,7 @@ final class KugouMusicAPI {
     }
 
     private func independentArtistList(limit: Int) async throws -> [Artist] {
-        var components = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/singer/list")!
+        var components = URLComponents(string: "http://mobilecdn.kugou.com/api/v3/singer/list")!
         components.queryItems = [
             URLQueryItem(name: "format", value: "json"),
             URLQueryItem(name: "page", value: "1"),
@@ -329,7 +329,7 @@ final class KugouMusicAPI {
     func albumSongs(albumID: String, page: Int = 1, limit: Int = 100) async throws -> [Song] {
         let id = albumID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !id.isEmpty, Int(id) != nil else { return [] }
-        var components = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/album/songs")!
+        var components = URLComponents(string: "http://mobilecdn.kugou.com/api/v3/album/songs")!
         components.queryItems = [
             URLQueryItem(name: "format", value: "json"),
             URLQueryItem(name: "albumid", value: id),
@@ -633,7 +633,7 @@ final class KugouMusicAPI {
     /// 酷狗移动端歌手歌曲列表，通常比作者接口更完整。
     private func officialArtistSongs(authorID: String, page: Int, limit: Int) async throws -> [Song] {
         let target = min(max(limit, 1), 100)
-        var components = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/singer/song")!
+        var components = URLComponents(string: "http://mobilecdn.kugou.com/api/v3/singer/song")!
         components.queryItems = [
             URLQueryItem(name: "format", value: "json"),
             URLQueryItem(name: "singerid", value: authorID),
@@ -1987,7 +1987,7 @@ final class KugouMusicAPI {
 
     private static func normalizeURL(_ value: String) -> String {
         if value.hasPrefix("//") { return "https:" + value }
-        if value.hasPrefix("http://") { return "https://" + String(value.dropFirst("http://".count)) }
+        if value.hasPrefix("http://") { return value }
         return value
     }
 

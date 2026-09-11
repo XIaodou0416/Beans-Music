@@ -1617,22 +1617,28 @@ struct PlayerView: View {
                 onNextTrack: { player.next() },
                 onPreviousTrack: { player.previous() }
             )
+            .modifier(Layoutable(
+                part: .vinylCover,
+                enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                data: $vinylLayoutData,
+                defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .vinylCover)
+            ))
 
             if showPreview {
                 vinylMiniLyricsPreview
                     .padding(.top, 0)
+                    .modifier(Layoutable(
+                        part: .vinylPreviewLyric,
+                        enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                        data: $vinylLayoutData,
+                        defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .vinylPreviewLyric)
+                    ))
             }
 
             Spacer(minLength: 0)
         }
         .padding(.bottom, deckInset + geo.safeAreaInsets.bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .modifier(Layoutable(
-            part: .vinylAlbum,
-            enabled: layoutMode && !layoutEditorUsesIPadLandscape,
-            data: $vinylLayoutData,
-            defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .vinylAlbum)
-        ))
     }
 
     private var vinylCompactHeader: some View {
@@ -1669,6 +1675,12 @@ struct PlayerView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { openArtistHome() }
             }
+            .modifier(Layoutable(
+                part: .vinylTitle,
+                enabled: layoutMode && !layoutEditorUsesIPadLandscape,
+                data: $vinylLayoutData,
+                defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .vinylTitle)
+            ))
 
             Spacer(minLength: 0)
 
@@ -3975,7 +3987,7 @@ struct PlayerView: View {
         case .appleMusic:
             appleLayoutPart = .cover
         case .vinyl:
-            layoutPart = .vinylAlbum
+            layoutPart = .vinylCover
             layoutPartRaw = layoutPart.rawValue
         case .classic:
             layoutPart = .cover
