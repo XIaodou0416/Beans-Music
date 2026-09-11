@@ -920,12 +920,13 @@ final class PlayerManager: NSObject, ObservableObject {
             "第三方播放地址失效，自动降级重试：歌曲=\(song.name)｜音质=\(thirdPartyQuality.rawValue)｜系统=\(UIDevice.current.systemVersion)｜排除域名=\(excludedHosts.sorted().joined(separator: ","))",
             level: .debug
         )
+        let excludedHostsForRetry = excludedHosts
         Task {
             let resolved = await self.resolveThirdParty(
                 song: song,
                 quality: thirdPartyQuality,
                 strict: strict,
-                excludedHosts: excludedHosts
+                excludedHosts: excludedHostsForRetry
             )
             await MainActor.run {
                 guard generation == self.loadGeneration,
@@ -951,7 +952,7 @@ final class PlayerManager: NSObject, ObservableObject {
                     )
                 } else {
                     BeansLogger.shared.log(
-                        "第三方播放地址重试未命中：歌曲=\(song.name)｜已排除域名=\(excludedHosts.sorted().joined(separator: ","))",
+                        "第三方播放地址重试未命中：歌曲=\(song.name)｜已排除域名=\(excludedHostsForRetry.sorted().joined(separator: ","))",
                         level: .debug
                     )
                     if self.retryThirdPartyIfNeeded() { return }
@@ -1541,20 +1542,35 @@ final class PlayerManager: NSObject, ObservableObject {
         }.joined(separator: ",")
         var format = "未知"
         if let track = item?.asset.tracks(withMediaType: .audio).first,
-           let description = track.formatDescriptions.first,
-           let stream = CMAudioFormatDescriptionGetStreamBasicDescription(description)?.pointee {
-            let formatID = String(bytes: [
-                UInt8((stream.mFormatID >> 24) & 0xff),
-                UInt8((stream.mFormatID >> 16) & 0xff),
-                UInt8((stream.mFormatID >> 8) & 0xff),
-                UInt8(stream.mFormatID & 0xff)
-            ], encoding: .ascii) ?? "????"
-            format = "\(formatID) \(Int(stream.mSampleRate))Hz \(stream.mChannelsPerFrame)ch"
+           let rawDescription = track.formatDescriptions.first {
+            if let description = rawDescription as? CMAudioFormatDescription {
+                let streamPointer = CMAudioFormatDescriptionGetStreamBasicDescription(description)
+                if let streamPointer {
+                    let stream = streamPointer.pointee
+                    let formatID = audioFormatIdentifier(stream.mFormatID)
+                    format = "\(formatID) \(Int(stream.mSampleRate))Hz \(stream.mChannelsPerFrame)ch"
+                } else {
+                    BeansLogger.shared.log(
+                        "音频输出诊断：无法读取音频格式描述 context=\(context)",
+                        level: .debug
+                    )
+                }
+            }
         }
         BeansLogger.shared.log(
             "音频输出诊断：\(context)｜route=\(outputs.isEmpty ? "无" : outputs)｜sample=\(format)｜category=\(session.category)｜mode=\(session.mode.rawValue)",
             level: .debug
         )
+    }
+
+    private func audioFormatIdentifier(_ value: UInt32) -> String {
+        let bytes: [UInt8] = [
+            UInt8((value >> 24) & 0xff),
+            UInt8((value >> 16) & 0xff),
+            UInt8((value >> 8) & 0xff),
+            UInt8(value & 0xff),
+        ]
+        return String(bytes: bytes, encoding: .ascii) ?? "????"
     }
 
     private func playerItemStatusDescription(_ status: AVPlayerItem.Status) -> String {

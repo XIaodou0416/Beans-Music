@@ -282,13 +282,9 @@ function createBeansRouter(options = {}) {
       });
       if (!updated) {
         removeUploadedFiles(request.files);
+        return response.status(404).json({ ok: false, message: 'feedback_not_found' });
       }
-      response.status(201).json({
-        ok: true,
-        feedback_id: feedbackID,
-        submitted_at: submittedAt,
-        download_unlocked: unlockDownload,
-      });
+      return response.status(201).json({ ok: true, feedback_id: request.params.id });
     }
   );
 
