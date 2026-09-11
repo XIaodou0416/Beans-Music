@@ -170,7 +170,7 @@ struct DiscoverView: View {
                                             .sectionEntrance(delay: 0.04)
                                     }
                                 case "歌手":
-                                    if !topArtists.isEmpty {
+                                    if source == .kugou || !topArtists.isEmpty {
                                         artistsSection
                                             .sectionEntrance(delay: 0.08)
                                     }
@@ -858,7 +858,7 @@ struct DiscoverView: View {
         } else if source == .netease {
             neteaseRecommendationCards
         } else if source == .qq {
-            qqRecommendationCard
+            qqRecommendationCards
         } else if source == .kugou {
             kugouRecommendationCards
         } else {
@@ -866,120 +866,32 @@ struct DiscoverView: View {
         }
     }
 
-    private var qqRecommendationCard: some View {
+    private var qqRecommendationCards: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: "每日推荐")
-            VStack(spacing: 4) {
-                ForEach(Array(dailySongs.prefix(6).enumerated()), id: \.element.identityKey) { index, song in
-                    qqRecommendationRow(song: song, index: index)
-                }
-                if dailySongs.isEmpty {
-                    LoadingStateView()
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 22)
-                } else if dailySongs.count > 6 {
-                    Button {
+            if !isNativeClean {
+                SectionHeader(title: "推荐")
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    neteaseRecommendationCard(
+                        title: "每日推荐",
+                        subtitle: dailyRecommendationSubtitle,
+                        icon: "calendar",
+                        coverURL: dailySongs.first?.coverURL,
+                        gradient: [Color(red: 0.15, green: 0.55, blue: 0.92), Color(red: 0.20, green: 0.78, blue: 0.84)],
+                        loadingKey: nil,
+                        emphasized: true
+                    ) {
                         BeansHaptics.tap()
                         openRoute(DiscoverRoute.dailySongs(dailySongs))
-                    } label: {
-                        Text(beansLocalized("查看全部 \(dailySongs.count) 首", "View all \(dailySongs.count) songs"))
-                            .font(BeansFont.appFont(12, .medium))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
                     }
-                    .buttonStyle(.plain)
+                    Color.clear.frame(width: 0, height: 1)
                 }
+                .padding(.vertical, 3)
+                .frame(height: isNativeClean ? 178 : 166)
             }
-        }
-    }
-
-    private func qqRecommendationRow(song: Song, index: Int) -> some View {
-        let metadata = [song.artists, song.album]
-            .filter { !$0.isEmpty }
-            .joined(separator: " · ")
-        let isCurrent = player.currentSong?.identityKey == song.identityKey && player.isPlaying
-
-        return Button {
-            BeansHaptics.tap()
-            player.play(songs: dailySongs, startAt: index)
-        } label: {
-            HStack(spacing: 12) {
-                Group {
-                    if let coverURL = song.coverURL {
-                        AsyncImage(url: coverURL) { phase in
-                            if let image = phase.image {
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            } else if phase.error != nil {
-                                qqRecommendationPlaceholder
-                            } else {
-                                ZStack {
-                                    qqRecommendationPlaceholder
-                                    ProgressView()
-                                        .controlSize(.small)
-                                }
-                            }
-                        }
-                    } else {
-                        qqRecommendationPlaceholder
-                    }
-                }
-                .frame(width: 112, height: 68)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(song.name)
-                        .font(BeansFont.appFont(15, .semibold))
-                        .foregroundStyle(Color.beansLabel)
-                        .lineLimit(1)
-                    if !metadata.isEmpty {
-                        Text(metadata)
-                            .font(BeansFont.appFont(12, .regular))
-                            .foregroundStyle(Color.beansComment)
-                            .lineLimit(1)
-                    }
-                    Text(song.formattedDuration)
-                        .font(BeansFont.appFont(11, .regular))
-                        .foregroundStyle(Color.beansComment.opacity(0.82))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if isCurrent {
-                    NowPlayingIndicator()
-                        .frame(width: 24, height: 24)
-                } else {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.beansAmber)
-                        .frame(width: 34, height: 34)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
-        .background {
-            if isNativeClean {
-                Color.clear
-            } else {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-        }
-    }
-
-    private var qqRecommendationPlaceholder: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color.beansAmber.opacity(0.46), Color.beansAmber.opacity(0.16)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            Image(systemName: "music.note")
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(.white.opacity(0.82))
+            .beansCompatScrollClipDisabled()
+            .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
 
@@ -1546,31 +1458,39 @@ struct DiscoverView: View {
     private var artistsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeader(title: beansLocalized("歌手", "Artists"))
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
-                    ForEach(topArtists) { artist in
-                        Button {
-                            BeansHaptics.tap()
-                            openRoute(.artist(artist))
-                        } label: {
-                            VStack(spacing: 8) {
-                                CoverImage(url: artist.coverURL, size: isNativeClean ? 136 : 116, cornerRadius: isNativeClean ? 68 : 58)
-                                Text(artist.name)
-                                    .font(BeansFont.appFont(isNativeClean ? 14 : 12, .semibold))
-                                    .foregroundStyle(Color.beansLabel)
-                                    .lineLimit(1)
-                                    .frame(width: isNativeClean ? 136 : 116)
+            if topArtists.isEmpty {
+                Text(beansLocalized("暂无音乐人", "No artists available"))
+                    .font(BeansFont.appFont(13))
+                    .foregroundStyle(Color.beansComment)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 18)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        ForEach(topArtists) { artist in
+                            Button {
+                                BeansHaptics.tap()
+                                openRoute(.artist(artist))
+                            } label: {
+                                VStack(spacing: 8) {
+                                    CoverImage(url: artist.coverURL, size: isNativeClean ? 136 : 116, cornerRadius: isNativeClean ? 68 : 58)
+                                    Text(artist.name)
+                                        .font(BeansFont.appFont(isNativeClean ? 14 : 12, .semibold))
+                                        .foregroundStyle(Color.beansLabel)
+                                        .lineLimit(1)
+                                        .frame(width: isNativeClean ? 136 : 116)
+                                }
                             }
+                            .buttonStyle(GlassPressButtonStyle(scale: 0.95))
                         }
-                        .buttonStyle(GlassPressButtonStyle(scale: 0.95))
+                        Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
                     }
-                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
+                    .padding(.vertical, 2)
+                    .frame(height: isNativeClean ? 168 : 146)
                 }
-                .padding(.vertical, 2)
-                .frame(height: isNativeClean ? 168 : 146)
+                .beansCompatScrollClipDisabled()
+                .padding(.trailing, isNativeClean ? -24 : 0)
             }
-            .beansCompatScrollClipDisabled()
-            .padding(.trailing, isNativeClean ? -24 : 0)
         }
     }
 

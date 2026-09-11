@@ -18,7 +18,13 @@ private struct FeedbackAttachment: Identifiable, Hashable {
     }
 
     var icon: String {
-        contentType.conforms(to: .movie) ? "video.fill" : "photo.fill"
+        if contentType.conforms(to: .movie) {
+            return "video.fill"
+        }
+        if contentType.conforms(to: .image) {
+            return "photo.fill"
+        }
+        return "doc.fill"
     }
 }
 
@@ -109,7 +115,7 @@ struct FeedbackSheet: View {
                                     Text(beansLocalized("附件", "Attachments"))
                                         .font(BeansFont.appFont(13, .semibold))
                                         .foregroundStyle(Color.beansLabel)
-                                    Text(beansLocalized("可选：图片或视频", "Optional: images or videos"))
+                                    Text(beansLocalized("可选：图片、视频或文件", "Optional: images, videos, or files"))
                                         .font(BeansFont.appFont(11))
                                         .foregroundStyle(Color.beansComment)
                                 }
@@ -214,7 +220,7 @@ struct FeedbackSheet: View {
         }
         .fileImporter(
             isPresented: $showFileImporter,
-            allowedContentTypes: [.image, .movie],
+            allowedContentTypes: [.data],
             allowsMultipleSelection: true
         ) { result in
             switch result {
@@ -422,11 +428,13 @@ struct FeedbackSheet: View {
             }
         }
 
-        let contentType = UTType(filenameExtension: sourceURL.pathExtension) ?? .data
-        guard contentType.conforms(to: .image) || contentType.conforms(to: .movie) else {
-            errorMessage = beansLocalized("只能添加图片或视频附件。", "Only image and video attachments are supported.")
+        let attributes = try? FileManager.default.attributesOfItem(atPath: sourceURL.path)
+        let size = (attributes?[.size] as? NSNumber)?.intValue ?? 0
+        guard size <= 50 * 1024 * 1024 else {
+            errorMessage = beansLocalized("单个附件不能超过 50 MB。", "Each attachment must be 50 MB or smaller.")
             return
         }
+        let contentType = UTType(filenameExtension: sourceURL.pathExtension) ?? .data
         guard let copyURL = FeedbackAttachmentStore.copyToTemporaryDirectory(sourceURL) else {
             errorMessage = beansLocalized("附件读取失败，请重新选择。", "The attachment could not be read. Please choose it again.")
             return

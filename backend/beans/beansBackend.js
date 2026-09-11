@@ -20,6 +20,19 @@ const MEDIA_TYPES = new Set([
   'video/mp4',
   'video/quicktime',
 ]);
+const DOCUMENT_TYPES = new Set([
+  'application/javascript',
+  'text/javascript',
+  'application/json',
+  'text/plain',
+  'application/pdf',
+  'application/zip',
+  'application/octet-stream',
+]);
+const DOCUMENT_EXTENSIONS = new Set([
+  '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.json', '.txt', '.log',
+  '.md', '.swift', '.plist', '.zip', '.pdf', '.csv', '.xml', '.html', '.css',
+]);
 
 function createBeansRouter(options = {}) {
   const router = express.Router();
@@ -41,7 +54,11 @@ function createBeansRouter(options = {}) {
     }),
     limits: { fileSize: MAX_ATTACHMENT_SIZE, files: MAX_ATTACHMENTS },
     fileFilter: (_request, file, callback) => {
-      callback(MEDIA_TYPES.has(file.mimetype) ? null : new Error('unsupported_attachment'), MEDIA_TYPES.has(file.mimetype));
+      const extension = path.extname(file.originalname || '').toLowerCase();
+      const supported = MEDIA_TYPES.has(file.mimetype)
+        || DOCUMENT_TYPES.has(file.mimetype)
+        || DOCUMENT_EXTENSIONS.has(extension);
+      callback(supported ? null : new Error('unsupported_attachment'), supported);
     },
   });
 
@@ -554,7 +571,11 @@ function extensionFor(file) {
     'video/mp4': '.mp4',
     'video/quicktime': '.mov',
   };
-  return extensions[file.mimetype] || '.bin';
+  if (extensions[file.mimetype]) {
+    return extensions[file.mimetype];
+  }
+  const originalExtension = path.extname(file.originalname || '').toLowerCase();
+  return DOCUMENT_EXTENSIONS.has(originalExtension) ? originalExtension : '.bin';
 }
 
 function ensureDirectory(directory) {
@@ -641,7 +662,7 @@ function renderAdminPage(database, section = 'overview') {
       }).join(' ');
       return `<div class="reply"><strong>后台回复</strong><small>${escapeHtml(reply.sent_at || '')}</small><div class="problem">${escapeHtml(reply.text || '')}</div><div class="media">${replyAttachments}</div></div>`;
     }).join('');
-    const replyForm = `<form class="reply-form" method="post" action="/beans/admin/feedback/${encodeURIComponent(item.id)}/reply" enctype="multipart/form-data"><textarea name="reply" rows="3" maxlength="8000" placeholder="回复内容（可只上传图片或视频）"></textarea><input type="file" name="reply_attachments[]" accept="image/*,video/*" multiple><button>发送回复</button></form>`;
+    const replyForm = `<form class="reply-form" method="post" action="/beans/admin/feedback/${encodeURIComponent(item.id)}/reply" enctype="multipart/form-data"><textarea name="reply" rows="3" maxlength="8000" placeholder="回复内容（可只上传附件）"></textarea><input type="file" name="reply_attachments[]" accept="*/*" multiple><button>发送回复</button></form>`;
     const deleteButton = `<form method="post" action="/beans/admin/feedback/${encodeURIComponent(item.id)}/delete" onsubmit="return confirm('确定删除这条反馈工单？')"><button class="danger">删除工单</button></form>`;
     return `<tr><td>${escapeHtml(item.submitted_at)}</td><td class="id">${escapeHtml(item.user_id)}</td><td>${escapeHtml(item.phone_model)}<br><small>${escapeHtml(item.phone_system)}</small></td><td class="problem">${escapeHtml(item.problem)}<div class="media">${attachments}</div>${replies}${replyForm}</td><td>${deleteButton}</td></tr>`;
   }).join('');

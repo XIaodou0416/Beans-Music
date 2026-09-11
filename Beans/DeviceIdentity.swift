@@ -36,6 +36,12 @@ enum DeviceIdentity {
         case "gif": return "image/gif"
         case "mov": return "video/quicktime"
         case "mp4", "m4v": return "video/mp4"
+        case "js", "mjs", "cjs": return "application/javascript"
+        case "ts", "tsx": return "text/typescript"
+        case "json": return "application/json"
+        case "txt", "log", "md", "swift": return "text/plain"
+        case "pdf": return "application/pdf"
+        case "zip": return "application/zip"
         default: return "application/octet-stream"
         }
     }
