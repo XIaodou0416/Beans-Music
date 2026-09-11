@@ -195,6 +195,13 @@ struct PlayerView: View {
         return false
     }
 
+    private var usesAppleMusicOverlayLayoutEditor: Bool {
+        if #available(iOS 26.0, *) {
+            return true
+        }
+        return false
+    }
+
     private var landscapeApplePrimaryColor: Color {
         if appleMusicPrimaryHex.hasPrefix("#"), let color = Color(hex: appleMusicPrimaryHex) {
             return color
@@ -439,6 +446,16 @@ struct PlayerView: View {
                         }
                     )
 
+                    if layoutMode && usesAppleMusicOverlayLayoutEditor {
+                        appleMusicLayoutToolbar
+                            .contentShape(Rectangle())
+                            .frame(maxWidth: .infinity)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                            .padding(.top, 54)
+                            .transition(.opacity)
+                            .zIndex(60)
+                    }
+
                     if showMoreActions {
                         Color.black.opacity(0.001)
                             .ignoresSafeArea()
@@ -617,7 +634,7 @@ struct PlayerView: View {
             layoutPart = PlayerLayoutPart(rawValue: rawValue) ?? .progress
         }
         .sheet(isPresented: Binding(
-            get: { layoutMode && coverPlayerStyle == .appleMusic },
+            get: { layoutMode && coverPlayerStyle == .appleMusic && !usesAppleMusicOverlayLayoutEditor },
             set: { presented in
                 if !presented { layoutMode = false }
             }
@@ -789,8 +806,14 @@ struct PlayerView: View {
                 iPadLandscapeControlDeck(bottomInset: geo.safeAreaInsets.bottom)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
-                if layoutMode && coverPlayerStyle != .appleMusic {
-                    layoutToolbar
+                if layoutMode && (coverPlayerStyle != .appleMusic || usesAppleMusicOverlayLayoutEditor) {
+                    Group {
+                        if coverPlayerStyle == .appleMusic {
+                            appleMusicLayoutToolbar
+                        } else {
+                            layoutToolbar
+                        }
+                    }
                     .contentShape(Rectangle())
                     .frame(maxWidth: .infinity)
                     .frame(maxHeight: .infinity, alignment: .top)
@@ -3094,7 +3117,7 @@ struct PlayerView: View {
     private var appleMusicLayoutToolbar: some View {
         VStack(spacing: 10) {
             HStack {
-                Text("Apple Music 布局调整")
+                Text(usesAppleMusicOverlayLayoutEditor ? "Apple Music 实时布局" : "Apple Music 布局调整")
                     .font(BeansFont.appFont(15, .bold))
                 Spacer()
                 Button {
@@ -3110,7 +3133,9 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.plain)
             }
-            appleMusicLayoutPreview
+            if !usesAppleMusicOverlayLayoutEditor {
+                appleMusicLayoutPreview
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(AppleMusicLayoutPart.allCases) { part in
@@ -3146,7 +3171,9 @@ struct PlayerView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    Text("上方预览会同步显示当前调整，关闭此页后播放器也会保留相同布局")
+                    Text(usesAppleMusicOverlayLayoutEditor
+                         ? "X / Y / 大小和 Apple Music 外观会立即同步到当前播放页"
+                         : "上方预览会同步显示当前调整，关闭此页后播放器也会保留相同布局")
                         .font(BeansFont.appFont(11))
                         .foregroundStyle(palette.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
