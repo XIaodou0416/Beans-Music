@@ -16,6 +16,7 @@ targets:
       - Beans
     dependencies:
       - target: BeansWidget
+        embed: true
     resources:
       - Beans/en.lproj
       - Beans/zh-Hans.lproj
@@ -61,8 +62,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.widget
+        PRODUCT_NAME: BeansWidget
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1,2"
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: NO
     info:
       path: BeansWidget/Info.plist
       properties:
