@@ -471,10 +471,10 @@ struct AppleMusicLayoutTransform: ViewModifier {
     }
 }
 
-/// 让组件可自由拖动并应用自定义位置、大小、旋转和透明度
+/// 应用自定义位置、大小、旋转和透明度，位置通过设置页滑块调整。
 struct Layoutable: ViewModifier {
     let part: PlayerLayoutPart
-    /// 编辑模式开关：开启时可拖动，未开启时完全无影响
+    /// 编辑模式开关：控制设置页是否应用自定义布局。
     let enabled: Bool
     /// 布局数据（双向绑定，实时保存）
     @Binding var data: [String: PlayerLayoutEntry]
@@ -504,17 +504,6 @@ struct Layoutable: ViewModifier {
             .rotationEffect(.degrees(displayEntry.rotation))
             .opacity(displayEntry.opacity)
             .offset(x: displayEntry.x, y: displayEntry.y)
-            .simultaneousGesture(
-                enabled && appliesTransform
-                    ? DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            var e = data[part.rawValue] ?? fallback
-                            e.x = normalizedX(value.translation.width)
-                            e.y = value.translation.height
-                            data[part.rawValue] = e
-                        }
-                    : nil
-            )
     }
 
     private func normalizedEntry(_ entry: PlayerLayoutEntry) -> PlayerLayoutEntry {
@@ -534,7 +523,7 @@ struct Layoutable: ViewModifier {
     }
 }
 
-/// iPad 横屏组件的位置与大小调整。
+/// iPad 横屏组件的位置与大小调整，位置通过设置页滑块调整。
 struct IPadLandscapeLayoutable: ViewModifier {
     let part: IPadLandscapeLayoutPart
     let style: BeansCoverPlayerStyle
@@ -572,18 +561,5 @@ struct IPadLandscapeLayoutable: ViewModifier {
             .rotationEffect(.degrees(displayEntry.rotation))
             .opacity(displayEntry.opacity)
             .offset(x: displayEntry.x, y: displayEntry.y)
-            .simultaneousGesture(
-                enabled && appliesTransform
-                    ? DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            var styleData = data[style.rawValue] ?? [:]
-                            var updated = styleData[part.rawValue] ?? PlayerLayoutEntry()
-                            updated.x = value.translation.width
-                            updated.y = value.translation.height
-                            styleData[part.rawValue] = updated
-                            data[style.rawValue] = styleData
-                        }
-                    : nil
-            )
     }
 }

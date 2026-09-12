@@ -2977,7 +2977,7 @@ struct PlayerView: View {
 
     /// 底部指示线：只有在指示线附近上滑才呼出评论区（避免误触控制按钮）
     /// 指示线可关闭（透明但保留热区，仍可上滑呼出评论区）
-    /// 布局模式下可直接拖动调整位置（与底部其他组件一致），滑杆同步可用
+    /// 底部指示线保留上滑评论手势，位置通过设置页滑块调整。
     private func deckGrabber(appliesPortraitLayout: Bool = true) -> some View {
         let entry = appliesPortraitLayout ? grabberEntry : PlayerLayoutEntry()
         return Capsule()
@@ -2994,22 +2994,14 @@ struct PlayerView: View {
             .scaleEffect(entry.scale)
             .offset(x: entry.x, y: entry.y)
             .gesture(
-                layoutMode && appliesPortraitLayout && !layoutEditorUsesIPadLandscape
-                    ? AnyGesture(DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            layoutPart = .grabber
-                            var e = layoutData[PlayerLayoutPart.grabber.rawValue] ?? PlayerLayoutStore.defaultEntry(for: .grabber)
-                            e.x = value.translation.width
-                            e.y = value.translation.height
-                            layoutData[PlayerLayoutPart.grabber.rawValue] = e
-                        })
-                    : AnyGesture(DragGesture(minimumDistance: 25)
-                        .onEnded { value in
-                            if value.translation.height < -50, song != nil {
-                                BeansHaptics.medium()
-                                showComments = true
-                            }
-                        })
+                DragGesture(minimumDistance: 25)
+                    .onEnded { value in
+                        guard !layoutMode,
+                              value.translation.height < -50,
+                              song != nil else { return }
+                        BeansHaptics.medium()
+                        showComments = true
+                    }
             )
     }
 
@@ -3587,10 +3579,6 @@ struct PlayerView: View {
                         .foregroundStyle(Color.beansAmber)
                 }
                 .buttonStyle(.plain)
-                Spacer()
-                Text("拖动预览中的组件也可以调整位置")
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(palette.secondary)
             }
             .frame(height: 52)
         }
@@ -3618,7 +3606,7 @@ struct PlayerView: View {
                 let canvasSize = playerPreviewCanvasSize
                 let availableWidth = max(1, geometry.size.width - 16)
                 let availableHeight = max(1, geometry.size.height - 16)
-                let scale = min(availableWidth / canvasSize.width, availableHeight / canvasSize.height)
+                let scale = min(availableWidth / canvasSize.width, availableHeight / canvasSize.height) * 0.88
 
                 ZStack {
                     GeometryReader { previewGeometry in
@@ -3651,7 +3639,6 @@ struct PlayerView: View {
                 .clipped()
             }
             .aspectRatio(previewDeviceAspect, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 50 : 26, style: .continuous))
             .overlay(alignment: .top) {
                 if layoutPreviewDevice == .iPhone {
                     Image("iPhonePreviewShell")
@@ -3687,7 +3674,7 @@ struct PlayerView: View {
                 let scale = min(
                     availableWidth / canvasSize.width,
                     availableHeight / canvasSize.height
-                )
+                ) * 0.88
 
                 ZStack {
                     ReferencePlaybackView(
@@ -3729,7 +3716,6 @@ struct PlayerView: View {
                 .clipped()
             }
             .aspectRatio(previewDeviceAspect, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 50 : 26, style: .continuous))
             .overlay(alignment: .top) {
                 if layoutPreviewDevice == .iPhone {
                     Image("iPhonePreviewShell")
@@ -4076,7 +4062,7 @@ struct PlayerView: View {
     private var iPadLandscapeLayoutPreview: some View {
         GeometryReader { geometry in
             let canvasSize = CGSize(width: 844, height: 390)
-            let scale = min((geometry.size.width - 16) / canvasSize.width, (geometry.size.height - 16) / canvasSize.height)
+            let scale = min((geometry.size.width - 16) / canvasSize.width, (geometry.size.height - 16) / canvasSize.height) * 0.88
             ZStack {
                 iPadLandscapeLyricsView
                     .frame(width: canvasSize.width, height: canvasSize.height)
@@ -4087,13 +4073,6 @@ struct PlayerView: View {
             .clipped()
         }
         .aspectRatio(CGFloat(844) / CGFloat(390), contentMode: .fit)
-        .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.24), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
         .frame(maxWidth: 460)
     }
 
