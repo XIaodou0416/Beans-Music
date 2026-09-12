@@ -530,43 +530,9 @@ struct ProfileView: View {
         updateShareFileURL = nil
     }
 
-    /// 开源地址 + 检查更新（GitHub 项目，可点击交互）
+    /// 检查更新
     private var updateLinkCard: some View {
         VStack(spacing: 0) {
-            Button {
-                BeansHaptics.tap()
-                if let url = URL(string: "https://github.com/XIaodou0416/Beans-Music") {
-                    UIApplication.shared.open(url)
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.beansHighlight)
-                        .frame(width: 26)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(beansLocalized("开源地址", "Open Source"))
-                            .font(BeansFont.appFont(14, .semibold))
-                            .foregroundStyle(Color.beansLabel)
-                        Text("GitHub：XIaodou0416/Beans-Music")
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.beansComment)
-                }
-                .padding(16)
-            }
-            .buttonStyle(.plain)
-
-            Divider()
-                .overlay(Color.beansComment.opacity(0.16))
-                .padding(.horizontal, 16)
-
             Button {
                 BeansHaptics.tap()
                 guard !checkingUpdate else { return }
