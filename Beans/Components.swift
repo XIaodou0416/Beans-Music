@@ -118,6 +118,7 @@ struct GlassPressButtonStyle: ButtonStyle {
 struct GlassBackdrop: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     /// 自定义背景色（nil 使用默认氛围渐变）
     var customColor: Color? = nil
@@ -162,7 +163,7 @@ struct GlassBackdrop: View {
             } else {
                 LinearGradient.beansBackdrop
             }
-            if uiStyle != .nativeClean {
+            if uiStyle != .nativeClean, !settingsPerformanceMode {
                 Circle()
                     .fill(Color.beansAmber.opacity(0.14))
                     .frame(width: 340, height: 340)
@@ -257,15 +258,10 @@ struct BeansGlass<S: Shape>: View {
 
     var body: some View {
         if settingsPerformanceMode {
-            if #available(iOS 26, *) {
-                regularBody
-            } else {
-                // 旧系统的 Material 在长设置页滚动时会触发高成本的实时合成。
-                // 使用不改变层级的纯色表面，保留卡片边界但避免掉帧。
-                shape
-                    .fill(Color.beansGlassFill.opacity(0.86))
-                    .allowsHitTesting(false)
-            }
+            // 编辑器和设置页只保留不参与实时合成的表面，减少滚动时的 GPU 合成压力。
+            shape
+                .fill(Color.beansGlassFill.opacity(0.86))
+                .allowsHitTesting(false)
         } else {
             regularBody
         }

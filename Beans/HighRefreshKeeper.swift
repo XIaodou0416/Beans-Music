@@ -75,6 +75,8 @@ final class HighRefreshKeeper {
 }
 
 struct HighRefreshConfigurator: UIViewRepresentable {
+    @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
+
     func makeUIView(context: Context) -> UIView {
         let view = UIView(frame: .zero)
         view.isUserInteractionEnabled = false
@@ -82,6 +84,10 @@ struct HighRefreshConfigurator: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        HighRefreshKeeper.shared.attach(to: uiView)
+        if settingsPerformanceMode || PlaybackRenderGate.shared.isSuppressed {
+            HighRefreshKeeper.shared.suspendTemporarily()
+        } else {
+            HighRefreshKeeper.shared.attach(to: uiView)
+        }
     }
 }

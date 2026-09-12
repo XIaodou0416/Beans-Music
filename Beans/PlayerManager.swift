@@ -27,12 +27,34 @@ enum PlayMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// 播放器编辑页显示时暂停高频界面订阅，音频引擎和真实播放进度继续运行。
+final class PlaybackRenderGate {
+    static let shared = PlaybackRenderGate()
+
+    private var suppressionDepth = 0
+
+    private init() {}
+
+    var isSuppressed: Bool {
+        suppressionDepth > 0
+    }
+
+    func beginSuppression() {
+        suppressionDepth += 1
+    }
+
+    func endSuppression() {
+        suppressionDepth = max(0, suppressionDepth - 1)
+    }
+}
+
 final class PlaybackClock: ObservableObject {
     @Published private(set) var progress: Double = 0
     @Published private(set) var duration: Double = 0
 
     func update(progress: Double? = nil, duration: Double? = nil) {
         let apply = {
+            guard !PlaybackRenderGate.shared.isSuppressed else { return }
             if let progress, abs(progress - self.progress) > 0.01 {
                 self.progress = progress
             }

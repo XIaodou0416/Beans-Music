@@ -28,6 +28,7 @@ struct PlayerView: View {
     @State private var sharedFileURL: URL?
     @State private var showAddToLocalPlaylist = false
     @State private var showPlayerSettings = false
+    @State private var playbackRenderingSuppressed = false
     @State private var showArtistHome = false
     @State private var pickedArtistName = ""
     @State private var showArtistPicker = false
@@ -336,7 +337,7 @@ struct PlayerView: View {
     }
 
     private var playerVisualsActive: Bool {
-        player.isPlaying && !showPlayerSettings
+        player.isPlaying && !showPlayerSettings && !layoutMode
     }
 
     private func openPlayerSettings() {
@@ -349,6 +350,27 @@ struct PlayerView: View {
         withAnimation(.easeOut(duration: 0.24)) {
             showPlayerSettings = false
         }
+    }
+
+    /// 设置页和布局编辑器显示期间暂停播放器界面的高频刷新，音频播放继续进行。
+    private func syncPlaybackRenderingSuppression() {
+        let shouldSuppress = showPlayerSettings || layoutMode
+        guard shouldSuppress != playbackRenderingSuppressed else { return }
+        playbackRenderingSuppressed = shouldSuppress
+        if shouldSuppress {
+            PlaybackRenderGate.shared.beginSuppression()
+            HighRefreshKeeper.shared.suspendTemporarily()
+        } else {
+            PlaybackRenderGate.shared.endSuppression()
+            HighRefreshKeeper.shared.resumeAfterTemporaryPause()
+        }
+    }
+
+    private func releasePlaybackRenderingSuppression() {
+        guard playbackRenderingSuppressed else { return }
+        playbackRenderingSuppressed = false
+        PlaybackRenderGate.shared.endSuppression()
+        HighRefreshKeeper.shared.resumeAfterTemporaryPause()
     }
 
     /// 当前行歌词颜色（可自定义；配色模式关闭时自动跟随封面取色）
@@ -549,6 +571,7 @@ struct PlayerView: View {
         }
         .onAppear {
             playerViewportSize = rootGeometry.size
+            syncPlaybackRenderingSuppression()
         }
         .onChange(of: rootGeometry.size) { newSize in
             playerViewportSize = newSize
@@ -620,12 +643,20 @@ struct PlayerView: View {
                     && playerViewportSize.width > playerViewportSize.height
                 layoutPreviewShowLyrics = false
             }
+            syncPlaybackRenderingSuppression()
+        }
+        .onChange(of: showPlayerSettings) { _ in
+            syncPlaybackRenderingSuppression()
+        }
+        .onDisappear {
+            releasePlaybackRenderingSuppression()
         }
         .sheet(isPresented: $layoutMode) {
             unifiedPlayerLayoutEditor
             .environmentObject(theme)
             .environmentObject(player)
             .environmentObject(clock)
+            .environment(\.beansSettingsPerformanceMode, true)
         }
         .sheet(isPresented: $showQueue) {
             QueueView()
@@ -648,6 +679,7 @@ struct PlayerView: View {
             PlayerSettingsSheet(layoutMode: $layoutMode, onDismiss: closePlayerSettings)
                 .environmentObject(theme)
                 .environmentObject(player)
+                .environment(\.beansSettingsPerformanceMode, true)
         }
         .sheet(item: $shareFile, onDismiss: cleanupSharedFile) { item in
             ShareSheet(items: [item.url])
@@ -5448,12 +5480,13 @@ struct LyricPreset {
     ]
 }
 
-// MARK: - 播放器设置（更多菜单 → 播放器设置：进度条样式 / 背景光晕 / 歌词字号 / 颜色色盘）
+// MARK: - 播放器设置（更多菜单 → 播放器设置：全局播放行为与播放器风格入口）
 
 struct PlayerSettingsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     private let onDismiss: (() -> Void)?
+    // Shared values remain available to the existing settings helpers; style-specific controls are rendered by the layout editor.
     @AppStorage("beans.playerBreath") private var breath = 0.6
     @AppStorage("beans.playerDustMode") private var playerDustModeRaw = BeansPlayerDustMode.off.rawValue
     @AppStorage("beans.playerDustDensity") private var playerDustDensity = 1.0
@@ -5771,11 +5804,6 @@ struct PlayerSettingsSheet: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     playingCard
-                    appleMusicCard
-                    if classicPlayerFeaturesAvailable {
-                        lyricDisplayCard
-                        lyricEffectCard
-                    }
                     layoutCard
                     coverCard
                 }
@@ -5903,106 +5931,13 @@ struct PlayerSettingsSheet: View {
         }
     }
 
-    /// 播放卡片：切歌 / 进度条样式 / 背景光晕 / DJ 视觉
+    /// 播放卡片：保留全局播放行为设置
     private var playingCard: some View {
         settingCard("播放", isExpanded: $playbackExpanded) {
-            playerButtonStyleSelector
-            Divider().opacity(0.5)
             CompactSettingGroup {
-                settingToggle("控件跟随封面取色", isOn: $controlsUseCoverColor,
-                              caption: "关闭后使用全局主题色")
-                Divider().opacity(0.35)
-                ColorPicker("顶部/底部主图标颜色", selection: playerMainIconColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-                ColorPicker("顶部/底部次级图标颜色", selection: playerSecondaryIconColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-                ColorPicker("播放按钮强调色", selection: playerPrimaryButtonColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-                Button {
-                    playerMainIconColorHex = ""
-                    playerSecondaryIconColorHex = ""
-                    playerPrimaryButtonColorHex = ""
-                    BeansHaptics.select()
-                } label: {
-                    Text("恢复播放页控件颜色默认")
-                        .font(BeansFont.appFont(12, .semibold))
-                        .foregroundStyle(Color.beansAmber)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color.beansAmber.opacity(0.12), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                Divider().opacity(0.35)
-                settingToggle("左右滑动切歌", isOn: $swipeSwitchSong,
-                              caption: "左滑下一首，右滑上一首")
-                Divider().opacity(0.35)
                 settingToggle("播放失败自动下一首", isOn: $autoSkipOnFailure,
                               caption: "当前歌曲解析失败或播放地址失效时，自动跳到下一首")
             }
-
-            if classicPlayerFeaturesAvailable {
-                Divider().opacity(0.5)
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("进度条颜色")
-                            .font(BeansFont.appFont(13))
-                            .foregroundStyle(Color.beansLabel)
-                        Text(LocalizedStringKey(progressAccentHex.isEmpty ? "跟随播放控件" : "自定义"))
-                            .font(BeansFont.appFont(12))
-                            .foregroundStyle(Color.beansComment)
-                    }
-                    Spacer()
-                    ColorPicker("", selection: progressAccentColor)
-                        .labelsHidden()
-                    Button {
-                        progressAccentHex = ""
-                        BeansHaptics.select()
-                    } label: {
-                        Text("跟随")
-                            .font(BeansFont.appFont(12, .semibold))
-                            .foregroundStyle(Color.beansAmber)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.beansAmber.opacity(0.12), in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-                Divider().opacity(0.5)
-                Text("进度条样式")
-                    .font(BeansFont.appFont(13, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                progressStyleGrid
-                Divider().opacity(0.5)
-                settingSlider("背景光晕强度", valueText: "\(Int((breath * 100).rounded()))%") {
-                    Slider(value: $breath, in: 0...1, step: 0.05)
-                        .tint(Color.beansAmber)
-                }
-                Divider().opacity(0.5)
-                dustModeSelector
-                if playerDustModeRaw == BeansPlayerDustMode.snow.rawValue {
-                    settingSlider("浮尘密度", valueText: String(format: "%.1fx", playerDustDensity)) {
-                        Slider(value: $playerDustDensity, in: 0.4...2.6, step: 0.1)
-                            .tint(Color.beansAmber)
-                    }
-                    settingSlider("浮尘大小", valueText: String(format: "%.1fx", playerDustSize)) {
-                        Slider(value: $playerDustSize, in: 0.8...2.8, step: 0.1)
-                            .tint(Color.beansAmber)
-                    }
-                }
-                Divider().opacity(0.5)
-                CompactSettingGroup {
-                    settingToggle("DJ 节奏脉冲光效", isOn: $djVisualEnabled,
-                                  caption: "封面背后随节拍扩散光环")
-                    if djVisualEnabled {
-                        Divider().opacity(0.35)
-                        settingSlider("光效强度", valueText: "\(Int((djVisualIntensity * 100).rounded()))%") {
-                            Slider(value: $djVisualIntensity, in: 0...1, step: 0.05)
-                                .tint(Color.beansAmber)
-                        }
-                    }
-                }
-            }
-
             Divider().opacity(0.5)
             CompactSettingGroup {
                 settingToggle("与其他音频同时播放", isOn: $mixesWithOthers,
@@ -6324,90 +6259,13 @@ struct PlayerSettingsSheet: View {
                 .font(BeansFont.appFont(12))
                 .foregroundStyle(Color.beansComment)
                 .fixedSize(horizontal: false, vertical: true)
-            Divider().opacity(0.5)
-            settingToggle("显示底部指示线", isOn: $deckGrabberEnabled,
-                          caption: "关闭后隐藏指示线，仍可上滑呼出评论区")
-            Divider().opacity(0.5)
-            HStack {
-                Text("歌词对齐样式")
-                    .font(BeansFont.appFont(13))
-                    .foregroundStyle(Color.beansLabel)
-                Spacer()
-                Picker("歌词对齐样式", selection: $lyricAlignRaw) {
-                    Text("居中").tag("center")
-                    Text("全部居左").tag("left")
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 190)
-            }
-            Button("恢复歌词默认") {
-                lyricAlignRaw = "center"
-                lyricOffsetX = 0
-                lyricAnchorY = 0
-                BeansHaptics.select()
-            }
-            .font(BeansFont.appFont(13))
-            .foregroundStyle(Color.beansAmber)
         }
     }
 
-    /// 封面卡片：圆形封面 / 旋转
+    /// 封面卡片：播放器风格选择
     private var coverCard: some View {
         settingCard("封面", isExpanded: $coverExpanded) {
             coverPlayerStyleSelector
-            if classicPlayerFeaturesAvailable {
-                Divider().opacity(0.5)
-                settingToggle("圆形封面模式", isOn: $circularCover,
-                              caption: "播放器封面与歌词页左上角封面显示为圆形")
-                Divider().opacity(0.5)
-                settingToggle("圆形封面旋转", isOn: $circularCoverSpin,
-                              caption: "开启后播放时封面自动匀速旋转")
-            }
-            Divider().opacity(0.5)
-            CompactSettingGroup {
-                Text("封面页文字颜色")
-                    .font(BeansFont.appFont(13, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                Toggle("文字渐变", isOn: $albumTextGradient)
-                    .tint(Color.beansAmber)
-                    .font(BeansFont.appFont(13))
-                Toggle("文字高光", isOn: $albumTextGlow)
-                    .tint(Color.beansAmber)
-                    .font(BeansFont.appFont(13))
-                if albumTextGlow {
-                    settingSlider("高光强度", valueText: "\(Int((albumTextGlowIntensity * 100).rounded()))%") {
-                        Slider(value: $albumTextGlowIntensity, in: 0.2...2.0, step: 0.05)
-                            .tint(Color.beansAmber)
-                    }
-                }
-                Divider().opacity(0.35)
-                ColorPicker("歌名颜色", selection: albumTitleColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-                ColorPicker("歌手颜色", selection: albumArtistColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-                ColorPicker("预览歌词颜色", selection: albumPreviewLyricColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-                ColorPicker("预览未播放颜色", selection: albumPreviewDimColor, supportsOpacity: false)
-                    .font(BeansFont.appFont(13))
-                Button {
-                    albumTitleColorHex = ""
-                    albumArtistColorHex = ""
-                    albumPreviewLyricColorHex = ""
-                    albumPreviewDimColorHex = ""
-                    albumTextGradient = false
-                    albumTextGlow = false
-                    albumTextGlowIntensity = 1.0
-                    BeansHaptics.select()
-                } label: {
-                    Text("恢复封面页文字默认")
-                        .font(BeansFont.appFont(12, .semibold))
-                        .foregroundStyle(Color.beansAmber)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color.beansAmber.opacity(0.12), in: Capsule())
-                }
-                .buttonStyle(.plain)
-            }
         }
     }
 
