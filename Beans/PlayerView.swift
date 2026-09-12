@@ -3630,6 +3630,7 @@ struct PlayerView: View {
                             }
                         }
                         .frame(width: canvasSize.width, height: canvasSize.height)
+                        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                     }
                     .frame(width: canvasSize.width, height: canvasSize.height)
                     .scaleEffect(scale)
@@ -3705,6 +3706,7 @@ struct PlayerView: View {
                         }
                     )
                     .frame(width: canvasSize.width, height: canvasSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                     .scaleEffect(scale)
                     .frame(
                         width: canvasSize.width * scale,
@@ -4066,6 +4068,7 @@ struct PlayerView: View {
             ZStack {
                 iPadLandscapeLyricsView
                     .frame(width: canvasSize.width, height: canvasSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .scaleEffect(max(0.01, scale))
                     .frame(width: canvasSize.width * scale, height: canvasSize.height * scale)
             }
