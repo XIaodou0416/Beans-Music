@@ -3667,6 +3667,7 @@ struct PlayerView: View {
             }
             .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
             .frame(maxWidth: previewDeviceMaxWidth)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(10)
         .background(Color.black.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -3750,6 +3751,7 @@ struct PlayerView: View {
             }
             .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
             .frame(maxWidth: previewDeviceMaxWidth)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(10)
         .background(Color.black.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
