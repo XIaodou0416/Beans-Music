@@ -1264,7 +1264,7 @@ struct PlayerView: View {
                     data: $iPadLandscapeLayoutData
                 ))
 
-            VStack(spacing: 10) {
+            VStack(spacing: 15) {
                 HStack(spacing: 28) {
                     Button {
                         BeansHaptics.tap()
@@ -1373,11 +1373,23 @@ struct PlayerView: View {
                 let isCircular = layoutRenderingStyle == .classic && circularCover
                 let cornerRadius = isCircular ? size / 2 : 18
                 if isCircular {
-                    CoverImage(url: song?.coverURL, size: size, cornerRadius: cornerRadius)
-                        .frame(width: size, height: size)
-                        .clipShape(Circle())
-                        .modifier(CoverSpin(enabled: circularCoverSpin, isPlaying: playerVisualsActive))
-                        .shadow(color: .black.opacity(0.38), radius: 24, y: 12)
+                    ZStack {
+                        Circle()
+                            .fill(palette.accent.opacity(0.20))
+                            .frame(width: size * 1.38, height: size * 1.38)
+                            .blur(radius: 34)
+
+                        BeansGlass(shape: Circle())
+                            .frame(width: size * 1.10, height: size * 1.10)
+                            .shadow(color: .black.opacity(0.28), radius: 22, y: 10)
+
+                        CoverImage(url: song?.coverURL, size: size, cornerRadius: cornerRadius)
+                            .frame(width: size, height: size)
+                            .clipShape(Circle())
+                            .modifier(CoverSpin(enabled: circularCoverSpin, isPlaying: playerVisualsActive))
+                            .shadow(color: .black.opacity(0.38), radius: 24, y: 12)
+                    }
+                    .frame(width: size * 1.10, height: size * 1.10)
                 } else {
                     CoverImage(url: song?.coverURL, size: size, cornerRadius: cornerRadius)
                         .frame(width: size, height: size)
