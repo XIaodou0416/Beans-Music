@@ -5803,7 +5803,6 @@ struct PlayerSettingsSheet: View {
         BeansNavigationStack {
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    playingCard
                     layoutCard
                     coverCard
                 }
@@ -5928,30 +5927,6 @@ struct PlayerSettingsSheet: View {
                 .frame(minHeight: 32)
                 .contentShape(Rectangle())
                 .allowsHitTesting(true)
-        }
-    }
-
-    /// 播放卡片：保留全局播放行为设置
-    private var playingCard: some View {
-        settingCard("播放", isExpanded: $playbackExpanded) {
-            CompactSettingGroup {
-                settingToggle("播放失败自动下一首", isOn: $autoSkipOnFailure,
-                              caption: "当前歌曲解析失败或播放地址失效时，自动跳到下一首")
-            }
-            Divider().opacity(0.5)
-            CompactSettingGroup {
-                settingToggle("与其他音频同时播放", isOn: $mixesWithOthers,
-                              caption: "开启后可与其他 App 的音频同时播放")
-                    .onChange(of: mixesWithOthers) { value in
-                        player.setMixesWithOthers(value)
-                    }
-                Divider().opacity(0.35)
-                settingToggle("显示锁屏与灵动岛播放器", isOn: $nowPlayingEnabled,
-                              caption: "独立控制系统锁屏和灵动岛的播放器信息")
-                    .onChange(of: nowPlayingEnabled) { value in
-                        player.setNowPlayingEnabled(value)
-                    }
-            }
         }
     }
 

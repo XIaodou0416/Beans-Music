@@ -27,7 +27,7 @@ enum PlayMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// 播放器编辑页显示时暂停高频界面订阅，音频引擎和真实播放进度继续运行。
+/// 播放器编辑页显示时暂停底层播放器的高频渲染，音频引擎和实时预览继续运行。
 final class PlaybackRenderGate {
     static let shared = PlaybackRenderGate()
 
@@ -54,7 +54,6 @@ final class PlaybackClock: ObservableObject {
 
     func update(progress: Double? = nil, duration: Double? = nil) {
         let apply = {
-            guard !PlaybackRenderGate.shared.isSuppressed else { return }
             if let progress, abs(progress - self.progress) > 0.01 {
                 self.progress = progress
             }
