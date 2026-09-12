@@ -72,7 +72,7 @@ struct PlayerView: View {
     /// 进度条单独强调色；空值时跟随播放控件颜色
     @AppStorage("beans.progressAccentHex") private var progressAccentHex = ""
     /// 播放器布局自由调整：开关 + 各组件 x/y/z 数据 + 当前选中组件
-    @AppStorage("beans.playerLayoutMode") private var layoutMode = false
+    @State private var layoutMode = false
     @AppStorage("beans.playerLayoutSelectedPart") private var layoutPartRaw = PlayerLayoutPart.progress.rawValue
     @State private var layoutData: [String: PlayerLayoutEntry] = PlayerLayoutStore.load()
     @State private var vinylLayoutData: [String: PlayerLayoutEntry] = VinylPlayerLayoutStore.load()
@@ -597,6 +597,9 @@ struct PlayerView: View {
             IPadLandscapeLayoutStore.save(newValue)
         }
         .onAppear {
+            // 布局编辑只在当前播放器会话内有效，不保留上次退出时的打开状态。
+            UserDefaults.standard.removeObject(forKey: "beans.playerLayoutMode")
+            layoutMode = false
             layoutPart = PlayerLayoutPart(rawValue: layoutPartRaw) ?? .progress
             showLyrics = lastLyricsPage
             if let path = LyricBackgroundStore.restoreFromBackup(), lyricBackgroundImagePath != path {
@@ -642,7 +645,7 @@ struct PlayerView: View {
             }
         }
         .fullScreenCover(isPresented: $showPlayerSettings) {
-            PlayerSettingsSheet(onDismiss: closePlayerSettings)
+            PlayerSettingsSheet(layoutMode: $layoutMode, onDismiss: closePlayerSettings)
                 .environmentObject(theme)
                 .environmentObject(player)
         }
@@ -5256,7 +5259,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.lyricGradEnd") private var gradEndRaw = ""
     @AppStorage("beans.lyricGradMode") private var gradMode = 0
     @AppStorage("beans.lyricTranslation") private var lyricTranslation = true
-    @AppStorage("beans.playerLayoutMode") private var layoutMode = false
+    @Binding private var layoutMode: Bool
     @AppStorage("beans.playerLayoutSelectedPart") private var layoutPartRaw = PlayerLayoutPart.progress.rawValue
     @AppStorage("beans.lyricAlignRaw") private var lyricAlignRaw = "center"
     @AppStorage("beans.lyricOffsetX") private var lyricOffsetX = 0.0
@@ -5297,7 +5300,8 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.playerSettings.appleMusicExpanded") private var appleMusicExpanded = false
     @State private var showLyricBackgroundPicker = false
 
-    init(onDismiss: (() -> Void)? = nil) {
+    init(layoutMode: Binding<Bool>, onDismiss: (() -> Void)? = nil) {
+        self._layoutMode = layoutMode
         self.onDismiss = onDismiss
     }
 
