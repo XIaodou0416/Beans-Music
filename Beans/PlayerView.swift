@@ -3606,7 +3606,12 @@ struct PlayerView: View {
                 let canvasSize = playerPreviewCanvasSize
                 let availableWidth = max(1, geometry.size.width - 16)
                 let availableHeight = max(1, geometry.size.height - 16)
-                let scale = min(availableWidth / canvasSize.width, availableHeight / canvasSize.height) * 0.96
+                let fallbackScale = min(availableWidth / canvasSize.width, availableHeight / canvasSize.height) * 0.96
+                let contentScale = previewContentScale(
+                    in: geometry.size,
+                    canvasSize: canvasSize,
+                    fallback: fallbackScale
+                )
 
                 ZStack {
                     GeometryReader { previewGeometry in
@@ -3633,8 +3638,8 @@ struct PlayerView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                     }
                     .frame(width: canvasSize.width, height: canvasSize.height)
-                    .scaleEffect(scale)
-                .frame(width: canvasSize.width * scale, height: canvasSize.height * scale, alignment: .center)
+                    .scaleEffect(contentScale)
+                    .frame(width: canvasSize.width * contentScale, height: canvasSize.height * contentScale, alignment: .center)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .clipped()
@@ -3672,10 +3677,15 @@ struct PlayerView: View {
                 let canvasSize = appleMusicPreviewCanvasSize
                 let availableWidth = max(1, geometry.size.width - 16)
                 let availableHeight = max(1, geometry.size.height - 16)
-                let scale = min(
+                let fallbackScale = min(
                     availableWidth / canvasSize.width,
                     availableHeight / canvasSize.height
                 ) * 0.96
+                let contentScale = previewContentScale(
+                    in: geometry.size,
+                    canvasSize: canvasSize,
+                    fallback: fallbackScale
+                )
 
                 ZStack {
                     ReferencePlaybackView(
@@ -3707,10 +3717,10 @@ struct PlayerView: View {
                     )
                     .frame(width: canvasSize.width, height: canvasSize.height)
                     .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                    .scaleEffect(scale)
+                    .scaleEffect(contentScale)
                     .frame(
-                        width: canvasSize.width * scale,
-                        height: canvasSize.height * scale,
+                        width: canvasSize.width * contentScale,
+                        height: canvasSize.height * contentScale,
                         alignment: .center
                     )
                 }
@@ -3776,6 +3786,15 @@ struct PlayerView: View {
         case .iPad:
             return layoutEditorUsesIPadLandscape ? 460 : 340
         }
+    }
+
+    /// iPhone 外壳的透明屏幕开口比例，内容按开口而不是整张外壳图片定位。
+    private func previewContentScale(in size: CGSize, canvasSize: CGSize, fallback: CGFloat) -> CGFloat {
+        guard layoutPreviewDevice == .iPhone else { return fallback }
+
+        let screenWidth = size.width * (1179.0 / 1419.0)
+        let screenHeight = size.height * (2556.0 / 2796.0)
+        return min(screenWidth / canvasSize.width, screenHeight / canvasSize.height)
     }
 
     private var unifiedPlayerLayoutEditor: some View {
