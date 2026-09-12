@@ -332,6 +332,12 @@ function createBeansRouter(options = {}) {
       return response.status(422).json({ ok: false, message: error.message });
     }
     if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return response.status(413).json({ ok: false, message: 'attachment_too_large' });
+      }
+      if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') {
+        return response.status(422).json({ ok: false, message: 'too_many_attachments' });
+      }
       return response.status(422).json({ ok: false, message: 'attachment_upload_failed' });
     }
     if (error?.message === 'unsupported_attachment') {

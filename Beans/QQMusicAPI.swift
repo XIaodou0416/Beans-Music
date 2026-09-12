@@ -34,8 +34,6 @@ final class QQMusicAPI {
 
     private func get(_ urlString: String, referer: String = "https://y.qq.com/", cookie: String = "") async throws -> [String: Any] {
         guard let url = URL(string: urlString) else { throw NetEaseError.unknown("请求地址无效") }
-        let startedAt = Date()
-        BeansLogger.shared.log("QQ HTTP GET 开始 url=\(Self.sanitizedURL(urlString)) referer=\(referer) cookie=\(Self.cookieSummary(cookie))", level: .debug)
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 QQMusic/9.0.5", forHTTPHeaderField: "User-Agent")
         request.setValue(referer, forHTTPHeaderField: "Referer")
@@ -43,7 +41,6 @@ final class QQMusicAPI {
         do {
             let (data, response) = try await session.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            BeansLogger.shared.log("QQ HTTP GET 完成 status=\(status) bytes=\(data.count) elapsed=\(Self.elapsed(startedAt))", level: .debug)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 BeansLogger.shared.log("QQ HTTP GET 非 200 status=\(status) response=\(Self.responseSummary(data))", level: .warn)
                 throw NetEaseError.network
@@ -53,10 +50,12 @@ final class QQMusicAPI {
                 let snippet = String(data: data, encoding: .utf8)?.prefix(120) ?? ""
                 throw NetEaseError.decoding(String(snippet))
             }
-            BeansLogger.shared.log("QQ HTTP GET JSON 结构 \(Self.jsonSummary(json))", level: .debug)
             return json
         } catch {
-            BeansLogger.shared.log("QQ HTTP GET 异常 elapsed=\(Self.elapsed(startedAt)) error=\(error.localizedDescription)", level: .error)
+            if (error as? URLError)?.code != .cancelled,
+               !(error is CancellationError) {
+                BeansLogger.shared.log("QQ HTTP GET 异常 error=\(error.localizedDescription)", level: .error)
+            }
             throw error
         }
     }
@@ -78,12 +77,9 @@ final class QQMusicAPI {
             request.setValue(cookie, forHTTPHeaderField: "Cookie")
         }
         request.httpBody = body
-        let startedAt = Date()
-        BeansLogger.shared.log("QQ musicu POST 开始 timeout=\(timeout)s cookie=\(Self.cookieSummary(cookie)) payload=\(Self.jsonSummary(payload))", level: .debug)
         do {
             let (data, response) = try await session.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            BeansLogger.shared.log("QQ musicu POST 完成 status=\(status) bytes=\(data.count) elapsed=\(Self.elapsed(startedAt))", level: .debug)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 BeansLogger.shared.log("QQ musicu 非 200 status=\(status) response=\(Self.responseSummary(data))", level: .warn)
                 throw NetEaseError.network
@@ -93,10 +89,12 @@ final class QQMusicAPI {
                 let snippet = String(data: data, encoding: .utf8)?.prefix(120) ?? ""
                 throw NetEaseError.decoding(String(snippet))
             }
-            BeansLogger.shared.log("QQ musicu JSON 结构 \(Self.jsonSummary(json))", level: .debug)
             return json
         } catch {
-            BeansLogger.shared.log("QQ musicu 异常 elapsed=\(Self.elapsed(startedAt)) error=\(error.localizedDescription)", level: .error)
+            if (error as? URLError)?.code != .cancelled,
+               !(error is CancellationError) {
+                BeansLogger.shared.log("QQ musicu 异常 error=\(error.localizedDescription)", level: .error)
+            }
             throw error
         }
     }
@@ -854,10 +852,8 @@ final class QQMusicAPI {
               let file = track["file"] as? [String: Any],
               let mediaMid = file["media_mid"] as? String,
               !mediaMid.isEmpty else {
-            BeansLogger.shared.log("QQ 歌曲详情未返回 media_mid，回退 songmid", level: .debug)
             return songmid
         }
-        BeansLogger.shared.log("QQ 歌曲详情：media_mid=已获取 是否不同=\(mediaMid == songmid ? "否" : "是")", level: .debug)
         return mediaMid
     }
 
@@ -935,8 +931,6 @@ final class QQMusicAPI {
               let infos = reqData["midurlinfo"] as? [[String: Any]] else { return nil }
         let playableInfos = infos.filter { ($0["purl"] as? String)?.isEmpty == false }
         guard !playableInfos.isEmpty else {
-            let result = infos.first?["result"] ?? "unknown"
-            BeansLogger.shared.log("QQ vkey 无可播地址：音质=\(br) result=\(result) 已登录=\(qqAuth.isLoggedIn ? "是" : "否")", level: .debug)
             return nil
         }
         let sips = reqData["sip"] as? [String] ?? []
@@ -959,8 +953,6 @@ final class QQMusicAPI {
                 unverifiedCandidate = unverifiedCandidate ?? candidate
                 switch await probeAudioURL(url, cookie: qqAuth.isLoggedIn ? qqAuth.cookieHeader : "") {
                 case .playable:
-                    let filename = info["filename"] as? String ?? "unknown"
-                    BeansLogger.shared.log("QQ 音频地址验证成功：音质=\(br) 文件=\(filename)", level: .debug)
                     return candidate
                 case .forbidden:
                     continue
@@ -972,10 +964,8 @@ final class QQMusicAPI {
         // 某些 QQ CDN 不支持 Range 探测，但 AVPlayer 携带 Referer/Cookie 仍可播放。
         // 不要把“探测被拒绝”误判成会员没有播放权限，交给播放器继续验证。
         if let unverifiedCandidate {
-            BeansLogger.shared.log("QQ CDN 拒绝预探测，保留地址交给 AVPlayer：音质=\(br)", level: .debug)
             return unverifiedCandidate
         }
-        BeansLogger.shared.log("QQ vkey 返回地址但 CDN 验证失败：音质=\(br) 候选=\(playableInfos.count)", level: .debug)
         return nil
     }
 

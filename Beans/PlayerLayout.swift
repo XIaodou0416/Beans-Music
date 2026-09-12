@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - 播放器 UI 自由调整（x / y / 大小）
+// MARK: - 播放器 UI 自由调整（x / y / 大小 / 旋转 / 透明度）
 
 /// 可自由调整的播放器组件
 enum PlayerLayoutPart: String, CaseIterable, Identifiable {
@@ -88,7 +88,7 @@ struct PlayerPreviewDeviceFrame<Content: View>: View {
     var body: some View {
         GeometryReader { geometry in
             let aspect: CGFloat = device == .iPhone
-                ? 0.462
+                ? 1419.0 / 2796.0
                 : (landscape ? 1.42 : 0.75)
             let availableWidth = max(1, geometry.size.width - 20)
             let availableHeight = max(1, geometry.size.height - 20)
@@ -104,11 +104,9 @@ struct PlayerPreviewDeviceFrame<Content: View>: View {
                     .frame(width: width - 12, height: height - 12)
                     .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
                 if device == .iPhone && !landscape {
-                    Capsule()
-                        .fill(Color.black.opacity(0.95))
-                        .frame(width: min(92, width * 0.28), height: 18)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 13)
+                    Image("iPhonePreviewShell")
+                        .resizable()
+                        .scaledToFit()
                         .allowsHitTesting(false)
                 }
             }
@@ -123,25 +121,39 @@ struct PlayerPreviewDeviceFrame<Content: View>: View {
     }
 }
 
-/// 单个组件的自定义位置（相对默认位置的偏移）与缩放
+/// 单个组件的自定义位置（相对默认位置的偏移）、缩放、旋转和透明度
 struct PlayerLayoutEntry: Codable, Equatable {
     var x: CGFloat = 0
     var y: CGFloat = 0
     /// 组件大小缩放（1 为原始大小）
     var scale: CGFloat = 1
+    /// 组件旋转角度
+    var rotation: CGFloat = 0
+    /// 组件透明度
+    var opacity: CGFloat = 1
 
-    init(x: CGFloat = 0, y: CGFloat = 0, scale: CGFloat = 1) {
+    init(
+        x: CGFloat = 0,
+        y: CGFloat = 0,
+        scale: CGFloat = 1,
+        rotation: CGFloat = 0,
+        opacity: CGFloat = 1
+    ) {
         self.x = x
         self.y = y
         self.scale = scale
+        self.rotation = rotation
+        self.opacity = opacity
     }
 
-    /// 兼容旧存档（老版本没有 scale 字段，缺省为 1）
+    /// 兼容旧存档（老版本没有新增字段时使用默认值）
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         x = try c.decodeIfPresent(CGFloat.self, forKey: .x) ?? 0
         y = try c.decodeIfPresent(CGFloat.self, forKey: .y) ?? 0
         scale = try c.decodeIfPresent(CGFloat.self, forKey: .scale) ?? 1
+        rotation = try c.decodeIfPresent(CGFloat.self, forKey: .rotation) ?? 0
+        opacity = try c.decodeIfPresent(CGFloat.self, forKey: .opacity) ?? 1
     }
 }
 
@@ -461,11 +473,13 @@ struct AppleMusicLayoutTransform: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scaleEffect(entry.scale)
+            .rotationEffect(.degrees(entry.rotation))
+            .opacity(entry.opacity)
             .offset(x: entry.x, y: entry.y)
     }
 }
 
-/// 让组件可自由拖动并应用自定义位置与大小（x / y 偏移 + scale 缩放）
+/// 让组件可自由拖动并应用自定义位置、大小、旋转和透明度
 struct Layoutable: ViewModifier {
     let part: PlayerLayoutPart
     /// 编辑模式开关：开启时可拖动，未开启时完全无影响
@@ -495,6 +509,8 @@ struct Layoutable: ViewModifier {
         let displayEntry = normalizedEntry(entry)
         content
             .scaleEffect(displayEntry.scale)
+            .rotationEffect(.degrees(displayEntry.rotation))
+            .opacity(displayEntry.opacity)
             .offset(x: displayEntry.x, y: displayEntry.y)
             .simultaneousGesture(
                 enabled && appliesTransform
@@ -512,6 +528,8 @@ struct Layoutable: ViewModifier {
     private func normalizedEntry(_ entry: PlayerLayoutEntry) -> PlayerLayoutEntry {
         var normalized = entry
         normalized.x = normalizedX(entry.x)
+        normalized.rotation = min(max(entry.rotation, -180), 180)
+        normalized.opacity = min(max(entry.opacity, 0.15), 1)
         if part == .loop || part == .queue {
             normalized.scale = min(max(entry.scale, 0.82), 1.15)
         }
@@ -550,9 +568,17 @@ struct IPadLandscapeLayoutable: ViewModifier {
         let entry = appliesTransform
             ? IPadLandscapeLayoutStore.entry(for: part, style: style, in: data)
             : PlayerLayoutEntry()
+        var displayEntry = entry
+        displayEntry.x = min(max(entry.x, -220), 220)
+        displayEntry.y = min(max(entry.y, -180), 180)
+        displayEntry.scale = min(max(entry.scale, 0.45), 1.6)
+        displayEntry.rotation = min(max(entry.rotation, -180), 180)
+        displayEntry.opacity = min(max(entry.opacity, 0.15), 1)
         content
-            .scaleEffect(entry.scale)
-            .offset(x: entry.x, y: entry.y)
+            .scaleEffect(displayEntry.scale)
+            .rotationEffect(.degrees(displayEntry.rotation))
+            .opacity(displayEntry.opacity)
+            .offset(x: displayEntry.x, y: displayEntry.y)
             .simultaneousGesture(
                 enabled && appliesTransform
                     ? DragGesture(minimumDistance: 0)

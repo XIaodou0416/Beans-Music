@@ -943,7 +943,8 @@ struct PlayerView: View {
         case .vinyl:
             iPadLandscapeVinylLyricsHeader
         case .classic:
-            iPadLandscapeClassicLyricsHeader
+            // 经典样式沿用播放器页的顶部栏，保证横屏与普通播放器使用同一套点击区域。
+            headerBar
         }
     }
 
@@ -1230,6 +1231,7 @@ struct PlayerView: View {
                 data: $iPadLandscapeLayoutData
             ))
         }
+        .frame(maxWidth: 640)
         .padding(.horizontal, 26)
         .padding(.top, 6)
         .padding(.bottom, max(10, bottomInset + 2))
@@ -1317,6 +1319,7 @@ struct PlayerView: View {
                 data: $iPadLandscapeLayoutData
             ))
         }
+        .frame(maxWidth: 640)
         .padding(.horizontal, 24)
         .padding(.top, 10)
         .padding(.bottom, max(14, bottomInset + 4))
@@ -1801,7 +1804,8 @@ struct PlayerView: View {
 
     private func vinylLyricsPanel(geo: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            vinylLyricsHeader
+            // iPad 竖屏歌词页与黑胶播放器页复用同一顶部栏，避免两个页面的点击热区和排版漂移。
+            (UIDevice.current.userInterfaceIdiom == .pad ? AnyView(vinylCompactHeader) : AnyView(vinylLyricsHeader))
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
                 .modifier(Layoutable(
@@ -2854,6 +2858,7 @@ struct PlayerView: View {
         .padding(.horizontal, playerButtonStyle == .appleMusic ? 24 : 32)
         .padding(.top, 10)
         .padding(.bottom, max(12, bottomInset + 4))
+        .frame(maxWidth: UIDevice.current.userInterfaceIdiom == .pad ? 720 : .infinity)
         .frame(maxWidth: .infinity)
     }
 
@@ -3654,10 +3659,9 @@ struct PlayerView: View {
             }
             .overlay(alignment: .top) {
                 if layoutPreviewDevice == .iPhone {
-                    Capsule()
-                        .fill(Color.black.opacity(0.95))
-                        .frame(width: 64, height: 14)
-                        .padding(.top, 10)
+                    Image("iPhonePreviewShell")
+                        .resizable()
+                        .scaledToFit()
                         .allowsHitTesting(false)
                 }
             }
@@ -3738,10 +3742,9 @@ struct PlayerView: View {
             }
             .overlay(alignment: .top) {
                 if layoutPreviewDevice == .iPhone {
-                    Capsule()
-                        .fill(Color.black.opacity(0.95))
-                        .frame(width: 64, height: 14)
-                        .padding(.top, 10)
+                    Image("iPhonePreviewShell")
+                        .resizable()
+                        .scaledToFit()
                         .allowsHitTesting(false)
                 }
             }
@@ -3782,7 +3785,7 @@ struct PlayerView: View {
     private var previewDeviceAspect: CGFloat {
         switch layoutPreviewDevice {
         case .iPhone:
-            return 390.0 / 844.0
+            return 1419.0 / 2796.0
         case .iPad:
             return layoutEditorUsesIPadLandscape ? 844.0 / 390.0 : 768.0 / 1024.0
         }
@@ -3976,6 +3979,8 @@ struct PlayerView: View {
             layoutSlider("X", value: unifiedLayoutEntryBinding.x, range: unifiedLayoutXRange)
             layoutSlider("Y", value: unifiedLayoutEntryBinding.y, range: unifiedLayoutYRange)
             layoutSlider("大小", value: unifiedLayoutEntryBinding.scale, range: 0.3...1.5, step: 0.05, format: "%.2f")
+            layoutSlider("旋转", value: unifiedLayoutEntryBinding.rotation, range: -180...180, step: 1)
+            layoutSlider("透明度", value: unifiedLayoutEntryBinding.opacity, range: 0.15...1, step: 0.05, format: "%.2f")
         }
         .padding(12)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -4125,6 +4130,8 @@ struct PlayerView: View {
             layoutSlider("X", value: appleMusicEntryBinding.x, range: -180...180)
             layoutSlider("Y", value: appleMusicEntryBinding.y, range: -240...240)
             layoutSlider("大小", value: appleMusicEntryBinding.scale, range: 0.3...1.5, step: 0.05, format: "%.2f")
+            layoutSlider("旋转", value: appleMusicEntryBinding.rotation, range: -180...180, step: 1)
+            layoutSlider("透明度", value: appleMusicEntryBinding.opacity, range: 0.15...1, step: 0.05, format: "%.2f")
         }
     }
 

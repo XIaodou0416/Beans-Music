@@ -128,7 +128,7 @@ final class DeviceReporter {
         request.timeoutInterval = 8
         request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
-        try validate(response)
+        try validate(response, body: data)
         let result = try JSONDecoder().decode(FeedbackListResponse.self, from: data)
         guard result.ok != false else {
             throw BackendRequestError.server(result.message ?? "获取反馈记录失败")
@@ -230,19 +230,51 @@ final class DeviceReporter {
         request.httpMethod = "POST"
         request.timeoutInterval = 60
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(String(body.count), forHTTPHeaderField: "Content-Length")
         request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
         request.httpBody = body
         let (data, response) = try await URLSession.shared.data(for: request)
-        try validate(response)
+        try validate(response, body: data)
         return data
     }
 
-    private func validate(_ response: URLResponse) throws {
+    private func validate(_ response: URLResponse, body: Data? = nil) throws {
         guard let http = response as? HTTPURLResponse else {
             throw BackendRequestError.invalidResponse
         }
         guard (200...299).contains(http.statusCode) else {
+            if let body, let message = backendMessage(from: body) {
+                throw BackendRequestError.server(message)
+            }
             throw BackendRequestError.httpStatus(http.statusCode)
+        }
+    }
+
+    private func backendMessage(from data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rawMessage = object["message"] as? String,
+              !rawMessage.isEmpty else {
+            return nil
+        }
+
+        switch rawMessage {
+        case "unsupported_attachment":
+            return beansLocalized("不支持这个文件类型，请选择 JS、图片、视频或普通文件。", "This file type is not supported. Choose a JS file, image, video, or regular file.")
+        case "attachment_upload_failed":
+            return beansLocalized("附件上传失败，文件可能过大或数量超出限制。", "The attachment upload failed. The files may be too large or exceed the limit.")
+        case "attachment_too_large":
+            return beansLocalized("单个附件不能超过 50 MB。", "Each attachment must be 50 MB or smaller.")
+        case "too_many_attachments":
+            return beansLocalized("最多只能上传 4 个附件。", "You can upload up to four attachments.")
+        case "missing_required_fields":
+            return beansLocalized("请填写全部必填项。", "Please complete all required fields.")
+        case "invalid_user_id":
+            return beansLocalized("设备标识无效，请重启应用后重试。", "The device identifier is invalid. Restart the app and try again.")
+        case "server_error":
+            return beansLocalized("服务器处理失败，请稍后重试。", "The server could not process the request. Please try again later.")
+        default:
+            return rawMessage
         }
     }
 

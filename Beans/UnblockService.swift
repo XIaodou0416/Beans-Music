@@ -67,10 +67,6 @@ enum UnblockService {
                     || canUse(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
             }
         guard !sources.isEmpty else {
-            BeansLogger.shared.log(
-                "没有启用的自定义音源：平台=\(songSource.rawValue)",
-                level: .debug
-            )
             return nil
         }
 
@@ -87,7 +83,6 @@ enum UnblockService {
             sources: sources
         )
         if let cached = cachedResolution(for: cacheKey, excludedHosts: excludedHosts) {
-            BeansLogger.shared.log("第三方音源命中短缓存：歌曲=\(name)｜音质=\(cached.quality.rawValue)", level: .debug)
             return cached
         }
 
@@ -340,13 +335,9 @@ enum UnblockService {
         let apiKeyPlaceholders = ["{apiKey}", "{apikey}", "{key}"]
         let requiresAPIKey = apiKeyPlaceholders.contains { source.template.contains($0) }
         if requiresAPIKey && apiKeys.isEmpty {
-            BeansLogger.shared.log(
-                "自定义音源缺少请求密钥：\(source.name)，已跳过请求",
-                level: .debug
-            )
             return nil
         }
-        for (idIndex, songID) in songIDs.enumerated() {
+        for songID in songIDs {
             var baseURLString = source.template
             let idValues: [String: String] = [
                 "{id}": songID,
@@ -366,12 +357,8 @@ enum UnblockService {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             baseURLString = baseURLString.replacingOccurrences(of: "{keyword}", with: urlEncoded(keyword))
             baseURLString = baseURLString.replacingOccurrences(of: "{artist}", with: urlEncoded(artists))
-            for (qualityIndex, quality) in qualityCandidates(for: source, songSource: songSource, preferredQuality: preferredQuality).enumerated() {
-                if qualityIndex > 0 {
-                    BeansLogger.shared.log("第三方音源自动降级：\(source.name) 音质=\(quality)", level: .debug)
-                }
+            for quality in qualityCandidates(for: source, songSource: songSource, preferredQuality: preferredQuality) {
                 let urlString = replacingQualityPlaceholders(in: baseURLString, with: quality)
-                let idLabel = songSource == .qq && songIDs.count > 1 ? " ID=\(idIndex + 1)/\(songIDs.count)" : ""
                 if !apiKeys.isEmpty {
                     for (originalIndex, apiKey) in apiKeys {
                         let keyedURLString = apiKeyPlaceholders.reduce(urlString) { result, placeholder in
@@ -382,10 +369,7 @@ enum UnblockService {
                             source: source,
                             url: url,
                             apiKey: apiKey,
-                            keyIndex: originalIndex + 1,
-                            keyTotal: apiKeys.count,
                             quality: quality,
-                            idLabel: idLabel,
                             excludedHosts: excludedHosts
                         ) {
                             rememberWorkingKey(originalIndex, for: source)
@@ -398,10 +382,7 @@ enum UnblockService {
                     source: source,
                     url: url,
                     apiKey: nil,
-                    keyIndex: 0,
-                    keyTotal: 0,
                     quality: quality,
-                    idLabel: idLabel,
                     excludedHosts: excludedHosts
                 ) {
                     return resolved
@@ -409,9 +390,6 @@ enum UnblockService {
             }
         }
 
-        if !apiKeys.isEmpty {
-            BeansLogger.shared.log("第三方音源全部密钥未命中：\(source.name) 共 \(apiKeys.count) 个", level: .debug)
-        }
         return nil
     }
 
@@ -452,10 +430,7 @@ enum UnblockService {
 
         let qualities = qualityCandidates(for: source, songSource: songSource, preferredQuality: preferredQuality)
         for songID in songIDs {
-            for (qualityIndex, quality) in qualities.enumerated() {
-                if qualityIndex > 0 {
-                    BeansLogger.shared.log("脚本音源自动降级：\(source.name) 音质=\(quality)", level: .debug)
-                }
+            for quality in qualities {
                 if let resolved = await LXScriptSourceRunner.shared.resolve(
                     source: source,
                     script: script,
@@ -469,7 +444,6 @@ enum UnblockService {
                     quality: quality,
                     excludedHosts: excludedHosts
                 ) {
-                    BeansLogger.shared.log("脚本音源命中：\(source.name) 音质=\(quality)", level: .info)
                     return resolved
                 }
             }
@@ -481,10 +455,7 @@ enum UnblockService {
         source: ThirdPartySource,
         url: URL,
         apiKey: String?,
-        keyIndex: Int,
-        keyTotal: Int,
         quality: String,
-        idLabel: String = "",
         excludedHosts: Set<String>
     ) async -> Resolved? {
         var request = URLRequest(url: url)
@@ -494,7 +465,6 @@ enum UnblockService {
         if let apiKey, !apiKey.isEmpty {
             request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
-        let keyLabel = idLabel + (keyTotal > 1 ? " 密钥=\(keyIndex)/\(keyTotal)" : "") + " 音质=\(quality)"
         let metadataKeys: Set<String> = [
             "source", "quality", "qualities", "qualityOptions", "qualitys",
             "br", "level", "apiKey", "apiKeys", "apiKeyQuery"
@@ -511,44 +481,23 @@ enum UnblockService {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            BeansLogger.shared.log("第三方音源请求失败：\(source.name)\(keyLabel) \(error.localizedDescription)", level: .debug)
             return nil
         }
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            BeansLogger.shared.log("第三方音源 HTTP 失败：\(source.name)\(keyLabel) 状态=\(status)", level: .debug)
             return nil
         }
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            BeansLogger.shared.log("第三方音源响应格式错误：\(source.name)\(keyLabel)", level: .debug)
             return nil
         }
         if let code = responseCode(from: obj), code != 0 && code != 200 {
-            let message = obj["message"] as? String ?? obj["msg"] as? String ?? "code=\(code)"
-            BeansLogger.shared.log("第三方音源返回失败：\(source.name)\(keyLabel) \(message)", level: .debug)
             return nil
         }
         guard let value = valueAtAnyPath(obj, source.urlPath),
               let resolvedURL = value as? String, !resolvedURL.isEmpty,
               let rawPlayURL = URL(string: resolvedURL),
-              let playURL = playablePlaybackURL(from: rawPlayURL, source: source, keyLabel: keyLabel, excludedHosts: excludedHosts) else {
-            BeansLogger.shared.log("第三方音源响应中没有播放地址：\(source.name)\(keyLabel)", level: .debug)
+              let playURL = playablePlaybackURL(from: rawPlayURL, excludedHosts: excludedHosts) else {
             return nil
         }
-        if rawPlayURL != playURL {
-            BeansLogger.shared.log(
-                "第三方音源切换 QQ CDN 节点：\(rawPlayURL.host ?? "?") -> \(playURL.host ?? "?")",
-                level: .debug
-            )
-        }
-        if let host = playURL.host?.lowercased(), excludedHosts.contains(host) {
-            BeansLogger.shared.log(
-                "第三方音源跳过已失败节点：\(source.name)\(keyLabel) 域名=\(host)",
-                level: .debug
-            )
-            return nil
-        }
-        BeansLogger.shared.log("第三方音源命中：\(source.name)\(keyLabel)", level: .info)
         return Resolved(
             url: playURL,
             source: source.name,
@@ -559,24 +508,13 @@ enum UnblockService {
     /// 部分第三方接口会固定返回不稳定的 QQ CDN 节点。
     /// 不在这里做 Range 探测：部分 QQ CDN 会拒绝探测请求，但 AVPlayer
     /// 带完整请求头后仍可正常播放。实际失败由 AVPlayer 反馈，再换下一个节点。
-    private static func playablePlaybackURL(from rawURL: URL, source: ThirdPartySource, keyLabel: String, excludedHosts: Set<String>) -> URL? {
+    private static func playablePlaybackURL(from rawURL: URL, excludedHosts: Set<String>) -> URL? {
         let candidates = qqPlaybackURLCandidates(for: rawURL)
         for candidate in candidates {
             guard let host = candidate.host?.lowercased() else { continue }
             if excludedHosts.contains(host) {
-                BeansLogger.shared.log(
-                    "第三方音源跳过已失败节点：\(source.name)\(keyLabel) 域名=\(host)",
-                    level: .debug
-                )
                 continue
             }
-            if rawURL != candidate {
-                BeansLogger.shared.log(
-                    "第三方音源准备 QQ CDN 备用节点：\(rawURL.host ?? "?") -> \(host)",
-                    level: .debug
-                )
-            }
-            BeansLogger.shared.log("第三方音源选择播放地址：\(source.name)\(keyLabel) \(safeURLSummary(candidate))", level: .debug)
             return candidate
         }
         return nil
@@ -671,13 +609,6 @@ enum UnblockService {
                   seen.insert(value).inserted else { return nil }
             return value
         }
-    }
-
-    private static func safeURLSummary(_ url: URL) -> String {
-        let host = url.host ?? "?"
-        let path = url.path.isEmpty ? "/" : url.path
-        let shortPath = path.count > 72 ? String(path.prefix(72)) + "..." : path
-        return "\(host)\(shortPath)"
     }
 
     private static func requestFingerprint(for source: ThirdPartySource) -> String {
