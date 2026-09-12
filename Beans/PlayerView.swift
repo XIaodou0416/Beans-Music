@@ -3859,43 +3859,84 @@ struct PlayerView: View {
         }
     }
 
-    /// iOS 26 只保留实时预览，避免编辑器下方的大量调节控件参与渲染。
+    /// iOS 26 使用单个实时预览，调节控件直接修改布局数据，不重复创建播放器视图。
     private var iOS26LayoutPreviewEditor: some View {
-        ZStack(alignment: .top) {
-            GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
-                .ignoresSafeArea()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    Text("自定义布局")
+                        .font(BeansFont.appFont(20, .bold))
+                        .foregroundStyle(palette.text)
 
-            Group {
-                if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
-                    iPadLandscapeLayoutPreview
-                } else if layoutEditorStyle == .appleMusic {
-                    appleMusicLayoutPreview
-                } else {
-                    playerLayoutPreview
+                    Spacer(minLength: 0)
+
+                    Button("完成") {
+                        BeansHaptics.select()
+                        layoutMode = false
+                    }
+                    .font(BeansFont.appFont(14, .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                }
+
+                layoutEditorStylePicker
+
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    Picker("预览方向", selection: $layoutEditorUsesIPadLandscape) {
+                        Text("竖屏").tag(false)
+                        Text("横屏").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Group {
+                    if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                        iPadLandscapeLayoutPreview
+                    } else if layoutEditorStyle == .appleMusic {
+                        appleMusicLayoutPreview
+                    } else {
+                        playerLayoutPreview
+                    }
+                }
+
+                Picker("预览页面", selection: $layoutPreviewShowLyrics) {
+                    Text("封面").tag(false)
+                    Text("歌词").tag(true)
+                }
+                .pickerStyle(.segmented)
+
+                layoutEditorPartPicker
+                layoutEditorSliders
+                layoutEditorStyleDebugControls
+
+                HStack(spacing: 18) {
+                    Button {
+                        resetUnifiedLayoutPart()
+                        BeansHaptics.success()
+                    } label: {
+                        Label("恢复当前", systemImage: "arrow.counterclockwise")
+                    }
+                    .foregroundStyle(Color.beansAmber)
+                    .buttonStyle(.plain)
+
+                    Spacer(minLength: 0)
+
+                    Button {
+                        resetUnifiedLayoutStyle()
+                        BeansHaptics.success()
+                    } label: {
+                        Label("恢复此样式", systemImage: "arrow.counterclockwise.circle")
+                    }
+                    .foregroundStyle(Color.beansAmber)
+                    .buttonStyle(.plain)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .padding(.top, 64)
             .padding(.horizontal, 16)
-            .padding(.bottom, 20)
-
-            HStack(spacing: 12) {
-                Text("自定义布局")
-                    .font(BeansFont.appFont(20, .bold))
-                    .foregroundStyle(palette.text)
-
-                Spacer(minLength: 0)
-
-                Button("完成") {
-                    BeansHaptics.select()
-                    layoutMode = false
-                }
-                .font(BeansFont.appFont(14, .semibold))
-                .foregroundStyle(Color.beansAmber)
-            }
-            .padding(.horizontal, 20)
             .padding(.top, 12)
+            .padding(.bottom, 24)
+            .frame(maxWidth: 780)
+            .frame(maxWidth: .infinity)
         }
+        .background { GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil) }
     }
 
     private var layoutEditorStylePicker: some View {
