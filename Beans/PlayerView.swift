@@ -93,8 +93,6 @@ struct PlayerView: View {
     @AppStorage("beans.lyricAnchorY") private var lyricAnchorY = 0.0
     /// 歌词大小缩放（布局调整弹窗「大小」滑杆）
     @AppStorage("beans.lyricScale") private var lyricScale = 1.0
-    /// 底部指示线开关（上滑呼出评论区）
-    @AppStorage("beans.deckGrabberEnabled") private var deckGrabberEnabled = true
     /// 圆形封面模式（播放器大封面 / 歌词页左上角小封面）
     @AppStorage("beans.circularCover") private var circularCover = true
     /// 圆形封面自动旋转
@@ -219,6 +217,35 @@ struct PlayerView: View {
             return true
         }
         return false
+    }
+
+    private var usesFullScreenLayoutEditor: Bool {
+        if #available(iOS 26.0, *) {
+            return true
+        }
+        return false
+    }
+
+    private var fullScreenLayoutEditorBinding: Binding<Bool> {
+        Binding(
+            get: { usesFullScreenLayoutEditor && layoutMode },
+            set: { newValue in
+                if usesFullScreenLayoutEditor {
+                    layoutMode = newValue
+                }
+            }
+        )
+    }
+
+    private var sheetLayoutEditorBinding: Binding<Bool> {
+        Binding(
+            get: { !usesFullScreenLayoutEditor && layoutMode },
+            set: { newValue in
+                if !usesFullScreenLayoutEditor {
+                    layoutMode = newValue
+                }
+            }
+        )
     }
 
     private var landscapeApplePrimaryColor: Color {
@@ -651,7 +678,14 @@ struct PlayerView: View {
         .onDisappear {
             releasePlaybackRenderingSuppression()
         }
-        .sheet(isPresented: $layoutMode) {
+        .fullScreenCover(isPresented: fullScreenLayoutEditorBinding) {
+            iOS26LayoutPreviewEditor
+                .environmentObject(theme)
+                .environmentObject(player)
+                .environmentObject(clock)
+                .environment(\.beansSettingsPerformanceMode, true)
+        }
+        .sheet(isPresented: sheetLayoutEditorBinding) {
             unifiedPlayerLayoutEditor
             .environmentObject(theme)
             .environmentObject(player)
@@ -2831,8 +2865,8 @@ struct PlayerView: View {
                         appliesTransform: !appliesPortraitLayout
                     ))
             }
-            if layoutRenderingStyle != .vinyl {
-                deckGrabber(appliesPortraitLayout: appliesPortraitLayout)
+            if layoutRenderingStyle == .classic {
+                commentSwipeSurface
             }
         }
         .padding(.horizontal, playerButtonStyle == .appleMusic ? 24 : 32)
@@ -2955,29 +2989,18 @@ struct PlayerView: View {
         VinylScrubber()
     }
 
-    /// 底部指示线：只有在指示线附近上滑才呼出评论区（避免误触控制按钮）
-    /// 指示线可关闭（透明但保留热区，仍可上滑呼出评论区）
-    /// 底部指示线保留上滑评论手势，位置通过设置页滑块调整。
-    private func deckGrabber(appliesPortraitLayout: Bool = true) -> some View {
-        let entry = appliesPortraitLayout ? grabberEntry : PlayerLayoutEntry()
-        return Capsule()
-            .fill(deckGrabberEnabled ? palette.secondary.opacity(0.5) : .clear)
-            .frame(width: 40, height: 5)
-            .overlay {
-                if deckGrabberEnabled {
-                    Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 0.5)
-                }
-            }
-            .padding(.top, 6)
-            .padding(.bottom, 8)
+    /// 经典样式保留上划评论手势，但不绘制任何底部指示线。
+    private var commentSwipeSurface: some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: 18)
             .contentShape(Rectangle())
-            .scaleEffect(entry.scale)
-            .offset(x: entry.x, y: entry.y)
             .gesture(
                 DragGesture(minimumDistance: 25)
                     .onEnded { value in
                         guard !layoutMode,
                               value.translation.height < -50,
+                              abs(value.translation.height) > abs(value.translation.width),
                               song != nil else { return }
                         BeansHaptics.medium()
                         showComments = true
@@ -3327,11 +3350,6 @@ struct PlayerView: View {
         )
     }
 
-    /// 指示线位置（存于布局数据字典，X / Y 偏移）
-    private var grabberEntry: PlayerLayoutEntry {
-        layoutData[PlayerLayoutPart.grabber.rawValue] ?? PlayerLayoutStore.defaultEntry(for: .grabber)
-    }
-
     /// 各组件 X 滑杆范围
     private var layoutXRange: ClosedRange<CGFloat> {
         switch layoutPart {
@@ -3577,7 +3595,7 @@ struct PlayerView: View {
                     .font(BeansFont.appFont(12, .semibold))
                     .foregroundStyle(palette.text)
                 Spacer()
-                Text(coverPlayerStyle.title)
+                Text(layoutEditorStyle.title)
                     .font(BeansFont.appFont(11, .medium))
                     .foregroundStyle(Color.beansAmber)
             }
@@ -3643,7 +3661,7 @@ struct PlayerView: View {
                     .font(BeansFont.appFont(12, .semibold))
                     .foregroundStyle(palette.text)
                 Spacer()
-                Text(appleLayoutPart.rawValue)
+                Text(layoutEditorStyle.title)
                     .font(BeansFont.appFont(11, .medium))
                     .foregroundStyle(Color.beansAmber)
             }
@@ -3838,6 +3856,45 @@ struct PlayerView: View {
             .background { GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil) }
             .navigationTitle("播放器布局")
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    /// iOS 26 只保留实时预览，避免编辑器下方的大量调节控件参与渲染。
+    private var iOS26LayoutPreviewEditor: some View {
+        ZStack(alignment: .top) {
+            GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                .ignoresSafeArea()
+
+            Group {
+                if layoutEditorUsesIPadLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                    iPadLandscapeLayoutPreview
+                } else if layoutEditorStyle == .appleMusic {
+                    appleMusicLayoutPreview
+                } else {
+                    playerLayoutPreview
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .padding(.top, 64)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 20)
+
+            HStack(spacing: 12) {
+                Text("自定义布局")
+                    .font(BeansFont.appFont(20, .bold))
+                    .foregroundStyle(palette.text)
+
+                Spacer(minLength: 0)
+
+                Button("完成") {
+                    BeansHaptics.select()
+                    layoutMode = false
+                }
+                .font(BeansFont.appFont(14, .semibold))
+                .foregroundStyle(Color.beansAmber)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
         }
     }
 
@@ -4371,8 +4428,6 @@ struct PlayerView: View {
             layoutDebugToggle("圆形封面旋转", isOn: $circularCoverSpin,
                               caption: "播放时封面自动旋转")
             Divider().opacity(0.35)
-            layoutDebugToggle("显示底部指示线", isOn: $deckGrabberEnabled,
-                              caption: "关闭后隐藏指示线，仍可上滑打开评论")
             HStack {
                 Text("歌词对齐样式")
                     .font(BeansFont.appFont(13))
@@ -5512,7 +5567,6 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.lyricAlignRaw") private var lyricAlignRaw = "center"
     @AppStorage("beans.lyricOffsetX") private var lyricOffsetX = 0.0
     @AppStorage("beans.lyricAnchorY") private var lyricAnchorY = 0.0
-    @AppStorage("beans.deckGrabberEnabled") private var deckGrabberEnabled = true
     @AppStorage("beans.circularCover") private var circularCover = true
     @AppStorage("beans.circularCoverSpin") private var circularCoverSpin = true
     @AppStorage("beans.djVisual") private var djVisualEnabled = false
@@ -5543,7 +5597,6 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.playerSettings.playbackExpanded") private var playbackExpanded = false
     @AppStorage("beans.playerSettings.lyricDisplayExpanded") private var lyricDisplayExpanded = false
     @AppStorage("beans.playerSettings.lyricEffectExpanded") private var lyricEffectExpanded = false
-    @AppStorage("beans.playerSettings.layoutExpanded") private var layoutExpanded = false
     @AppStorage("beans.playerSettings.coverExpanded") private var coverExpanded = false
     @AppStorage("beans.playerSettings.appleMusicExpanded") private var appleMusicExpanded = false
     @State private var showLyricBackgroundPicker = false
@@ -6206,7 +6259,7 @@ struct PlayerSettingsSheet: View {
 
     /// 布局卡片：播放器自定义布局 / 指示线 / 歌词对齐
     private var layoutCard: some View {
-        settingCard("自定义布局", isExpanded: $layoutExpanded) {
+        settingCard("自定义布局") {
             Button {
                 layoutMode = true
                 BeansHaptics.select()
@@ -6230,10 +6283,6 @@ struct PlayerSettingsSheet: View {
                 .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.98))
-            Text("Apple Music、黑胶唱盘、经典封面和 iPad 横屏布局分别保存。")
-                .font(BeansFont.appFont(12))
-                .foregroundStyle(Color.beansComment)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
