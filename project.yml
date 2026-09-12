@@ -14,6 +14,8 @@ targets:
     platform: iOS
     sources:
       - Beans
+    dependencies:
+      - target: BeansWidget
     resources:
       - Beans/en.lproj
       - Beans/zh-Hans.lproj
@@ -49,6 +51,27 @@ targets:
         CADisableMinimumFrameDurationOnPhone: true
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+
+  BeansWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - BeansWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.widget
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+    info:
+      path: BeansWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Beans Music
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).BeansWidgetBundle
 
 schemes:
   Beans:
