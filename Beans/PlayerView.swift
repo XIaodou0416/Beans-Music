@@ -701,14 +701,12 @@ struct PlayerView: View {
                 .environmentObject(theme)
                 .environmentObject(player)
                 .environmentObject(clock)
-                .environment(\.beansSettingsPerformanceMode, true)
         }
         .sheet(isPresented: sheetLayoutEditorBinding) {
             unifiedPlayerLayoutEditor
             .environmentObject(theme)
             .environmentObject(player)
             .environmentObject(clock)
-            .environment(\.beansSettingsPerformanceMode, true)
         }
         .sheet(isPresented: $showQueue) {
             QueueView()
@@ -731,7 +729,6 @@ struct PlayerView: View {
             PlayerSettingsSheet(layoutMode: $layoutMode, onDismiss: closePlayerSettings)
                 .environmentObject(theme)
                 .environmentObject(player)
-                .environment(\.beansSettingsPerformanceMode, true)
         }
         .sheet(item: $shareFile, onDismiss: cleanupSharedFile) { item in
             ShareSheet(items: [item.url])
