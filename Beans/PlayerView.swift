@@ -3308,7 +3308,7 @@ struct PlayerView: View {
                 .foregroundStyle(layoutRenderingStyle == .appleMusic ? Color.black : playerButtonText)
                 .frame(width: primaryPlayerButtonSize, height: primaryPlayerButtonSize)
                 .background {
-                    if layoutRenderingStyle != .appleMusic {
+                    if playerButtonStyle != .appleMusic {
                         playerButtonSurface(size: primaryPlayerButtonSize, primary: true, appleLiquid: true)
                     }
                 }
