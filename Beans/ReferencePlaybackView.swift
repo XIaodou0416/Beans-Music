@@ -344,85 +344,27 @@ struct ReferencePlaybackView: View {
     }
 
     private func playbackControls(bottomInset: CGFloat) -> some View {
-        VStack(spacing: 15) {
-            ReferenceScrubber()
-                .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.progress)))
-                .contentShape(Rectangle())
-            HStack(spacing: 28) {
-                Button {
-                    BeansHaptics.tap()
-                    player.previous()
-                } label: {
-                    Image(systemName: "backward.fill")
-                        .font(.system(size: 25, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-                .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.previous)))
-
-                Button {
-                    BeansHaptics.tap()
-                    player.togglePlayPause()
-                } label: {
-                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24)
-                        .frame(width: 66, height: 66)
-                        .foregroundStyle(primaryColor)
-                }
-                .buttonStyle(GlassPressButtonStyle(scale: 0.92))
-                .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.play)))
-
-                Button {
-                    BeansHaptics.tap()
-                    player.next()
-                } label: {
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 25, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-                .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.next)))
-            }
-            .foregroundStyle(primaryColor)
-            .frame(maxWidth: 320)
-
-            if showVolumeControl {
-                ReferenceVolumeControl(accent: volumeColor, secondary: secondaryColor)
-                    .frame(maxWidth: 420)
-                    .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.volume)))
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-
-            HStack(spacing: 48) {
-                referenceActionButton(icon: "quote.bubble", active: showLyrics) {
-                    showLyrics.toggle()
-                }
-                referenceActionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
-                    player.togglePlayMode()
-                }
-                referenceActionButton(icon: "list.bullet") {
-                    onQueue()
-                }
-            }
-            .frame(maxWidth: 420)
-            .modifier(AppleMusicLayoutTransform(entry: layoutEntry(.actions)))
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 10)
-        .padding(.bottom, max(14, bottomInset + 4))
-        .simultaneousGesture(commentsGesture, including: .subviews)
-    }
-
-    private func referenceActionButton(icon: String, active: Bool = false, tint: Color = .white, action: @escaping () -> Void) -> some View {
-        Button {
-            BeansHaptics.tap()
-            action()
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(active ? accentColor : primaryColor.opacity(0.78))
-                .frame(width: 58, height: 58)
-                .background { BeansGlass(shape: Circle(), forceLiquid: true) }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        AppleMusicPlaybackControls(
+            bottomInset: bottomInset,
+            primary: primaryColor,
+            secondary: secondaryColor,
+            accent: accentColor,
+            volumeColor: volumeColor,
+            showVolume: showVolumeControl,
+            lyricsActive: showLyrics,
+            layout: AppleMusicPlaybackControlLayout(
+                progress: layoutEntry(.progress),
+                previous: layoutEntry(.previous),
+                play: layoutEntry(.play),
+                next: layoutEntry(.next),
+                volume: layoutEntry(.volume),
+                actions: layoutEntry(.actions),
+                container: PlayerLayoutEntry()
+            ),
+            onLyrics: { showLyrics.toggle() },
+            onQueue: onQueue,
+            onComments: onComments
+        )
     }
 
     private func compactActionButton(icon: String, active: Bool = false, action: @escaping () -> Void) -> some View {
@@ -619,15 +561,6 @@ struct ReferencePlaybackView: View {
             }
     }
 
-    private var commentsGesture: some Gesture {
-        DragGesture(minimumDistance: 25)
-            .onEnded { value in
-                guard value.translation.height < -54, abs(value.translation.height) > abs(value.translation.width) else { return }
-                BeansHaptics.medium()
-                onComments()
-            }
-    }
-
     private var primaryColor: Color {
         if primaryHex.hasPrefix("#"), let color = Color(hex: primaryHex) { return color }
         return .white
@@ -646,6 +579,132 @@ struct ReferencePlaybackView: View {
     private var volumeColor: Color {
         if volumeHex.hasPrefix("#"), let color = Color(hex: volumeHex) { return color }
         return primaryColor
+    }
+}
+
+struct AppleMusicPlaybackControlLayout {
+    let progress: PlayerLayoutEntry
+    let previous: PlayerLayoutEntry
+    let play: PlayerLayoutEntry
+    let next: PlayerLayoutEntry
+    let volume: PlayerLayoutEntry
+    let actions: PlayerLayoutEntry
+    let container: PlayerLayoutEntry
+}
+
+struct AppleMusicPlaybackControls: View {
+    @EnvironmentObject private var player: PlayerManager
+
+    let bottomInset: CGFloat
+    let primary: Color
+    let secondary: Color
+    let accent: Color
+    let volumeColor: Color
+    let showVolume: Bool
+    let lyricsActive: Bool
+    let layout: AppleMusicPlaybackControlLayout
+    let onLyrics: () -> Void
+    let onQueue: () -> Void
+    let onComments: () -> Void
+
+    var body: some View {
+        VStack(spacing: 15) {
+            ReferenceScrubber()
+                .modifier(AppleMusicLayoutTransform(entry: layout.progress))
+                .contentShape(Rectangle())
+
+            VStack(spacing: 15) {
+                HStack(spacing: 28) {
+                    Button {
+                        BeansHaptics.tap()
+                        player.previous()
+                    } label: {
+                        Image(systemName: "backward.fill")
+                            .font(.system(size: 25, weight: .semibold))
+                            .frame(width: 42, height: 42)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .modifier(AppleMusicLayoutTransform(entry: layout.previous))
+
+                    Button {
+                        BeansHaptics.tap()
+                        player.togglePlayPause()
+                    } label: {
+                        PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24)
+                            .frame(width: 66, height: 66)
+                            .foregroundStyle(primary)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+                    .modifier(AppleMusicLayoutTransform(entry: layout.play))
+
+                    Button {
+                        BeansHaptics.tap()
+                        player.next()
+                    } label: {
+                        Image(systemName: "forward.fill")
+                            .font(.system(size: 25, weight: .semibold))
+                            .frame(width: 42, height: 42)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .modifier(AppleMusicLayoutTransform(entry: layout.next))
+                }
+                .foregroundStyle(primary)
+                .frame(maxWidth: 320)
+
+                if showVolume {
+                    ReferenceVolumeControl(accent: volumeColor, secondary: secondary)
+                        .frame(maxWidth: 420)
+                        .modifier(AppleMusicLayoutTransform(entry: layout.volume))
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+
+                HStack(spacing: 48) {
+                    actionButton(icon: "quote.bubble", active: lyricsActive, action: onLyrics)
+                    actionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
+                        player.togglePlayMode()
+                    }
+                    actionButton(icon: "list.bullet", action: onQueue)
+                }
+                .frame(maxWidth: 420)
+                .modifier(AppleMusicLayoutTransform(entry: layout.actions))
+            }
+            .modifier(AppleMusicLayoutTransform(entry: layout.container))
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, max(14, bottomInset + 4))
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 25)
+                .onEnded { value in
+                    guard value.translation.height < -54,
+                          abs(value.translation.height) > abs(value.translation.width) else { return }
+                    BeansHaptics.medium()
+                    onComments()
+                },
+            including: .subviews
+        )
+    }
+
+    private func actionButton(
+        icon: String,
+        active: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            BeansHaptics.tap()
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(active ? accent : primary.opacity(0.78))
+                .frame(width: 58, height: 58)
+                .background { BeansGlass(shape: Circle(), forceLiquid: true) }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

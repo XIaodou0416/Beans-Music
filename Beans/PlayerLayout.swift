@@ -346,6 +346,21 @@ enum IPadLandscapeLayoutStore {
         layouts[style.rawValue]?[part.rawValue] ?? PlayerLayoutEntry()
     }
 
+    static func displayEntry(
+        for part: IPadLandscapeLayoutPart,
+        style: BeansCoverPlayerStyle,
+        in layouts: LayoutData
+    ) -> PlayerLayoutEntry {
+        let entry = entry(for: part, style: style, in: layouts)
+        return PlayerLayoutEntry(
+            x: min(max(entry.x, -220), 220),
+            y: min(max(entry.y, -180), 180),
+            scale: min(max(entry.scale, 0.45), 1.6),
+            rotation: min(max(entry.rotation, -180), 180),
+            opacity: min(max(entry.opacity, 0.15), 1)
+        )
+    }
+
     static func reset() {
         pendingSave?.cancel()
         UserDefaults.standard.removeObject(forKey: dataKey)

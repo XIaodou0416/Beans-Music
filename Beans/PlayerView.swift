@@ -1255,110 +1255,38 @@ struct PlayerView: View {
     }
 
     private func iPadLandscapeAppleMusicControlDeck(bottomInset: CGFloat) -> some View {
-        VStack(spacing: 15) {
-            ReferenceScrubber()
-                .modifier(IPadLandscapeLayoutable(
-                    part: .progress,
-                    style: layoutRenderingStyle,
-                    enabled: layoutMode && layoutEditorUsesIPadLandscape,
-                    data: $iPadLandscapeLayoutData
-                ))
-                .contentShape(Rectangle())
-
-            VStack(spacing: 15) {
-                HStack(spacing: 28) {
-                    Button {
-                        BeansHaptics.tap()
-                        player.previous()
-                    } label: {
-                        Image(systemName: "backward.fill")
-                            .font(.system(size: 25, weight: .semibold))
-                            .foregroundStyle(landscapeApplePrimaryColor)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        BeansHaptics.tap()
-                        player.togglePlayPause()
-                    } label: {
-                        PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24)
-                            .frame(width: 66, height: 66)
-                            .foregroundStyle(landscapeApplePrimaryColor)
-                    }
-                    .buttonStyle(GlassPressButtonStyle(scale: 0.92))
-
-                    Button {
-                        BeansHaptics.tap()
-                        player.next()
-                    } label: {
-                        Image(systemName: "forward.fill")
-                            .font(.system(size: 25, weight: .semibold))
-                            .foregroundStyle(landscapeApplePrimaryColor)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .foregroundStyle(landscapeApplePrimaryColor)
-                .frame(maxWidth: 320)
-
-                if appleShowVolume {
-                    ReferenceVolumeControl(
-                        accent: landscapeApplePrimaryColor,
-                        secondary: landscapeAppleSecondaryColor
-                    )
-                    .frame(maxWidth: 420)
-                }
-
-                HStack(spacing: 48) {
-                    iPadLandscapeAppleMusicActionButton(icon: "quote.bubble", active: true) {
-                        toggleLyrics()
-                    }
-                    iPadLandscapeAppleMusicActionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
-                        player.togglePlayMode()
-                    }
-                    iPadLandscapeAppleMusicActionButton(icon: "list.bullet") {
-                        showQueue = true
-                    }
-                }
-                .frame(maxWidth: 420)
-            }
-            .modifier(IPadLandscapeLayoutable(
-                part: .controls,
-                style: layoutRenderingStyle,
-                enabled: layoutMode && layoutEditorUsesIPadLandscape,
-                data: $iPadLandscapeLayoutData
-            ))
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 10)
-        .padding(.bottom, max(14, bottomInset + 4))
-        .gesture(
-            DragGesture(minimumDistance: 25)
-                .onEnded { value in
-                    guard value.translation.height < -54,
-                          abs(value.translation.height) > abs(value.translation.width) else { return }
-                    BeansHaptics.medium()
-                    showComments = true
-                }
+        let progress = IPadLandscapeLayoutStore.displayEntry(
+            for: .progress,
+            style: layoutRenderingStyle,
+            in: iPadLandscapeLayoutData
         )
-    }
+        let controls = IPadLandscapeLayoutStore.displayEntry(
+            for: .controls,
+            style: layoutRenderingStyle,
+            in: iPadLandscapeLayoutData
+        )
 
-    private func iPadLandscapeAppleMusicActionButton(
-        icon: String,
-        active: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            BeansHaptics.tap()
-            action()
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(active ? landscapeAppleAccentColor : landscapeApplePrimaryColor.opacity(0.78))
-                .frame(width: 58, height: 58)
-                .background { BeansGlass(shape: Circle(), forceLiquid: true) }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        return AppleMusicPlaybackControls(
+            bottomInset: bottomInset,
+            primary: landscapeApplePrimaryColor,
+            secondary: landscapeAppleSecondaryColor,
+            accent: landscapeAppleAccentColor,
+            volumeColor: landscapeApplePrimaryColor,
+            showVolume: appleShowVolume,
+            lyricsActive: true,
+            layout: AppleMusicPlaybackControlLayout(
+                progress: progress,
+                previous: PlayerLayoutEntry(),
+                play: PlayerLayoutEntry(),
+                next: PlayerLayoutEntry(),
+                volume: PlayerLayoutEntry(),
+                actions: PlayerLayoutEntry(),
+                container: controls
+            ),
+            onLyrics: toggleLyrics,
+            onQueue: { showQueue = true },
+            onComments: { showComments = true }
+        )
     }
 
     @ViewBuilder
@@ -2794,7 +2722,7 @@ struct PlayerView: View {
     private var iPadLandscapeControlsReservedHeight: CGFloat {
         switch layoutRenderingStyle {
         case .appleMusic:
-            return 238
+            return appleShowVolume ? 294 : 238
         case .vinyl:
             return 136
         case .classic:
