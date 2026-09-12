@@ -3606,7 +3606,7 @@ struct PlayerView: View {
                 let canvasSize = playerPreviewCanvasSize
                 let availableWidth = max(1, geometry.size.width - 16)
                 let availableHeight = max(1, geometry.size.height - 16)
-                let scale = min(availableWidth / canvasSize.width, availableHeight / canvasSize.height) * 0.88
+                let scale = min(availableWidth / canvasSize.width, availableHeight / canvasSize.height) * 0.96
 
                 ZStack {
                     GeometryReader { previewGeometry in
@@ -3674,7 +3674,7 @@ struct PlayerView: View {
                 let scale = min(
                     availableWidth / canvasSize.width,
                     availableHeight / canvasSize.height
-                ) * 0.88
+                ) * 0.96
 
                 ZStack {
                     ReferencePlaybackView(
@@ -4062,7 +4062,7 @@ struct PlayerView: View {
     private var iPadLandscapeLayoutPreview: some View {
         GeometryReader { geometry in
             let canvasSize = CGSize(width: 844, height: 390)
-            let scale = min((geometry.size.width - 16) / canvasSize.width, (geometry.size.height - 16) / canvasSize.height) * 0.88
+            let scale = min((geometry.size.width - 16) / canvasSize.width, (geometry.size.height - 16) / canvasSize.height) * 0.96
             ZStack {
                 iPadLandscapeLyricsView
                     .frame(width: canvasSize.width, height: canvasSize.height)
