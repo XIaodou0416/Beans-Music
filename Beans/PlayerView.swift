@@ -367,6 +367,20 @@ struct PlayerView: View {
         player.isPlaying && !showPlayerSettings && !layoutMode
     }
 
+    /// 播放器封面页上划打开评论，覆盖内部封面和控件的手势区域。
+    private var commentSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                guard !showLyrics,
+                      !layoutMode,
+                      value.translation.height < -54,
+                      abs(value.translation.height) > abs(value.translation.width),
+                      song != nil else { return }
+                BeansHaptics.medium()
+                showComments = true
+            }
+    }
+
     private func openPlayerSettings() {
         withAnimation(.spring(response: 0.42, dampingFraction: 0.86, blendDuration: 0.08)) {
             showPlayerSettings = true
@@ -526,6 +540,8 @@ struct PlayerView: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
                     }
                 }
+                .contentShape(Rectangle())
+                .simultaneousGesture(commentSwipeGesture, including: .all)
             } else if coverPlayerStyle == .vinyl {
                 GeometryReader { geo in
                     ZStack {
@@ -556,6 +572,8 @@ struct PlayerView: View {
                                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
                         }
                     }
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(commentSwipeGesture, including: .all)
                 }
             } else {
                 GeometryReader { geo in
