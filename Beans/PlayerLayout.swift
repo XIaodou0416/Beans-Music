@@ -568,12 +568,13 @@ struct IPadLandscapeLayoutable: ViewModifier {
         let entry = appliesTransform
             ? IPadLandscapeLayoutStore.entry(for: part, style: style, in: data)
             : PlayerLayoutEntry()
-        var displayEntry = entry
-        displayEntry.x = min(max(entry.x, -220), 220)
-        displayEntry.y = min(max(entry.y, -180), 180)
-        displayEntry.scale = min(max(entry.scale, 0.45), 1.6)
-        displayEntry.rotation = min(max(entry.rotation, -180), 180)
-        displayEntry.opacity = min(max(entry.opacity, 0.15), 1)
+        let displayEntry = PlayerLayoutEntry(
+            x: min(max(entry.x, -220), 220),
+            y: min(max(entry.y, -180), 180),
+            scale: min(max(entry.scale, 0.45), 1.6),
+            rotation: min(max(entry.rotation, -180), 180),
+            opacity: min(max(entry.opacity, 0.15), 1)
+        )
         content
             .scaleEffect(displayEntry.scale)
             .rotationEffect(.degrees(displayEntry.rotation))
