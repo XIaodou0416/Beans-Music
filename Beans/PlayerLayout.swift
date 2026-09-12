@@ -94,14 +94,11 @@ struct PlayerPreviewDeviceFrame<Content: View>: View {
             let availableHeight = max(1, geometry.size.height - 20)
             let height = min(availableHeight, availableWidth / aspect)
             let width = height * aspect
-            let radius = device == .iPhone ? min(30, width * 0.09) : min(24, width * 0.055)
+            let radius = device == .iPhone ? min(50, width * 0.09) : min(30, width * 0.055)
 
             ZStack {
-                RoundedRectangle(cornerRadius: radius + 6, style: .continuous)
-                    .fill(Color.black.opacity(0.92))
                 content
-                    .padding(6)
-                    .frame(width: width - 12, height: height - 12)
+                    .frame(width: width, height: height)
                     .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
                 if device == .iPhone && !landscape {
                     Image("iPhonePreviewShell")
@@ -111,11 +108,6 @@ struct PlayerPreviewDeviceFrame<Content: View>: View {
                 }
             }
             .frame(width: width, height: height)
-            .overlay {
-                RoundedRectangle(cornerRadius: radius + 6, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }

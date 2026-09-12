@@ -3651,12 +3651,7 @@ struct PlayerView: View {
                 .clipped()
             }
             .aspectRatio(previewDeviceAspect, contentMode: .fit)
-            .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 32 : 26, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 28 : 22, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 28 : 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.24), lineWidth: 1)
-            }
+            .clipShape(RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 50 : 26, style: .continuous))
             .overlay(alignment: .top) {
                 if layoutPreviewDevice == .iPhone {
                     Image("iPhonePreviewShell")
@@ -3665,7 +3660,6 @@ struct PlayerView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
             .frame(maxWidth: previewDeviceMaxWidth)
             .frame(maxWidth: .infinity, alignment: .center)
         }
@@ -3735,12 +3729,7 @@ struct PlayerView: View {
                 .clipped()
             }
             .aspectRatio(previewDeviceAspect, contentMode: .fit)
-            .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 32 : 26, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 28 : 22, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 28 : 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.24), lineWidth: 1)
-            }
+            .clipShape(RoundedRectangle(cornerRadius: layoutPreviewDevice == .iPhone ? 50 : 26, style: .continuous))
             .overlay(alignment: .top) {
                 if layoutPreviewDevice == .iPhone {
                     Image("iPhonePreviewShell")
@@ -3749,7 +3738,6 @@ struct PlayerView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
             .frame(maxWidth: previewDeviceMaxWidth)
             .frame(maxWidth: .infinity, alignment: .center)
         }
