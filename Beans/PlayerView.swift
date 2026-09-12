@@ -3768,9 +3768,7 @@ struct PlayerView: View {
 
                     layoutEditorPartPicker
                     layoutEditorSliders
-                    if layoutEditorStyle == .appleMusic {
-                        appleMusicAppearanceControls
-                    }
+                    layoutEditorStyleDebugControls
 
                     HStack(spacing: 18) {
                         Button {
@@ -4114,6 +4112,90 @@ struct PlayerView: View {
         )
     }
 
+    private var albumTitleColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if albumTitleColorHex.hasPrefix("#"), let color = Color(hex: albumTitleColorHex) {
+                    return color
+                }
+                return palette.text
+            },
+            set: { albumTitleColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var albumArtistColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if albumArtistColorHex.hasPrefix("#"), let color = Color(hex: albumArtistColorHex) {
+                    return color
+                }
+                return palette.secondary
+            },
+            set: { albumArtistColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var albumPreviewLyricColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if albumPreviewLyricColorHex.hasPrefix("#"), let color = Color(hex: albumPreviewLyricColorHex) {
+                    return color
+                }
+                return palette.text
+            },
+            set: { albumPreviewLyricColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var albumPreviewDimColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if albumPreviewDimColorHex.hasPrefix("#"), let color = Color(hex: albumPreviewDimColorHex) {
+                    return color
+                }
+                return palette.secondary
+            },
+            set: { albumPreviewDimColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var playerMainIconColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if playerMainIconColorHex.hasPrefix("#"), let color = Color(hex: playerMainIconColorHex) {
+                    return color
+                }
+                return palette.text
+            },
+            set: { playerMainIconColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var playerSecondaryIconColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if playerSecondaryIconColorHex.hasPrefix("#"), let color = Color(hex: playerSecondaryIconColorHex) {
+                    return color
+                }
+                return palette.secondary
+            },
+            set: { playerSecondaryIconColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
+    private var playerPrimaryButtonColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                if playerPrimaryButtonColorHex.hasPrefix("#"), let color = Color(hex: playerPrimaryButtonColorHex) {
+                    return color
+                }
+                return Color.beansAmber
+            },
+            set: { playerPrimaryButtonColorHex = "#" + UIColor($0).hexString }
+        )
+    }
+
     private var appleMusicAppearanceControls: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Apple Music 外观")
@@ -4122,6 +4204,9 @@ struct PlayerView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Toggle("显示音量条", isOn: $appleShowVolume)
+                .font(BeansFont.appFont(12))
+                .tint(Color.beansAmber)
+            Toggle("显示封面页歌词预览", isOn: $appleShowLyricPreview)
                 .font(BeansFont.appFont(12))
                 .tint(Color.beansAmber)
             Toggle("同步主页壁纸", isOn: $appleSyncWallpaper)
@@ -4149,9 +4234,194 @@ struct PlayerView: View {
                 .font(BeansFont.appFont(12))
             ColorPicker("音量条颜色", selection: appleVolumeColorBinding, supportsOpacity: false)
                 .font(BeansFont.appFont(12))
+            Divider().opacity(0.35)
+            Text("封面页文字颜色")
+                .font(BeansFont.appFont(12, .semibold))
+                .foregroundStyle(Color.beansLabel)
+            ColorPicker("歌名颜色", selection: albumTitleColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(12))
+            ColorPicker("歌手颜色", selection: albumArtistColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(12))
+            ColorPicker("预览歌词颜色", selection: albumPreviewLyricColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(12))
+            ColorPicker("预览未播放颜色", selection: albumPreviewDimColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(12))
+            Toggle("文字渐变", isOn: $albumTextGradient)
+                .font(BeansFont.appFont(12))
+                .tint(Color.beansAmber)
+            Toggle("文字高光", isOn: $albumTextGlow)
+                .font(BeansFont.appFont(12))
+                .tint(Color.beansAmber)
+            if albumTextGlow {
+                HStack {
+                    Text("高光强度")
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(palette.secondary)
+                    Slider(value: $albumTextGlowIntensity, in: 0.2...2.0, step: 0.05)
+                        .tint(Color.beansAmber)
+                    Text("\(Int((albumTextGlowIntensity * 100).rounded()))%")
+                        .font(BeansFont.appFont(11, .semibold, .monospaced))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(width: 42, alignment: .trailing)
+                }
+            }
         }
         .padding(10)
         .background(Color.black.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var layoutEditorStyleDebugControls: some View {
+        switch layoutEditorStyle {
+        case .classic:
+            classicStyleDebugControls
+        case .vinyl:
+            vinylStyleDebugControls
+        case .appleMusic:
+            appleMusicAppearanceControls
+        }
+    }
+
+    private var classicStyleDebugControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("经典样式调试")
+                .font(BeansFont.appFont(13, .bold))
+                .foregroundStyle(palette.text)
+            Picker("播放器按钮样式", selection: $playerButtonStyleRaw) {
+                ForEach(BeansPlayerButtonStyle.allCases) { style in
+                    Text(LocalizedStringKey(style.title)).tag(style.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            Divider().opacity(0.45)
+            layoutDebugToggle("控件跟随封面取色", isOn: $controlsUseCoverColor,
+                              caption: "关闭后使用全局主题色")
+            Divider().opacity(0.35)
+            ColorPicker("主图标颜色", selection: playerMainIconColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(13))
+            ColorPicker("次级图标颜色", selection: playerSecondaryIconColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(13))
+            ColorPicker("播放按钮颜色", selection: playerPrimaryButtonColorBinding, supportsOpacity: false)
+                .font(BeansFont.appFont(13))
+            Divider().opacity(0.35)
+            Picker("进度条样式", selection: $progressBarStyle) {
+                Text("流光").tag(0)
+                Text("辉光").tag(1)
+                Text("极光").tag(2)
+                Text("波浪").tag(3)
+            }
+            .pickerStyle(.segmented)
+            Divider().opacity(0.35)
+            layoutDebugSlider("背景浮沉强度", valueText: "\(Int((playerBreath * 100).rounded()))%", value: Binding(get: { CGFloat(playerBreath) }, set: { playerBreath = Double($0) }), range: 0...1, step: 0.05)
+            Picker("浮沉样式", selection: $playerDustModeRaw) {
+                ForEach(BeansPlayerDustMode.allCases) { mode in
+                    Label(LocalizedStringKey(mode.title), systemImage: mode.icon).tag(mode.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            if playerDustModeRaw == BeansPlayerDustMode.snow.rawValue {
+                layoutDebugSlider("浮沉密度", valueText: String(format: "%.1fx", playerDustDensity), value: Binding(get: { CGFloat(playerDustDensity) }, set: { playerDustDensity = Double($0) }), range: 0.4...2.6, step: 0.1)
+                layoutDebugSlider("浮沉大小", valueText: String(format: "%.1fx", playerDustSize), value: Binding(get: { CGFloat(playerDustSize) }, set: { playerDustSize = Double($0) }), range: 0.8...2.8, step: 0.1)
+            }
+            Divider().opacity(0.35)
+            layoutDebugToggle("DJ 节奏脉冲光效", isOn: $djVisualEnabled,
+                              caption: "封面背后随节拍扩散光环")
+            if djVisualEnabled {
+                layoutDebugSlider("光效强度", valueText: "\(Int((djVisualIntensity * 100).rounded()))%", value: Binding(get: { CGFloat(djVisualIntensity) }, set: { djVisualIntensity = Double($0) }), range: 0...1, step: 0.05)
+            }
+            Divider().opacity(0.35)
+            lyricDisplayEditorControls
+            Divider().opacity(0.35)
+            lyricEffectEditorControls
+            Divider().opacity(0.35)
+            layoutDebugToggle("圆形封面模式", isOn: $circularCover,
+                              caption: "播放器封面和歌词页封面显示为圆形")
+            layoutDebugToggle("圆形封面旋转", isOn: $circularCoverSpin,
+                              caption: "播放时封面自动旋转")
+            Divider().opacity(0.35)
+            layoutDebugToggle("显示底部指示线", isOn: $deckGrabberEnabled,
+                              caption: "关闭后隐藏指示线，仍可上滑打开评论")
+            HStack {
+                Text("歌词对齐样式")
+                    .font(BeansFont.appFont(13))
+                    .foregroundStyle(palette.text)
+                Spacer()
+                Picker("歌词对齐样式", selection: $lyricAlignRaw) {
+                    Text("居中").tag("center")
+                    Text("全部居左").tag("left")
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 190)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var vinylStyleDebugControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("黑胶样式调试")
+                .font(BeansFont.appFont(13, .bold))
+                .foregroundStyle(palette.text)
+            layoutDebugToggle("左右滑动切歌", isOn: $swipeSwitchSong,
+                              caption: "左滑下一首，右滑上一首")
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var lyricDisplayEditorControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("歌词显示")
+                .font(BeansFont.appFont(13, .semibold))
+                .foregroundStyle(palette.text)
+            layoutDebugSlider("歌词字号", valueText: "\(lyricFontSize) pt", value: Binding(get: { CGFloat(lyricFontSize) }, set: { lyricFontSize = Int($0) }), range: 12...28, step: 1)
+            layoutDebugSlider("歌词行距", valueText: "\(lyricLineSpacing) pt", value: Binding(get: { CGFloat(lyricLineSpacing) }, set: { lyricLineSpacing = Int($0) }), range: 14...40, step: 1)
+            layoutDebugToggle("显示歌词翻译", isOn: $lyricTranslation)
+        }
+    }
+
+    private var lyricEffectEditorControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("歌词效果")
+                .font(BeansFont.appFont(13, .semibold))
+                .foregroundStyle(palette.text)
+            layoutDebugSlider("模糊起始距离", valueText: "\(lyricBlurStart) 行", value: Binding(get: { CGFloat(lyricBlurStart) }, set: { lyricBlurStart = Int($0) }), range: 0...4, step: 1)
+            layoutDebugSlider("模糊强度", valueText: String(format: "%.1f", lyricBlurAmount), value: Binding(get: { CGFloat(lyricBlurAmount) }, set: { lyricBlurAmount = Double($0) }), range: 0...6, step: 0.1)
+            layoutDebugSlider("歌词发光", valueText: glowName(lyricGlowLevel), value: Binding(get: { CGFloat(lyricGlowLevel) }, set: { lyricGlowLevel = Int($0) }), range: 0...5, step: 1)
+            layoutDebugSlider("3D 倾斜", valueText: "\(lyricTilt)°", value: Binding(get: { CGFloat(lyricTilt) }, set: { lyricTilt = Int($0) }), range: 0...45, step: 1)
+            layoutDebugSlider("左右倾斜", valueText: "\(lyricTiltY)°", value: Binding(get: { CGFloat(lyricTiltY) }, set: { lyricTiltY = Int($0) }), range: -45...45, step: 1)
+            layoutDebugToggle("保持自定义配色", isOn: Binding(get: { lyricGradMode == 1 }, set: { lyricGradMode = $0 ? 1 : 0 }),
+                              caption: "关闭后歌词自动跟随封面取色")
+        }
+    }
+
+    private func layoutDebugToggle(_ title: String, isOn: Binding<Bool>, caption: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle(LocalizedStringKey(title), isOn: isOn)
+                .font(BeansFont.appFont(13))
+                .tint(Color.beansAmber)
+            if let caption {
+                Text(LocalizedStringKey(caption))
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(palette.secondary)
+            }
+        }
+    }
+
+    private func layoutDebugSlider(_ title: String, valueText: String, value: Binding<CGFloat>, range: ClosedRange<CGFloat>, step: CGFloat) -> some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text(LocalizedStringKey(title))
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(palette.secondary)
+                Spacer()
+                Text(valueText)
+                    .font(BeansFont.appFont(11, .semibold, .monospaced))
+                    .foregroundStyle(Color.beansAmber)
+            }
+            layoutValueSlider(title: title, value: value, range: range, step: step)
+        }
     }
 
     private func resetAppleMusicSettings() {
