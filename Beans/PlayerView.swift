@@ -1263,6 +1263,7 @@ struct PlayerView: View {
                     enabled: layoutMode && layoutEditorUsesIPadLandscape,
                     data: $iPadLandscapeLayoutData
                 ))
+                .contentShape(Rectangle())
 
             VStack(spacing: 15) {
                 HStack(spacing: 28) {
@@ -1273,8 +1274,6 @@ struct PlayerView: View {
                         Image(systemName: "backward.fill")
                             .font(.system(size: 25, weight: .semibold))
                             .foregroundStyle(landscapeApplePrimaryColor)
-                            .frame(width: 42, height: 42)
-                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
 
@@ -1295,12 +1294,19 @@ struct PlayerView: View {
                         Image(systemName: "forward.fill")
                             .font(.system(size: 25, weight: .semibold))
                             .foregroundStyle(landscapeApplePrimaryColor)
-                            .frame(width: 42, height: 42)
-                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
+                .foregroundStyle(landscapeApplePrimaryColor)
                 .frame(maxWidth: 320)
+
+                if appleShowVolume {
+                    ReferenceVolumeControl(
+                        accent: landscapeApplePrimaryColor,
+                        secondary: landscapeAppleSecondaryColor
+                    )
+                    .frame(maxWidth: 420)
+                }
 
                 HStack(spacing: 48) {
                     iPadLandscapeAppleMusicActionButton(icon: "quote.bubble", active: true) {
@@ -1322,7 +1328,6 @@ struct PlayerView: View {
                 data: $iPadLandscapeLayoutData
             ))
         }
-        .frame(maxWidth: 640)
         .padding(.horizontal, 24)
         .padding(.top, 10)
         .padding(.bottom, max(14, bottomInset + 4))

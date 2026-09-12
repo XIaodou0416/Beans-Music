@@ -962,7 +962,7 @@ struct AppleMusicLyricsSection: View {
     }
 }
 
-private struct ReferenceVolumeControl: View {
+struct ReferenceVolumeControl: View {
     let accent: Color
     let secondary: Color
 
