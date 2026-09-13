@@ -19,6 +19,7 @@ struct WidgetPlaybackState: Codable {
 enum WidgetPlaybackBridge {
     static let appGroupID = "group.com.beans.music"
     private static let stateKey = "beans.widget.playback.state"
+    private static let commandKey = "beans.widget.command"
     private static let coverFileName = "beans-widget-cover.jpg"
     private static var reloadWorkItem: DispatchWorkItem?
     private static var lastReloadUptime = 0.0
@@ -99,6 +100,16 @@ enum WidgetPlaybackBridge {
             )
         }
         requestReload()
+    }
+
+    static func consumeCommand() -> String? {
+        guard let defaults = UserDefaults(suiteName: appGroupID),
+              let command = defaults.dictionary(forKey: commandKey),
+              let name = command["name"] as? String else {
+            return nil
+        }
+        defaults.removeObject(forKey: commandKey)
+        return name
     }
 
     private static func read(using defaults: UserDefaults) -> WidgetPlaybackState? {

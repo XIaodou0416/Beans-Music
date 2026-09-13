@@ -122,6 +122,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var playOrder: [Int] = []
     private var orderPosition = 0
     private var sleepTimer: Timer?
+    private var widgetCommandTimer: Timer?
     private var lastCountedSongID: String?
     private var wasPlayingBeforeInterruption = false
     private var interruptionInProgress = false
@@ -227,17 +228,35 @@ final class PlayerManager: NSObject, ObservableObject {
         ) { [weak self] _ in
             self?.stopPlaybackIfBackendBlocked()
         }
+        widgetCommandTimer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in
+            self?.processWidgetCommand()
+        }
     }
 
     deinit {
         interruptionResumeWorkItem?.cancel()
         audioRecoveryWorkItem?.cancel()
         audioSessionWatchdogTimer?.invalidate()
+        widgetCommandTimer?.invalidate()
         if let equalizerSettingsObserver {
             NotificationCenter.default.removeObserver(equalizerSettingsObserver)
         }
         if let backendBlockObserver {
             NotificationCenter.default.removeObserver(backendBlockObserver)
+        }
+    }
+
+    private func processWidgetCommand() {
+        guard let command = WidgetPlaybackBridge.consumeCommand() else { return }
+        switch command {
+        case "playPause":
+            togglePlayPause()
+        case "previous":
+            previous()
+        case "next":
+            next()
+        default:
+            break
         }
     }
 

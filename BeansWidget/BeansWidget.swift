@@ -2,9 +2,56 @@ import Foundation
 import SwiftUI
 import UIKit
 import WidgetKit
+import AppIntents
 
 private let widgetGroupID = "group.com.beans.music"
 private let widgetStateKey = "beans.widget.playback.state"
+private let widgetCommandKey = "beans.widget.command"
+
+@available(iOS 17.0, *)
+private enum WidgetCommandIntentSupport {
+    static func send(_ command: String) {
+        guard let defaults = UserDefaults(suiteName: widgetGroupID) else { return }
+        defaults.set(
+            [
+                "id": UUID().uuidString,
+                "name": command,
+                "createdAt": Date().timeIntervalSince1970
+            ],
+            forKey: widgetCommandKey
+        )
+    }
+}
+
+@available(iOS 17.0, *)
+private struct WidgetPlayPauseIntent: AppIntent {
+    static var title: LocalizedStringResource = "播放或暂停"
+
+    func perform() async throws -> some IntentResult {
+        WidgetCommandIntentSupport.send("playPause")
+        return .result()
+    }
+}
+
+@available(iOS 17.0, *)
+private struct WidgetPreviousIntent: AppIntent {
+    static var title: LocalizedStringResource = "上一首"
+
+    func perform() async throws -> some IntentResult {
+        WidgetCommandIntentSupport.send("previous")
+        return .result()
+    }
+}
+
+@available(iOS 17.0, *)
+private struct WidgetNextIntent: AppIntent {
+    static var title: LocalizedStringResource = "下一首"
+
+    func perform() async throws -> some IntentResult {
+        WidgetCommandIntentSupport.send("next")
+        return .result()
+    }
+}
 
 private struct WidgetPlaybackState: Codable {
     let songKey: String
@@ -151,7 +198,13 @@ private struct BeansWidgetView: View {
                 mediumLayout
             }
         }
-        .modifier(WidgetContainerBackground(accent: entry.accent, colorScheme: colorScheme))
+        .modifier(
+            WidgetContainerBackground(
+                cover: entry.cover,
+                accent: entry.accent,
+                colorScheme: colorScheme
+            )
+        )
     }
 }
 
@@ -208,32 +261,68 @@ private extension BeansWidgetView {
         .frame(height: 3)
     }
 
-    var playLink: some View {
-        Link(destination: URL(string: "beansmusic://widget/playPause")!) {
-            Image(systemName: entry.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(entry.accent, in: Circle())
+    @ViewBuilder
+    var playButton: some View {
+        if #available(iOSApplicationExtension 17.0, *) {
+            Button(intent: WidgetPlayPauseIntent()) {
+                playLabel
+            }
+            .buttonStyle(.plain)
+        } else {
+            Link(destination: URL(string: "beansmusic://widget/playPause")!) {
+                playLabel
+            }
         }
     }
 
-    var previousLink: some View {
-        Link(destination: URL(string: "beansmusic://widget/previous")!) {
-            Image(systemName: "backward.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(primary.opacity(0.76))
-                .frame(width: 30, height: 30)
+    var playLabel: some View {
+        Image(systemName: entry.isPlaying ? "pause.fill" : "play.fill")
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: 36, height: 36)
+            .background(entry.accent, in: Circle())
+    }
+
+    @ViewBuilder
+    var previousButton: some View {
+        if #available(iOSApplicationExtension 17.0, *) {
+            Button(intent: WidgetPreviousIntent()) {
+                previousLabel
+            }
+            .buttonStyle(.plain)
+        } else {
+            Link(destination: URL(string: "beansmusic://widget/previous")!) {
+                previousLabel
+            }
         }
     }
 
-    var nextLink: some View {
-        Link(destination: URL(string: "beansmusic://widget/next")!) {
-            Image(systemName: "forward.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(primary.opacity(0.76))
-                .frame(width: 30, height: 30)
+    var previousLabel: some View {
+        Image(systemName: "backward.fill")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(primary.opacity(0.76))
+            .frame(width: 30, height: 30)
+    }
+
+    @ViewBuilder
+    var nextButton: some View {
+        if #available(iOSApplicationExtension 17.0, *) {
+            Button(intent: WidgetNextIntent()) {
+                nextLabel
+            }
+            .buttonStyle(.plain)
+        } else {
+            Link(destination: URL(string: "beansmusic://widget/next")!) {
+                nextLabel
+            }
         }
+    }
+
+    var nextLabel: some View {
+        Image(systemName: "forward.fill")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(primary.opacity(0.76))
+            .frame(width: 30, height: 30)
     }
 
     var smallLayout: some View {
@@ -252,7 +341,7 @@ private extension BeansWidgetView {
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.white.opacity(0.7))
                     Spacer()
-                    playLink
+                    playButton
                 }
             }
             .padding(12)
@@ -276,10 +365,10 @@ private extension BeansWidgetView {
             }
 
             VStack(spacing: 4) {
-                playLink
+                playButton
                 HStack(spacing: 0) {
-                    previousLink
-                    nextLink
+                    previousButton
+                    nextButton
                 }
             }
         }
@@ -334,11 +423,11 @@ private extension BeansWidgetView {
             }
 
             HStack {
-                previousLink
+                previousButton
                 Spacer()
-                playLink
+                playButton
                 Spacer()
-                nextLink
+                nextButton
             }
         }
         .padding(16)
@@ -351,19 +440,35 @@ private extension BeansWidgetView {
 }
 
 private struct WidgetContainerBackground: ViewModifier {
+    let cover: UIImage?
     let accent: Color
     let colorScheme: ColorScheme
 
     func body(content: Content) -> some View {
-        let background = LinearGradient(
-            colors: [
-                accent.opacity(colorScheme == .dark ? 0.36 : 0.12),
-                accent.opacity(colorScheme == .dark ? 0.12 : 0.04),
-                colorScheme == .dark ? Color.black.opacity(0.96) : Color.white.opacity(0.98)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        let background = ZStack {
+            if let cover {
+                Image(uiImage: cover)
+                    .resizable()
+                    .scaledToFill()
+                    .blur(radius: 28)
+                    .scaleEffect(1.18)
+                    .overlay(Color.black.opacity(colorScheme == .dark ? 0.45 : 0.3))
+            } else {
+                LinearGradient(
+                    colors: [accent, accent.opacity(0.38), .black.opacity(0.86)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+            LinearGradient(
+                colors: [
+                    .black.opacity(colorScheme == .dark ? 0.22 : 0.08),
+                    .black.opacity(colorScheme == .dark ? 0.72 : 0.38)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
         if #available(iOSApplicationExtension 17.0, *) {
             content
                 .background(background)
