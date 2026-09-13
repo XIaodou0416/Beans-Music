@@ -4772,9 +4772,12 @@ struct PlayerView: View {
     private func loadLyrics() async {
         guard let song else { return }
         let identity = song.identityKey
-        func apply(_ parsed: [LyricLine]) {
+        func apply(_ parsed: [LyricLine], raw: String? = nil) {
             guard self.song?.identityKey == identity, !parsed.isEmpty else { return }
             self.lyrics = parsed
+            if let raw, !raw.isEmpty {
+                WidgetPlaybackBridge.updateLyrics(raw)
+            }
         }
 
         let cacheKey: String
@@ -4786,21 +4789,27 @@ struct PlayerView: View {
             cacheKey = "netease:\(song.id)"
         }
         if let cached = LyricsCache.shared.value(for: cacheKey) {
-            apply(LyricParser.parse(cached.lyric, translationRaw: cached.translation))
+            apply(
+                LyricParser.parse(cached.lyric, translationRaw: cached.translation),
+                raw: cached.lyric
+            )
         }
 
         if song.source == .kugou, let hash = song.kugouHash {
             let raw = await KugouMusicAPI.shared.lyric(hash: hash, duration: song.duration)
-            apply(LyricParser.parse(raw))
+            apply(LyricParser.parse(raw), raw: raw)
             LyricsCache.shared.save(lyric: raw, translation: nil, for: cacheKey)
         } else if song.source == .qq, let mid = song.qqMid {
             if let raw = try? await QQMusicAPI.shared.lyric(songmid: mid) {
-                apply(LyricParser.parse(raw))
+                apply(LyricParser.parse(raw), raw: raw)
                 LyricsCache.shared.save(lyric: raw, translation: nil, for: cacheKey)
             }
         } else {
             if let (lrc, tlyric) = try? await NetEaseAPI.shared.lyricWithTranslation(id: song.id) {
-                apply(LyricParser.parse(lrc ?? "", translationRaw: tlyric))
+                apply(
+                    LyricParser.parse(lrc ?? "", translationRaw: tlyric),
+                    raw: lrc
+                )
                 if let lrc, !lrc.isEmpty {
                     LyricsCache.shared.save(lyric: lrc, translation: tlyric, for: cacheKey)
                 }
