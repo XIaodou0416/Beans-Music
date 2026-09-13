@@ -6,9 +6,9 @@
 <title>Voice of the Heart</title>
 <meta name="referrer" content="no-referrer">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Inter:wght@200;300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&family=UnifrakturCook:wght@700&display=swap" rel="stylesheet">
-<script src="vendor/three.r128.min.js"></script>
-<script src="vendor/music-tempo.min.js"></script>
-<script src="vendor/gsap.min.js"></script>
+<script src="three.r128.min.js"></script>
+<script src="music-tempo.min.js"></script>
+<script src="gsap.min.js"></script>
 <script>
 try {
   document.documentElement.classList.add(localStorage.getItem('mineradio-diy-player-mode-v1') === '1' ? 'diy-mode-preload' : 'simple-mode-preload');
@@ -8193,7 +8193,7 @@ function loadSkullParticleAsset() {
     skullParticleAsset.failed = true;
     return Promise.resolve(null);
   }
-  skullParticleAsset.promise = fetch('assets/skull-decimation-points.bin?v=regular-surface-teeth-soften-20260621', { cache: 'reload' })
+  skullParticleAsset.promise = fetch('skull-decimation-points.bin?v=regular-surface-teeth-soften-20260621', { cache: 'reload' })
     .then(function(res){
       if (!res.ok) throw new Error('skull asset ' + res.status);
       return res.arrayBuffer();
@@ -11759,7 +11759,7 @@ var musicTempoLoadPromise = null;
 function ensureMusicTempo() {
   if (window.MusicTempo) return Promise.resolve(window.MusicTempo);
   if (musicTempoLoadPromise) return musicTempoLoadPromise;
-  musicTempoLoadPromise = fetch('/vendor/music-tempo.min.js')
+  musicTempoLoadPromise = fetch('music-tempo.min.js')
     .then(function(resp){
       if (!resp.ok) throw new Error('music-tempo load failed: ' + resp.status);
       return resp.text();
@@ -11782,7 +11782,7 @@ function getMusicTempoWorkerUrl() {
     'self.onmessage=function(e){',
     'var d=e.data||{};',
     'try{',
-    'importScripts(d.scriptUrl||"/vendor/music-tempo.min.js");',
+    'importScripts(d.scriptUrl||"music-tempo.min.js");',
     'var C=self.MusicTempo||(typeof MusicTempo!=="undefined"?MusicTempo:null);',
     'if(!C)throw new Error("MusicTempo unavailable");',
     'var mono=new Float32Array(d.mono);',
@@ -11853,7 +11853,7 @@ async function analyzeMusicTempoInWorker(buffer, token) {
       worker.postMessage({
         mono: mono.buffer,
         sampleRate: buffer.sampleRate,
-        scriptUrl: location.origin + '/vendor/music-tempo.min.js'
+        scriptUrl: new URL('music-tempo.min.js', location.href).href
       }, [mono.buffer]);
     });
   } catch (err) {
