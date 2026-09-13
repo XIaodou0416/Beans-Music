@@ -50,6 +50,9 @@ struct BeansApp: App {
                 }
             }
             .environment(\.locale, Locale(identifier: languageRaw))
+            .onOpenURL { url in
+                handleWidgetURL(url)
+            }
             .task {
                 // 先让系统完成首帧，再恢复仅影响已安装用户的数据与媒体偏好。
                 await Task.yield()
@@ -73,6 +76,23 @@ struct BeansApp: App {
                     await RemoteControlStore.shared.refreshIfNeeded()
                 }
             }
+        }
+    }
+
+    private func handleWidgetURL(_ url: URL) {
+        guard url.scheme == "beansmusic",
+              url.host == "widget" else { return }
+        switch url.path {
+        case "/playPause":
+            player.togglePlayPause()
+        case "/previous":
+            player.previous()
+        case "/next":
+            player.next()
+        case "/open":
+            break
+        default:
+            break
         }
     }
 }

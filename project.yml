@@ -28,6 +28,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_OBJC_BRIDGING_HEADER: Beans/Beans-Bridging-Header.h
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: Beans/Beans.entitlements
     info:
       path: Beans/Info.plist
       properties:
@@ -50,6 +51,9 @@ targets:
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         CADisableMinimumFrameDurationOnPhone: true
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - beansmusic
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
 
@@ -67,6 +71,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         APPLICATION_EXTENSION_API_ONLY: YES
         SKIP_INSTALL: NO
+        CODE_SIGN_ENTITLEMENTS: BeansWidget/BeansWidget.entitlements
     info:
       path: BeansWidget/Info.plist
       properties:
