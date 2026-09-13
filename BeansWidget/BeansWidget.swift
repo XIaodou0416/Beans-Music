@@ -62,6 +62,7 @@ private struct WidgetPlaybackState: Codable {
     let duration: Double
     let progress: Double
     let isPlaying: Bool
+    let lyricRaw: String?
     let coverFileName: String?
     let colorHex: String?
     let updatedAt: Date
