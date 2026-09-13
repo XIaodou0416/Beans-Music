@@ -2,85 +2,12 @@ import Foundation
 import SwiftUI
 import UIKit
 import WidgetKit
-import AppIntents
 import OSLog
 
 private let widgetGroupID = "group.com.beans.music"
 private let widgetStateKey = "beans.widget.playback.state"
 private let widgetCommandKey = "beans.widget.command"
 private let widgetLogger = Logger(subsystem: "com.beans.app.widget", category: "playback")
-
-@available(iOS 17.0, *)
-private enum WidgetCommandIntentSupport {
-    static func send(_ command: String) {
-        guard let defaults = UserDefaults(suiteName: widgetGroupID) else {
-            widgetLogger.error("shared defaults unavailable command=\(command, privacy: .public)")
-            return
-        }
-        let commandID = UUID().uuidString
-        defaults.set(
-            [
-                "id": commandID,
-                "name": command,
-                "createdAt": Date().timeIntervalSince1970
-            ],
-            forKey: widgetCommandKey
-        )
-        applyOptimisticState(for: command, defaults: defaults)
-        defaults.synchronize()
-        WidgetCenter.shared.reloadTimelines(ofKind: "BeansWidget")
-    }
-
-    private static func applyOptimisticState(
-        for command: String,
-        defaults: UserDefaults
-    ) {
-        guard let data = defaults.data(forKey: widgetStateKey) else { return }
-        do {
-            var state = try JSONDecoder().decode(WidgetPlaybackState.self, from: data)
-            if command == "playPause" {
-                state.isPlaying.toggle()
-            }
-            state.updatedAt = Date()
-            defaults.set(try JSONEncoder().encode(state), forKey: widgetStateKey)
-        } catch {
-            widgetLogger.error("shared state update failed command=\(command, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-        }
-    }
-}
-
-@available(iOS 17.0, *)
-private struct WidgetPlayPauseIntent: AppIntent {
-    static var title: LocalizedStringResource = "播放或暂停"
-    static var openAppWhenRun: Bool { true }
-
-    func perform() async throws -> some IntentResult {
-        WidgetCommandIntentSupport.send("playPause")
-        return .result()
-    }
-}
-
-@available(iOS 17.0, *)
-private struct WidgetPreviousIntent: AppIntent {
-    static var title: LocalizedStringResource = "上一首"
-    static var openAppWhenRun: Bool { true }
-
-    func perform() async throws -> some IntentResult {
-        WidgetCommandIntentSupport.send("previous")
-        return .result()
-    }
-}
-
-@available(iOS 17.0, *)
-private struct WidgetNextIntent: AppIntent {
-    static var title: LocalizedStringResource = "下一首"
-    static var openAppWhenRun: Bool { true }
-
-    func perform() async throws -> some IntentResult {
-        WidgetCommandIntentSupport.send("next")
-        return .result()
-    }
-}
 
 private struct WidgetPlaybackState: Codable {
     let songKey: String
@@ -339,17 +266,9 @@ private extension BeansWidgetView {
         .frame(height: 3)
     }
 
-    @ViewBuilder
     var playButton: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            Button(intent: WidgetPlayPauseIntent()) {
-                playLabel
-            }
-            .buttonStyle(.plain)
-        } else {
-            Link(destination: URL(string: "beansmusic://widget/playPause")!) {
-                playLabel
-            }
+        Link(destination: URL(string: "beansmusic://widget/playPause")!) {
+            playLabel
         }
     }
 
@@ -361,17 +280,9 @@ private extension BeansWidgetView {
             .background(entry.accent, in: Circle())
     }
 
-    @ViewBuilder
     var previousButton: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            Button(intent: WidgetPreviousIntent()) {
-                previousLabel
-            }
-            .buttonStyle(.plain)
-        } else {
-            Link(destination: URL(string: "beansmusic://widget/previous")!) {
-                previousLabel
-            }
+        Link(destination: URL(string: "beansmusic://widget/previous")!) {
+            previousLabel
         }
     }
 
@@ -382,17 +293,9 @@ private extension BeansWidgetView {
             .frame(width: 30, height: 30)
     }
 
-    @ViewBuilder
     var nextButton: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            Button(intent: WidgetNextIntent()) {
-                nextLabel
-            }
-            .buttonStyle(.plain)
-        } else {
-            Link(destination: URL(string: "beansmusic://widget/next")!) {
-                nextLabel
-            }
+        Link(destination: URL(string: "beansmusic://widget/next")!) {
+            nextLabel
         }
     }
 
