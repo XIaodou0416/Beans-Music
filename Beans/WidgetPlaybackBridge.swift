@@ -20,9 +20,11 @@ enum WidgetPlaybackBridge {
     static let appGroupID = "group.com.beans.music"
     private static let stateKey = "beans.widget.playback.state"
     private static let commandKey = "beans.widget.command"
+    private static let lastConsumedCommandIDKey = "beans.widget.command.lastConsumedID"
     private static let coverFileName = "beans-widget-cover.jpg"
     private static var reloadWorkItem: DispatchWorkItem?
     private static var lastReloadUptime = 0.0
+    private static var lastDiagnosticUptime = 0.0
 
     static func publish(
         song: Song,
@@ -32,7 +34,10 @@ enum WidgetPlaybackBridge {
         coverData: Data? = nil,
         dominantColor: RGBColor? = nil
     ) {
-        guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
+        guard let defaults = UserDefaults(suiteName: appGroupID) else {
+            logDiagnostic("App Group UserDefaults 不可用")
+            return
+        }
         var state = read(using: defaults) ?? WidgetPlaybackState(
             songKey: song.identityKey,
             title: song.name,
@@ -73,11 +78,20 @@ enum WidgetPlaybackBridge {
             let coverURL = container.appendingPathComponent(coverFileName)
             if (try? coverData.write(to: coverURL, options: .atomic)) != nil {
                 state.coverFileName = coverFileName
+            } else {
+                logDiagnostic("App Group 封面写入失败")
             }
+        } else if coverData != nil {
+            logDiagnostic("App Group 容器不可用，无法写入封面")
         }
 
-        save(state, using: defaults)
+        guard save(state, using: defaults) else { return }
         defaults.synchronize()
+        if defaults.data(forKey: stateKey) == nil {
+            logDiagnostic("共享播放状态写入后无法读取")
+        } else if isNewSong || wasPlaying != isPlaying {
+            logDiagnostic("共享播放状态已写入：字段=11 歌曲=\(titleSummary(state.title)) 播放=\(isPlaying ? "是" : "否")")
+        }
         requestReload(force: isNewSong || wasPlaying != isPlaying)
     }
 
@@ -87,13 +101,16 @@ enum WidgetPlaybackBridge {
         state.progress = max(0, progress)
         state.isPlaying = isPlaying
         state.updatedAt = Date()
-        save(state, using: defaults)
+        guard save(state, using: defaults) else { return }
         defaults.synchronize()
         requestReload()
     }
 
     static func clear() {
-        guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
+        guard let defaults = UserDefaults(suiteName: appGroupID) else {
+            logDiagnostic("App Group UserDefaults 不可用，无法清除状态")
+            return
+        }
         defaults.removeObject(forKey: stateKey)
         defaults.synchronize()
         if let container = FileManager.default.containerURL(
@@ -109,41 +126,75 @@ enum WidgetPlaybackBridge {
     static func consumeCommand() -> String? {
         guard let defaults = UserDefaults(suiteName: appGroupID),
               let command = defaults.dictionary(forKey: commandKey),
+              let commandID = command["id"] as? String,
               let name = command["name"] as? String else {
             return nil
         }
+        if defaults.string(forKey: lastConsumedCommandIDKey) == commandID {
+            defaults.removeObject(forKey: commandKey)
+            defaults.synchronize()
+            return nil
+        }
+        defaults.set(commandID, forKey: lastConsumedCommandIDKey)
         defaults.removeObject(forKey: commandKey)
+        defaults.synchronize()
+        logDiagnostic("已接收小组件命令：\(name)")
         return name
     }
 
     private static func read(using defaults: UserDefaults) -> WidgetPlaybackState? {
         guard let data = defaults.data(forKey: stateKey) else { return nil }
-        return try? JSONDecoder().decode(WidgetPlaybackState.self, from: data)
+        do {
+            return try JSONDecoder().decode(WidgetPlaybackState.self, from: data)
+        } catch {
+            logDiagnostic("共享播放状态解析失败：\(error.localizedDescription)")
+            return nil
+        }
     }
 
-    private static func save(_ state: WidgetPlaybackState, using defaults: UserDefaults) {
-        guard let data = try? JSONEncoder().encode(state) else { return }
+    @discardableResult
+    private static func save(_ state: WidgetPlaybackState, using defaults: UserDefaults) -> Bool {
+        guard let data = try? JSONEncoder().encode(state) else {
+            logDiagnostic("共享播放状态编码失败")
+            return false
+        }
         defaults.set(data, forKey: stateKey)
+        return true
     }
 
     private static func requestReload(force: Bool = false) {
         let now = ProcessInfo.processInfo.systemUptime
-        if force, reloadWorkItem == nil {
+        if force {
+            reloadWorkItem?.cancel()
+            reloadWorkItem = nil
             lastReloadUptime = now
             WidgetCenter.shared.reloadTimelines(ofKind: "BeansWidget")
-            WidgetCenter.shared.reloadAllTimelines()
             return
         }
-        guard reloadWorkItem == nil else { return }
-        let delay = max(0, 1.5 - (now - lastReloadUptime))
+        guard reloadWorkItem == nil,
+              now - lastReloadUptime >= 15 else { return }
+        let delay = 0.2
         let work = DispatchWorkItem {
             reloadWorkItem = nil
             lastReloadUptime = ProcessInfo.processInfo.systemUptime
             WidgetCenter.shared.reloadTimelines(ofKind: "BeansWidget")
-            WidgetCenter.shared.reloadAllTimelines()
         }
         reloadWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private static func titleSummary(_ title: String) -> String {
+        let normalized = title
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+        return String(normalized.prefix(32))
+    }
+
+    private static func logDiagnostic(_ message: String) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastDiagnosticUptime >= 2 else { return }
+        lastDiagnosticUptime = now
+        BeansLogger.shared.log("小组件：\(message)", level: .debug)
     }
 
     private static func hex(for color: RGBColor) -> String {

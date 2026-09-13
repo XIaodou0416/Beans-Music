@@ -3,30 +3,56 @@ import SwiftUI
 import UIKit
 import WidgetKit
 import AppIntents
+import OSLog
 
 private let widgetGroupID = "group.com.beans.music"
 private let widgetStateKey = "beans.widget.playback.state"
 private let widgetCommandKey = "beans.widget.command"
+private let widgetLogger = Logger(subsystem: "com.beans.app.widget", category: "playback")
 
 @available(iOS 17.0, *)
 private enum WidgetCommandIntentSupport {
     static func send(_ command: String) {
-        guard let defaults = UserDefaults(suiteName: widgetGroupID) else { return }
+        guard let defaults = UserDefaults(suiteName: widgetGroupID) else {
+            widgetLogger.error("shared defaults unavailable command=\(command, privacy: .public)")
+            return
+        }
+        let commandID = UUID().uuidString
         defaults.set(
             [
-                "id": UUID().uuidString,
+                "id": commandID,
                 "name": command,
                 "createdAt": Date().timeIntervalSince1970
             ],
             forKey: widgetCommandKey
         )
+        applyOptimisticState(for: command, defaults: defaults)
         defaults.synchronize()
+        WidgetCenter.shared.reloadTimelines(ofKind: "BeansWidget")
+    }
+
+    private static func applyOptimisticState(
+        for command: String,
+        defaults: UserDefaults
+    ) {
+        guard let data = defaults.data(forKey: widgetStateKey) else { return }
+        do {
+            var state = try JSONDecoder().decode(WidgetPlaybackState.self, from: data)
+            if command == "playPause" {
+                state.isPlaying.toggle()
+            }
+            state.updatedAt = Date()
+            defaults.set(try JSONEncoder().encode(state), forKey: widgetStateKey)
+        } catch {
+            widgetLogger.error("shared state update failed command=\(command, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 
 @available(iOS 17.0, *)
 private struct WidgetPlayPauseIntent: AppIntent {
     static var title: LocalizedStringResource = "播放或暂停"
+    static var openAppWhenRun: Bool { true }
 
     func perform() async throws -> some IntentResult {
         WidgetCommandIntentSupport.send("playPause")
@@ -37,6 +63,7 @@ private struct WidgetPlayPauseIntent: AppIntent {
 @available(iOS 17.0, *)
 private struct WidgetPreviousIntent: AppIntent {
     static var title: LocalizedStringResource = "上一首"
+    static var openAppWhenRun: Bool { true }
 
     func perform() async throws -> some IntentResult {
         WidgetCommandIntentSupport.send("previous")
@@ -47,6 +74,7 @@ private struct WidgetPreviousIntent: AppIntent {
 @available(iOS 17.0, *)
 private struct WidgetNextIntent: AppIntent {
     static var title: LocalizedStringResource = "下一首"
+    static var openAppWhenRun: Bool { true }
 
     func perform() async throws -> some IntentResult {
         WidgetCommandIntentSupport.send("next")
@@ -62,7 +90,7 @@ private struct WidgetPlaybackState: Codable {
     let duration: Double
     let progress: Double
     let isPlaying: Bool
-    let lyricRaw: String?
+    let lyricRaw: String
     let coverFileName: String?
     let colorHex: String?
     let updatedAt: Date
@@ -116,11 +144,20 @@ private struct BeansWidgetProvider: TimelineProvider {
     }
 
     private func readState() -> WidgetPlaybackState? {
-        guard let defaults = UserDefaults(suiteName: widgetGroupID),
-              let data = defaults.data(forKey: widgetStateKey) else {
+        guard let defaults = UserDefaults(suiteName: widgetGroupID) else {
+            widgetLogger.error("shared defaults unavailable while reading state")
             return nil
         }
-        return try? JSONDecoder().decode(WidgetPlaybackState.self, from: data)
+        guard let data = defaults.data(forKey: widgetStateKey) else {
+            widgetLogger.debug("shared playback state is empty")
+            return nil
+        }
+        do {
+            return try JSONDecoder().decode(WidgetPlaybackState.self, from: data)
+        } catch {
+            widgetLogger.error("shared playback state decode failed bytes=\(data.count, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     private func makeEntry(
@@ -160,9 +197,15 @@ private struct BeansWidgetProvider: TimelineProvider {
               let container = FileManager.default.containerURL(
                 forSecurityApplicationGroupIdentifier: widgetGroupID
               ) else {
+            widgetLogger.error("shared container unavailable while loading cover")
             return nil
         }
-        return UIImage(contentsOfFile: container.appendingPathComponent(fileName).path)
+        let url = container.appendingPathComponent(fileName)
+        guard let image = UIImage(contentsOfFile: url.path) else {
+            widgetLogger.error("shared cover unavailable filename=\(fileName, privacy: .public)")
+            return nil
+        }
+        return image
     }
 
     private func color(from hex: String?) -> Color {

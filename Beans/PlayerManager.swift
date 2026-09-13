@@ -228,9 +228,11 @@ final class PlayerManager: NSObject, ObservableObject {
         ) { [weak self] _ in
             self?.stopPlaybackIfBackendBlocked()
         }
-        widgetCommandTimer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in
+        let widgetTimer = Timer(timeInterval: 0.45, repeats: true) { [weak self] _ in
             self?.processWidgetCommand()
         }
+        RunLoop.main.add(widgetTimer, forMode: .common)
+        widgetCommandTimer = widgetTimer
     }
 
     deinit {
