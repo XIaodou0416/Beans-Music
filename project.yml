@@ -14,9 +14,6 @@ targets:
     platform: iOS
     sources:
       - Beans
-    dependencies:
-      - target: BeansWidget
-        embed: true
     resources:
       - Beans/en.lproj
       - Beans/zh-Hans.lproj
@@ -51,37 +48,15 @@ targets:
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         CADisableMinimumFrameDurationOnPhone: true
-        CFBundleURLTypes:
-          - CFBundleURLSchemes:
-              - beansmusic
+        UISupportsCarPlay: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneConfigurationName: CarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-
-  BeansWidget:
-    type: app-extension
-    platform: iOS
-    deploymentTarget: "15.0"
-    sources:
-      - BeansWidget
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.widget
-        PRODUCT_NAME: BeansWidget
-        SWIFT_VERSION: "5.0"
-        TARGETED_DEVICE_FAMILY: "1,2"
-        APPLICATION_EXTENSION_API_ONLY: YES
-        SKIP_INSTALL: NO
-        CODE_SIGN_ENTITLEMENTS: BeansWidget/BeansWidget.entitlements
-    info:
-      path: BeansWidget/Info.plist
-      properties:
-        CFBundleName: BeansWidget
-        CFBundleDisplayName: Beans Music
-        CFBundlePackageType: XPC!
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.widgetkit-extension
 
 schemes:
   Beans:
