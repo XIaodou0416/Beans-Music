@@ -89,11 +89,11 @@ private struct WidgetPlaybackState: Codable {
     let album: String
     let duration: Double
     let progress: Double
-    let isPlaying: Bool
+    var isPlaying: Bool
     let lyricRaw: String
     let coverFileName: String?
     let colorHex: String?
-    let updatedAt: Date
+    var updatedAt: Date
 }
 
 private struct BeansWidgetEntry: TimelineEntry {
