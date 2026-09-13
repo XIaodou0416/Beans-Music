@@ -1266,6 +1266,7 @@ struct SettingsView: View {
     /// 日志
     @State private var showLogViewer = false
     @State private var showAccountHub = false
+    @State private var showMineradioRestored = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1521,6 +1522,7 @@ struct SettingsView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 16) {
                         accountSection
+                        immersivePlayerSection
                         themeSection
                         playbackSection
                         equalizerSection
@@ -1606,6 +1608,9 @@ struct SettingsView: View {
             EqualizerSettingsView()
                 .environmentObject(theme)
         }
+        .fullScreenCover(isPresented: $showMineradioRestored) {
+            MineradioRestoredView()
+        }
         .fullScreenCover(isPresented: $showRestorePicker) {
             BackupDocumentPicker { url in
                 handleBackupImport(url)
@@ -1651,6 +1656,39 @@ struct SettingsView: View {
                     Text(beansLocalized("账号登录", "Account sign-in"))
                         .font(BeansFont.appFont(15, .semibold))
                         .foregroundStyle(Color.beansLabel)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.beansComment.opacity(0.65))
+            }
+            .padding(14)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+    }
+
+    private var immersivePlayerSection: some View {
+        Button {
+            BeansHaptics.tap()
+            showMineradioRestored = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles.tv")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 30)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Voice of the Heart")
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text("打开原版沉浸式播放器")
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
