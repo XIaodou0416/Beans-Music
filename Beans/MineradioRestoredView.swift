@@ -6,30 +6,10 @@ import CoreImage.CIFilterBuiltins
 /// Hosts the complete Voice of the Heart web surface extracted from the supplied IPA.
 /// The page owns its layout, animation and interaction; Beans only supplies the iOS bridge.
 struct MineradioRestoredView: View {
-    @Environment(\.dismiss) private var dismiss
-
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            MineradioRestoredWebView()
-                .ignoresSafeArea()
-
-            Button {
-                BeansHaptics.tap()
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.88))
-                    .frame(width: 34, height: 34)
-                    .background(.black.opacity(0.35), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .padding(.leading, 16)
-            .padding(.top, 12)
-            .accessibilityLabel("关闭沉浸式播放器")
-        }
-        .background(Color.black.ignoresSafeArea())
-        .statusBarHidden(true)
+        MineradioRestoredWebView()
+            .ignoresSafeArea()
+            .background(Color.black.ignoresSafeArea())
     }
 }
 
@@ -72,6 +52,19 @@ struct MineradioRestoredWebView: UIViewRepresentable {
                 WKUserScript(
                     source: bridge,
                     injectionTime: .atDocumentStart,
+                    forMainFrameOnly: true
+                )
+            )
+        }
+
+        // The original iOS build applies this stylesheet after the document has
+        // a head element. It hides desktop-only chrome and lays out the iOS shell.
+        if let styleURL = bundledResource("ios-style", fileExtension: "js"),
+           let style = try? String(contentsOf: styleURL, encoding: .utf8) {
+            configuration.userContentController.addUserScript(
+                WKUserScript(
+                    source: style,
+                    injectionTime: .atDocumentEnd,
                     forMainFrameOnly: true
                 )
             )
@@ -202,6 +195,7 @@ struct MineradioRestoredWebView: UIViewRepresentable {
             }
         }
 
+        @MainActor
         private func qrImageDataURL(for text: String) -> String? {
             let filter = CIFilter.qrCodeGenerator()
             filter.message = Data(text.utf8)
@@ -367,7 +361,10 @@ struct MineradioRestoredWebView: UIViewRepresentable {
                     "url": qrURL,
                     "qrurl": qrURL,
                 ]
-                if let image = qrImageDataURL(for: qrURL) {
+                let image = await MainActor.run {
+                    self.qrImageDataURL(for: qrURL)
+                }
+                if let image {
                     result["img"] = image
                 }
                 return result
