@@ -20,6 +20,7 @@ private enum WidgetCommandIntentSupport {
             ],
             forKey: widgetCommandKey
         )
+        defaults.synchronize()
     }
 }
 
@@ -198,6 +199,7 @@ private struct BeansWidgetView: View {
                 mediumLayout
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: family == .systemSmall ? 22 : 26, style: .continuous))
         .modifier(
             WidgetContainerBackground(
                 cover: entry.cover,
@@ -234,6 +236,38 @@ private extension BeansWidgetView {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(.white.opacity(0.2), lineWidth: 0.7)
         }
+    }
+
+    var recordCover: some View {
+        ZStack {
+            Circle()
+                .fill(.black.opacity(0.78))
+                .overlay {
+                    Circle()
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                }
+            if let image = entry.cover {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .clipShape(Circle())
+                    .padding(9)
+            } else {
+                Image(systemName: "music.note")
+                    .font(.system(size: 30, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.86))
+            }
+            Circle()
+                .stroke(
+                    AngularGradient(
+                        colors: [.white.opacity(0.1), .black.opacity(0.85), .white.opacity(0.1)],
+                        center: .center
+                    ),
+                    lineWidth: 5
+                )
+                .padding(4)
+        }
+        .shadow(color: .black.opacity(0.38), radius: 10, y: 6)
     }
 
     var titleBlock: some View {
@@ -350,68 +384,88 @@ private extension BeansWidgetView {
     }
 
     var mediumLayout: some View {
-        HStack(spacing: 12) {
-            Link(destination: URL(string: "beansmusic://widget/open")!) {
-                cover.frame(width: 78, height: 78)
-            }
+        ZStack {
+            widgetBackdrop
+            HStack(spacing: 13) {
+                Link(destination: URL(string: "beansmusic://widget/open")!) {
+                    recordCover
+                        .frame(width: 92, height: 92)
+                }
 
-            VStack(alignment: .leading, spacing: 7) {
-                titleBlock
-                Text(entry.album.isEmpty ? "正在播放" : entry.album)
-                    .font(.system(size: 11))
-                    .foregroundStyle(secondary)
-                    .lineLimit(1)
-                progressLine
-            }
-
-            VStack(spacing: 4) {
-                playButton
-                HStack(spacing: 0) {
-                    previousButton
-                    nextButton
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(entry.title)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(entry.artist)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    progressLine
+                    HStack {
+                        Text(formatTime(entry.progress))
+                        Spacer()
+                        Text(formatTime(entry.duration))
+                    }
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.56))
+                    HStack(spacing: 2) {
+                        previousButton
+                        Spacer()
+                        playButton
+                        Spacer()
+                        nextButton
+                    }
+                    .frame(height: 36)
                 }
             }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 12)
         }
-        .padding(14)
     }
 
     var largeLayout: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            HStack(spacing: 6) {
-                Image(systemName: entry.isPlaying ? "waveform" : "music.note")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(entry.accent)
-                Text("BEANS MUSIC")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(0.6)
-                    .foregroundStyle(secondary)
-                Spacer()
-                Link(destination: URL(string: "beansmusic://widget/open")!) {
-                    Image(systemName: "chevron.right")
+        ZStack {
+            widgetBackdrop
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 6) {
+                    Image(systemName: entry.isPlaying ? "waveform" : "music.note")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(secondary)
-                }
-            }
-
-            HStack(spacing: 14) {
-                Link(destination: URL(string: "beansmusic://widget/open")!) {
-                    cover.frame(width: 108, height: 108)
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    titleBlock
-                    Text(entry.album.isEmpty ? "正在播放" : entry.album)
-                        .font(.system(size: 11))
-                        .foregroundStyle(secondary)
-                        .lineLimit(2)
-                    Spacer(minLength: 0)
+                        .foregroundStyle(.white.opacity(0.78))
+                    Text("BEANS MUSIC")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .tracking(0.7)
+                        .foregroundStyle(.white.opacity(0.58))
+                    Spacer()
                     Text(entry.isPlaying ? "正在播放" : "已暂停")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(entry.accent)
+                        .foregroundStyle(.white.opacity(0.58))
                 }
-                Spacer(minLength: 0)
-            }
 
-            VStack(spacing: 5) {
+                HStack(spacing: 16) {
+                    Link(destination: URL(string: "beansmusic://widget/open")!) {
+                        recordCover
+                            .frame(width: 126, height: 126)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(entry.title)
+                            .font(.system(size: 21, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                        Text(entry.artist)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.62))
+                            .lineLimit(1)
+                        Text(entry.album.isEmpty ? "正在播放" : entry.album)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.48))
+                            .lineLimit(2)
+                        Spacer(minLength: 0)
+                    }
+                    Spacer(minLength: 0)
+                }
+
                 progressLine
                 HStack {
                     Text(formatTime(entry.progress))
@@ -419,18 +473,43 @@ private extension BeansWidgetView {
                     Text(formatTime(entry.duration))
                 }
                 .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(secondary)
-            }
+                .foregroundStyle(.white.opacity(0.58))
 
-            HStack {
-                previousButton
-                Spacer()
-                playButton
-                Spacer()
-                nextButton
+                HStack {
+                    previousButton
+                    Spacer()
+                    playButton
+                    Spacer()
+                    nextButton
+                }
+                .frame(height: 38)
             }
+            .padding(17)
         }
-        .padding(16)
+    }
+
+    var widgetBackdrop: some View {
+        ZStack {
+            if let image = entry.cover {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .blur(radius: 30)
+                    .scaleEffect(1.2)
+                    .overlay(.black.opacity(0.48))
+            } else {
+                LinearGradient(
+                    colors: [entry.accent.opacity(0.72), .black.opacity(0.94)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+            LinearGradient(
+                colors: [.black.opacity(0.08), .black.opacity(0.62)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
     }
 
     func formatTime(_ value: Double) -> String {

@@ -48,6 +48,7 @@ enum WidgetPlaybackBridge {
         )
 
         let isNewSong = state.songKey != song.identityKey
+        let wasPlaying = state.isPlaying
         state.songKey = song.identityKey
         state.title = song.name
         state.artist = song.artists
@@ -76,7 +77,8 @@ enum WidgetPlaybackBridge {
         }
 
         save(state, using: defaults)
-        requestReload()
+        defaults.synchronize()
+        requestReload(force: isNewSong || wasPlaying != isPlaying)
     }
 
     static func updateProgress(progress: Double, isPlaying: Bool) {
@@ -86,12 +88,14 @@ enum WidgetPlaybackBridge {
         state.isPlaying = isPlaying
         state.updatedAt = Date()
         save(state, using: defaults)
+        defaults.synchronize()
         requestReload()
     }
 
     static func clear() {
         guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
         defaults.removeObject(forKey: stateKey)
+        defaults.synchronize()
         if let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupID
         ) {
@@ -122,14 +126,21 @@ enum WidgetPlaybackBridge {
         defaults.set(data, forKey: stateKey)
     }
 
-    private static func requestReload() {
+    private static func requestReload(force: Bool = false) {
         let now = ProcessInfo.processInfo.systemUptime
+        if force, reloadWorkItem == nil {
+            lastReloadUptime = now
+            WidgetCenter.shared.reloadTimelines(ofKind: "BeansWidget")
+            WidgetCenter.shared.reloadAllTimelines()
+            return
+        }
         guard reloadWorkItem == nil else { return }
         let delay = max(0, 1.5 - (now - lastReloadUptime))
         let work = DispatchWorkItem {
             reloadWorkItem = nil
             lastReloadUptime = ProcessInfo.processInfo.systemUptime
             WidgetCenter.shared.reloadTimelines(ofKind: "BeansWidget")
+            WidgetCenter.shared.reloadAllTimelines()
         }
         reloadWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
