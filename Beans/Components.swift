@@ -541,6 +541,49 @@ private struct BeansDetailMiniPlayerModifier: ViewModifier {
 
 // MARK: - 封面图
 
+/// 固定尺寸的扫光骨架，占位期间不改变父布局尺寸。
+struct BeansShimmerSkeleton: View {
+    var cornerRadius: CGFloat = 12
+    var baseOpacity: Double = 0.12
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let height = proxy.size.height
+            let bandWidth = max(width * 0.6, 1)
+
+            ZStack {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.primary.opacity(baseOpacity))
+
+                if reduceMotion {
+                    Color.clear
+                } else {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                        let phase = context.date.timeIntervalSinceReferenceDate
+                            .truncatingRemainder(dividingBy: 1.5) / 1.5
+
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                Color.primary.opacity(0.08),
+                                .clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: bandWidth, height: height)
+                        .offset(x: (width * 1.6) * phase - bandWidth)
+                    }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        }
+    }
+}
+
 struct CoverImage: View {
     let url: URL?
     var size: CGFloat
@@ -563,13 +606,11 @@ struct CoverImage: View {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
+                            .transition(.opacity.animation(.easeIn(duration: 0.22)))
                     } else if url == nil || imageLoader.didFail {
                         placeholderIcon
                     } else {
-                        ZStack {
-                            placeholderIcon
-                            ProgressView().tint(Color.beansAmber)
-                        }
+                        BeansShimmerSkeleton(cornerRadius: cornerRadius)
                     }
                 }
                 .frame(width: size * max(aspectRatio, 0.1), height: size)
@@ -888,11 +929,45 @@ struct LoadingStateView: View {
 
     var body: some View {
         let _ = theme.accent
-        ProgressView()
-            .controlSize(.large)
-            .tint(Color.beansAmber)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
+        VStack(alignment: .leading, spacing: 22) {
+            HStack(spacing: 12) {
+                BeansShimmerSkeleton(cornerRadius: 8)
+                    .frame(width: 128, height: 22)
+                Spacer(minLength: 0)
+                BeansShimmerSkeleton(cornerRadius: 8)
+                    .frame(width: 72, height: 22)
+            }
+
+            HStack(spacing: 14) {
+                ForEach(0..<3, id: \.self) { index in
+                    VStack(alignment: .leading, spacing: 8) {
+                        BeansShimmerSkeleton(cornerRadius: 14)
+                            .aspectRatio(1, contentMode: .fit)
+                            .frame(maxWidth: .infinity)
+                        BeansShimmerSkeleton(cornerRadius: 5)
+                            .frame(height: 12)
+                            .frame(maxWidth: index == 2 ? 74 : 116, alignment: .leading)
+                    }
+                }
+            }
+
+            ForEach(0..<3, id: \.self) { index in
+                HStack(spacing: 12) {
+                    BeansShimmerSkeleton(cornerRadius: 10)
+                        .frame(width: 54, height: 54)
+                    VStack(alignment: .leading, spacing: 8) {
+                        BeansShimmerSkeleton(cornerRadius: 5)
+                            .frame(height: 12)
+                            .frame(maxWidth: index == 1 ? 170 : 230, alignment: .leading)
+                        BeansShimmerSkeleton(cornerRadius: 5)
+                            .frame(width: 112, height: 10)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 28)
     }
 }
 

@@ -79,15 +79,11 @@ struct PlaylistSquareView: View {
                             }
 
                             if isSearching && isSearchLoading {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity, minHeight: 180)
-                                    .tint(Color.beansAmber)
+                                playlistLoadingGrid
                             } else if isSearching {
                                 searchGrid
                             } else if isLoading && playlists.isEmpty {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity, minHeight: 180)
-                                    .tint(Color.beansAmber)
+                                playlistLoadingGrid
                             } else if let errorMessage, playlists.isEmpty {
                                 ErrorStateView(message: errorMessage) {
                                     Task { await load(force: true) }
@@ -243,6 +239,28 @@ struct PlaylistSquareView: View {
                 .buttonStyle(GlassPressButtonStyle(scale: 0.97))
             }
         }
+    }
+
+    private var playlistLoadingGrid: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 16)],
+            alignment: .center,
+            spacing: 18
+        ) {
+            ForEach(0..<6, id: \.self) { index in
+                VStack(alignment: .leading, spacing: 7) {
+                    BeansShimmerSkeleton(cornerRadius: isNativeClean ? 14 : 16)
+                        .aspectRatio(1, contentMode: .fit)
+                    BeansShimmerSkeleton(cornerRadius: 5)
+                        .frame(height: 12)
+                        .frame(maxWidth: index.isMultiple(of: 3) ? 112 : 138, alignment: .leading)
+                    BeansShimmerSkeleton(cornerRadius: 5)
+                        .frame(width: 86, height: 10)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(minHeight: 220)
     }
 
     private func playlistCard(_ playlist: Playlist, showsContainer: Bool = true) -> some View {
