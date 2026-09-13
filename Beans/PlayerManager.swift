@@ -136,6 +136,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastNowPlayingArtworkKey: String?
     private var nowPlayingSongKey: String?
     private var nowPlayingInfo: [String: Any] = [:]
+    private var lastWidgetProgressUptime = 0.0
     /// 酷狗高音质地址在部分账号/系统上会返回但无法由 AVPlayer 打开；每首歌只自动降级一次。
     private var kugouStandardFallbackSongKey: String?
     /// 第三方地址偶发过期或节点不可用时，按失败域名重试，避免同一节点反复进入播放器。
@@ -605,6 +606,12 @@ final class PlayerManager: NSObject, ObservableObject {
         isPlaying = false
         isBuffering = true
         loadFailed = false
+        WidgetPlaybackBridge.publish(
+            song: song,
+            progress: initialProgress,
+            duration: song.duration,
+            isPlaying: false
+        )
         pushHistory(song)
         savePersistedPlaybackState()
         Task {
@@ -1227,6 +1234,14 @@ final class PlayerManager: NSObject, ObservableObject {
                 if abs(time.seconds - self.lastPublishedProgress) >= 0.18 {
                     self.lastPublishedProgress = time.seconds
                     self.progress = time.seconds
+                    let uptime = ProcessInfo.processInfo.systemUptime
+                    if uptime - self.lastWidgetProgressUptime >= 1.0 {
+                        self.lastWidgetProgressUptime = uptime
+                        WidgetPlaybackBridge.updateProgress(
+                            progress: time.seconds,
+                            isPlaying: self.isPlaying
+                        )
+                    }
                     if abs(time.seconds - self.lastPersistedProgress) >= 2.0 {
                         self.lastPersistedProgress = time.seconds
                         self.savePersistedPlaybackState()
@@ -2008,11 +2023,23 @@ final class PlayerManager: NSObject, ObservableObject {
     // MARK: - 系统正在播放
 
     private func updateNowPlaying() {
+        guard let song = currentSong else {
+            WidgetPlaybackBridge.clear()
+            if !nowPlayingEnabled {
+                clearNowPlayingInfo()
+            }
+            return
+        }
+        WidgetPlaybackBridge.publish(
+            song: song,
+            progress: progress,
+            duration: max(duration, song.duration),
+            isPlaying: isPlaying
+        )
         guard nowPlayingEnabled else {
             clearNowPlayingInfo()
             return
         }
-        guard let song = currentSong else { return }
         let sameSong = nowPlayingSongKey == song.identityKey
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: song.name,
@@ -2030,16 +2057,34 @@ final class PlayerManager: NSObject, ObservableObject {
             let artworkKey = song.identityKey + "|" + artworkURL.absoluteString
             if let cached = Self.nowPlayingArtworkCache.object(forKey: artworkURL as NSURL) {
                 info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cached.size) { _ in cached }
+                WidgetPlaybackBridge.publish(
+                    song: song,
+                    progress: progress,
+                    duration: max(duration, song.duration),
+                    isPlaying: isPlaying,
+                    coverData: cached.jpegData(compressionQuality: 0.86),
+                    dominantColor: PaletteExtractor.dominantColor(in: cached)
+                )
             } else if lastNowPlayingArtworkKey != artworkKey {
                 lastNowPlayingArtworkKey = artworkKey
                 DispatchQueue.global(qos: .utility).async { [weak self] in
                     if let data = try? Data(contentsOf: artworkURL), let image = UIImage(data: data) {
                         Self.nowPlayingArtworkCache.setObject(image, forKey: artworkURL as NSURL)
+                        let widgetCoverData = image.jpegData(compressionQuality: 0.86) ?? data
+                        let widgetColor = PaletteExtractor.dominantColor(in: image)
                         let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                         DispatchQueue.main.async {
                             guard let self,
-                                  self.nowPlayingEnabled,
                                   self.currentSong?.identityKey == song.identityKey else { return }
+                            WidgetPlaybackBridge.publish(
+                                song: song,
+                                progress: self.progress,
+                                duration: max(self.duration, song.duration),
+                                isPlaying: self.isPlaying,
+                                coverData: widgetCoverData,
+                                dominantColor: widgetColor
+                            )
+                            guard self.nowPlayingEnabled else { return }
                             self.nowPlayingSongKey = song.identityKey
                             self.nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
                             self.publishNowPlayingInfo()
