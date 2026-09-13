@@ -154,7 +154,7 @@ struct DiscoverView: View {
                                 Task { await load(force: true) }
                             }
                         } else if loading {
-                            LoadingStateView()
+                            discoverLoadingState
                         } else {
                             // 板块按用户自定义顺序渲染（可拖拽排序）
                             ForEach(homeOrder.filter { availableSections.contains($0) }, id: \.self) { key in
@@ -581,6 +581,185 @@ struct DiscoverView: View {
         case 5..<12: return "早上好"
         case 12..<18: return "下午好"
         default: return "晚上好"
+        }
+    }
+
+    private var discoverLoadingState: some View {
+        VStack(alignment: .leading, spacing: isNativeClean ? 34 : 26) {
+            ForEach(homeOrder.filter { availableSections.contains($0) }, id: \.self) { key in
+                switch key {
+                case "每日推荐":
+                    loadingRecommendationSection
+                case "新碟上架":
+                    loadingHorizontalCoverSection(titleWidth: 116, itemSize: isNativeClean ? 148 : 124, itemCount: 4)
+                case "歌手":
+                    loadingArtistSection
+                case "排行榜":
+                    loadingRankSection
+                default:
+                    EmptyView()
+                }
+            }
+        }
+        .accessibilityLabel(Text("加载中"))
+    }
+
+    private var loadingRecommendationSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if !isNativeClean {
+                BeansShimmerSkeleton(cornerRadius: 8)
+                    .frame(width: 78, height: 24)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    ForEach(0..<recommendationSkeletonCount, id: \.self) { index in
+                        VStack(alignment: .leading, spacing: 0) {
+                            BeansShimmerSkeleton(cornerRadius: isNativeClean ? 16 : 18)
+                                .frame(
+                                    width: recommendationSkeletonSize.width,
+                                    height: recommendationSkeletonSize.height
+                                )
+                            if index == 0 && dailySongsListStyle {
+                                BeansShimmerSkeleton(cornerRadius: 5)
+                                    .frame(width: 108, height: 12)
+                                    .padding(.top, 8)
+                                BeansShimmerSkeleton(cornerRadius: 5)
+                                    .frame(width: 74, height: 10)
+                                    .padding(.top, 8)
+                            }
+                        }
+                    }
+                    Color.clear.frame(width: 0, height: 1)
+                }
+                .padding(.vertical, 3)
+                .frame(height: recommendationSkeletonHeight)
+            }
+            .beansCompatScrollClipDisabled()
+            .padding(.trailing, isNativeClean ? -24 : 0)
+        }
+    }
+
+    private var recommendationSkeletonCount: Int {
+        if dailySongsListStyle { return 4 }
+        if source == .qq { return 1 }
+        return source == .kugou ? 2 : 3
+    }
+
+    private var recommendationSkeletonSize: CGSize {
+        if dailySongsListStyle {
+            let side = isNativeClean ? 156.0 : 108.0
+            return CGSize(width: side, height: side)
+        }
+        if source == .qq {
+            return CGSize(width: isNativeClean ? 304 : 278, height: isNativeClean ? 172 : 160)
+        }
+        let side = isNativeClean ? 172.0 : 160.0
+        return CGSize(width: side, height: side)
+    }
+
+    private var recommendationSkeletonHeight: CGFloat {
+        if dailySongsListStyle { return isNativeClean ? 198 : 150 }
+        return isNativeClean ? 178 : 166
+    }
+
+    private func loadingHorizontalCoverSection(titleWidth: CGFloat, itemSize: CGFloat, itemCount: Int) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            BeansShimmerSkeleton(cornerRadius: 8)
+                .frame(width: titleWidth, height: isNativeClean ? 26 : 22)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    ForEach(0..<itemCount, id: \.self) { index in
+                        VStack(alignment: .leading, spacing: 7) {
+                            BeansShimmerSkeleton(cornerRadius: 6)
+                                .frame(width: itemSize, height: itemSize)
+                            BeansShimmerSkeleton(cornerRadius: 5)
+                                .frame(width: index.isMultiple(of: 2) ? itemSize * 0.78 : itemSize * 0.58, height: 12)
+                            BeansShimmerSkeleton(cornerRadius: 5)
+                                .frame(width: itemSize * 0.48, height: 10)
+                        }
+                        .frame(width: itemSize, alignment: .leading)
+                    }
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
+                }
+                .padding(.vertical, 2)
+                .frame(height: itemSize + 50)
+            }
+            .beansCompatScrollClipDisabled()
+            .padding(.trailing, isNativeClean ? -24 : 0)
+        }
+    }
+
+    private var loadingArtistSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            BeansShimmerSkeleton(cornerRadius: 8)
+                .frame(width: 64, height: isNativeClean ? 26 : 22)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 16) {
+                    ForEach(0..<5, id: \.self) { index in
+                        let size = isNativeClean ? 136.0 : 116.0
+                        VStack(spacing: 8) {
+                            BeansShimmerSkeleton(cornerRadius: size / 2)
+                                .frame(width: size, height: size)
+                            BeansShimmerSkeleton(cornerRadius: 5)
+                                .frame(width: index.isMultiple(of: 2) ? 72 : 54, height: 12)
+                        }
+                        .frame(width: size)
+                    }
+                    Color.clear.frame(width: isNativeClean ? 0 : 8, height: 1)
+                }
+                .padding(.vertical, 2)
+                .frame(height: isNativeClean ? 168 : 146)
+            }
+            .beansCompatScrollClipDisabled()
+            .padding(.trailing, isNativeClean ? -24 : 0)
+        }
+    }
+
+    @ViewBuilder
+    private var loadingRankSection: some View {
+        if isNativeClean {
+            loadingHorizontalCoverSection(titleWidth: 78, itemSize: 148, itemCount: 4)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                BeansShimmerSkeleton(cornerRadius: 8)
+                    .frame(width: 78, height: 22)
+                VStack(spacing: 0) {
+                    ForEach(0..<3, id: \.self) { index in
+                        HStack(spacing: 12) {
+                            BeansShimmerSkeleton(cornerRadius: 5)
+                                .frame(width: 24, height: 18)
+                            BeansShimmerSkeleton(cornerRadius: 6)
+                                .frame(width: 52, height: 52)
+                            VStack(alignment: .leading, spacing: 8) {
+                                BeansShimmerSkeleton(cornerRadius: 5)
+                                    .frame(width: index == 1 ? 132 : 168, height: 13)
+                                BeansShimmerSkeleton(cornerRadius: 5)
+                                    .frame(width: 92, height: 10)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 8)
+                        if index < 2 {
+                            Divider().overlay(Color.beansComment.opacity(0.12))
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(Color.black.opacity(0.06))
+                        .background {
+                            BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.8)
+                        }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .beansCardShadow(radius: 9, y: 3)
+            }
         }
     }
 
