@@ -25,6 +25,7 @@ struct ProfileView: View {
     @State private var showAccountHub = false
     /// 设置页（外观 + 歌词翻译等）
     @State private var showSettings = false
+    @State private var showEmbeddedPlayer = false
     /// 手动检查更新
     @State private var checkingUpdate = false
     @State private var updateResult: UpdateChecker.CheckResult?
@@ -170,6 +171,7 @@ struct ProfileView: View {
                         header
                     }
                     customAvatarCard
+                    embeddedPlayerCard
                     // 更新入口固定放在“我的”页面最底部，避免被板块排序隐藏。
                     updateLinkCard
                     communityCard
@@ -223,6 +225,12 @@ struct ProfileView: View {
                 .environmentObject(player)
                 .environmentObject(auth)
                 .ignoresSafeArea(.all)
+        }
+        .fullScreenCover(isPresented: $showEmbeddedPlayer) {
+            MineradioRestoredView()
+                .environmentObject(theme)
+                .environmentObject(player)
+                .environmentObject(auth)
         }
         .sheet(item: $updateShareFile, onDismiss: cleanupUpdateShareFile) { item in
             ShareSheet(items: [item.url])
@@ -1139,6 +1147,40 @@ struct AccountHubSheet: View {
 // MARK: - 设置页（外观 + 歌词翻译，从「我的」右上角齿轮进入）
 
 private extension ProfileView {
+    private var embeddedPlayerCard: some View {
+        Button {
+            BeansHaptics.tap()
+            showEmbeddedPlayer = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles.tv")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 30)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(isEnglish ? "Visual player" : "视觉播放器")
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(isEnglish ? "Open the immersive player" : "打开独立的沉浸式播放页面")
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.beansComment.opacity(0.65))
+            }
+            .padding(14)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+        .beansCardShadow(radius: 8, y: 3)
+    }
+
     var customAvatarCard: some View {
         HStack(spacing: 12) {
             Button {

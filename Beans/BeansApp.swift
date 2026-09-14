@@ -3,6 +3,7 @@ import UIKit
 
 @main
 struct BeansApp: App {
+    @UIApplicationDelegateAdaptor(BeansAppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var auth = AuthStore()
     @StateObject private var player = PlayerManager()
