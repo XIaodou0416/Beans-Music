@@ -25,26 +25,38 @@ private func beansCommentCountText(songName: String, platform: String? = nil, co
 struct CommentsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
     let song: Song
+    var isExpanded = false
 
     @State private var page: NetEaseAPI.SongCommentPage?
-    @State private var qqComments: [SongComment] = []
+    @State private var qqHotComments: [SongComment] = []
+    @State private var qqLatestComments: [SongComment] = []
     @State private var qqTotal = 0
     @State private var qqPageNum = 0
-    @State private var kugouComments: [SongComment] = []
+    @State private var kugouHotComments: [SongComment] = []
+    @State private var kugouLatestComments: [SongComment] = []
     @State private var kugouTotal = 0
     @State private var kugouPageNum = 1
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var offset = 0
+    @State private var selectedSection: CommentSection = .latest
 
     private let limit = 30
     /// QQ 音乐每页条数（接口单页上限 25）
     private let qqPageSize = 25
 
+    private enum CommentSection: String, CaseIterable, Identifiable {
+        case latest
+        case hot
+
+        var id: String { rawValue }
+        var title: String { self == .latest ? "最新评论" : "热门评论" }
+    }
+
     var body: some View {
         let _ = theme.accent
         ZStack {
-            GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            commentsBackground
             BeansNavigationStack {
                 Group {
                     if loading {
@@ -72,6 +84,22 @@ struct CommentsSheet: View {
         .task { await load(reset: true) }
     }
 
+    @ViewBuilder
+    private var commentsBackground: some View {
+        if #available(iOS 26, *), !isExpanded {
+            ZStack {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                BeansGlass(shape: Rectangle(), forceLiquid: true)
+            }
+            .ignoresSafeArea()
+        } else if isExpanded {
+            Color(uiColor: .systemBackground)
+                .ignoresSafeArea()
+        } else {
+            GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+        }
+    }
+
     private func neteaseCommentList(_ page: NetEaseAPI.SongCommentPage) -> some View {
         List {
             Section {
@@ -80,23 +108,31 @@ struct CommentsSheet: View {
                     .foregroundStyle(Color.beansComment)
             }
             .listRowBackground(Color.clear)
-            if !page.hot.isEmpty {
-                Section("精彩评论") {
-                    ForEach(page.hot) { comment in
+            Section {
+                Picker("评论分类", selection: $selectedSection) {
+                    ForEach(CommentSection.allCases) { section in
+                        Text(section.title).tag(section)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+            }
+            Section(selectedSection.title) {
+                let comments = selectedSection == .hot ? page.hot : page.comments
+                if comments.isEmpty {
+                    Text("暂无\(selectedSection.title)")
+                        .font(BeansFont.appFont(13))
+                        .foregroundStyle(Color.beansComment)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(comments) { comment in
                         CommentRow(comment: comment)
                             .listRowBackground(Color.clear)
                     }
                 }
             }
-            if !page.comments.isEmpty {
-                Section("最新评论") {
-                    ForEach(page.comments) { comment in
-                        CommentRow(comment: comment)
-                            .listRowBackground(Color.clear)
-                    }
-                }
-            }
-            if page.comments.count >= limit {
+            if selectedSection == .latest && page.comments.count >= limit {
                 Section {
                     Button {
                         Task { await loadMore() }
@@ -117,10 +153,12 @@ struct CommentsSheet: View {
         if reset {
             offset = 0
             page = nil
-            qqComments = []
+            qqHotComments = []
+            qqLatestComments = []
             qqTotal = 0
             qqPageNum = 0
-            kugouComments = []
+            kugouHotComments = []
+            kugouLatestComments = []
             kugouTotal = 0
             kugouPageNum = 1
             loading = true
@@ -136,9 +174,10 @@ struct CommentsSheet: View {
                     limit: limit
                 )
                 if reset {
-                    kugouComments = result.comments
+                    kugouHotComments = result.hotComments
+                    kugouLatestComments = result.comments
                 } else {
-                    kugouComments.append(contentsOf: result.comments)
+                    kugouLatestComments.append(contentsOf: result.comments)
                 }
                 kugouTotal = result.total
                 loading = false
@@ -146,9 +185,10 @@ struct CommentsSheet: View {
             } else if song.source == .qq {
                 let result = try await QQMusicAPI.shared.comments(songID: song.id, limit: qqPageSize, pagenum: qqPageNum)
                 if reset {
-                    qqComments = result.comments
+                    qqHotComments = result.hotComments
+                    qqLatestComments = result.comments
                 } else {
-                    qqComments.append(contentsOf: result.comments)
+                    qqLatestComments.append(contentsOf: result.comments)
                 }
                 qqTotal = result.total
             } else {
@@ -170,23 +210,37 @@ struct CommentsSheet: View {
     /// QQ 音乐评论列表（分页加载更多）
     private var qqCommentList: some View {
         Group {
-            if qqComments.isEmpty {
+            if qqHotComments.isEmpty && qqLatestComments.isEmpty {
                 EmptyStateView(icon: "bubble.left", text: "暂无评论")
             } else {
                 List {
                     Section {
-                        Text(beansCommentCountText(songName: song.name, platform: "QQ 音乐", count: qqTotal > 0 ? qqTotal : qqComments.count))
+                        Text(beansCommentCountText(songName: song.name, platform: "QQ 音乐", count: qqTotal > 0 ? qqTotal : qqLatestComments.count))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                     }
                     .listRowBackground(Color.clear)
-                    Section("评论") {
-                        ForEach(qqComments) { comment in
-                            CommentRow(comment: comment)
-                                .listRowBackground(Color.clear)
+                    Section {
+                        Picker("评论分类", selection: $selectedSection) {
+                            ForEach(CommentSection.allCases) { section in
+                                Text(section.title).tag(section)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .listRowBackground(Color.clear)
+                    }
+                    Section(selectedSection.title) {
+                        let comments = selectedSection == .hot ? qqHotComments : qqLatestComments
+                        if comments.isEmpty {
+                            emptyCommentSection
+                        } else {
+                            ForEach(comments) { comment in
+                                CommentRow(comment: comment)
+                                    .listRowBackground(Color.clear)
+                            }
                         }
                     }
-                    if qqTotal <= 0 || qqComments.count < qqTotal {
+                    if selectedSection == .latest && (qqTotal <= 0 || qqLatestComments.count < qqTotal) {
                         Section {
                             Button {
                                 Task { await loadQQMore() }
@@ -213,23 +267,37 @@ struct CommentsSheet: View {
 
     private var kugouCommentList: some View {
         Group {
-            if kugouComments.isEmpty {
+            if kugouHotComments.isEmpty && kugouLatestComments.isEmpty {
                 EmptyStateView(icon: "bubble.left", text: "暂无评论")
             } else {
                 List {
                     Section {
-                        Text(beansCommentCountText(songName: song.name, platform: "酷狗音乐", count: kugouTotal > 0 ? kugouTotal : kugouComments.count))
+                        Text(beansCommentCountText(songName: song.name, platform: "酷狗音乐", count: kugouTotal > 0 ? kugouTotal : kugouLatestComments.count + kugouHotComments.count))
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                     }
                     .listRowBackground(Color.clear)
-                    Section("评论") {
-                        ForEach(kugouComments) { comment in
-                            CommentRow(comment: comment)
-                                .listRowBackground(Color.clear)
+                    Section {
+                        Picker("评论分类", selection: $selectedSection) {
+                            ForEach(CommentSection.allCases) { section in
+                                Text(section.title).tag(section)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .listRowBackground(Color.clear)
+                    }
+                    Section(selectedSection.title) {
+                        let comments = selectedSection == .hot ? kugouHotComments : kugouLatestComments
+                        if comments.isEmpty {
+                            emptyCommentSection
+                        } else {
+                            ForEach(comments) { comment in
+                                CommentRow(comment: comment)
+                                    .listRowBackground(Color.clear)
+                            }
                         }
                     }
-                    if kugouTotal <= 0 || kugouComments.count < kugouTotal {
+                    if selectedSection == .latest && (kugouTotal <= 0 || kugouLatestComments.count < kugouTotal) {
                         Section {
                             Button {
                                 kugouPageNum += 1
@@ -252,6 +320,48 @@ struct CommentsSheet: View {
     private func loadMore() async {
         offset += limit
         await load(reset: false)
+    }
+
+    private var emptyCommentSection: some View {
+        Text("暂无\(selectedSection.title)")
+            .font(BeansFont.appFont(13))
+            .foregroundStyle(Color.beansComment)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .listRowBackground(Color.clear)
+    }
+}
+
+/// 评论区使用独立宿主保存当前半屏/全屏状态，避免把 detent 状态藏在内容视图外
+/// 导致展开后背景仍然保持液态效果。
+struct CommentsSheetHost: View {
+    let song: Song
+
+    var body: some View {
+        if #available(iOS 16, *) {
+            CommentsSheetDetentHost(song: song)
+        } else {
+            CommentsSheet(song: song)
+        }
+    }
+}
+
+@available(iOS 16, *)
+private struct CommentsSheetDetentHost: View {
+    let song: Song
+    @State private var selectedDetent: PresentationDetent = .medium
+
+    var body: some View {
+        let content = CommentsSheet(song: song, isExpanded: selectedDetent == .large)
+            .presentationDetents([.medium, .large], selection: $selectedDetent)
+            .presentationDragIndicator(.visible)
+
+        if #available(iOS 16.4, *) {
+            content
+                .presentationBackground(.clear)
+                .presentationCornerRadius(28)
+        } else {
+            content
+        }
     }
 }
 

@@ -1556,6 +1556,7 @@ final class KugouMusicAPI {
     // MARK: - 酷狗评论
 
     struct KugouCommentPage {
+        let hotComments: [SongComment]
         let comments: [SongComment]
         let total: Int
     }
@@ -1599,7 +1600,7 @@ final class KugouMusicAPI {
             }
         }
         let parsed = Self.parseComments(json: json, page: page, songName: commentID)
-        if parsed.comments.isEmpty, let legacy = try? await legacyCommentJSON(childrenID: commentID, page: page, limit: limit) {
+        if parsed.comments.isEmpty && parsed.hotComments.isEmpty, let legacy = try? await legacyCommentJSON(childrenID: commentID, page: page, limit: limit) {
             return Self.parseComments(json: legacy, page: page, songName: commentID)
         }
         return parsed
@@ -1658,12 +1659,16 @@ final class KugouMusicAPI {
     }
 
     private static func parseComments(json: [String: Any], page: Int, songName: String) -> KugouCommentPage {
-        let rows = Self.deepArrays(
+        let hotRows = Self.deepArrays(
+            json,
+            names: ["hot_comment", "hot_comments", "hotlist", "hot_list"]
+        )
+        let regularRows = Self.deepArrays(
             json,
             names: ["commentlist", "comments", "list", "comment", "hot_comment", "hot_comments"]
         )
         var seen = Set<Int>()
-        let comments = rows.compactMap { raw -> SongComment? in
+        func parse(_ raw: [String: Any], isHot: Bool) -> SongComment? {
             let rawID = Self.string(raw["commentid"] ?? raw["comment_id"] ?? raw["id"] ?? raw["cid"])
             let content = Self.clean(Self.string(
                 raw["content"] ?? raw["comment_content"] ?? raw["commentContent"] ?? raw["text"]
@@ -1688,12 +1693,14 @@ final class KugouMusicAPI {
                 avatarURL: avatar.isEmpty ? nil : URL(string: avatar),
                 time: seconds > 0 ? Date(timeIntervalSince1970: seconds) : Date(),
                 likedCount: Self.int(raw["praisenum"] ?? raw["like_count"] ?? raw["liked_count"] ?? raw["likes"]),
-                isHot: page == 1
+                isHot: isHot
             )
         }
+        let hotComments = hotRows.compactMap { parse($0, isHot: true) }
+        let comments = regularRows.compactMap { parse($0, isHot: false) }
         let total = Self.deepInt(json, names: ["total", "commenttotal", "comment_total", "count"])
-        BeansLogger.shared.log("酷狗评论：mixsongid=\(songName) page=\(page) 返回 \(comments.count) 条", level: .debug)
-        return KugouCommentPage(comments: comments, total: total)
+        BeansLogger.shared.log("酷狗评论：mixsongid=\(songName) page=\(page) 返回 \(hotComments.count + comments.count) 条", level: .debug)
+        return KugouCommentPage(hotComments: hotComments, comments: comments, total: total)
     }
 
     private func registerDevice() async {

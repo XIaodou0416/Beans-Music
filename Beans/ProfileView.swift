@@ -593,14 +593,11 @@ struct ProfileView: View {
                     .font(.system(size: 15))
                     .foregroundStyle(Color.beansHighlight)
                     .frame(width: 28)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("交流群")
-                        .font(BeansFont.appFont(14, .semibold))
-                        .foregroundStyle(Color.beansLabel)
-                    Text("点击跳转 Telegram")
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
-                }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("交流群")
+                            .font(BeansFont.appFont(14, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                    }
                 Spacer()
                 Image(systemName: "arrow.up.forward.app")
                     .font(.system(size: 15, weight: .semibold))
@@ -680,9 +677,6 @@ struct ProfileView: View {
                         Text("自愿赞助")
                             .font(BeansFont.appFont(16, .bold))
                             .foregroundStyle(Color.beansLabel)
-                        Text(donationExpanded ? "点击收起赞助信息" : "点击展开赞助信息")
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
                     }
                     Spacer()
                     Image(systemName: donationExpanded ? "chevron.up" : "chevron.down")

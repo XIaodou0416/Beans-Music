@@ -1064,6 +1064,7 @@ final class QQMusicAPI {
     /// QQ 音乐评论分页（fcg_global_comment_h5；topid 必须用数字 songid 并带 cid/reqtype，用 songmid 会返回空）
     /// pagenum 从 0 开始；热评只在第一页返回，翻页只取普通评论
     struct QQCommentPage {
+        let hotComments: [SongComment]
         let comments: [SongComment]
         let total: Int
     }
@@ -1081,16 +1082,15 @@ final class QQMusicAPI {
         let normal = ((json["comment"] as? [String: Any])?["commentlist"] as? [[String: Any]]) ?? []
         let commentTotal = ((json["comment"] as? [String: Any])?["commenttotal"] as? Int) ?? 0
         var seen = Set<String>()
-        var result: [SongComment] = []
-        for item in hot + normal {
+        func parse(_ item: [String: Any], isHot: Bool) -> SongComment? {
             let rootID = item["rootcommentid"] as? String ?? ""
             let commentID = item["commentid"] as? String ?? ""
             let key = rootID + "_" + commentID
-            guard !key.isEmpty, !seen.contains(key) else { continue }
+            guard !key.isEmpty, !seen.contains(key) else { return nil }
             seen.insert(key)
             var content = Self.decodeCommentEmoji(item["rootcommentcontent"] as? String ?? "")
             content = content.replacingOccurrences(of: "\\n", with: "\n")
-            guard !content.isEmpty else { continue }
+            guard !content.isEmpty else { return nil }
             var nick = item["nick"] as? String ?? ""
             if nick.isEmpty { nick = item["rootcommentnick"] as? String ?? "" }
             if nick.hasPrefix("@") { nick = String(nick.dropFirst()) }
@@ -1103,10 +1103,12 @@ final class QQMusicAPI {
                 avatarURL: avatar.isEmpty ? nil : URL(string: avatar),
                 time: time > 0 ? Date(timeIntervalSince1970: time) : Date(),
                 likedCount: item["praisenum"] as? Int ?? 0,
-                isHot: true
+                isHot: isHot
             ))
         }
-        return QQCommentPage(comments: result, total: commentTotal)
+        let hotComments = hot.compactMap { parse($0, isHot: true) }
+        let comments = normal.compactMap { parse($0, isHot: false) }
+        return QQCommentPage(hotComments: hotComments, comments: comments, total: commentTotal)
     }
 
     /// QQ 评论表情解码（[em]eXXXXXX[/em] → 对应 Unicode 表情）

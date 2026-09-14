@@ -722,7 +722,7 @@ struct PlayerView: View {
         }
         .sheet(isPresented: $showComments) {
             if let song {
-                CommentsSheet(song: song)
+                CommentsSheetHost(song: song)
             }
         }
         .fullScreenCover(isPresented: $showPlayerSettings) {
@@ -1321,7 +1321,7 @@ struct PlayerView: View {
         .padding(.bottom, max(10, bottomInset + 2))
         .frame(maxWidth: .infinity)
         .simultaneousGesture(
-            layoutRenderingStyle == .vinyl
+            layoutRenderingStyle == .vinyl || layoutRenderingStyle == .appleMusic
                 ? AnyGesture(
                     DragGesture(minimumDistance: 24)
                         .onEnded { value in
@@ -1367,6 +1367,18 @@ struct PlayerView: View {
             onLyrics: toggleLyrics,
             onQueue: { showQueue = true },
             onComments: { showComments = true }
+        )
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24)
+                .onEnded { value in
+                    guard !showLyrics,
+                          !layoutMode,
+                          value.translation.height < -54,
+                          abs(value.translation.height) > abs(value.translation.width),
+                          song != nil else { return }
+                    BeansHaptics.medium()
+                    showComments = true
+                }
         )
     }
 
