@@ -7,10 +7,11 @@ import CoreImage.CIFilterBuiltins
 /// The page owns its layout and interaction; Beans supplies account, catalog and playback data.
 struct MineradioRestoredView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var player: PlayerManager
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            MineradioRestoredWebView()
+            MineradioRestoredWebView(player: player)
                 .ignoresSafeArea()
 
             Button {
@@ -36,6 +37,12 @@ struct MineradioRestoredView: View {
 }
 
 struct MineradioRestoredWebView: UIViewRepresentable {
+    let player: PlayerManager
+
+    init(player: PlayerManager) {
+        self.player = player
+    }
+
     private func bundledResource(_ name: String, fileExtension: String) -> URL? {
         if let url = Bundle.main.url(
             forResource: name,
@@ -57,7 +64,7 @@ struct MineradioRestoredWebView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(player: player)
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -115,9 +122,11 @@ struct MineradioRestoredWebView: UIViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         weak var webView: WKWebView?
+        private let player: PlayerManager
         private let session: URLSession
 
-        override init() {
+        init(player: PlayerManager) {
+            self.player = player
             let configuration = URLSessionConfiguration.default
             configuration.timeoutIntervalForRequest = 15
             configuration.timeoutIntervalForResource = 25
@@ -243,6 +252,31 @@ struct MineradioRestoredWebView: UIViewRepresentable {
             ]
         }
 
+        private func beansPlaybackState() -> [String: Any] {
+            guard let song = player.currentSong else {
+                return [
+                    "hasSong": false,
+                    "isPlaying": false,
+                    "progress": 0,
+                    "duration": 0,
+                ]
+            }
+            return [
+                "hasSong": true,
+                "songKey": song.identityKey,
+                "id": song.id,
+                "title": song.name,
+                "artist": song.artists,
+                "album": song.album,
+                "cover": song.coverURL?.absoluteString ?? "",
+                "provider": song.source.rawValue,
+                "progress": max(0, player.progress),
+                "duration": max(player.duration, song.duration),
+                "isPlaying": player.isPlaying,
+                "rate": player.rate,
+            ]
+        }
+
         private func audioQuality(from raw: String) -> BeansAudioQuality {
             switch raw.lowercased() {
             case "standard", "normal", "128k": return .standard
@@ -345,6 +379,9 @@ struct MineradioRestoredWebView: UIViewRepresentable {
             switch action {
             case "beans-session-status":
                 return await beansSessionStatus()
+
+            case "beans-playback-state":
+                return beansPlaybackState()
 
             case "itunes-search":
                 let keyword = value(payload, ["keywords", "term"]).trimmingCharacters(in: .whitespacesAndNewlines)

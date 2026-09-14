@@ -751,6 +751,7 @@
         installIOSPanelClosers();
         installIOSLoginLimits();
         startBeansSessionSync();
+        installNativePlaybackMirror();
         installIOSTabBar();
         installIOSCanvasGestures();
         installIOSPlayerShell();
@@ -789,7 +790,8 @@
     window.__mineradioEmbeddedLoginDisabled = true;
     var style = document.createElement('style');
     style.textContent = [
-      '#login-modal, #user-modal, #login-guide-canvas, #trial-login-btn { display:none !important; }',
+      '#login-modal, #user-modal, #login-guide-canvas, #trial-login-btn, #user-btn, #top-right .top-account-pill { display:none !important; }',
+      '#search-area, #search-results, #search-mode-tabs { display:none !important; }',
       '#login-provider-netease, #login-provider-qq, #login-provider-kugou, #login-both-btn,',
       '#qq-cookie-toggle-btn, #qq-cookie-panel, #refresh-qr-btn, #account-add-netease,',
       '#account-add-qq, #account-add-kugou, #account-logout-btn { display:none !important; }'
@@ -852,6 +854,125 @@
     window.__beansSessionSyncTimer = setInterval(function(){
       syncBeansSessionToPage();
     }, 30000);
+  }
+
+  function installNativePlaybackMirror() {
+    if (window.__beansNativePlaybackMirrorInstalled) return;
+    window.__beansNativePlaybackMirrorInstalled = true;
+    window.__vothNativePlaybackOnly = true;
+
+    // Keep the existing visual engine alive with a tiny media-like object. It
+    // receives time from Beans, but never creates a second audio player.
+    var listeners = {};
+    var nativeAudio = {
+      currentTime: 0,
+      duration: 0,
+      playbackRate: 1,
+      paused: true,
+      ended: false,
+      src: 'beans-native://playback',
+      addEventListener: function(name, fn) {
+        if (typeof fn !== 'function') return;
+        (listeners[name] || (listeners[name] = [])).push(fn);
+      },
+      removeEventListener: function(name, fn) {
+        listeners[name] = (listeners[name] || []).filter(function(item){ return item !== fn; });
+      },
+      dispatch: function(name) {
+        (listeners[name] || []).slice().forEach(function(fn){
+          try { fn({ type:name, target:nativeAudio }); } catch (_) {}
+        });
+      },
+      load: function(){},
+      pause: function(){ this.paused = true; this.dispatch('pause'); },
+      play: function(){ this.paused = false; this.dispatch('play'); return Promise.resolve(); }
+    };
+    window.audio = nativeAudio;
+
+    function mirrorSong(state) {
+      return {
+        provider: state.provider || 'netease',
+        source: state.provider || 'netease',
+        type: 'song',
+        id: state.id,
+        name: state.title || '',
+        title: state.title || '',
+        artist: state.artist || '',
+        artists: [{ name: state.artist || '' }],
+        album: state.album || '',
+        cover: state.cover || '',
+        duration: Math.max(0, Number(state.duration) || 0) * 1000,
+        playable: true,
+        fee: 0
+      };
+    }
+
+    function applyNativePlaybackState(state) {
+      state = state || {};
+      if (!state.hasSong) {
+        nativeAudio.currentTime = 0;
+        nativeAudio.duration = 0;
+        nativeAudio.paused = true;
+        nativeAudio.ended = false;
+        playing = false;
+        setPlayIcon(false);
+        updatePlaybackProgressUi();
+        return;
+      }
+
+      var song = mirrorSong(state);
+      var songChanged = window.__beansNativeSongKey !== String(state.songKey || state.id || '');
+      window.__beansNativeSongKey = String(state.songKey || state.id || '');
+      playQueue = [song];
+      currentIdx = 0;
+      currentLocalSong = null;
+      nativeAudio.currentTime = Math.max(0, Number(state.progress) || 0);
+      nativeAudio.duration = Math.max(nativeAudio.currentTime, Number(state.duration) || 0);
+      nativeAudio.playbackRate = Math.max(0.25, Number(state.rate) || 1);
+      nativeAudio.paused = !state.isPlaying;
+      nativeAudio.ended = false;
+      playing = !!state.isPlaying;
+      window.__vothNativePlaybackState = state;
+
+      if (songChanged) {
+        if (typeof updateControlTrackInfo === 'function') updateControlTrackInfo(song);
+        if (typeof setControlCoverSrc === 'function') setControlCoverSrc(song.cover || '');
+        var thumbCover = document.getElementById('thumb-cover');
+        if (thumbCover) thumbCover.src = song.cover || '';
+        var thumbTitle = document.getElementById('thumb-title');
+        if (thumbTitle) thumbTitle.textContent = song.name;
+        var thumbArtist = document.getElementById('thumb-artist');
+        if (thumbArtist) thumbArtist.textContent = song.artist;
+        var thumbWrap = document.getElementById('thumb-wrap');
+        if (thumbWrap) thumbWrap.classList.add('visible');
+        var hint = document.getElementById('hint');
+        if (hint) hint.classList.add('hidden');
+        if (typeof safeRenderQueuePanel === 'function') safeRenderQueuePanel('native-playback-sync');
+      }
+      setPlayIcon(playing);
+      updatePlaybackProgressUi();
+      if (typeof updateLyricsHighlight === 'function') updateLyricsHighlight();
+    }
+
+    async function syncNativePlayback() {
+      try {
+        var result = await nativeIOSRequest('beans-playback-state', {});
+        applyNativePlaybackState((result && result.data) || {});
+      } catch (_) {}
+    }
+    window.__beansNativePlaybackSync = syncNativePlayback;
+    syncNativePlayback();
+    window.__beansNativePlaybackTimer = setInterval(syncNativePlayback, 500);
+
+    function nativeOnlyMessage() {
+      if (typeof showToast === 'function') showToast('请返回 Beans Music 搜索并播放歌曲');
+      return Promise.resolve(false);
+    }
+    window.doSearch = nativeOnlyMessage;
+    window.playQueueAt = nativeOnlyMessage;
+    window.togglePlay = nativeOnlyMessage;
+    window.nextTrack = nativeOnlyMessage;
+    window.prevTrack = nativeOnlyMessage;
   }
 
   function iosPerfLabel(mode) {
