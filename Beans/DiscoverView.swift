@@ -2051,7 +2051,7 @@ struct QQTopListDetailView: View {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
-                    LoadingStateView()
+                    BeansDetailSongsLoadingState(coverSize: 88, rowCount: 10, showsRank: false)
                 } else if let errorMessage {
                     ErrorStateView(message: errorMessage) {
                         Task { await load() }
@@ -2160,7 +2160,7 @@ struct QQPlaylistSongsSheet: View {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
-                    LoadingStateView()
+                    BeansDetailSongsLoadingState(coverSize: 88, rowCount: 10, showsRank: false)
                 } else if let errorMessage {
                     ErrorStateView(message: errorMessage) {
                         Task { await load() }
@@ -2317,7 +2317,7 @@ struct TopListDetailView: View {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
-                    LoadingStateView()
+                    BeansDetailSongsLoadingState(coverSize: 88, rowCount: 10, showsRank: false)
                 } else if let errorMessage {
                     ErrorStateView(message: errorMessage) {
                         Task { await load() }
@@ -2457,7 +2457,7 @@ struct KugouTopListDetailView: View {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
-                    LoadingStateView()
+                    BeansDetailSongsLoadingState(coverSize: 88, rowCount: 10, showsRank: false)
                 } else if let errorMessage {
                     ErrorStateView(message: errorMessage) {
                         Task { await load() }
@@ -2722,7 +2722,7 @@ private struct HomeUnifiedSearchSheet: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if searching && results.isEmpty {
-            LoadingStateView()
+            unifiedSearchLoadingState
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if results.isEmpty {
             EmptyStateView(icon: "music.note", text: "暂未找到相关歌曲")
@@ -2776,6 +2776,45 @@ private struct HomeUnifiedSearchSheet: View {
             .beansScrollDismissesKeyboard()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private var unifiedSearchLoadingState: some View {
+        ScrollView {
+            LazyVStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    BeansShimmerSkeleton(cornerRadius: 5)
+                        .frame(width: 168, height: 12)
+                    Spacer(minLength: 0)
+                    BeansShimmerSkeleton(cornerRadius: 16)
+                        .frame(width: 78, height: 30)
+                }
+                .padding(.vertical, 8)
+
+                ForEach(0..<9, id: \.self) { index in
+                    HStack(spacing: 12) {
+                        BeansShimmerSkeleton(cornerRadius: 8)
+                            .frame(width: 46, height: 46)
+                        VStack(alignment: .leading, spacing: 8) {
+                            BeansShimmerSkeleton(cornerRadius: 5)
+                                .frame(height: 13)
+                                .frame(maxWidth: index.isMultiple(of: 3) ? 220 : 160, alignment: .leading)
+                            BeansShimmerSkeleton(cornerRadius: 5)
+                                .frame(width: index.isMultiple(of: 2) ? 140 : 96, height: 10)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background {
+                        BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 120)
+        }
+        .beansScrollIndicatorsHidden()
+        .beansScrollDismissesKeyboard()
     }
 
     @MainActor

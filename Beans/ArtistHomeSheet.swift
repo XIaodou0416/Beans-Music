@@ -61,7 +61,7 @@ struct ArtistHomeSheet: View {
             GlassBackdrop(customColor: theme.customBackground, homeMode: true)
             Group {
                 if loading {
-                    LoadingStateView()
+                    artistLoadingState
                 } else if let errorMessage {
                     ErrorStateView(message: errorMessage) {
                         Task { await load() }
@@ -112,6 +112,42 @@ struct ArtistHomeSheet: View {
             Spacer()
         }
         .padding(.horizontal, 16)
+    }
+
+    private var artistLoadingState: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 14) {
+                    BeansShimmerSkeleton(cornerRadius: 36)
+                        .frame(width: 72, height: 72)
+                    VStack(alignment: .leading, spacing: 9) {
+                        BeansShimmerSkeleton(cornerRadius: 6)
+                            .frame(width: 150, height: 18)
+                        BeansShimmerSkeleton(cornerRadius: 5)
+                            .frame(width: 180, height: 12)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+
+                BeansShimmerSkeleton(cornerRadius: 7)
+                    .frame(width: 86, height: 18)
+                    .padding(.horizontal, 16)
+
+                HStack(spacing: 10) {
+                    BeansShimmerSkeleton(cornerRadius: 16)
+                        .frame(height: 38)
+                    BeansShimmerSkeleton(cornerRadius: 16)
+                        .frame(height: 38)
+                }
+                .padding(.horizontal, 16)
+
+                BeansSongRowsLoadingState(rowCount: 8, coverSize: 40, showsRank: true, horizontalPadding: 16)
+            }
+            .padding(.top, 6)
+            .padding(.bottom, 170)
+        }
+        .beansScrollIndicatorsHidden()
     }
 
     private var hotSongsSection: some View {

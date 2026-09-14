@@ -446,7 +446,7 @@ struct SearchView: View {
                 Task { await startSearch(word) }
             }
             if hotWords.isEmpty {
-                LoadingStateView()
+                hotSearchLoadingState
             } else {
                 if usesTabletHotSearchLayout {
                     LazyVGrid(
@@ -541,6 +541,16 @@ struct SearchView: View {
         .buttonStyle(GlassPressButtonStyle(scale: 0.92))
     }
 
+    private var hotSearchLoadingState: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(0..<10, id: \.self) { index in
+                BeansShimmerSkeleton(cornerRadius: 16)
+                    .frame(width: index < 3 ? 132 : (index.isMultiple(of: 2) ? 112 : 92), height: 38)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     // MARK: - 结果区
 
     @ViewBuilder
@@ -552,12 +562,30 @@ struct SearchView: View {
         }
     }
 
+    private var searchResultsLoadingState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            BeansShimmerSkeleton(cornerRadius: 5)
+                .frame(width: resultType == .song ? 160 : 132, height: 12)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+            BeansSongRowsLoadingState(
+                rowCount: 8,
+                coverSize: resultType == .artist ? 46 : 46,
+                showsRank: false,
+                horizontalPadding: 20
+            )
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 180)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
     private var songResultsArea: some View {
         Group {
             if let errorMessage, songResults.isEmpty {
                 ErrorStateView(message: errorMessage) { submitSearch() }
             } else if searching && songResults.isEmpty {
-                LoadingStateView()
+                searchResultsLoadingState
             } else if songResults.isEmpty {
                 EmptyStateView(icon: "music.note", text: "\(provider.rawValue)未找到相关歌曲")
             } else {
@@ -620,7 +648,7 @@ struct SearchView: View {
             if let errorMessage, artistResults.isEmpty {
                 ErrorStateView(message: errorMessage) { submitSearch() }
             } else if searching && artistResults.isEmpty {
-                LoadingStateView()
+                searchResultsLoadingState
             } else if artistResults.isEmpty {
                 EmptyStateView(icon: "person.crop.circle", text: "\(provider.rawValue)未找到相关歌手")
             } else {
@@ -690,7 +718,7 @@ struct SearchView: View {
             if let errorMessage, albumResults.isEmpty {
                 ErrorStateView(message: errorMessage) { submitSearch() }
             } else if searching && albumResults.isEmpty {
-                LoadingStateView()
+                searchResultsLoadingState
             } else if albumResults.isEmpty {
                 EmptyStateView(icon: "square.stack", text: "\(provider.rawValue)未找到相关专辑")
             } else {
@@ -899,7 +927,7 @@ struct AlbumDetailView: View {
         ZStack {
             GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
             if isLoading {
-                LoadingStateView()
+                albumDetailLoadingState
             } else if let errorMessage {
                 ErrorStateView(message: errorMessage) { Task { await load() } }
             } else {
@@ -1030,6 +1058,10 @@ struct AlbumDetailView: View {
                 isLoading = false
             }
         }
+    }
+
+    private var albumDetailLoadingState: some View {
+        BeansDetailSongsLoadingState(coverSize: 92, rowCount: 9)
     }
 
     private var albumSearchQuery: String {

@@ -45,7 +45,7 @@ struct PlaylistView: View {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
-                    LoadingStateView()
+                    BeansDetailSongsLoadingState(coverSize: 96, rowCount: 10)
                 } else if let errorMessage {
                     ErrorStateView(message: errorMessage) {
                         Task { await load(force: true) }

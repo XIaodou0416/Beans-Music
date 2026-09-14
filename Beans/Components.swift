@@ -971,6 +971,87 @@ struct LoadingStateView: View {
     }
 }
 
+struct BeansSongRowsLoadingState: View {
+    var rowCount = 8
+    var coverSize: CGFloat = 46
+    var showsRank = false
+    var horizontalPadding: CGFloat = 20
+
+    var body: some View {
+        LazyVStack(spacing: 8) {
+            ForEach(0..<rowCount, id: \.self) { index in
+                HStack(spacing: 12) {
+                    if showsRank {
+                        BeansShimmerSkeleton(cornerRadius: 5)
+                            .frame(width: 24, height: 18)
+                    }
+                    BeansShimmerSkeleton(cornerRadius: coverSize / 5)
+                        .frame(width: coverSize, height: coverSize)
+                    VStack(alignment: .leading, spacing: 8) {
+                        BeansShimmerSkeleton(cornerRadius: 5)
+                            .frame(height: 13)
+                            .frame(maxWidth: index.isMultiple(of: 3) ? 210 : 150, alignment: .leading)
+                        BeansShimmerSkeleton(cornerRadius: 5)
+                            .frame(width: index.isMultiple(of: 2) ? 128 : 86, height: 10)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background {
+                    BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
+        }
+        .padding(.horizontal, horizontalPadding)
+    }
+}
+
+struct BeansDetailSongsLoadingState: View {
+    var coverSize: CGFloat = 92
+    var rowCount = 9
+    var showsRank = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 14) {
+                    BeansShimmerSkeleton(cornerRadius: 16)
+                        .frame(width: coverSize, height: coverSize)
+                    VStack(alignment: .leading, spacing: 9) {
+                        BeansShimmerSkeleton(cornerRadius: 6)
+                            .frame(height: 18)
+                            .frame(maxWidth: 220, alignment: .leading)
+                        BeansShimmerSkeleton(cornerRadius: 5)
+                            .frame(width: 130, height: 12)
+                        BeansShimmerSkeleton(cornerRadius: 5)
+                            .frame(width: 84, height: 11)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .background {
+                    BeansSurface(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
+                .padding(.horizontal, 16)
+
+                HStack(spacing: 12) {
+                    BeansShimmerSkeleton(cornerRadius: 16)
+                        .frame(height: 42)
+                    BeansShimmerSkeleton(cornerRadius: 16)
+                        .frame(height: 42)
+                }
+                .padding(.horizontal, 16)
+
+                BeansSongRowsLoadingState(rowCount: rowCount, coverSize: 46, showsRank: showsRank, horizontalPadding: 16)
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 170)
+        }
+        .beansScrollIndicatorsHidden()
+    }
+}
+
 // MARK: - 二维码
 
 struct QRCodeView: View {
