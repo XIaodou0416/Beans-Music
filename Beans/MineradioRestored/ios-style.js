@@ -7,7 +7,8 @@
       height: 100vh !important;
       overflow: hidden !important;
       background: #000 !important;
-      touch-action: manipulation;
+      touch-action: pan-y;
+      -webkit-text-size-adjust: 100%;
       -webkit-user-select: none;
       user-select: none;
     }
@@ -45,6 +46,25 @@
     html.ios-shell-root #account-logout-btn {
       display: none !important;
     }
+    html.ios-shell-root #search-submit-btn {
+      appearance: none !important;
+      -webkit-appearance: none !important;
+      border: 0 !important;
+      padding: 0 !important;
+      margin: 0 10px 0 0 !important;
+      width: 22px !important;
+      height: 30px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex: 0 0 22px !important;
+      color: rgba(255,255,255,.48) !important;
+      background: transparent !important;
+      cursor: pointer !important;
+      touch-action: manipulation !important;
+    }
+    html.ios-shell-root #search-submit-btn:active { transform: scale(.92); }
+    html.ios-shell-root #search-submit-btn #search-icon { margin: 0 !important; }
     html.ios-shell-root body.user-capsule-auto-hide #top-right,
     html.ios-shell-root body.user-capsule-auto-hide.user-capsule-peek #top-right {
       right: 56px !important;

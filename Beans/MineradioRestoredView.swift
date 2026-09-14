@@ -98,6 +98,9 @@ struct MineradioRestoredWebView: UIViewRepresentable {
         webView.backgroundColor = .black
         webView.scrollView.backgroundColor = .black
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // Keep normal taps and scrolling, but prevent the embedded page from
+        // entering WebKit's page-zoom gesture.
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
         context.coordinator.webView = webView
 
         guard let pageURL = bundledResource("index", fileExtension: "html") else {
@@ -206,6 +209,40 @@ struct MineradioRestoredWebView: UIViewRepresentable {
             return 0
         }
 
+        private func beansSessionStatus() async -> [String: Any] {
+            let savedAuth = AuthStore()
+            var netease: [String: Any] = [
+                "provider": "netease",
+                "loggedIn": savedAuth.isLoggedIn,
+                "uid": savedAuth.user?.uid ?? 0,
+                "nickname": savedAuth.user?.nickname ?? "",
+                "avatar": savedAuth.user?.avatarURL?.absoluteString ?? "",
+                "vipType": savedAuth.user?.vipType ?? 0,
+                "vipBadge": savedAuth.user?.vipBadge ?? "",
+            ]
+            let qq: [String: Any] = [
+                "provider": "qq",
+                "loggedIn": QQMusicAuth.shared.isLoggedIn,
+                "nickname": QQMusicAuth.shared.nickname,
+                "vipBadge": QQMusicAuth.shared.vipBadge ?? "",
+            ]
+            let kugou: [String: Any] = [
+                "provider": "kugou",
+                "loggedIn": KugouMusicAuth.shared.isLoggedIn,
+                "userId": KugouMusicAuth.shared.userId,
+                "nickname": KugouMusicAuth.shared.nickname,
+                "avatar": KugouMusicAuth.shared.avatarURL?.absoluteString ?? "",
+                "vipType": KugouMusicAuth.shared.vipType,
+                "vipBadge": KugouMusicAuth.shared.vipBadge ?? "",
+            ]
+            return [
+                "loggedIn": (netease["loggedIn"] as? Bool == true) || QQMusicAuth.shared.isLoggedIn || KugouMusicAuth.shared.isLoggedIn,
+                "netease": netease,
+                "qq": qq,
+                "kugou": kugou,
+            ]
+        }
+
         private func audioQuality(from raw: String) -> BeansAudioQuality {
             switch raw.lowercased() {
             case "standard", "normal", "128k": return .standard
@@ -306,26 +343,37 @@ struct MineradioRestoredWebView: UIViewRepresentable {
 
         private func perform(action: String, payload: [String: Any]) async throws -> [String: Any] {
             switch action {
+            case "beans-session-status":
+                return await beansSessionStatus()
+
             case "itunes-search":
-                return try await iTunesSearch(keyword: value(payload, ["keywords", "term"]), limit: integer(payload, ["limit"]))
+                let keyword = value(payload, ["keywords", "term"]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !keyword.isEmpty else { throw NetEaseError.unknown("搜索关键词不能为空") }
+                return try await iTunesSearch(keyword: keyword, limit: integer(payload, ["limit"]))
 
             case "netease-search":
+                let keyword = value(payload, ["keywords", "term"]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !keyword.isEmpty else { throw NetEaseError.unknown("搜索关键词不能为空") }
                 let songs = try await NetEaseAPI.shared.search(
-                    keyword: value(payload, ["keywords", "term"]),
+                    keyword: keyword,
                     limit: max(1, integer(payload, ["limit"]))
                 )
                 return ["provider": "netease", "songs": songList(songs)]
 
             case "qq-search":
+                let keyword = value(payload, ["keywords", "term"]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !keyword.isEmpty else { throw NetEaseError.unknown("搜索关键词不能为空") }
                 let songs = try await QQMusicAPI.shared.searchSongs(
-                    keyword: value(payload, ["keywords", "term"]),
+                    keyword: keyword,
                     limit: max(1, integer(payload, ["limit"]))
                 )
                 return ["provider": "qq", "songs": songList(songs)]
 
             case "kugou-search":
+                let keyword = value(payload, ["keywords", "term"]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !keyword.isEmpty else { throw NetEaseError.unknown("搜索关键词不能为空") }
                 let songs = try await KugouMusicAPI.shared.searchSongs(
-                    keyword: value(payload, ["keywords", "term"]),
+                    keyword: keyword,
                     limit: max(1, integer(payload, ["limit"]))
                 )
                 return ["provider": "kugou", "songs": songList(songs)]
@@ -375,47 +423,15 @@ struct MineradioRestoredWebView: UIViewRepresentable {
                 return ["lyric": lyric]
 
             case "netease-login-qr-key":
-                let key = try await NetEaseAPI.shared.qrKey()
-                let qrURL = NetEaseAPI.shared.qrLoginURL(key: key)
-                var result: [String: Any] = [
-                    "key": key,
-                    "url": qrURL,
-                    "qrurl": qrURL,
-                ]
-                let image = await MainActor.run {
-                    self.qrImageDataURL(for: qrURL)
-                }
-                if let image {
-                    result["img"] = image
-                }
-                return result
+                return ["ok": false, "requiresNativeLogin": true, "message": "请先在 Beans Music 原生设置中登录"]
 
             case "netease-login-qr-check":
-                let key = value(payload, ["key"])
-                let code = try await NetEaseAPI.shared.qrCheck(key: key)
-                var result: [String: Any] = ["code": code]
-                if code == 803 {
-                    if let user = try? await NetEaseAPI.shared.account() {
-                        result["loggedIn"] = true
-                        result["uid"] = user.uid
-                        result["nickname"] = user.nickname
-                        result["avatar"] = user.avatarURL?.absoluteString ?? ""
-                        result["vipType"] = user.vipType
-                    } else {
-                        result["hasCookie"] = true
-                    }
-                }
-                return result
+                return ["code": 0, "requiresNativeLogin": true, "message": "请先在 Beans Music 原生设置中登录"]
 
             case "netease-login-status":
-                guard let user = try? await NetEaseAPI.shared.account() else { return ["loggedIn": false] }
-                return [
-                    "loggedIn": true,
-                    "uid": user.uid,
-                    "nickname": user.nickname,
-                    "avatar": user.avatarURL?.absoluteString ?? "",
-                    "vipType": user.vipType,
-                ]
+                let session = await beansSessionStatus()
+                return session["netease"] as? [String: Any]
+                    ?? ["provider": "netease", "loggedIn": false]
 
             case "qq-login-status":
                 let auth = QQMusicAuth.shared
@@ -432,14 +448,10 @@ struct MineradioRestoredWebView: UIViewRepresentable {
                 ]
 
             case "netease-login-cookie":
-                NetEaseAPI.shared.importWebCookies(parseCookieHeader(value(payload, ["cookie", "text", "data"])))
-                let user = try await NetEaseAPI.shared.account()
-                return ["loggedIn": true, "uid": user.uid, "nickname": user.nickname]
+                return ["ok": false, "requiresNativeLogin": true, "message": "网页播放器不接收登录会话，请在 Beans Music 原生设置中登录"]
 
             case "qq-login-cookie":
-                let cookies = parseCookieHeader(value(payload, ["cookie", "text", "data"]))
-                QQMusicAuth.shared.importCookies(cookies, nickname: nil)
-                return ["saved": true, "loggedIn": QQMusicAuth.shared.isLoggedIn, "nickname": QQMusicAuth.shared.nickname]
+                return ["ok": false, "requiresNativeLogin": true, "message": "网页播放器不接收登录会话，请在 Beans Music 原生设置中登录"]
 
             case "netease-user-playlists":
                 let user = try await NetEaseAPI.shared.account()
@@ -483,10 +495,10 @@ struct MineradioRestoredWebView: UIViewRepresentable {
                 return ["ok": true, "loggedIn": false]
 
             case "qq-web-login":
-                return ["url": "https://y.qq.com/", "provider": "qq"]
+                return ["ok": false, "requiresNativeLogin": true, "message": "请先在 Beans Music 原生设置中登录"]
 
             case "kugou-web-login":
-                return ["url": "https://www.kugou.com/", "provider": "kugou"]
+                return ["ok": false, "requiresNativeLogin": true, "message": "请先在 Beans Music 原生设置中登录"]
 
             default:
                 return [:]

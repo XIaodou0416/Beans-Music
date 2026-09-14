@@ -1,6 +1,11 @@
 (function(){
   window.__mineradioIOS = true;
   document.documentElement.classList.add('ios-shell-root');
+  // Prevent WebKit's double-tap page zoom without consuming normal taps or
+  // vertical scrolling inside the player.
+  document.addEventListener('dblclick', function(event){
+    if (event.cancelable) event.preventDefault();
+  }, { capture:true, passive:false });
   window.addEventListener('error', function(event){
     try { window.webkit.messageHandlers.iosBridge.postMessage({ type:'error', message:String(event.message || ''), source:String(event.filename || ''), line:event.lineno || 0 }); } catch(e) {}
   });
@@ -87,6 +92,12 @@
         delete nativePending[id];
         reject(e);
       }
+    });
+  }
+
+  function nativeSessionStatus() {
+    return nativeIOSRequest('beans-session-status', {}).then(function(res){
+      return (res && res.data) || {};
     });
   }
 
@@ -408,9 +419,9 @@
       return originalFetch(query('url'), init || {});
     }
     if (path === '/api/app/version') return json({ version:'ios-desktop-shell', platform:'ios' });
-    if (path === '/api/login/status') return neteaseResponse(neteaseNative('netease-login-status', {}).then(function(d){ d.provider='netease'; return d; }), { loggedIn:false, provider:'netease' });
-    if (path === '/api/qq/login/status') return neteaseResponse(nativeIOSRequest('qq-login-status', {}).then(function(res){ return (res && res.data) || {}; }), { loggedIn:false, provider:'qq' });
-    if (path === '/api/kugou/login/status') return neteaseResponse(nativeIOSRequest('kugou-login-status', {}).then(function(res){ return (res && res.data) || {}; }), { loggedIn:false, provider:'kugou' });
+    if (path === '/api/login/status') return neteaseResponse(nativeSessionStatus().then(function(d){ return Object.assign({ provider:'netease' }, d.netease || { loggedIn:false }); }), { loggedIn:false, provider:'netease' });
+    if (path === '/api/qq/login/status') return neteaseResponse(nativeSessionStatus().then(function(d){ return Object.assign({ provider:'qq' }, d.qq || { loggedIn:false }); }), { loggedIn:false, provider:'qq' });
+    if (path === '/api/kugou/login/status') return neteaseResponse(nativeSessionStatus().then(function(d){ return Object.assign({ provider:'kugou' }, d.kugou || { loggedIn:false }); }), { loggedIn:false, provider:'kugou' });
     if (path === '/api/login/cookie') return neteaseResponse(parseBody(init).then(function(body){ return neteaseNative('netease-login-cookie', { cookie:String((body && (body.cookie||body.data||body.text)) || '') }); }).then(function(d){ d.provider='netease'; return d; }), function(e){ return { loggedIn:false, provider:'netease', error:String(e&&e.message||e) }; });
     if (path === '/api/qq/login/cookie') return neteaseResponse(parseBody(init).then(function(body){ return nativeIOSRequest('qq-login-cookie', { cookie:String((body && (body.cookie||body.data||body.text)) || '') }); }).then(function(res){ return (res && res.data) || {}; }), function(e){ return { provider:'qq', loggedIn:false, saved:false, error:String(e&&e.message||e) }; });
     if (path === '/api/kugou/login/cookie') return neteaseResponse(parseBody(init).then(function(body){ return nativeIOSRequest('kugou-login-cookie', { cookie:String((body && (body.cookie||body.data||body.text)) || '') }); }).then(function(res){ return (res && res.data) || {}; }), function(e){ return { provider:'kugou', loggedIn:false, saved:false, error:String(e&&e.message||e) }; });
@@ -451,7 +462,7 @@
     }
     if (path === '/api/search') {
       return neteaseResponse(
-        neteaseNative('netease-search', { keywords:(query('keywords') || query('term')), limit:(parseInt(query('limit'), 10) || 20) }).then(function(d){
+        nativeIOSRequest('netease-search', { keywords:(query('keywords') || query('term')), limit:(parseInt(query('limit'), 10) || 20) }).then(function(res){ return (res && res.data) || {}; }).then(function(d){
           var songs = rememberSongs(d.songs || []);
           return { provider:'netease', songs:songs, result:{ songs:songs, songCount:songs.length } };
         }),
@@ -731,12 +742,15 @@
       if (hint) hint.classList.remove('hidden');
       try {
         if (typeof updateEmptyHomeVisibility === 'function') updateEmptyHomeVisibility({ forceLoad: true });
-        if (typeof refreshLoginStatus === 'function') refreshLoginStatus(true);
+        syncBeansSessionToPage().then(function(){
+          if (typeof refreshUserPlaylists === 'function' && window.__beansSessionLoggedIn) refreshUserPlaylists(true);
+        });
         if (typeof updateControlGlassDisplacementMap === 'function') updateControlGlassDisplacementMap();
         installIOSPerformancePanel();
         installIOSControlHub();
         installIOSPanelClosers();
         installIOSLoginLimits();
+        startBeansSessionSync();
         installIOSTabBar();
         installIOSCanvasGestures();
         installIOSPlayerShell();
@@ -776,7 +790,6 @@
     var style = document.createElement('style');
     style.textContent = [
       '#login-modal, #user-modal, #login-guide-canvas, #trial-login-btn { display:none !important; }',
-      '#user-btn, #top-right .top-account-pill { pointer-events:none !important; }',
       '#login-provider-netease, #login-provider-qq, #login-provider-kugou, #login-both-btn,',
       '#qq-cookie-toggle-btn, #qq-cookie-panel, #refresh-qr-btn, #account-add-netease,',
       '#account-add-qq, #account-add-kugou, #account-logout-btn { display:none !important; }'
@@ -796,7 +809,8 @@
       window[name] = function() {
         var modal = document.getElementById('login-modal');
         if (modal) modal.classList.remove('show');
-        return Promise.resolve({ ok:false, disabled:true });
+        if (typeof showToast === 'function') showToast('请先在 Beans Music 设置中登录');
+        return Promise.resolve({ ok:false, requiresNativeLogin:true });
       };
     });
     if (window.desktopWindow) {
@@ -804,6 +818,40 @@
       window.desktopWindow.openQQMusicLogin = null;
       window.desktopWindow.openKugouMusicLogin = null;
     }
+    window.onUserBtnClick = function(){
+      if (typeof showToast === 'function') {
+        showToast(window.__beansSessionLoggedIn ? '账号状态由 Beans Music 管理' : '请先在 Beans Music 设置中登录');
+      }
+    };
+  }
+
+  async function syncBeansSessionToPage() {
+    try {
+      var result = await nativeSessionStatus();
+      var netease = result.netease || { provider:'netease', loggedIn:false };
+      var qq = result.qq || { provider:'qq', loggedIn:false };
+      var kugou = result.kugou || { provider:'kugou', loggedIn:false };
+      window.__beansSessionLoggedIn = !!result.loggedIn;
+      window.loginStatus = Object.assign({}, window.loginStatus || {}, netease, { provider:'netease' });
+      window.qqLoginStatus = Object.assign({}, window.qqLoginStatus || {}, qq, { provider:'qq' });
+      window.kugouLoginStatus = Object.assign({}, window.kugouLoginStatus || {}, kugou, { provider:'kugou' });
+      if (typeof renderUserBtn === 'function') renderUserBtn();
+      return result;
+    } catch (error) {
+      window.__beansSessionLoggedIn = false;
+      if (typeof showToast === 'function') showToast('无法读取 Beans Music 登录状态');
+      return null;
+    }
+  }
+
+  // The native settings screen can change account state while this page is
+  // still alive. Refresh the lightweight persisted state instead of opening
+  // any web login flow.
+  function startBeansSessionSync() {
+    if (window.__beansSessionSyncTimer) clearInterval(window.__beansSessionSyncTimer);
+    window.__beansSessionSyncTimer = setInterval(function(){
+      syncBeansSessionToPage();
+    }, 30000);
   }
 
   function iosPerfLabel(mode) {
