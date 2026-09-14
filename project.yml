@@ -17,7 +17,6 @@ targets:
     resources:
       - Beans/en.lproj
       - Beans/zh-Hans.lproj
-      - Beans/MineradioRestored
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app
@@ -40,8 +39,6 @@ targets:
           UIColorName: LaunchBackgroundColor
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
         "UISupportedInterfaceOrientations~ipad":
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
