@@ -1096,7 +1096,7 @@ final class QQMusicAPI {
             if nick.hasPrefix("@") { nick = String(nick.dropFirst()) }
             let avatar = item["avatarurl"] as? String ?? ""
             let time = item["time"] as? TimeInterval ?? 0
-            result.append(SongComment(
+            return SongComment(
                 id: key.hashValue,
                 content: content,
                 nickname: nick,
@@ -1104,7 +1104,7 @@ final class QQMusicAPI {
                 time: time > 0 ? Date(timeIntervalSince1970: time) : Date(),
                 likedCount: item["praisenum"] as? Int ?? 0,
                 isHot: isHot
-            ))
+            )
         }
         let hotComments = hot.compactMap { parse($0, isHot: true) }
         let comments = normal.compactMap { parse($0, isHot: false) }
