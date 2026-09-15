@@ -24,8 +24,8 @@ struct ReferencePlaybackView: View {
     let song: Song?
     let lyrics: [LyricLine]
     @Binding var showLyrics: Bool
+    @Binding var showQueue: Bool
     let onFavorite: () -> Void
-    let onQueue: () -> Void
     let onComments: () -> Void
     let onSleepTimer: () -> Void
     let onAddToLocalPlaylist: () -> Void
@@ -64,7 +64,10 @@ struct ReferencePlaybackView: View {
                     Color.clear.frame(height: ReferencePlaybackPresentationMetrics.headerTopSpacing)
 
                     ZStack {
-                        if showLyrics {
+                        if showQueue {
+                            compactQueuePage
+                                .transition(.opacity)
+                        } else if showLyrics {
                             lyricsPage
                                 .transition(.asymmetric(
                                     insertion: .move(edge: .bottom).combined(with: .opacity),
@@ -80,6 +83,7 @@ struct ReferencePlaybackView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .animation(.easeInOut(duration: 0.22), value: showLyrics)
+                    .animation(.easeInOut(duration: 0.22), value: showQueue)
 
                     playbackControls(bottomInset: geometry.safeAreaInsets.bottom)
                 }
@@ -352,6 +356,7 @@ struct ReferencePlaybackView: View {
             volumeColor: volumeColor,
             showVolume: showVolumeControl,
             lyricsActive: showLyrics,
+            queueActive: showQueue,
             layout: AppleMusicPlaybackControlLayout(
                 progress: layoutEntry(.progress),
                 previous: layoutEntry(.previous),
@@ -361,10 +366,77 @@ struct ReferencePlaybackView: View {
                 actions: layoutEntry(.actions),
                 container: PlayerLayoutEntry()
             ),
-            onLyrics: { showLyrics.toggle() },
-            onQueue: onQueue,
+            onLyrics: {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    if showQueue {
+                        showQueue = false
+                        showLyrics = true
+                    } else {
+                        showLyrics.toggle()
+                    }
+                }
+            },
+            onQueue: {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    showQueue.toggle()
+                }
+            },
             onComments: onComments
         )
+    }
+
+    private var compactQueuePage: some View {
+        VStack(spacing: 12) {
+            compactQueueHeader
+            AppleMusicCompactQueueContent()
+        }
+        .padding(.horizontal, 32)
+        .padding(.bottom, 4)
+    }
+
+    private var compactQueueHeader: some View {
+        HStack(spacing: 11) {
+            CoverImage(url: song?.coverURL, size: 46, cornerRadius: 10)
+                .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(song?.name ?? "未在播放")
+                    .font(BeansFont.appFont(16, .bold))
+                    .foregroundStyle(primaryColor)
+                    .lineLimit(1)
+                Text(song?.artists ?? "")
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(secondaryColor)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            compactActionButton(
+                icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
+                active: localLibrary.containsSong(song)
+            ) {
+                onFavorite()
+            }
+
+            Menu {
+                Button("清空播放列表", role: .destructive) {
+                    player.clearQueue()
+                }
+                Divider()
+                Button("定时关闭", action: onSleepTimer)
+                Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                if downloadFeatureUnlocked {
+                    Button("下载歌曲", action: onDownload)
+                }
+                Button("播放器设置", action: onPlayerSettings)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(primaryColor.opacity(0.78))
+                    .frame(width: 38, height: 38)
+                    .contentShape(Rectangle())
+            }
+        }
     }
 
     private func compactActionButton(icon: String, active: Bool = false, action: @escaping () -> Void) -> some View {
@@ -602,6 +674,7 @@ struct AppleMusicPlaybackControls: View {
     let volumeColor: Color
     let showVolume: Bool
     let lyricsActive: Bool
+    let queueActive: Bool
     let layout: AppleMusicPlaybackControlLayout
     let onLyrics: () -> Void
     let onQueue: () -> Void
@@ -661,12 +734,13 @@ struct AppleMusicPlaybackControls: View {
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
-                HStack(spacing: 48) {
-                    actionButton(icon: "quote.bubble", active: lyricsActive, action: onLyrics)
+                HStack(spacing: 24) {
+                    actionButton(icon: lyricsActive && !queueActive ? "quote.bubble.fill" : "quote.bubble", active: lyricsActive && !queueActive, action: onLyrics)
                     actionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
                         player.togglePlayMode()
                     }
-                    actionButton(icon: "list.bullet", action: onQueue)
+                    actionButton(icon: "text.bubble", action: onComments)
+                    actionButton(icon: "list.bullet", active: queueActive, action: onQueue)
                 }
                 .frame(maxWidth: 420)
                 .modifier(AppleMusicLayoutTransform(entry: layout.actions))
@@ -705,6 +779,147 @@ struct AppleMusicPlaybackControls: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct AppleMusicCompactQueueContent: View {
+    @EnvironmentObject private var player: PlayerManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack(spacing: 10) {
+                modeButton(
+                    icon: "arrow.right",
+                    label: "顺序播放",
+                    isActive: player.playMode == .sequential
+                ) {
+                    player.setPlayMode(.sequential)
+                }
+                modeButton(
+                    icon: "shuffle",
+                    label: "随机播放",
+                    isActive: player.playMode == .shuffle
+                ) {
+                    player.setPlayMode(.shuffle)
+                }
+                modeButton(
+                    icon: "repeat",
+                    label: "列表循环",
+                    isActive: player.playMode == .repeatAll
+                ) {
+                    player.setPlayMode(.repeatAll)
+                }
+                modeButton(
+                    icon: "repeat.1",
+                    label: "单曲循环",
+                    isActive: player.playMode == .repeatOne
+                ) {
+                    player.setPlayMode(.repeatOne)
+                }
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text("继续播放")
+                    .font(BeansFont.appFont(20, .bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Text("\(player.upcomingQueue.count) 首")
+                    .font(BeansFont.appFont(12, .regular, .monospaced))
+                    .foregroundStyle(.white.opacity(0.46))
+            }
+
+            if player.upcomingQueue.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 28, weight: .light))
+                    Text("播放队列是空的")
+                        .font(BeansFont.appFont(14, .semibold))
+                }
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: 4) {
+                        ForEach(Array(player.upcomingQueue.prefix(100)), id: \.index) { item in
+                            AppleMusicCompactQueueRow(index: item.index, song: item.song)
+                        }
+                    }
+                }
+                .mask(
+                    LinearGradient(
+                        colors: [.black, .black, .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    private func modeButton(
+        icon: String,
+        label: String,
+        isActive: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(isActive ? Color.black.opacity(0.76) : .white.opacity(0.76))
+                .frame(maxWidth: .infinity, minHeight: 42)
+                .background(
+                    isActive ? AnyShapeStyle(.white.opacity(0.66)) : AnyShapeStyle(.white.opacity(0.1)),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.96))
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+}
+
+private struct AppleMusicCompactQueueRow: View {
+    @EnvironmentObject private var player: PlayerManager
+
+    let index: Int
+    let song: Song
+
+    var body: some View {
+        Button {
+            BeansHaptics.tap()
+            player.playQueueIndex(index)
+        } label: {
+            HStack(spacing: 11) {
+                CoverImage(url: song.coverURL, size: 46, cornerRadius: 8)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(song.name)
+                        .font(BeansFont.appFont(14, .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(1)
+                    Text(song.artists)
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(.white.opacity(0.48))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+
+                Text(song.formattedDuration)
+                    .font(BeansFont.appFont(11, .regular, .monospaced))
+                    .foregroundStyle(.white.opacity(0.36))
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("从播放列表移除", role: .destructive) {
+                player.removeFromQueue(at: index)
+            }
+        }
+        .accessibilityLabel("\(song.name)，\(song.artists)")
     }
 }
 

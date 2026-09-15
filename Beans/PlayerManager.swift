@@ -5,6 +5,7 @@ import UIKit
 
 enum PlayMode: String, CaseIterable, Identifiable {
     case sequential
+    case repeatAll
     case repeatOne
     case shuffle
 
@@ -12,7 +13,8 @@ enum PlayMode: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .sequential: return "repeat"
+        case .sequential: return "arrow.right"
+        case .repeatAll: return "repeat"
         case .repeatOne: return "repeat.1"
         case .shuffle: return "shuffle"
         }
@@ -21,6 +23,7 @@ enum PlayMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .sequential: return "顺序播放"
+        case .repeatAll: return "列表循环"
         case .repeatOne: return "单曲循环"
         case .shuffle: return "随机播放"
         }
@@ -201,6 +204,23 @@ final class PlayerManager: NSObject, ObservableObject {
 
     var currentSong: Song? {
         queue.indices.contains(currentIndex) ? queue[currentIndex] : nil
+    }
+
+    /// 当前实际播放顺序中、当前歌曲之后尚未播放的项目。
+    /// 随机模式使用内部随机顺序，而不是原始队列顺序。
+    var upcomingQueue: [(index: Int, song: Song)] {
+        guard !queue.isEmpty else { return [] }
+        let indices: [Int]
+        if playMode == .shuffle, !playOrder.isEmpty {
+            let nextPosition = min(orderPosition + 1, playOrder.count)
+            indices = Array(playOrder.dropFirst(nextPosition))
+        } else {
+            indices = Array(queue.indices.dropFirst(min(currentIndex + 1, queue.count)))
+        }
+        return indices.compactMap { index in
+            guard queue.indices.contains(index) else { return nil }
+            return (index, queue[index])
+        }
     }
 
     override init() {
@@ -410,10 +430,17 @@ final class PlayerManager: NSObject, ObservableObject {
 
     func togglePlayMode() {
         switch playMode {
-        case .sequential: playMode = .repeatOne
+        case .sequential: playMode = .repeatAll
+        case .repeatAll: playMode = .repeatOne
         case .repeatOne: playMode = .shuffle
         case .shuffle: playMode = .sequential
         }
+        buildPlayOrder()
+    }
+
+    func setPlayMode(_ mode: PlayMode) {
+        guard playMode != mode else { return }
+        playMode = mode
         buildPlayOrder()
     }
 
@@ -1257,6 +1284,11 @@ final class PlayerManager: NSObject, ObservableObject {
             guard let self else { return }
             if self.playMode == .repeatOne {
                 self.restartCurrent()
+            } else if self.playMode == .sequential,
+                      self.currentIndex >= self.queue.count - 1 {
+                self.isPlaying = false
+                self.stopAudioSessionWatchdog()
+                self.updateNowPlaying()
             } else {
                 self.advance()
                 self.loadCurrent()

@@ -16,6 +16,7 @@ struct PlayerView: View {
     @State private var showLyrics = false
     @AppStorage("beans.player.lastLyricsPage") private var lastLyricsPage = false
     @State private var showQueue = false
+    @State private var showAppleMusicQueue = false
     @State private var showSleepTimer = false
     @State private var showAddToPlaylist = false
     @State private var showComments = false
@@ -85,6 +86,7 @@ struct PlayerView: View {
     @State private var layoutEditorStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
     @State private var layoutEditorUsesIPadLandscape = false
     @State private var layoutPreviewShowLyrics = false
+    @State private var layoutPreviewShowQueue = false
     /// 调整页使用真实播放器视口比例，避免 iPad 预览与实际布局不一致。
     @State private var playerViewportSize: CGSize = .zero
     /// 歌词布局：对齐样式 / 水平偏移 / 垂直重心（底部更多或顶部更多歌词）
@@ -498,12 +500,10 @@ struct PlayerView: View {
                         song: song,
                         lyrics: lyrics,
                         showLyrics: $showLyrics,
+                        showQueue: $showAppleMusicQueue,
                         onFavorite: {
                             guard let song else { return }
                             toggleLocalFavorite(song)
-                        },
-                        onQueue: {
-                            showQueue = true
                         },
                         onComments: {
                             if song != nil { showComments = true }
@@ -871,14 +871,23 @@ struct PlayerView: View {
                             data: $iPadLandscapeLayoutData
                         ))
 
-                        iPadLandscapeLyricsColumn(geo: geo)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .modifier(IPadLandscapeLayoutable(
-                                part: .lyrics,
-                                style: layoutRenderingStyle,
-                                enabled: layoutMode && layoutEditorUsesIPadLandscape,
-                                data: $iPadLandscapeLayoutData
-                            ))
+                        Group {
+                            if layoutRenderingStyle == .appleMusic && showAppleMusicQueue {
+                                AppleMusicCompactQueueContent()
+                                    .transition(.opacity)
+                            } else {
+                                iPadLandscapeLyricsColumn(geo: geo)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .modifier(IPadLandscapeLayoutable(
+                            part: .lyrics,
+                            style: layoutRenderingStyle,
+                            enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                            data: $iPadLandscapeLayoutData
+                        ))
+                        .animation(.easeInOut(duration: 0.22), value: showAppleMusicQueue)
                     }
                     .padding(.horizontal, 34)
                     .padding(.top, 4)
@@ -1074,6 +1083,10 @@ struct PlayerView: View {
                 .buttonStyle(.plain)
 
                 Menu {
+                    Button("清空播放列表", role: .destructive) {
+                        player.clearQueue()
+                    }
+                    Divider()
                     Button("定时关闭") { showSleepTimer = true }
                     Button("添加到本地歌单") { showAddToLocalPlaylist = true }
                     if downloadFeatureUnlocked {
@@ -1355,6 +1368,7 @@ struct PlayerView: View {
             volumeColor: landscapeApplePrimaryColor,
             showVolume: appleShowVolume,
             lyricsActive: true,
+            queueActive: showAppleMusicQueue,
             layout: AppleMusicPlaybackControlLayout(
                 progress: progress,
                 previous: PlayerLayoutEntry(),
@@ -1364,8 +1378,20 @@ struct PlayerView: View {
                 actions: PlayerLayoutEntry(),
                 container: controls
             ),
-            onLyrics: toggleLyrics,
-            onQueue: { showQueue = true },
+            onLyrics: {
+                if showAppleMusicQueue {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        showAppleMusicQueue = false
+                    }
+                } else {
+                    toggleLyrics()
+                }
+            },
+            onQueue: {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    showAppleMusicQueue.toggle()
+                }
+            },
             onComments: { showComments = true }
         )
         .simultaneousGesture(
@@ -3707,12 +3733,10 @@ struct PlayerView: View {
                         song: song,
                         lyrics: lyrics,
                         showLyrics: $layoutPreviewShowLyrics,
+                        showQueue: $layoutPreviewShowQueue,
                         onFavorite: {
                             guard let song else { return }
                             toggleLocalFavorite(song)
-                        },
-                        onQueue: {
-                            showQueue = true
                         },
                         onComments: {
                             if song != nil { showComments = true }
