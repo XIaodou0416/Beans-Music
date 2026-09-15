@@ -1,9 +1,5 @@
 import SwiftUI
 
-import UIKit
-
-
-
 private struct RecordRotationState: Equatable, Sendable {
     static let defaultDegreesPerSecond: Double = 24.0
 
@@ -43,58 +39,57 @@ private struct RecordRotationState: Equatable, Sendable {
     }
 }
 
-/// Interactive release-style vinyl stage: continuous rotation, tonearm state,
-/// tap-to-open lyrics, and horizontal swipe-to-switch tracks.
 struct VinylTurntableView: View {
     let coverURL: URL?
     let isPlaying: Bool
     let trackId: Int?
     let size: CGFloat
-    var onTap: (() -> Void)?
-    var onNextTrack: (() -> Void)?
-    var onPreviousTrack: (() -> Void)?
+    var onTap: (() -> Void)? = nil
+    var onNextTrack: (() -> Void)? = nil
+    var onPreviousTrack: (() -> Void)? = nil
 
     @State private var rotationState = RecordRotationState()
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
     @State private var isTransitioningTrack = false
 
-    init(coverURL: URL?, isPlaying: Bool, trackId: Int? = nil, size: CGFloat = 280, onTap: (() -> Void)? = nil, onNextTrack: (() -> Void)? = nil, onPreviousTrack: (() -> Void)? = nil) {
-        self.coverURL = coverURL
-        self.isPlaying = isPlaying
-        self.trackId = trackId
-        self.size = size
-        self.onTap = onTap
-        self.onNextTrack = onNextTrack
-        self.onPreviousTrack = onPreviousTrack
-    }
-
     var body: some View {
-        let armHeight = size * 0.68
+        let discSize = size
+        let armHeight = discSize * 0.68
+        let stageWidth = discSize + 48
+        let stageHeight = discSize + armHeight * 0.38
 
-        ZStack(alignment: .top) {
+        return ZStack(alignment: .top) {
             TimelineView(.animation(paused: !isPlaying || isDragging || isTransitioningTrack)) { timeline in
-                VinylRecordView(coverURL: coverURL, size: size)
-                    .rotationEffect(.degrees(rotationState.currentAngle(at: timeline.date)))
+                let currentAngle = rotationState.currentAngle(at: timeline.date)
+                VinylRecordView(coverURL: coverURL, size: discSize)
+                    .rotationEffect(.degrees(currentAngle))
             }
             .offset(x: dragOffset)
             .padding(.top, armHeight * 0.36)
             .contentShape(Circle())
-            .gesture(swipeGesture)
+            .gesture(dragAndSwipeGesture(discSize: discSize))
             .onTapGesture { onTap?() }
             .zIndex(1)
 
-            VinylTonearmView(isPlaying: isPlaying && !isDragging && !isTransitioningTrack, height: armHeight, reduceMotion: UIAccessibility.isReduceMotionEnabled)
-                .offset(x: size * 0.12, y: -armHeight * 0.08)
-                .allowsHitTesting(false)
-                .zIndex(2)
+            VinylTonearmView(
+                isPlaying: isPlaying && !isDragging && !isTransitioningTrack,
+                height: armHeight
+            )
+            .offset(x: discSize * 0.12, y: -armHeight * 0.08)
+            .allowsHitTesting(false)
+            .zIndex(2)
         }
-        .frame(width: size + 48, height: size + armHeight * 0.38, alignment: .top)
+        .frame(width: stageWidth, height: stageHeight, alignment: .top)
         .onAppear {
-            if isPlaying { rotationState.start() }
+            if isPlaying { rotationState.start(at: Date()) }
         }
         .onChange(of: isPlaying) { playing in
-            if playing { rotationState.start() } else { rotationState.stop() }
+            if playing {
+                rotationState.start(at: Date())
+            } else {
+                rotationState.stop(at: Date())
+            }
         }
         .onChange(of: trackId) { _ in
             isTransitioningTrack = true
@@ -105,22 +100,43 @@ struct VinylTurntableView: View {
         }
     }
 
-    private var swipeGesture: some Gesture {
+    private func dragAndSwipeGesture(discSize: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
-                guard abs(value.translation.width) > abs(value.translation.height) * 0.6 else { return }
-                isDragging = true
-                dragOffset = value.translation.width
+                if abs(value.translation.width) > abs(value.translation.height) * 0.6 {
+                    isDragging = true
+                    dragOffset = value.translation.width
+                }
             }
             .onEnded { value in
                 let translation = value.translation.width
-                let predicted = value.predictedEndTranslation.width
-                let threshold: CGFloat = 45
+                let velocity = value.predictedEndTranslation.width
+                let swipeThreshold: CGFloat = 45
 
-                if translation < -threshold || predicted < -100 {
-                    switchTrack(offset: -size * 1.25, callback: onNextTrack)
-                } else if translation > threshold || predicted > 100 {
-                    switchTrack(offset: size * 1.25, callback: onPreviousTrack)
+                if translation < -swipeThreshold || velocity < -100 {
+                    withAnimation(.easeOut(duration: 0.20)) {
+                        dragOffset = -discSize * 1.25
+                    }
+                    onNextTrack?()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                        dragOffset = discSize * 1.25
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.80)) {
+                            dragOffset = 0
+                            isDragging = false
+                        }
+                    }
+                } else if translation > swipeThreshold || velocity > 100 {
+                    withAnimation(.easeOut(duration: 0.20)) {
+                        dragOffset = discSize * 1.25
+                    }
+                    onPreviousTrack?()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                        dragOffset = -discSize * 1.25
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.80)) {
+                            dragOffset = 0
+                            isDragging = false
+                        }
+                    }
                 } else {
                     withAnimation(.spring(response: 0.32, dampingFraction: 0.76)) {
                         dragOffset = 0
@@ -129,149 +145,215 @@ struct VinylTurntableView: View {
                 }
             }
     }
-
-    private func switchTrack(offset: CGFloat, callback: (() -> Void)?) {
-        withAnimation(.easeOut(duration: 0.20)) { dragOffset = offset }
-        callback?()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-            dragOffset = offset > 0 ? -size * 1.25 : size * 1.25
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.80)) {
-                dragOffset = 0
-                isDragging = false
-            }
-        }
-    }
 }
 
-/// A programmatic vinyl record so the player does not need another image asset.
 struct VinylRecordView: View {
     let coverURL: URL?
     let size: CGFloat
 
-    init(coverURL: URL?, size: CGFloat = 280) {
-        self.coverURL = coverURL
-        self.size = size
-    }
-
     var body: some View {
-        let labelSize = size * 0.64
-        let spindleSize = max(7, size * 0.032)
+        let discDiameter = size
+        let labelDiameter = discDiameter * 0.64
+        let spindleHoleDiameter = max(7, discDiameter * 0.032)
 
-        ZStack {
+        return ZStack {
             Circle()
-                .fill(Color.black.opacity(0.42))
-                .frame(width: size + 8, height: size + 8)
-                .blur(radius: max(8, size * 0.045))
-                .offset(y: size * 0.04)
+                .fill(
+                    RadialGradient(
+                        colors: [Color(white: 0.06), Color(white: 0.02)],
+                        center: .center,
+                        startRadius: discDiameter * 0.3,
+                        endRadius: discDiameter * 0.5
+                    )
+                )
+                .frame(width: discDiameter + 6, height: discDiameter + 6)
+                .shadow(color: .black.opacity(0.45), radius: max(16, discDiameter * 0.08), x: 0, y: discDiameter * 0.04)
+                .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
 
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(white: 0.16), Color(white: 0.08), Color(white: 0.025)],
+                        colors: [Color(white: 0.14), Color(white: 0.08), Color(white: 0.05), Color(white: 0.03)],
                         center: .center,
-                        startRadius: size * 0.08,
-                        endRadius: size * 0.52
+                        startRadius: discDiameter * 0.25,
+                        endRadius: discDiameter * 0.5
                     )
                 )
-                .frame(width: size, height: size)
+                .frame(width: discDiameter, height: discDiameter)
                 .overlay {
-                    Circle().stroke(
-                        LinearGradient(
-                            colors: [.white.opacity(0.28), .white.opacity(0.04), .black.opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.2
-                    )
+                    Circle()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.25), Color.white.opacity(0.04), Color.white.opacity(0.18), Color.black.opacity(0.6)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.2
+                        )
                 }
 
             Circle()
                 .fill(
                     AngularGradient(
                         gradient: Gradient(colors: [
-                            .white.opacity(0.04), .white.opacity(0.16), .black.opacity(0.16),
-                            .white.opacity(0.11), .black.opacity(0.12), .white.opacity(0.05)
+                            Color(white: 0.06), Color(white: 0.18), Color(white: 0.05), Color(white: 0.22),
+                            Color(white: 0.07), Color(white: 0.16), Color(white: 0.05), Color(white: 0.20),
+                            Color(white: 0.06), Color(white: 0.18), Color(white: 0.06)
                         ]),
                         center: .center
                     )
                 )
-                .frame(width: size - 4, height: size - 4)
+                .frame(width: discDiameter - 4, height: discDiameter - 4)
                 .opacity(0.9)
 
-            ForEach(0..<18, id: \.self) { index in
-                let factor = 0.68 + (Double(index) / 17) * 0.29
+            ForEach(0..<18, id: \.self) { i in
+                let factor = 0.68 + (Double(i) / 17.0) * 0.29
+                let isMajorTrack = (i % 4 == 0)
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [.white.opacity(index % 4 == 0 ? 0.14 : 0.06), .black.opacity(0.42), .white.opacity(0.04)],
+                            colors: [Color.white.opacity(isMajorTrack ? 0.14 : 0.06), Color.black.opacity(0.4), Color.white.opacity(isMajorTrack ? 0.09 : 0.03)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: index % 4 == 0 ? 0.8 : 0.45
+                        lineWidth: isMajorTrack ? 0.8 : 0.45
                     )
-                    .frame(width: size * factor, height: size * factor)
+                    .frame(width: discDiameter * factor, height: discDiameter * factor)
             }
+
+            Circle()
+                .stroke(Color.white.opacity(0.18), lineWidth: 0.9)
+                .frame(width: discDiameter * 0.98, height: discDiameter * 0.98)
+
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.20), Color.black.opacity(0.5)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.2
+                )
+                .frame(width: discDiameter * 0.665, height: discDiameter * 0.665)
 
             Circle()
                 .fill(
                     AngularGradient(
                         gradient: Gradient(stops: [
-                            .init(color: .clear, location: 0.00),
-                            .init(color: .white.opacity(0.22), location: 0.15),
-                            .init(color: .clear, location: 0.28),
-                            .init(color: .clear, location: 0.52),
-                            .init(color: .white.opacity(0.14), location: 0.66),
-                            .init(color: .clear, location: 0.82),
-                            .init(color: .clear, location: 1.00)
+                            .init(color: .clear, location: 0.0),
+                            .init(color: Color.white.opacity(0.02), location: 0.08),
+                            .init(color: Color.white.opacity(0.18), location: 0.14),
+                            .init(color: Color(red: 0.85, green: 0.95, blue: 1.0).opacity(0.24), location: 0.17),
+                            .init(color: Color.white.opacity(0.18), location: 0.20),
+                            .init(color: Color.white.opacity(0.02), location: 0.26),
+                            .init(color: .clear, location: 0.34),
+                            .init(color: .clear, location: 0.50),
+                            .init(color: Color.white.opacity(0.02), location: 0.58),
+                            .init(color: Color.white.opacity(0.18), location: 0.64),
+                            .init(color: Color(red: 0.85, green: 0.95, blue: 1.0).opacity(0.24), location: 0.67),
+                            .init(color: Color.white.opacity(0.18), location: 0.70),
+                            .init(color: Color.white.opacity(0.02), location: 0.76),
+                            .init(color: .clear, location: 0.84),
+                            .init(color: .clear, location: 1.0)
                         ]),
                         center: .center,
                         angle: .degrees(35)
                     )
                 )
-                .frame(width: size - 2, height: size - 2)
+                .frame(width: discDiameter - 2, height: discDiameter - 2)
                 .blendMode(.screen)
                 .allowsHitTesting(false)
 
             ZStack {
                 Circle()
-                    .fill(LinearGradient(colors: [Color(white: 0.18), Color(white: 0.05)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: labelSize + 6, height: labelSize + 6)
-                    .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(white: 0.16), Color(white: 0.06)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: labelDiameter + 6, height: labelDiameter + 6)
+                    .shadow(color: .black.opacity(0.6), radius: 3, x: 0, y: 1)
 
                 Group {
                     if coverURL != nil {
-                        CoverImage(url: coverURL, size: labelSize, cornerRadius: labelSize / 2)
+                        CoverImage(url: coverURL, size: labelDiameter, cornerRadius: labelDiameter / 2, emptyHint: nil)
                     } else {
                         ZStack {
-                            LinearGradient(colors: [Color(white: 0.22), Color(white: 0.10)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            LinearGradient(
+                                colors: [Color(white: 0.22), Color(white: 0.12)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                             Image(systemName: "music.note")
-                                .font(.system(size: labelSize * 0.35, weight: .light))
+                                .font(.system(size: labelDiameter * 0.35, weight: .light))
                                 .foregroundStyle(.white.opacity(0.45))
                         }
+                        .frame(width: labelDiameter, height: labelDiameter)
                     }
                 }
-                .frame(width: labelSize, height: labelSize)
+                .frame(width: labelDiameter, height: labelDiameter)
                 .clipShape(Circle())
-                .overlay { Circle().strokeBorder(.black.opacity(0.45), lineWidth: 1.5) }
+                .overlay {
+                    Circle()
+                        .strokeBorder(Color.black.opacity(0.45), lineWidth: 1.5)
+                }
 
                 Circle()
-                    .stroke(.white.opacity(0.26), lineWidth: 0.8)
-                    .frame(width: labelSize * 0.86, height: labelSize * 0.86)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.28), Color.white.opacity(0.08)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.8
+                    )
+                    .frame(width: labelDiameter * 0.86, height: labelDiameter * 0.86)
 
                 Circle()
-                    .fill(LinearGradient(colors: [.white.opacity(0.95), .white.opacity(0.45), .black.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: spindleSize * 2.4, height: spindleSize * 2.4)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(white: 0.95), Color(white: 0.65), Color(white: 0.90), Color(white: 0.40)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: spindleHoleDiameter * 1.8, height: spindleHoleDiameter * 1.8)
+                    .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
+
                 Circle()
-                    .fill(Color(white: 0.04))
-                    .frame(width: spindleSize, height: spindleSize)
+                    .fill(Color.black.opacity(0.65))
+                    .frame(width: spindleHoleDiameter, height: spindleHoleDiameter)
+
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.9), Color.clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: spindleHoleDiameter * 0.55, height: spindleHoleDiameter * 0.55)
+                    .offset(x: -spindleHoleDiameter * 0.12, y: -spindleHoleDiameter * 0.12)
             }
+            .frame(width: labelDiameter, height: labelDiameter)
+
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.14), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: discDiameter * 0.92, height: discDiameter * 0.92)
+                .blendMode(.screen)
         }
-        .frame(width: size + 8, height: size + 8)
+        .frame(width: discDiameter, height: discDiameter)
     }
 }
 
-/// A small vector tonearm that lifts while paused and settles onto the record
-/// while playing. It uses no platform-specific drawing APIs.
 struct VinylTonearmView: View {
     let isPlaying: Bool
     let height: CGFloat
@@ -288,46 +370,210 @@ struct VinylTonearmView: View {
         let pivotSize = width * 0.46
 
         ZStack(alignment: .top) {
+            pivotBase(size: pivotSize)
+                .zIndex(3)
+
+            TimelineView(.animation(paused: !isPlaying || reduceMotion)) { timeline in
+                let wobble = wobbleDegrees(at: timeline.date)
+                armAssembly(width: width, height: height)
+                    .rotationEffect(
+                        .degrees(rotationAngle + wobble),
+                        anchor: UnitPoint(x: 0.5, y: pivotSize * 0.5 / height)
+                    )
+            }
+            .animation(reduceMotion ? nil : .spring(response: 0.48, dampingFraction: 0.74, blendDuration: 0.08), value: isPlaying)
+            .shadow(color: .black.opacity(0.4), radius: 6, x: -3, y: 5)
+            .zIndex(2)
+        }
+        .frame(width: width, height: height, alignment: .top)
+    }
+
+    private var rotationAngle: Double { isPlaying ? 0.0 : -32.0 }
+
+    private func wobbleDegrees(at date: Date) -> Double {
+        guard isPlaying, !reduceMotion else { return 0 }
+        let seconds = date.timeIntervalSinceReferenceDate
+        let harmonic1 = sin(seconds * 2.0 * .pi / 3.2) * 0.20
+        let harmonic2 = sin(seconds * 2.0 * .pi / 1.1 + 0.6) * 0.08
+        return harmonic1 + harmonic2
+    }
+
+    private func pivotBase(size: CGFloat) -> some View {
+        ZStack {
             Circle()
-                .fill(LinearGradient(colors: [Color(white: 0.9), Color(white: 0.28), Color(white: 0.78)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: pivotSize, height: pivotSize)
+                .fill(Color.black.opacity(0.5))
+                .frame(width: size * 1.1, height: size * 1.1)
+                .blur(radius: 3)
+                .offset(y: 2)
+
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.82), Color(white: 0.35), Color(white: 0.75)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size, height: size)
                 .overlay {
-                    Circle()
-                        .fill(Color(white: 0.12))
-                        .padding(pivotSize * 0.19)
+                    Circle().stroke(Color.white.opacity(0.5), lineWidth: 0.8)
                 }
-                .shadow(color: .black.opacity(0.45), radius: 4, y: 2)
-                .zIndex(2)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color(white: 0.24), Color(white: 0.08)],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: size * 0.42
+                    )
+                )
+                .frame(width: size * 0.80, height: size * 0.80)
+
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.95), Color(white: 0.55), Color(white: 0.85)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size * 0.40, height: size * 0.40)
+                .shadow(color: .black.opacity(0.4), radius: 1, y: 1)
+
+            Circle()
+                .fill(Color(white: 0.12))
+                .frame(width: size * 0.14, height: size * 0.14)
+        }
+        .frame(width: size, height: size)
+    }
+
+    private func armAssembly(width: CGFloat, height: CGFloat) -> some View {
+        let pivotY = (width * 0.46) * 0.5
+        let tubeWidth: CGFloat = max(3.5, width * 0.058)
+
+        return ZStack(alignment: .top) {
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.75), Color(white: 0.25), Color(white: 0.65)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: tubeWidth * 2.6, height: height * 0.15)
+                .offset(y: -height * 0.08)
 
             TonearmPath()
-                .stroke(Color.black.opacity(0.36), lineWidth: max(5, width * 0.09))
-                .blur(radius: 2)
+                .stroke(Color.black.opacity(0.35), lineWidth: tubeWidth * 1.5)
+                .blur(radius: 2.5)
                 .offset(x: 2, y: 3)
 
             TonearmPath()
                 .stroke(
-                    LinearGradient(colors: [.white.opacity(0.96), .white.opacity(0.52), .white.opacity(0.90), .white.opacity(0.38)], startPoint: .leading, endPoint: .trailing),
-                    style: StrokeStyle(lineWidth: max(3.5, width * 0.058), lineCap: .round, lineJoin: .round)
+                    LinearGradient(
+                        colors: [Color(white: 0.98), Color(white: 0.55), Color(white: 0.92), Color(white: 0.40)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    style: StrokeStyle(lineWidth: tubeWidth, lineCap: .round, lineJoin: .round)
                 )
-                .rotationEffect(.degrees(isPlaying ? 0 : -32), anchor: UnitPoint(x: 0.5, y: pivotSize * 0.5 / height))
-                .animation(reduceMotion ? nil : .spring(response: 0.48, dampingFraction: 0.74), value: isPlaying)
-                .zIndex(1)
+
+            headshellAndCartridge(width: width, height: height)
         }
-        .frame(width: width, height: height, alignment: .top)
+        .frame(width: width, height: height)
+        .offset(y: pivotY)
+    }
+
+    private func headshellAndCartridge(width: CGFloat, height: CGFloat) -> some View {
+        let headWidth = width * 0.24
+        let headHeight = height * 0.22
+
+        return ZStack {
+            RoundedRectangle(cornerRadius: 2.5)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.32), Color(white: 0.10)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: headWidth, height: headHeight)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 2.5)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 0.8)
+                }
+
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.85), Color(white: 0.4)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 2.5, height: headHeight * 0.45)
+                .offset(x: headWidth * 0.52, y: -headHeight * 0.1)
+
+            VStack(spacing: 0) {
+                Spacer()
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(red: 0.92, green: 0.22, blue: 0.22), Color(red: 0.55, green: 0.08, blue: 0.08)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: headWidth * 0.65, height: 4.5)
+
+                Triangle()
+                    .fill(Color(white: 0.95))
+                    .frame(width: 3, height: 3.5)
+                    .offset(y: 1)
+            }
+        }
+        .frame(width: headWidth, height: headHeight)
+        .rotationEffect(.degrees(24))
+        .position(x: width * 0.31, y: height * 0.74)
     }
 }
 
 private struct TonearmPath: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let start = CGPoint(x: rect.width * 0.5, y: 0)
-        let first = CGPoint(x: rect.width * 0.58, y: rect.height * 0.28)
-        let second = CGPoint(x: rect.width * 0.42, y: rect.height * 0.55)
-        let end = CGPoint(x: rect.width * 0.31, y: rect.height * 0.74)
-        path.move(to: start)
-        path.addCurve(to: first, control1: CGPoint(x: rect.width * 0.52, y: rect.height * 0.1), control2: CGPoint(x: rect.width * 0.58, y: rect.height * 0.2))
-        path.addCurve(to: second, control1: CGPoint(x: rect.width * 0.58, y: rect.height * 0.38), control2: CGPoint(x: rect.width * 0.45, y: rect.height * 0.48))
-        path.addCurve(to: end, control1: CGPoint(x: rect.width * 0.38, y: rect.height * 0.62), control2: CGPoint(x: rect.width * 0.33, y: rect.height * 0.70))
+        let startPoint = CGPoint(x: rect.width * 0.5, y: 0)
+        let midPoint1 = CGPoint(x: rect.width * 0.58, y: rect.height * 0.28)
+        let midPoint2 = CGPoint(x: rect.width * 0.42, y: rect.height * 0.55)
+        let endPoint = CGPoint(x: rect.width * 0.31, y: rect.height * 0.74)
+
+        path.move(to: startPoint)
+        path.addCurve(
+            to: midPoint1,
+            control1: CGPoint(x: rect.width * 0.52, y: rect.height * 0.1),
+            control2: CGPoint(x: rect.width * 0.58, y: rect.height * 0.2)
+        )
+        path.addCurve(
+            to: midPoint2,
+            control1: CGPoint(x: rect.width * 0.58, y: rect.height * 0.38),
+            control2: CGPoint(x: rect.width * 0.45, y: rect.height * 0.48)
+        )
+        path.addCurve(
+            to: endPoint,
+            control1: CGPoint(x: rect.width * 0.38, y: rect.height * 0.62),
+            control2: CGPoint(x: rect.width * 0.33, y: rect.height * 0.70)
+        )
+        return path
+    }
+}
+
+private struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.closeSubpath()
         return path
     }
 }
