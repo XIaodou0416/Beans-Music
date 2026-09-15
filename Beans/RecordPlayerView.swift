@@ -107,8 +107,8 @@ struct RecordPlayerView: View {
                 trackId: song?.id,
                 size: artworkSize,
                 onTap: { showsLyrics = true },
-                onNextTrack: player.next,
-                onPreviousTrack: player.previous
+                onNextTrack: { player.next() },
+                onPreviousTrack: { player.previous() }
             )
             .frame(maxWidth: .infinity)
 
