@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // Adapted under LGPL-3.0. See THIRD_PARTY_NOTICES.md.
 struct RecordPlayerView: View {
@@ -16,6 +17,7 @@ struct RecordPlayerView: View {
     let onFavorite: () -> Void
     let onComments: () -> Void
     let onSettings: () -> Void
+    let onArtist: () -> Void
     let onSleepTimer: () -> Void
     let onAddToLocalPlaylist: () -> Void
     let onDownload: () -> Void
@@ -36,6 +38,7 @@ struct RecordPlayerView: View {
         onFavorite: @escaping () -> Void,
         onComments: @escaping () -> Void,
         onSettings: @escaping () -> Void,
+        onArtist: @escaping () -> Void = {},
         onSleepTimer: @escaping () -> Void = {},
         onAddToLocalPlaylist: @escaping () -> Void = {},
         onDownload: @escaping () -> Void = {},
@@ -50,6 +53,7 @@ struct RecordPlayerView: View {
         self.onFavorite = onFavorite
         self.onComments = onComments
         self.onSettings = onSettings
+        self.onArtist = onArtist
         self.onSleepTimer = onSleepTimer
         self.onAddToLocalPlaylist = onAddToLocalPlaylist
         self.onDownload = onDownload
@@ -234,10 +238,17 @@ struct RecordPlayerView: View {
                 .font(BeansFont.appFont(21, .bold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
+                .contextMenu {
+                    Button("复制歌名") {
+                        copySongTitle()
+                    }
+                }
             Text(song.map { "\($0.artists) — \($0.album)" } ?? "")
                 .font(BeansFont.appFont(13.5))
                 .foregroundStyle(.white.opacity(0.65))
                 .lineLimit(1)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onArtist)
             Text("来源：\(sourceName)")
                 .font(BeansFont.appFont(11))
                 .foregroundStyle(.white.opacity(0.5))
@@ -366,10 +377,17 @@ struct RecordPlayerView: View {
                         .font(BeansFont.appFont(16, .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
+                        .contextMenu {
+                            Button("复制歌名") {
+                                copySongTitle()
+                            }
+                        }
                     Text(song?.artists ?? "")
                         .font(BeansFont.appFont(12, .medium))
                         .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onArtist)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Button(action: onFavorite) {
@@ -412,13 +430,7 @@ struct RecordPlayerView: View {
                 }
                 Button("定时关闭", action: onSleepTimer)
                 Button("添加到本地歌单", action: onAddToLocalPlaylist)
-                if downloadFeatureUnlocked {
-                    Button("下载歌曲", action: onDownload)
-                }
                 Button("播放器设置", action: onSettings)
-                Button("关闭播放器", role: .destructive) {
-                    isPresented = false
-                }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 20, weight: .medium))
@@ -428,6 +440,23 @@ struct RecordPlayerView: View {
             }
             .buttonStyle(RecordModePressButtonStyle())
             .accessibilityLabel("更多设置")
+
+            if showLyrics {
+                Button {
+                    BeansHaptics.tap()
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        showLyrics = false
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(RecordModePressButtonStyle())
+                .accessibilityLabel("返回唱片")
+            }
 
             Spacer()
 
@@ -457,13 +486,19 @@ struct RecordPlayerView: View {
         DragGesture(minimumDistance: 24)
             .onEnded { value in
                 guard value.translation.height > 70,
-                      abs(value.translation.height) > abs(value.translation.width) else { return }
-                if showLyrics {
-                    showLyrics = false
-                } else {
-                    isPresented = false
-                }
+                      abs(value.translation.height) > abs(value.translation.width),
+                      !showLyrics,
+                      !showQueue else { return }
+                isPresented = false
             }
+    }
+
+    private func copySongTitle() {
+        guard let title = song?.name.trimmingCharacters(in: .whitespacesAndNewlines),
+              !title.isEmpty else { return }
+        UIPasteboard.general.string = title
+        BeansHaptics.success()
+        ToastCenter.shared.show("歌名已复制")
     }
 }
 

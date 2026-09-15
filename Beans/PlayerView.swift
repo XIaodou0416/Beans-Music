@@ -498,6 +498,9 @@ struct PlayerView: View {
                         },
                         onPlayerSettings: {
                             openPlayerSettings()
+                        },
+                        onArtist: {
+                            openArtistHome()
                         }
                     )
 
@@ -536,6 +539,9 @@ struct PlayerView: View {
                     },
                     onSettings: {
                         openPlayerSettings()
+                    },
+                    onArtist: {
+                        openArtistHome()
                     },
                     onSleepTimer: {
                         showSleepTimer = true
@@ -869,16 +875,21 @@ struct PlayerView: View {
                         ))
 
                     HStack(alignment: .center, spacing: 34) {
-                        iPadLandscapeArtwork(
-                            size: min(geo.size.height * 0.52, geo.size.width * 0.32)
-                        )
-                        .frame(maxWidth: geo.size.width * 0.43)
-                        .modifier(IPadLandscapeLayoutable(
-                            part: .artwork,
-                            style: layoutRenderingStyle,
-                            enabled: layoutMode && layoutEditorUsesIPadLandscape,
-                            data: $iPadLandscapeLayoutData
-                        ))
+                        VStack(spacing: 2) {
+                            iPadLandscapeArtwork(
+                                size: min(geo.size.height * 0.46, geo.size.width * 0.30)
+                            )
+                            .modifier(IPadLandscapeLayoutable(
+                                part: .artwork,
+                                style: layoutRenderingStyle,
+                                enabled: layoutMode && layoutEditorUsesIPadLandscape,
+                                data: $iPadLandscapeLayoutData
+                            ))
+
+                            iPadLandscapeControlDeck(bottomInset: 0)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .frame(maxWidth: geo.size.width * 0.46)
 
                         Group {
                             if (layoutRenderingStyle == .appleMusic && showAppleMusicQueue)
@@ -901,12 +912,8 @@ struct PlayerView: View {
                     }
                     .padding(.horizontal, 34)
                     .padding(.top, 4)
-                    .padding(.bottom, iPadLandscapeControlsReservedHeight + geo.safeAreaInsets.bottom)
+                    .padding(.bottom, geo.safeAreaInsets.bottom + 8)
                 }
-
-                iPadLandscapeControlDeck(bottomInset: geo.safeAreaInsets.bottom)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-
             }
         }
     }
@@ -1068,11 +1075,16 @@ struct PlayerView: View {
                     .foregroundStyle(landscapeApplePrimaryColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .contextMenu {
+                        Button("复制歌名") { copyCurrentSongTitle() }
+                    }
                 Text(subtitle)
                     .font(BeansFont.appFont(12, .medium))
                     .foregroundStyle(landscapeAppleSecondaryColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openArtistHome() }
             }
 
             Spacer(minLength: 0)
@@ -1137,6 +1149,9 @@ struct PlayerView: View {
                             .foregroundStyle(albumTitleForeground)
                             .lineLimit(1)
                             .truncationMode(.tail)
+                            .contextMenu {
+                                Button("复制歌名") { copyCurrentSongTitle() }
+                            }
                         if showSongVIPBadge, song?.isVIP == true {
                             Text("VIP")
                                 .font(BeansFont.appFont(8, .bold))
@@ -1230,10 +1245,15 @@ struct PlayerView: View {
                     .font(BeansFont.appFont(15, .semibold))
                     .foregroundStyle(playerButtonText)
                     .lineLimit(1)
+                    .contextMenu {
+                        Button("复制歌名") { copyCurrentSongTitle() }
+                    }
                 Text(song?.artists ?? "")
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(playerButtonSecondaryText)
                     .lineLimit(1)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openArtistHome() }
             }
             .frame(maxWidth: 430)
 
@@ -1459,10 +1479,17 @@ struct PlayerView: View {
                     .font(BeansFont.appFont(18, .bold))
                     .foregroundStyle(playerButtonText)
                     .lineLimit(1)
-                Text(song?.album ?? song?.artists ?? "")
+                    .contextMenu {
+                        Button("复制歌名") {
+                            copyCurrentSongTitle()
+                        }
+                    }
+                Text(song?.artists ?? "")
                     .font(BeansFont.appFont(13, .medium))
                     .foregroundStyle(playerButtonSecondaryText)
                     .lineLimit(1)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openArtistHome() }
             }
             .frame(maxWidth: size + 56)
         }
@@ -1779,6 +1806,9 @@ struct PlayerView: View {
                         .foregroundStyle(albumTitleForeground)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        .contextMenu {
+                            Button("复制歌名") { copyCurrentSongTitle() }
+                        }
                     if showSongVIPBadge, song?.isVIP == true {
                         Text("VIP")
                             .font(BeansFont.appFont(8, .bold))
@@ -1966,6 +1996,9 @@ struct PlayerView: View {
                         .foregroundStyle(albumTitleForeground)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        .contextMenu {
+                            Button("复制歌名") { copyCurrentSongTitle() }
+                        }
                     if showSongVIPBadge, song?.isVIP == true {
                         Text("VIP")
                             .font(BeansFont.appFont(8, .bold))
@@ -2308,6 +2341,11 @@ struct PlayerView: View {
                         .lineLimit(2)
                         .minimumScaleFactor(0.55)
                         .multilineTextAlignment(.center)
+                        .contextMenu {
+                            Button("复制歌名") {
+                                copyCurrentSongTitle()
+                            }
+                        }
                         .shadow(color: albumGlow(albumTitleColor, strong: true), radius: albumTextGlow ? 10 : 0, y: 2)
                     if showSongVIPBadge, song?.isVIP == true {
                         Text("VIP")
@@ -2442,6 +2480,11 @@ struct PlayerView: View {
                         .foregroundStyle(albumTitleForeground)
                         .lineLimit(2)
                         .minimumScaleFactor(0.58)
+                        .contextMenu {
+                            Button("复制歌名") {
+                                copyCurrentSongTitle()
+                            }
+                        }
                         .multilineTextAlignment(.center)
                         .shadow(color: albumGlow(albumTitleColor, strong: true), radius: albumTextGlow ? 10 : 0, y: 2)
                     Text(subtitle)
@@ -3752,6 +3795,9 @@ struct PlayerView: View {
                         },
                         onPlayerSettings: {
                             openPlayerSettings()
+                        },
+                        onArtist: {
+                            openArtistHome()
                         }
                     )
                     .frame(width: canvasSize.width, height: canvasSize.height)
@@ -4761,9 +4807,12 @@ struct PlayerView: View {
     /// 全部歌手名（多歌手歌曲点击时弹出选择，避免只打开第一位）
     private var artistNames: [String] {
         guard let artists = song?.artists else { return [] }
-        return artists
-            .replacingOccurrences(of: " / ", with: "/")
-            .split(separator: "/")
+        let separators = [" / ", "/", "、", ",", "，", " & ", " &", "& ", " feat. ", " Feat. ", " ft. ", " Ft. "]
+        let normalized = separators.reduce(artists) { value, separator in
+            value.replacingOccurrences(of: separator, with: "|")
+        }
+        return normalized
+            .split(separator: "|")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).description }
             .filter { !$0.isEmpty }
     }
@@ -4782,6 +4831,14 @@ struct PlayerView: View {
             pickedArtistName = primaryArtistName
             showArtistHome = true
         }
+    }
+
+    private func copyCurrentSongTitle() {
+        guard let title = song?.name.trimmingCharacters(in: .whitespacesAndNewlines),
+              !title.isEmpty else { return }
+        UIPasteboard.general.string = title
+        BeansHaptics.success()
+        ToastCenter.shared.show("歌名已复制")
     }
 
     private func toggleLyrics() {

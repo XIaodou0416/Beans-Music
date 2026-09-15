@@ -51,6 +51,10 @@ struct ProfileView: View {
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
+    @AppStorage("beans.globalFloatingEffect") private var globalFloatingEffectRaw = BeansGlobalFloatingEffect.off.rawValue
+    @AppStorage("beans.globalFloatingDensity") private var globalFloatingDensity = 1.0
+    @AppStorage("beans.globalFloatingSize") private var globalFloatingSize = 1.0
+    @AppStorage("beans.globalFloatingSpeed") private var globalFloatingSpeed = 1.0
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -161,12 +165,9 @@ struct ProfileView: View {
                         header
                     }
                     customAvatarCard
-                    // 更新入口固定放在“我的”页面最底部，避免被板块排序隐藏。
-                    updateLinkCard
                     communityCard
-                    donationCard
-                    feedbackCard
                     profileVersionFooter
+                    donationCard
                 }
                 .padding(.horizontal, isNativeClean ? 24 : 16)
                 .padding(.top, isNativeClean ? 14 : 8)
@@ -715,21 +716,49 @@ struct ProfileView: View {
                 ForEach(displayedDonors.indices, id: \.self) { index in
                     let donor = displayedDonors[index]
                     HStack(spacing: 10) {
-                        Text("\(index + 1)")
-                            .font(BeansFont.appFont(13, .bold))
-                            .foregroundStyle(index == 0 ? Color.beansAmber : Color.beansComment)
-                            .frame(width: 24, height: 24)
-                            .background(
-                                (index == 0 ? Color.beansAmber : Color.beansComment).opacity(index == 0 ? 0.16 : 0.08),
-                                in: Circle()
-                            )
+                        Text(index < 3 ? ["1", "2", "3"][index] : "\(index + 1)")
+                            .font(BeansFont.appFont(index < 3 ? 14 : 13, .bold))
+                            .foregroundStyle(sponsorRankColor(for: index))
+                            .frame(width: 28, height: 28)
+                            .background {
+                                Circle()
+                                    .fill(sponsorRankColor(for: index).opacity(index < 3 ? 0.18 : 0.08))
+                                if index == 0 {
+                                    Image(systemName: "crown.fill")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(Color.beansAmber.opacity(0.82))
+                                        .offset(y: -16)
+                                }
+                            }
                         Text(donor.name)
                             .font(BeansFont.appFont(13, .medium))
                             .foregroundStyle(Color.beansLabel)
                         Spacer()
                         Text(String(format: "¥ %.2f", donor.amount))
                             .font(BeansFont.appFont(13, .semibold))
-                            .foregroundStyle(index == 0 ? Color.beansAmber : Color.beansLabel)
+                            .foregroundStyle(index < 3 ? sponsorRankColor(for: index) : Color.beansLabel)
+                    }
+                    .padding(.horizontal, index < 3 ? 11 : 8)
+                    .padding(.vertical, index < 3 ? 9 : 6)
+                    .background {
+                        if index < 3 {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            sponsorRankColor(for: index).opacity(0.16),
+                                            sponsorRankColor(for: index).opacity(0.035)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(sponsorRankColor(for: index).opacity(0.28), lineWidth: 0.8)
+                                }
+                                .shadow(color: sponsorRankColor(for: index).opacity(0.22), radius: 12, y: 4)
+                        }
                     }
                     if index < displayedDonors.count - 1 {
                         Divider().overlay(Color.beansComment.opacity(0.12))
@@ -740,9 +769,25 @@ struct ProfileView: View {
         }
         .padding(16)
         .background {
-            BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            ZStack {
+                if donationExpanded {
+                    SponsorRankAtmosphere()
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .opacity(0.9)
+                }
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
         }
         .beansCardShadow(radius: 9, y: 3)
+    }
+
+    private func sponsorRankColor(for index: Int) -> Color {
+        switch index {
+        case 0: return Color(red: 1.0, green: 0.72, blue: 0.22)
+        case 1: return Color(red: 0.72, green: 0.82, blue: 0.94)
+        case 2: return Color(red: 0.84, green: 0.50, blue: 0.30)
+        default: return Color.beansComment
+        }
     }
 
     private func openWeChatPayment() {
@@ -1171,6 +1216,10 @@ struct SettingsView: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
+    @AppStorage("beans.globalFloatingEffect") private var globalFloatingEffectRaw = BeansGlobalFloatingEffect.off.rawValue
+    @AppStorage("beans.globalFloatingDensity") private var globalFloatingDensity = 1.0
+    @AppStorage("beans.globalFloatingSize") private var globalFloatingSize = 1.0
+    @AppStorage("beans.globalFloatingSpeed") private var globalFloatingSpeed = 1.0
     @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
@@ -1251,6 +1300,10 @@ struct SettingsView: View {
     /// 日志
     @State private var showLogViewer = false
     @State private var showAccountHub = false
+    @State private var showFeedback = false
+    @State private var checkingUpdate = false
+    @State private var updateResult: UpdateChecker.CheckResult?
+    @State private var showUpdateResult = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1513,6 +1566,7 @@ struct SettingsView: View {
                         backupSection
                         logSection
                         footerNote
+                        settingsSupportSection
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
@@ -1586,6 +1640,28 @@ struct SettingsView: View {
             AccountHubSheet()
                 .environmentObject(auth)
                 .environmentObject(theme)
+        }
+        .sheet(isPresented: $showFeedback) {
+            FeedbackSheet()
+                .environmentObject(theme)
+        }
+        .alert("检查更新", isPresented: $showUpdateResult, presenting: updateResult) { result in
+            switch result {
+            case .update(let info):
+                Button("立即更新") { UIApplication.shared.open(info.htmlURL) }
+                Button("取消", role: .cancel) {}
+            case .upToDate, .failed:
+                Button("好", role: .cancel) {}
+            }
+        } message: { result in
+            switch result {
+            case .update(let info):
+                Text("发现新版本 (info.version)，是否前往更新页？")
+            case .upToDate:
+                Text("当前已是最新版本")
+            case .failed:
+                Text("检查失败，请检查网络后重试")
+            }
         }
         .sheet(isPresented: $showEqualizer) {
             EqualizerSettingsView()
@@ -1773,6 +1849,35 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .tint(Color.beansAmber)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("全局漂浮特效")
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text("在页面背景中显示轻雪、极光或星尘，支持密度、大小和速度调节")
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                    Picker("全局漂浮特效", selection: $globalFloatingEffectRaw) {
+                        ForEach(BeansGlobalFloatingEffect.allCases) { effect in
+                            Label(effect.title, systemImage: effect.icon).tag(effect.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .tint(Color.beansAmber)
+                    if globalFloatingEffectRaw != BeansGlobalFloatingEffect.off.rawValue {
+                        layoutSettingSlider("特效密度", value: $globalFloatingDensity, range: 0.4...2.4, step: 0.1, format: "%.1fx")
+                        layoutSettingSlider("粒子大小", value: $globalFloatingSize, range: 0.6...2.2, step: 0.1, format: "%.1fx")
+                        layoutSettingSlider("动画速度", value: $globalFloatingSpeed, range: 0.4...1.8, step: 0.1, format: "%.1fx")
+                    }
+                }
 
                 Toggle(isOn: $tabLabelsVisible) {
                     HStack(spacing: 12) {
@@ -2973,6 +3078,19 @@ struct SettingsView: View {
         return intValue > 0 ? "+\(intValue)" : "\(intValue)"
     }
 
+    private func layoutSettingSlider(
+        _ title: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        step: Double,
+        format: String
+    ) -> some View {
+        settingsSlider(title, valueText: String(format: format, value.wrappedValue)) {
+            Slider(value: value, in: range, step: step)
+                .tint(Color.beansAmber)
+        }
+    }
+
     private func settingsSlider<Content: View>(_ title: String, valueText: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 5) {
             HStack {
@@ -3075,6 +3193,86 @@ struct SettingsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
+    }
+
+    private var settingsSupportSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "帮助与说明")
+            VStack(spacing: 0) {
+                settingsSupportButton(
+                    icon: checkingUpdate ? "arrow.triangle.2.circlepath" : "checkmark.circle.fill",
+                    title: checkingUpdate ? "正在检查更新…" : "检查更新",
+                    tint: Color.beansHighlight
+                ) {
+                    guard !checkingUpdate else { return }
+                    checkingUpdate = true
+                    Task {
+                        let result = await UpdateChecker.checkNow()
+                        await MainActor.run {
+                            checkingUpdate = false
+                            updateResult = result
+                            showUpdateResult = true
+                        }
+                    }
+                }
+                Divider().overlay(Color.beansComment.opacity(0.14))
+                settingsSupportButton(
+                    icon: "bubble.left.and.exclamationmark.bubble.right.fill",
+                    title: "问题反馈",
+                    tint: Color.beansHighlight
+                ) {
+                    showFeedback = true
+                }
+            }
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 9) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Color.beansAmber)
+                    Text("免责声明")
+                        .font(BeansFont.appFont(14, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                }
+                Text("Beans Music 仅作为个人音乐播放与管理工具，不提供音乐文件下载或存储服务。歌曲、封面、歌词、评论和歌单等内容来自第三方平台，版权归原权利人所有。请遵守所在地区法律法规及各平台服务条款，仅使用你有权访问的内容。由于网络、接口、设备和系统差异，部分功能的可用性可能发生变化。")
+                    .font(BeansFont.appFont(11, .regular))
+                    .foregroundStyle(Color.beansComment)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(14)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+        }
+    }
+
+    private func settingsSupportButton(
+        icon: String,
+        title: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 28)
+                Text(title)
+                    .font(BeansFont.appFont(14, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.beansComment.opacity(0.65))
+            }
+            .padding(15)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+        .disabled(checkingUpdate && title.hasPrefix("正在"))
     }
 
     /// 壁纸格子：点击应用到所选外观；使用中的壁纸显示主题色边框+勾选；右上角删除
@@ -3583,6 +3781,55 @@ struct WallpaperPhotoPicker: UIViewControllerRepresentable {
                 }
             }
         }
+    }
+}
+
+/// 赞助排行展开后的低对比动态光效，不参与交互，也不影响列表布局。
+private struct SponsorRankAtmosphere: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            Canvas { context, size in
+                guard size.width > 1, size.height > 1 else { return }
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let drift = CGFloat(sin(time * 0.18)) * size.width * 0.12
+                let warm = Color(red: 1.0, green: 0.62, blue: 0.20)
+                let cool = colorScheme == .dark ? Color.white : Color(red: 0.18, green: 0.34, blue: 0.56)
+
+                context.fill(
+                    Path(ellipseIn: CGRect(
+                        x: size.width * 0.04 + drift,
+                        y: -size.height * 0.12,
+                        width: size.width * 0.72,
+                        height: size.height * 0.62
+                    )),
+                    with: .radialGradient(
+                        Gradient(colors: [warm.opacity(0.13), .clear]),
+                        center: CGPoint(x: size.width * 0.35 + drift, y: size.height * 0.14),
+                        startRadius: 2,
+                        endRadius: size.width * 0.48
+                    )
+                )
+
+                let counterDrift = CGFloat(cos(time * 0.15)) * size.width * 0.1
+                context.fill(
+                    Path(ellipseIn: CGRect(
+                        x: size.width * 0.48 + counterDrift,
+                        y: size.height * 0.46,
+                        width: size.width * 0.62,
+                        height: size.height * 0.48
+                    )),
+                    with: .radialGradient(
+                        Gradient(colors: [cool.opacity(0.09), .clear]),
+                        center: CGPoint(x: size.width * 0.70 + counterDrift, y: size.height * 0.68),
+                        startRadius: 2,
+                        endRadius: size.width * 0.42
+                    )
+                )
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

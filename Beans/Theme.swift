@@ -276,6 +276,35 @@ enum BeansPlayerDustMode: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - 全局漂浮效果
+
+enum BeansGlobalFloatingEffect: String, CaseIterable, Identifiable {
+    case off
+    case snow
+    case aurora
+    case sparkle
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .off: return "关闭"
+        case .snow: return "轻雪"
+        case .aurora: return "极光"
+        case .sparkle: return "星尘"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .off: return "circle.slash"
+        case .snow: return "snowflake"
+        case .aurora: return "rays"
+        case .sparkle: return "sparkles"
+        }
+    }
+}
+
 // MARK: - 播放器封面页样式
 
 enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {

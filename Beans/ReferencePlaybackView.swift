@@ -1,5 +1,6 @@
 import SwiftUI
 import MediaPlayer
+import UIKit
 
 private struct ReferenceLyricCenterKey: PreferenceKey {
     static var defaultValue: [UUID: CGFloat] = [:]
@@ -31,6 +32,7 @@ struct ReferencePlaybackView: View {
     let onAddToLocalPlaylist: () -> Void
     let onDownload: () -> Void
     let onPlayerSettings: () -> Void
+    let onArtist: () -> Void = {}
 
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
     @AppStorage("beans.appleMusic.showVolume") private var showVolumeControl = false
@@ -154,11 +156,16 @@ struct ReferencePlaybackView: View {
             if showLyricPreview {
             VStack(spacing: 5) {
                 HStack(spacing: 9) {
-                    Text(song?.name ?? "未在播放")
-                        .font(BeansFont.appFont(22, .bold))
-                        .foregroundStyle(primaryColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                Text(song?.name ?? "未在播放")
+                    .font(BeansFont.appFont(22, .bold))
+                    .foregroundStyle(primaryColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .contextMenu {
+                        Button("复制歌名") {
+                            copySongTitle()
+                        }
+                    }
                     if showSongVIPBadge, song?.isVIP == true {
                         Text("VIP")
                             .font(BeansFont.appFont(9, .bold))
@@ -173,6 +180,8 @@ struct ReferencePlaybackView: View {
                     .foregroundStyle(secondaryColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onArtist)
             }
             .frame(maxWidth: 420)
             .padding(.top, 22)
@@ -201,10 +210,17 @@ struct ReferencePlaybackView: View {
                     .font(BeansFont.appFont(16, .semibold))
                     .foregroundStyle(primaryColor)
                     .lineLimit(1)
+                    .contextMenu {
+                        Button("复制歌名") {
+                            copySongTitle()
+                        }
+                    }
                 Text(subtitle)
                     .font(BeansFont.appFont(12, .medium))
                     .foregroundStyle(secondaryColor)
                     .lineLimit(1)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onArtist)
             }
             Spacer(minLength: 0)
             compactActionButton(
@@ -314,12 +330,19 @@ struct ReferencePlaybackView: View {
                         .foregroundStyle(primaryColor)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        .contextMenu {
+                            Button("复制歌名") {
+                                copySongTitle()
+                            }
+                        }
                 }
                 Text(subtitle)
                     .font(BeansFont.appFont(12, .medium))
                     .foregroundStyle(secondaryColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onArtist)
             }
             Spacer(minLength: 0)
             HStack(spacing: 0) {
@@ -404,10 +427,17 @@ struct ReferencePlaybackView: View {
                     .font(BeansFont.appFont(16, .bold))
                     .foregroundStyle(primaryColor)
                     .lineLimit(1)
+                    .contextMenu {
+                        Button("复制歌名") {
+                            copySongTitle()
+                        }
+                    }
                 Text(song?.artists ?? "")
                     .font(BeansFont.appFont(12, .medium))
                     .foregroundStyle(secondaryColor)
                     .lineLimit(1)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onArtist)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -514,6 +544,14 @@ struct ReferencePlaybackView: View {
         guard let song else { return "" }
         let parts = [song.artists, song.album].filter { !$0.isEmpty }
         return parts.isEmpty ? "未知歌曲" : parts.joined(separator: " · ")
+    }
+
+    private func copySongTitle() {
+        guard let title = song?.name.trimmingCharacters(in: .whitespacesAndNewlines),
+              !title.isEmpty else { return }
+        UIPasteboard.general.string = title
+        BeansHaptics.success()
+        ToastCenter.shared.show("歌名已复制")
     }
 
     private func lyricLine(_ line: LyricLine, isFocused: Bool, proxy: ScrollViewProxy) -> some View {
