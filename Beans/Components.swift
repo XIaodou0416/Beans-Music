@@ -193,6 +193,9 @@ struct GlobalFloatingEffectView: View {
     @AppStorage("beans.globalFloatingDensity") private var density = 1.0
     @AppStorage("beans.globalFloatingSize") private var size = 1.0
     @AppStorage("beans.globalFloatingSpeed") private var speed = 1.0
+    @AppStorage("beans.globalFloatingText") private var floatingText = "❄️"
+    @AppStorage("beans.globalFloatingRotation") private var rotation = 0.0
+    @AppStorage("beans.globalFloatingSkew") private var skew = 0.0
 
     private var effect: BeansGlobalFloatingEffect {
         BeansGlobalFloatingEffect(rawValue: effectRaw) ?? .off
@@ -200,52 +203,38 @@ struct GlobalFloatingEffectView: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: effect == .off)) { timeline in
-            Canvas { context, canvasSize in
-                guard effect != .off, canvasSize.width > 1, canvasSize.height > 1 else { return }
-                let time = timeline.date.timeIntervalSinceReferenceDate * max(0.25, min(speed, 2.0))
-                let accent = theme.customAccent ?? (colorScheme == .dark ? Color.beansAmber : Color.beansHighlight)
-                let count = max(8, min(64, Int((18 * density).rounded())))
-
-                switch effect {
-                case .snow:
-                    for index in 0..<count {
-                        let seed = Double(index)
-                        let x = ((seed * 0.173).truncatingRemainder(dividingBy: 1.0)) * canvasSize.width
-                        let fall = ((time * (0.035 + seed.truncatingRemainder(dividingBy: 7) * 0.006) + seed * 0.071).truncatingRemainder(dividingBy: 1.15))
-                        let y = fall * canvasSize.height - canvasSize.height * 0.08
-                        let drift = sin(time * 0.32 + seed * 1.7) * canvasSize.width * 0.012
-                        let radius = max(1.2, min(4.2, size * (1.2 + seed.truncatingRemainder(dividingBy: 3) * 0.45)))
-                        let rect = CGRect(x: x + drift, y: y, width: radius * 2, height: radius * 2)
-                        context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.08 + 0.04 * sin(seed))))
+            let time = timeline.date.timeIntervalSinceReferenceDate * max(0.25, min(speed, 2.0))
+            let accent = theme.customAccent ?? (colorScheme == .dark ? Color.beansAmber : Color.beansHighlight)
+            let count = max(8, min(64, Int((18 * density).rounded())))
+            ZStack {
+                Canvas { context, canvasSize in
+                    guard effect != .off, canvasSize.width > 1, canvasSize.height > 1 else { return }
+                    if effect == .snow {
+                        for index in 0..<count {
+                            let seed = Double(index)
+                            let x = ((seed * 0.173).truncatingRemainder(dividingBy: 1.0)) * canvasSize.width
+                            let fall = ((time * (0.035 + seed.truncatingRemainder(dividingBy: 7) * 0.006) + seed * 0.071).truncatingRemainder(dividingBy: 1.15))
+                            let y = fall * canvasSize.height - canvasSize.height * 0.08
+                            let drift = sin(time * 0.32 + seed * 1.7) * canvasSize.width * 0.012
+                            let text = Text("❄️").font(.system(size: max(10, min(30, size * 14))))
+                            context.draw(text.foregroundStyle(.white.opacity(0.24)), at: CGPoint(x: x + drift, y: y))
+                        }
                     }
-                case .aurora:
-                    let shift = CGFloat(sin(time * 0.12)) * canvasSize.width * 0.18
-                    let gradient = Gradient(colors: [accent.opacity(0.16), .clear])
-                    context.fill(
-                        Path(ellipseIn: CGRect(x: canvasSize.width * 0.10 + shift, y: canvasSize.height * 0.08, width: canvasSize.width * 0.72, height: canvasSize.height * 0.32)),
-                        with: .radialGradient(gradient, center: CGPoint(x: canvasSize.width * 0.46 + shift, y: canvasSize.height * 0.22), startRadius: 4, endRadius: canvasSize.width * 0.42)
-                    )
-                    let second = CGFloat(cos(time * 0.10)) * canvasSize.width * 0.14
-                    context.fill(
-                        Path(ellipseIn: CGRect(x: canvasSize.width * 0.32 + second, y: canvasSize.height * 0.62, width: canvasSize.width * 0.56, height: canvasSize.height * 0.26)),
-                        with: .radialGradient(Gradient(colors: [Color.beansSage.opacity(0.12), .clear]), center: CGPoint(x: canvasSize.width * 0.58 + second, y: canvasSize.height * 0.75), startRadius: 2, endRadius: canvasSize.width * 0.34)
-                    )
-                case .sparkle:
-                    for index in 0..<count {
-                        let seed = Double(index)
-                        let x = ((seed * 0.239 + 0.11).truncatingRemainder(dividingBy: 1.0)) * canvasSize.width
-                        let y = ((seed * 0.131 + 0.18).truncatingRemainder(dividingBy: 0.86)) * canvasSize.height
-                        let pulse = 0.35 + 0.65 * abs(sin(time * 0.75 + seed * 1.8))
-                        let arm = max(1.5, min(6, size * (2.0 + seed.truncatingRemainder(dividingBy: 3))))
-                        var path = Path()
-                        path.move(to: CGPoint(x: x - arm, y: y))
-                        path.addLine(to: CGPoint(x: x + arm, y: y))
-                        path.move(to: CGPoint(x: x, y: y - arm))
-                        path.addLine(to: CGPoint(x: x, y: y + arm))
-                        context.stroke(path, with: .color(accent.opacity(0.11 * pulse)), lineWidth: max(0.7, size * 0.45))
+                }
+                if effect == .customText {
+                    GeometryReader { geometry in
+                        ForEach(0..<count, id: \.self) { index in
+                            let seed = Double(index)
+                            let x = ((seed * 0.173).truncatingRemainder(dividingBy: 1.0)) * geometry.size.width
+                            let y = ((time * (0.035 + seed.truncatingRemainder(dividingBy: 7) * 0.006) + seed * 0.071).truncatingRemainder(dividingBy: 1.15)) * geometry.size.height
+                            Text(floatingText.isEmpty ? "✦" : floatingText)
+                                .font(.system(size: max(10, min(30, size * 14)), weight: .medium))
+                                .foregroundStyle(accent.opacity(0.24))
+                                .rotationEffect(.degrees(rotation + sin(time * 0.4 + seed) * 8))
+                                .transformEffect(CGAffineTransform(a: 1, b: 0, c: CGFloat(tan(skew * .pi / 180)), d: 1, tx: 0, ty: 0))
+                                .position(x: x, y: y)
+                        }
                     }
-                case .off:
-                    break
                 }
             }
         }

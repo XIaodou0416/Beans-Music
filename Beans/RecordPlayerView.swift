@@ -424,6 +424,7 @@ struct RecordPlayerView: View {
 
     private var recordHeader: some View {
         HStack {
+            Spacer()
             Menu {
                 if showLyrics || showQueue {
                     Button("返回唱片") {
@@ -465,8 +466,6 @@ struct RecordPlayerView: View {
                 .buttonStyle(RecordModePressButtonStyle())
                 .accessibilityLabel("返回唱片")
             }
-
-            Spacer()
 
         }
     }

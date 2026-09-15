@@ -281,17 +281,15 @@ enum BeansPlayerDustMode: String, CaseIterable, Identifiable {
 enum BeansGlobalFloatingEffect: String, CaseIterable, Identifiable {
     case off
     case snow
-    case aurora
-    case sparkle
+    case customText
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .off: return "关闭"
-        case .snow: return "轻雪"
-        case .aurora: return "极光"
-        case .sparkle: return "星尘"
+        case .snow: return "雪花"
+        case .customText: return "文字 / Emoji"
         }
     }
 
@@ -299,8 +297,7 @@ enum BeansGlobalFloatingEffect: String, CaseIterable, Identifiable {
         switch self {
         case .off: return "circle.slash"
         case .snow: return "snowflake"
-        case .aurora: return "rays"
-        case .sparkle: return "sparkles"
+        case .customText: return "textformat"
         }
     }
 }
@@ -398,7 +395,7 @@ final class ThemeStore: ObservableObject {
     private var wallpapersRestored = false
 
     private init() {
-        accent = BeansAccent(rawValue: UserDefaults.standard.string(forKey: AccentTheme.key) ?? "") ?? .red
+        accent = BeansAccent(rawValue: UserDefaults.standard.string(forKey: AccentTheme.key) ?? "") ?? .amber
         let savedAccent = UserDefaults.standard.string(forKey: customAccentKey)
         customAccentHex = (savedAccent?.isEmpty ?? true) ? nil : savedAccent
         let legacyBackground = UserDefaults.standard.string(forKey: backgroundKey) ?? ""
