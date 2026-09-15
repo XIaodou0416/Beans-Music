@@ -53,6 +53,32 @@ struct ReferencePlaybackView: View {
     @State private var resumeTask: Task<Void, Never>?
     @State private var lyricTapTask: Task<Void, Never>?
 
+    init(
+        song: Song?,
+        lyrics: [LyricLine],
+        showLyrics: Binding<Bool>,
+        showQueue: Binding<Bool>,
+        onFavorite: @escaping () -> Void,
+        onComments: @escaping () -> Void,
+        onSleepTimer: @escaping () -> Void,
+        onAddToLocalPlaylist: @escaping () -> Void,
+        onDownload: @escaping () -> Void,
+        onPlayerSettings: @escaping () -> Void,
+        onArtist: @escaping () -> Void = {}
+    ) {
+        self.song = song
+        self.lyrics = lyrics
+        self._showLyrics = showLyrics
+        self._showQueue = showQueue
+        self.onFavorite = onFavorite
+        self.onComments = onComments
+        self.onSleepTimer = onSleepTimer
+        self.onAddToLocalPlaylist = onAddToLocalPlaylist
+        self.onDownload = onDownload
+        self.onPlayerSettings = onPlayerSettings
+        self.onArtist = onArtist
+    }
+
     private func layoutEntry(_ part: AppleMusicLayoutPart) -> PlayerLayoutEntry {
         appleLayout.entry(for: part)
     }

@@ -694,11 +694,7 @@ struct PlayerView: View {
         }
         .onChange(of: layoutMode) { enabled in
             if enabled {
-                layoutEditorStyleRaw = coverPlayerStyle.rawValue
-                selectInitialLayoutPart(for: coverPlayerStyle)
-                layoutEditorUsesIPadLandscape = UIDevice.current.userInterfaceIdiom == .pad
-                    && playerViewportSize.width > playerViewportSize.height
-                layoutPreviewShowLyrics = false
+                prepareLayoutEditor()
             }
             syncPlaybackRenderingSuppression()
         }
@@ -4839,6 +4835,15 @@ struct PlayerView: View {
         UIPasteboard.general.string = title
         BeansHaptics.success()
         ToastCenter.shared.show("歌名已复制")
+    }
+
+    private func prepareLayoutEditor() {
+        layoutEditorStyleRaw = coverPlayerStyle.rawValue
+        selectInitialLayoutPart(for: coverPlayerStyle)
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        let isLandscape = playerViewportSize.width > playerViewportSize.height
+        layoutEditorUsesIPadLandscape = isPad && isLandscape
+        layoutPreviewShowLyrics = false
     }
 
     private func toggleLyrics() {
