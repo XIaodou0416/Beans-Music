@@ -17,3 +17,17 @@ Source: https://github.com/jiajia2222/Moumusic
 Reference revision: v1.0.14 (ddfb8f742b56df949c9afb657ae2b9eb72f69c10).
 
 The upstream license and copyright notices remain applicable to the adapted code.
+
+## Record player mode
+
+The record player mode, including its turntable, tonearm, continuous rotation,
+compact metadata, transport controls, mini lyrics, and responsive presentation,
+is adapted from the iOS player implementation in Moumusic by jiajia2222.
+
+Source: https://github.com/jiajia2222/Moumusic
+
+Reference revision: v1.0.14 (ddfb8f742b56df949c9afb657ae2b9eb72f69c10).
+
+The adapted implementation is distributed under the terms of GNU Lesser General
+Public License version 3.0. The upstream copyright and license notices remain
+applicable.

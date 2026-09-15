@@ -526,6 +526,7 @@ struct PlayerView: View {
                     lyrics: lyrics,
                     isPresented: $isPresented,
                     layoutData: vinylLayoutData,
+                    isFavorite: song.map { localLibrary.containsSong($0) } ?? false,
                     onFavorite: {
                         guard let song else { return }
                         toggleLocalFavorite(song)
@@ -3645,6 +3646,7 @@ struct PlayerView: View {
                                     isPresented: .constant(true),
                                     layoutData: vinylLayoutData,
                                     initialShowsLyrics: layoutRenderingShowLyrics,
+                                    isFavorite: song.map { localLibrary.containsSong($0) } ?? false,
                                     onFavorite: {},
                                     onComments: {},
                                     onSettings: {}
@@ -4206,6 +4208,7 @@ struct PlayerView: View {
                         isPresented: .constant(true),
                         layoutData: vinylLayoutData,
                         initialShowsLyrics: layoutRenderingShowLyrics,
+                        isFavorite: song.map { localLibrary.containsSong($0) } ?? false,
                         onFavorite: {},
                         onComments: {},
                         onSettings: {}
