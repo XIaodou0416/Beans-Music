@@ -470,7 +470,7 @@ struct PlayerView: View {
         let _ = theme.accent
         GeometryReader { rootGeometry in
         Group {
-            if isIPadLandscape(in: rootGeometry.size) && showLyrics {
+            if isIPadLandscape(in: rootGeometry.size) && showLyrics && coverPlayerStyle != .record {
                 iPadLandscapeLyricsView
                     .id("landscape-\(layoutRenderingStyle.rawValue)-\(rootGeometry.size.width > rootGeometry.size.height)")
             } else if coverPlayerStyle == .appleMusic {
@@ -520,6 +520,25 @@ struct PlayerView: View {
                     }
                 }
                 .contentShape(Rectangle())
+            } else if coverPlayerStyle == .record {
+                RecordPlayerView(
+                    song: song,
+                    lyrics: lyrics,
+                    isPresented: $isPresented,
+                    onFavorite: {
+                        guard let song else { return }
+                        toggleLocalFavorite(song)
+                    },
+                    onComments: {
+                        if song != nil { showComments = true }
+                    },
+                    onMore: {
+                        showNativeMoreActions = true
+                    },
+                    onSettings: {
+                        openPlayerSettings()
+                    }
+                )
             } else if coverPlayerStyle == .vinyl {
                 GeometryReader { geo in
                     ZStack {
@@ -854,7 +873,7 @@ struct PlayerView: View {
 
                         Group {
                             if (layoutRenderingStyle == .appleMusic && showAppleMusicQueue)
-                                || (layoutRenderingStyle == .vinyl && showVinylQueue) {
+                                || ((layoutRenderingStyle == .vinyl || layoutRenderingStyle == .record) && showVinylQueue) {
                                 AppleMusicCompactQueueContent()
                                     .transition(.opacity)
                             } else {
@@ -897,7 +916,7 @@ struct PlayerView: View {
                     BeansHaptics.tap()
                     seekToLyric(line)
                 }
-            case .vinyl:
+            case .vinyl, .record:
                 iPadLandscapeVinylLyricsColumn(geo: geo)
             case .classic:
                 LyricsSection(
@@ -1015,7 +1034,7 @@ struct PlayerView: View {
         switch layoutRenderingStyle {
         case .appleMusic:
             iPadLandscapeAppleMusicLyricsHeader
-        case .vinyl:
+        case .vinyl, .record:
             iPadLandscapeVinylLyricsHeader
         case .classic:
             // 经典样式沿用播放器页的顶部栏，保证横屏与普通播放器使用同一套点击区域。
@@ -1255,7 +1274,7 @@ struct PlayerView: View {
         switch layoutRenderingStyle {
         case .appleMusic:
             iPadLandscapeAppleMusicControlDeck(bottomInset: bottomInset)
-        case .vinyl, .classic:
+        case .vinyl, .record, .classic:
             iPadLandscapeCompactControlDeck(bottomInset: bottomInset)
         }
     }
@@ -1298,7 +1317,7 @@ struct PlayerView: View {
                 }
                 .frame(maxWidth: .infinity)
                 vinylSideControl(icon: "list.bullet", part: .queue, appliesPortraitLayout: false) {
-                    if layoutRenderingStyle == .vinyl {
+                    if layoutRenderingStyle == .vinyl || layoutRenderingStyle == .record {
                         withAnimation(.easeInOut(duration: 0.22)) {
                             showVinylQueue.toggle()
                         }
@@ -1322,7 +1341,7 @@ struct PlayerView: View {
         .padding(.bottom, max(10, bottomInset + 2))
         .frame(maxWidth: .infinity)
         .simultaneousGesture(
-            layoutRenderingStyle == .vinyl
+            layoutRenderingStyle == .vinyl || layoutRenderingStyle == .record
                 ? AnyGesture(
                     DragGesture(minimumDistance: 24)
                         .onEnded { value in
@@ -1387,7 +1406,7 @@ struct PlayerView: View {
     @ViewBuilder
     private func iPadLandscapeArtwork(size: CGFloat) -> some View {
         VStack(spacing: 14) {
-            if layoutRenderingStyle == .vinyl {
+            if layoutRenderingStyle == .vinyl || layoutRenderingStyle == .record {
                 VinylTurntableView(
                     coverURL: song?.coverURL,
                     isPlaying: playerVisualsActive,
@@ -1644,7 +1663,7 @@ struct PlayerView: View {
         ZStack {
             if song == nil {
                 placeholderView
-            } else if layoutRenderingStyle == .vinyl {
+            } else if layoutRenderingStyle == .vinyl || layoutRenderingStyle == .record {
                 if showVinylQueue {
                     vinylQueuePanel
                         .transition(.opacity)
@@ -1689,7 +1708,7 @@ struct PlayerView: View {
         switch layoutRenderingStyle {
         case .classic, .appleMusic:
             classicAlbumPanel(geo: geo)
-        case .vinyl:
+        case .vinyl, .record:
             vinylAlbumPanel(geo: geo)
         }
     }
@@ -2791,6 +2810,8 @@ struct PlayerView: View {
             return appleShowVolume ? 294 : 238
         case .vinyl:
             return 136
+        case .record:
+            return 136
         case .classic:
             return 148
         }
@@ -2799,7 +2820,7 @@ struct PlayerView: View {
     @ViewBuilder
     private func controlDeck(bottomInset: CGFloat, appliesPortraitLayout: Bool = true) -> some View {
         VStack(spacing: 0) {
-            if layoutRenderingStyle == .vinyl {
+            if layoutRenderingStyle == .vinyl || layoutRenderingStyle == .record {
                 vinylProgress
                     .modifier(Layoutable(
                         part: .progress,
@@ -3619,7 +3640,7 @@ struct PlayerView: View {
                             background
                                 .ignoresSafeArea()
 
-                            if layoutRenderingStyle == .vinyl {
+                            if layoutRenderingStyle == .vinyl || layoutRenderingStyle == .record {
                                 content(geo: previewGeometry)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 controlDeck(bottomInset: previewGeometry.safeAreaInsets.bottom)
@@ -3989,8 +4010,8 @@ struct PlayerView: View {
                 layoutPartChips(AppleMusicLayoutPart.allCases.map { ($0.rawValue, $0) }) { part in
                     appleLayoutPart = part
                 } selected: { appleLayoutPart == $0 }
-            case .vinyl:
-                layoutPartChips(PlayerLayoutPart.vinylEditableCases.map { ($0.rawValue, $0) }) { part in
+        case .vinyl, .record:
+            layoutPartChips(PlayerLayoutPart.vinylEditableCases.map { ($0.rawValue, $0) }) { part in
                     layoutPart = part
                     layoutPartRaw = part.rawValue
                 } selected: { layoutPart == $0 }
@@ -4058,7 +4079,7 @@ struct PlayerView: View {
                 switch layoutEditorStyle {
                 case .appleMusic:
                     return appleLayout.entry(for: appleLayoutPart)
-                case .vinyl:
+                case .vinyl, .record:
                     return vinylLayoutData[layoutPart.rawValue]
                         ?? VinylPlayerLayoutStore.defaultEntry(for: layoutPart)
                 case .classic:
@@ -4076,7 +4097,7 @@ struct PlayerView: View {
                 switch layoutEditorStyle {
                 case .appleMusic:
                     appleLayout.set(value, for: appleLayoutPart)
-                case .vinyl:
+                case .vinyl, .record:
                     vinylLayoutData[layoutPart.rawValue] = value
                 case .classic:
                     layoutData[layoutPart.rawValue] = value
@@ -4101,7 +4122,7 @@ struct PlayerView: View {
         switch style {
         case .appleMusic:
             appleLayoutPart = .cover
-        case .vinyl:
+        case .vinyl, .record:
             layoutPart = .vinylCover
             layoutPartRaw = layoutPart.rawValue
         case .classic:
@@ -4120,7 +4141,7 @@ struct PlayerView: View {
         switch layoutEditorStyle {
         case .appleMusic:
             appleLayout.reset(appleLayoutPart)
-        case .vinyl:
+        case .vinyl, .record:
             vinylLayoutData.removeValue(forKey: layoutPart.rawValue)
         case .classic:
             resetCurrentLayoutPart()
@@ -4135,7 +4156,7 @@ struct PlayerView: View {
         switch layoutEditorStyle {
         case .appleMusic:
             appleLayout.resetAll()
-        case .vinyl:
+        case .vinyl, .record:
             vinylLayoutData = [:]
         case .classic:
             layoutData = [:]
@@ -4410,7 +4431,7 @@ struct PlayerView: View {
         switch layoutEditorStyle {
         case .classic:
             classicStyleDebugControls
-        case .vinyl:
+        case .vinyl, .record:
             vinylStyleDebugControls
         case .appleMusic:
             appleMusicAppearanceControls

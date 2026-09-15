@@ -597,12 +597,13 @@ struct CoverImage: View {
     // 布局尺寸完全由外层固定容器决定；AsyncImage 只放在 overlay 中渲染，
     // 图片加载完成与否都不会改变任何布局尺寸（根治"封面加载后错乱"）。
     var body: some View {
+        let cachedImage = imageLoader.image ?? BeansCoverImageStore.cachedImage(for: url)
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(Color.beansGlassFill)
             .frame(width: size * max(aspectRatio, 0.1), height: size)
             .overlay {
                 Group {
-                    if let image = imageLoader.image {
+                    if let image = cachedImage {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
@@ -659,6 +660,22 @@ final class BeansCoverImageStore {
         return URLSession(configuration: configuration)
     }()
 
+    /// Read decoded memory or disk-backed URLCache data synchronously.
+    /// CoverImage uses this during its first body evaluation to avoid a
+    /// skeleton flash when the cover was already cached.
+    static func cachedImage(for url: URL?) -> UIImage? {
+        guard let url else { return nil }
+        if let image = memoryCache.object(forKey: url as NSURL) {
+            return image
+        }
+        var request = URLRequest(url: url)
+        request.cachePolicy = .returnCacheDataElseLoad
+        guard let response = session.configuration.urlCache?.cachedResponse(for: request),
+              let image = UIImage(data: response.data) else { return nil }
+        memoryCache.setObject(image, forKey: url as NSURL)
+        return image
+    }
+
     /// 分批下载封面，避免首次启动时同时创建大量网络任务。
     static func prefetch(urls: Set<URL>) async {
         let uniqueURLs = Array(urls)
@@ -709,22 +726,17 @@ private final class BeansCoverImageLoader: ObservableObject {
 
     func load(url: URL?) {
         task?.cancel()
-        image = nil
         didFail = false
         loadedURL = url
-        guard let url else { return }
-        if let cached = BeansCoverImageStore.memoryCache.object(forKey: url as NSURL) {
+        guard let url else {
+            image = nil
+            return
+        }
+        if let cached = BeansCoverImageStore.cachedImage(for: url) {
             image = cached
             return
         }
-        var cachedRequest = URLRequest(url: url)
-        cachedRequest.cachePolicy = .returnCacheDataElseLoad
-        if let cachedResponse = BeansCoverImageStore.session.configuration.urlCache?.cachedResponse(for: cachedRequest),
-           let cachedImage = UIImage(data: cachedResponse.data) {
-            BeansCoverImageStore.memoryCache.setObject(cachedImage, forKey: url as NSURL)
-            image = cachedImage
-            return
-        }
+        image = nil
         task = Task { [weak self] in
             do {
                 var request = URLRequest(url: url)

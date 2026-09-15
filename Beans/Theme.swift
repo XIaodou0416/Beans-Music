@@ -282,6 +282,7 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
     case classic
     case appleMusic
     case vinyl
+    case record
 
     var id: String { rawValue }
 
@@ -290,6 +291,7 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
         case .classic: return "经典封面"
         case .appleMusic: return "Apple Music"
         case .vinyl: return beansLocalized("黑胶唱盘", "Vinyl Turntable")
+        case .record: return beansLocalized("唱片模式", "Record Mode")
         }
     }
 
@@ -298,6 +300,7 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
         case .classic: return "封面、歌名和预览歌词分层显示"
         case .appleMusic: return "大封面、细进度条和简洁播放控制"
         case .vinyl: return beansLocalized("黑胶唱片、唱臂和旋转唱盘", "Vinyl record, tonearm, and spinning turntable")
+        case .record: return beansLocalized("参考唱片界面、歌词、队列和播放控制", "Reference record interface with lyrics, queue, and playback controls")
         }
     }
 
@@ -306,6 +309,7 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
         case .classic: return "square.stack"
         case .appleMusic: return "music.note.list"
         case .vinyl: return "opticaldisc"
+        case .record: return "record.circle"
         }
     }
 
