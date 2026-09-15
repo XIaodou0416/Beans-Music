@@ -525,15 +525,13 @@ struct PlayerView: View {
                     song: song,
                     lyrics: lyrics,
                     isPresented: $isPresented,
+                    layoutData: vinylLayoutData,
                     onFavorite: {
                         guard let song else { return }
                         toggleLocalFavorite(song)
                     },
                     onComments: {
                         if song != nil { showComments = true }
-                    },
-                    onMore: {
-                        showNativeMoreActions = true
                     },
                     onSettings: {
                         openPlayerSettings()
@@ -3640,7 +3638,22 @@ struct PlayerView: View {
                             background
                                 .ignoresSafeArea()
 
-                            if layoutRenderingStyle == .vinyl || layoutRenderingStyle == .record {
+                            if layoutRenderingStyle == .record {
+                                RecordPlayerView(
+                                    song: song,
+                                    lyrics: lyrics,
+                                    isPresented: .constant(true),
+                                    layoutData: vinylLayoutData,
+                                    initialShowsLyrics: layoutRenderingShowLyrics,
+                                    onFavorite: {},
+                                    onComments: {},
+                                    onSettings: {}
+                                )
+                                .id("record-layout-preview-\(layoutRenderingShowLyrics)")
+                                .environmentObject(player)
+                                .environmentObject(clock)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else if layoutRenderingStyle == .vinyl {
                                 content(geo: previewGeometry)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 controlDeck(bottomInset: previewGeometry.safeAreaInsets.bottom)
@@ -4011,7 +4024,7 @@ struct PlayerView: View {
                     appleLayoutPart = part
                 } selected: { appleLayoutPart == $0 }
         case .vinyl, .record:
-            layoutPartChips(PlayerLayoutPart.vinylEditableCases.map { ($0.rawValue, $0) }) { part in
+            layoutPartChips(PlayerLayoutPart.vinylEditableCases.map { (layoutPartTitle($0), $0) }) { part in
                     layoutPart = part
                     layoutPartRaw = part.rawValue
                 } selected: { layoutPart == $0 }
@@ -4021,6 +4034,24 @@ struct PlayerView: View {
                     layoutPartRaw = part.rawValue
                 } selected: { layoutPart == $0 }
             }
+        }
+    }
+
+    private func layoutPartTitle(_ part: PlayerLayoutPart) -> String {
+        guard layoutEditorStyle == .record else { return part.rawValue }
+        switch part {
+        case .vinylCover: return "唱片"
+        case .vinylTitle: return "歌名歌手"
+        case .vinylLyricsHeader: return "歌词顶部"
+        case .vinylLyricsText: return "歌词内容"
+        case .progress: return "进度条"
+        case .controls: return "控制行"
+        case .loop: return "播放模式"
+        case .previous: return "上一首"
+        case .playPause: return "播放暂停"
+        case .next: return "下一首"
+        case .queue: return "播放列表"
+        default: return part.rawValue
         }
     }
 
@@ -4168,11 +4199,31 @@ struct PlayerView: View {
             let canvasSize = CGSize(width: 844, height: 390)
             let scale = min((geometry.size.width - 16) / canvasSize.width, (geometry.size.height - 16) / canvasSize.height) * 0.96
             ZStack {
-                iPadLandscapeLyricsView
+                if layoutEditorStyle == .record {
+                    RecordPlayerView(
+                        song: song,
+                        lyrics: lyrics,
+                        isPresented: .constant(true),
+                        layoutData: vinylLayoutData,
+                        initialShowsLyrics: layoutRenderingShowLyrics,
+                        onFavorite: {},
+                        onComments: {},
+                        onSettings: {}
+                    )
+                    .id("record-ipad-layout-preview-\(layoutRenderingShowLyrics)")
+                    .environmentObject(player)
+                    .environmentObject(clock)
                     .frame(width: canvasSize.width, height: canvasSize.height)
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .scaleEffect(max(0.01, scale))
                     .frame(width: canvasSize.width * scale, height: canvasSize.height * scale)
+                } else {
+                    iPadLandscapeLyricsView
+                        .frame(width: canvasSize.width, height: canvasSize.height)
+                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .scaleEffect(max(0.01, scale))
+                        .frame(width: canvasSize.width * scale, height: canvasSize.height * scale)
+                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .clipped()
@@ -4514,7 +4565,7 @@ struct PlayerView: View {
 
     private var vinylStyleDebugControls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("黑胶样式调试")
+            Text(layoutEditorStyle == .record ? "唱片模式调试" : "黑胶样式调试")
                 .font(BeansFont.appFont(13, .bold))
                 .foregroundStyle(palette.text)
             layoutDebugToggle("左右滑动切歌", isOn: $swipeSwitchSong,

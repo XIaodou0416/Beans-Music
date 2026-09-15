@@ -12,13 +12,35 @@ struct RecordPlayerView: View {
     let song: Song?
     let lyrics: [LyricLine]
     @Binding var isPresented: Bool
+    let layoutData: [String: PlayerLayoutEntry]
+    let initialShowsLyrics: Bool
     let onFavorite: () -> Void
     let onComments: () -> Void
-    let onMore: () -> Void
     let onSettings: () -> Void
 
     @State private var showsLyrics = false
     @State private var showsQueue = false
+
+    init(
+        song: Song?,
+        lyrics: [LyricLine],
+        isPresented: Binding<Bool>,
+        layoutData: [String: PlayerLayoutEntry] = [:],
+        initialShowsLyrics: Bool = false,
+        onFavorite: @escaping () -> Void,
+        onComments: @escaping () -> Void,
+        onSettings: @escaping () -> Void
+    ) {
+        self.song = song
+        self.lyrics = lyrics
+        self._isPresented = isPresented
+        self.layoutData = layoutData
+        self.initialShowsLyrics = initialShowsLyrics
+        self.onFavorite = onFavorite
+        self.onComments = onComments
+        self.onSettings = onSettings
+        self._showsLyrics = State(initialValue: initialShowsLyrics)
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -58,7 +80,13 @@ struct RecordPlayerView: View {
         VStack {
             HStack(spacing: 12) {
                 Button {
-                    isPresented = false
+                    if showsLyrics {
+                        showsLyrics = false
+                    } else if showsQueue {
+                        showsQueue = false
+                    } else {
+                        isPresented = false
+                    }
                 } label: {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 15, weight: .semibold))
@@ -77,20 +105,12 @@ struct RecordPlayerView: View {
                             .background(.white.opacity(0.12), in: Circle())
                     }
                     .accessibilityLabel("收藏")
-
-                    Button(action: onMore) {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 18, weight: .medium))
-                            .frame(width: 40, height: 40)
-                            .background(.white.opacity(0.12), in: Circle())
-                    }
-                    .accessibilityLabel("更多操作")
-                    .disabled(song.identityKey.isEmpty)
                 }
             }
             .foregroundStyle(.white.opacity(0.9))
             .padding(.horizontal, 20)
             .padding(.top, 12)
+            .modifier(recordLayout(.vinylLyricsHeader))
             Spacer()
         }
         .allowsHitTesting(true)
@@ -110,10 +130,12 @@ struct RecordPlayerView: View {
                 onNextTrack: { player.next() },
                 onPreviousTrack: { player.previous() }
             )
+            .modifier(recordLayout(.vinylCover))
             .frame(maxWidth: .infinity)
 
             recordMetadata
                 .padding(.top, 10)
+                .modifier(recordLayout(.vinylTitle))
 
             recordMiniLyrics
                 .frame(maxWidth: 420, maxHeight: .infinity)
@@ -197,11 +219,14 @@ struct RecordPlayerView: View {
     private var recordControls: some View {
         VStack(spacing: 12) {
             ReferenceScrubber()
+                .modifier(recordLayout(.progress))
             HStack(spacing: 0) {
                 recordButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
                     player.togglePlayMode()
                 }
+                .modifier(recordLayout(.loop))
                 recordButton(icon: "backward.fill") { player.previous() }
+                    .modifier(recordLayout(.previous))
                 Button { player.togglePlayPause() } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 22, weight: .bold))
@@ -211,11 +236,15 @@ struct RecordPlayerView: View {
                         .shadow(color: .black.opacity(0.28), radius: 12, y: 4)
                 }
                 .frame(maxWidth: .infinity)
+                .modifier(recordLayout(.playPause))
                 recordButton(icon: "forward.fill") { player.next() }
+                    .modifier(recordLayout(.next))
                 recordButton(icon: showsQueue ? "xmark" : "list.bullet", active: showsQueue) {
                     showsQueue.toggle()
                 }
+                .modifier(recordLayout(.queue))
             }
+            .modifier(recordLayout(.controls))
         }
         .foregroundStyle(.white)
     }
@@ -232,9 +261,6 @@ struct RecordPlayerView: View {
 
     private var lyricsPage: some View {
         VStack(spacing: 0) {
-            recordPageHeader(title: "歌词") {
-                showsLyrics = false
-            }
             AppleMusicLyricsSection(
                 lyrics: lyrics,
                 primary: .white,
@@ -244,6 +270,7 @@ struct RecordPlayerView: View {
                 player.seekPrecisely(to: LyricTiming.seekTime(for: line, userOffset: 0))
             }
             .padding(.horizontal, 14)
+            .modifier(recordLayout(.vinylLyricsText))
             recordControls
                 .padding(.horizontal, 20)
                 .padding(.bottom, 22)
@@ -258,6 +285,7 @@ struct RecordPlayerView: View {
             }
             AppleMusicCompactQueueContent()
                 .padding(.horizontal, 20)
+                .modifier(recordLayout(.queue))
             recordControls
                 .padding(.horizontal, 20)
                 .padding(.bottom, 22)
@@ -265,21 +293,8 @@ struct RecordPlayerView: View {
         .padding(.top, 62)
     }
 
-    private func recordPageHeader(title: String, onBack: @escaping () -> Void) -> some View {
-        HStack(spacing: 10) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 38, height: 38)
-                    .background(.white.opacity(0.12), in: Circle())
-            }
-            Text(title)
-                .font(BeansFont.appFont(18, .bold))
-            Spacer()
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 10)
+    private func recordLayout(_ part: PlayerLayoutPart) -> some ViewModifier {
+        RecordPlayerLayoutTransform(entry: layoutData[part.rawValue] ?? VinylPlayerLayoutStore.defaultEntry(for: part))
     }
 
     private var commentGesture: some Gesture {
@@ -290,5 +305,17 @@ struct RecordPlayerView: View {
                       song != nil else { return }
                 onComments()
             }
+    }
+}
+
+private struct RecordPlayerLayoutTransform: ViewModifier {
+    let entry: PlayerLayoutEntry
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(entry.scale)
+            .rotationEffect(.degrees(entry.rotation))
+            .opacity(entry.opacity)
+            .offset(x: entry.x, y: entry.y)
     }
 }
