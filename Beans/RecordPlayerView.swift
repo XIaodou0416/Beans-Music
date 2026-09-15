@@ -1,8 +1,8 @@
-import AVKit
 import SwiftUI
 
 // Adapted under LGPL-3.0. See THIRD_PARTY_NOTICES.md.
 struct RecordPlayerView: View {
+    @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
     @Environment(\.colorScheme) private var colorScheme
@@ -18,6 +18,9 @@ struct RecordPlayerView: View {
     let onSettings: () -> Void
 
     @State private var showLyrics = false
+    @State private var showQueue = false
+    @State private var showQualityPicker = false
+    @AppStorage("beans.audioQuality") private var playbackQualityRaw = BeansAudioQuality.hires.rawValue
 
     init(
         song: Song?,
@@ -60,6 +63,21 @@ struct RecordPlayerView: View {
         }
         .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.22), value: showLyrics)
+        .sheet(isPresented: $showQueue) {
+            QueueView()
+                .environmentObject(player)
+                .environmentObject(theme)
+        }
+        .sheet(isPresented: $showQualityPicker) {
+            RecordModeQualityPickerSheet(song: song)
+                .environmentObject(player)
+        }
+        .overlay(alignment: .top) {
+            recordHeader
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .zIndex(10)
+        }
     }
 
     private var backdrop: some View {
@@ -107,14 +125,6 @@ struct RecordPlayerView: View {
                 .modifier(recordLayout(.controls))
         }
         .padding(.horizontal, 16)
-        .overlay(alignment: .topLeading) {
-            if showLyrics {
-                backToRecordButton
-                    .padding(.top, 18)
-                    .padding(.leading, 20)
-                    .modifier(recordLayout(.vinylLyricsHeader))
-            }
-        }
     }
 
     private func landscapeLayout(size: CGSize) -> some View {
@@ -148,11 +158,6 @@ struct RecordPlayerView: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
-        .overlay(alignment: .topLeading) {
-            closeButton
-                .padding(.top, 10)
-                .padding(.leading, 12)
-        }
     }
 
     private func regularLayout(size: CGSize) -> some View {
@@ -180,11 +185,6 @@ struct RecordPlayerView: View {
         }
         .padding(.horizontal, 48)
         .padding(.vertical, size.height < 500 ? 24 : 40)
-        .overlay(alignment: .topLeading) {
-            closeButton
-                .padding(.top, 20)
-                .padding(.leading, 20)
-        }
     }
 
     private func turntable(size: CGFloat) -> some View {
@@ -213,7 +213,9 @@ struct RecordPlayerView: View {
                 .font(BeansFont.appFont(11))
                 .foregroundStyle(.white.opacity(0.5))
             HStack(spacing: 8) {
-                metadataButton(title: "音质", icon: "waveform", action: onSettings)
+                metadataButton(title: "音质：\(BeansAudioQuality(rawValue: playbackQualityRaw)?.displayName ?? BeansAudioQuality.hires.displayName)", icon: "waveform") {
+                    showQualityPicker = true
+                }
                 metadataButton(title: "评论", icon: "text.bubble", action: onComments)
             }
         }
@@ -243,8 +245,6 @@ struct RecordPlayerView: View {
 
     private var controls: some View {
         HStack(spacing: 0) {
-            circleButton(icon: isFavorite ? "heart.fill" : "heart", size: 15, tint: isFavorite ? .red : nil, action: onFavorite)
-                .frame(maxWidth: .infinity)
             circleButton(icon: "shuffle", size: 14, tint: player.playMode == .shuffle ? .red : nil) {
                 player.setPlayMode(player.playMode == .shuffle ? .sequential : .shuffle)
             }
@@ -255,7 +255,16 @@ struct RecordPlayerView: View {
                 .frame(maxWidth: .infinity)
             circleButton(icon: "forward.fill", size: 16) { player.next() }
                 .frame(maxWidth: .infinity)
-            RecordModeRoutePickerButton()
+            Button {
+                showQueue = true
+            } label: {
+                Image(systemName: "list.bullet")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 40, height: 40)
+                    .background(.white.opacity(0.1), in: Circle())
+            }
+            .buttonStyle(RecordModePressButtonStyle())
                 .frame(maxWidth: .infinity)
             circleButton(icon: repeatIcon, size: 14, tint: repeatIsActive ? .red : nil, action: cycleRepeatMode)
                 .frame(maxWidth: .infinity)
@@ -347,33 +356,44 @@ struct RecordPlayerView: View {
         .modifier(recordLayout(.vinylLyricsText))
     }
 
-    private var backToRecordButton: some View {
-        Button { showLyrics = false } label: {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
-                .frame(width: 36, height: 36)
-                .background(.white.opacity(0.12), in: Circle())
-        }
-        .buttonStyle(RecordModePressButtonStyle())
-        .accessibilityLabel("返回唱片")
-    }
-
-    private var closeButton: some View {
-        Button {
-            if showLyrics {
-                showLyrics = false
-            } else {
-                isPresented = false
+    private var recordHeader: some View {
+        HStack {
+            Menu {
+                if showLyrics {
+                    Button("返回唱片") {
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            showLyrics = false
+                        }
+                    }
+                }
+                Button("播放器设置", action: onSettings)
+                Button("查看评论", action: onComments)
+                Divider()
+                Button("关闭播放器", role: .destructive) {
+                    isPresented = false
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-        } label: {
-            Image(systemName: showLyrics ? "chevron.left" : "chevron.down")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
-                .frame(width: 36, height: 36)
-                .background(.white.opacity(0.12), in: Circle())
+            .buttonStyle(RecordModePressButtonStyle())
+            .accessibilityLabel("更多设置")
+
+            Spacer()
+
+            Button(action: onFavorite) {
+                Image(systemName: isFavorite ? "heart.fill" : "heart")
+                    .font(.system(size: 21, weight: .medium))
+                    .foregroundStyle(isFavorite ? .red : .white.opacity(0.88))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(RecordModePressButtonStyle())
+            .accessibilityLabel(isFavorite ? "取消收藏" : "收藏")
         }
-        .buttonStyle(RecordModePressButtonStyle())
     }
 
     private func isPhoneLandscape(size: CGSize) -> Bool {
@@ -397,6 +417,64 @@ struct RecordPlayerView: View {
                     isPresented = false
                 }
             }
+    }
+}
+
+private struct RecordModeQualityPickerSheet: View {
+    @EnvironmentObject private var player: PlayerManager
+    @Environment(\.dismiss) private var dismiss
+
+    let song: Song?
+    @AppStorage("beans.audioQuality") private var selectedRaw = BeansAudioQuality.hires.rawValue
+
+    var body: some View {
+        BeansNavigationStack {
+            List {
+                Section("当前歌曲") {
+                    Text(song?.name ?? "未播放歌曲")
+                        .lineLimit(2)
+                    Text("可用音质会随当前平台和音源变化")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("选择播放音质") {
+                    ForEach(BeansAudioQuality.allCases) { quality in
+                        Button {
+                            selectedRaw = quality.rawValue
+                            player.retryCurrent()
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(quality.displayName)
+                                Spacer()
+                                if selectedRaw == quality.rawValue {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(Color.beansAmber)
+                                }
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                        .frame(minHeight: 44)
+                    }
+                }
+
+                Section {
+                    Text("如果选定音质不可用，播放器会自动回退到当前音源支持的较低音质。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("播放音质")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
     }
 }
 
@@ -837,29 +915,5 @@ private struct RecordModeRotationState: Equatable, Sendable {
     func currentAngle(at date: Date) -> Double {
         guard isAnimating else { return stoppedAngle }
         return baseAngle + max(0, date.timeIntervalSince(startedAt)) * degreesPerSecond
-    }
-}
-
-private struct RecordModeRoutePickerButton: View {
-    var body: some View {
-        RecordModeRoutePickerRepresentable()
-            .frame(width: 40, height: 40)
-            .background(.white.opacity(0.1), in: Circle())
-            .accessibilityLabel("AirPlay")
-    }
-}
-
-private struct RecordModeRoutePickerRepresentable: UIViewRepresentable {
-    func makeUIView(context: Context) -> AVRoutePickerView {
-        let view = AVRoutePickerView()
-        view.backgroundColor = .clear
-        view.tintColor = UIColor.white.withAlphaComponent(0.8)
-        view.activeTintColor = .systemRed
-        view.prioritizesVideoDevices = false
-        return view
-    }
-
-    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
-        uiView.tintColor = UIColor.white.withAlphaComponent(0.8)
     }
 }

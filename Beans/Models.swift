@@ -13,7 +13,7 @@ enum BeansAudioQuality: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .standard: return beansLocalized("标准", "Standard")
-        case .higher: return beansLocalized("较高", "Higher")
+        case .higher: return beansLocalized("更高", "Higher")
         case .exhigh: return beansLocalized("极高", "Very High")
         case .lossless: return beansLocalized("无损", "Lossless")
         case .hires: return "Hi-Res"

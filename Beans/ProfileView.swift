@@ -113,9 +113,6 @@ struct ProfileView: View {
                 Text("我的")
                     .font(BeansFont.appFont(30, .bold))
                     .foregroundStyle(Color.beansLabel)
-            Text(isEnglish ? "Customize your avatar and nickname" : "自定义头像与昵称")
-                    .font(BeansFont.appFont(13))
-                    .foregroundStyle(Color.beansComment)
             }
             Spacer()
             HStack(spacing: 10) {
@@ -142,12 +139,6 @@ struct ProfileView: View {
                     showSettings = true
                 }
             }
-            Text(LocalizedStringKey(isEnglish ? "Customize your avatar and nickname" : "自定义头像与昵称"))
-                .font(BeansFont.appFont(12, .medium))
-                .foregroundStyle(Color.beansComment)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-                .truncationMode(.tail)
             Rectangle()
                 .fill(Color.beansLabel.opacity(0.10))
                 .frame(height: 1)
