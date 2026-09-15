@@ -64,11 +64,11 @@ struct CommentsSheet: View {
     }
 
     private enum CommentSection: String, CaseIterable, Identifiable {
-        case latest
         case hot
+        case latest
 
         var id: String { rawValue }
-        var title: String { self == .latest ? "最新评论" : "热门评论" }
+        var title: String { self == .hot ? "热门评论" : "最新评论" }
     }
 
     var body: some View {

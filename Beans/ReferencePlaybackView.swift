@@ -759,11 +759,10 @@ struct AppleMusicPlaybackControls: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(active ? accent : primary.opacity(0.78))
-                .frame(width: 44, height: 44)
-                .background(.white.opacity(0.08), in: Circle())
-                .frame(maxWidth: .infinity)
+                .frame(width: 58, height: 58)
+                .background { BeansGlass(shape: Circle(), forceLiquid: true) }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

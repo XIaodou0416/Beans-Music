@@ -717,6 +717,14 @@ private final class BeansCoverImageLoader: ObservableObject {
             image = cached
             return
         }
+        var cachedRequest = URLRequest(url: url)
+        cachedRequest.cachePolicy = .returnCacheDataElseLoad
+        if let cachedResponse = BeansCoverImageStore.session.configuration.urlCache?.cachedResponse(for: cachedRequest),
+           let cachedImage = UIImage(data: cachedResponse.data) {
+            BeansCoverImageStore.memoryCache.setObject(cachedImage, forKey: url as NSURL)
+            image = cachedImage
+            return
+        }
         task = Task { [weak self] in
             do {
                 var request = URLRequest(url: url)

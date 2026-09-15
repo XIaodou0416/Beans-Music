@@ -229,28 +229,6 @@ struct PlayerView: View {
         return false
     }
 
-    private var fullScreenLayoutEditorBinding: Binding<Bool> {
-        Binding(
-            get: { usesFullScreenLayoutEditor && layoutMode },
-            set: { newValue in
-                if usesFullScreenLayoutEditor {
-                    layoutMode = newValue
-                }
-            }
-        )
-    }
-
-    private var sheetLayoutEditorBinding: Binding<Bool> {
-        Binding(
-            get: { !usesFullScreenLayoutEditor && layoutMode },
-            set: { newValue in
-                if !usesFullScreenLayoutEditor {
-                    layoutMode = newValue
-                }
-            }
-        )
-    }
-
     private var landscapeApplePrimaryColor: Color {
         if appleMusicPrimaryHex.hasPrefix("#"), let color = Color(hex: appleMusicPrimaryHex) {
             return color
@@ -696,14 +674,14 @@ struct PlayerView: View {
         .onDisappear {
             releasePlaybackRenderingSuppression()
         }
-        .fullScreenCover(isPresented: fullScreenLayoutEditorBinding) {
-            iOS26LayoutPreviewEditor
-                .environmentObject(theme)
-                .environmentObject(player)
-                .environmentObject(clock)
-        }
-        .sheet(isPresented: sheetLayoutEditorBinding) {
-            unifiedPlayerLayoutEditor
+        .fullScreenCover(isPresented: $layoutMode) {
+            Group {
+                if usesFullScreenLayoutEditor {
+                    iOS26LayoutPreviewEditor
+                } else {
+                    unifiedPlayerLayoutEditor
+                }
+            }
             .environmentObject(theme)
             .environmentObject(player)
             .environmentObject(clock)
@@ -724,11 +702,11 @@ struct PlayerView: View {
             if let song {
                 CommentsSheetHost(
                     song: song,
-                    presentation: coverPlayerStyle == .appleMusic ? .reference : .standard
+                    presentation: .reference
                 )
             }
         }
-        .fullScreenCover(isPresented: $showPlayerSettings) {
+        .sheet(isPresented: $showPlayerSettings) {
             PlayerSettingsSheet(layoutMode: $layoutMode, onDismiss: closePlayerSettings)
                 .environmentObject(theme)
                 .environmentObject(player)
@@ -1718,7 +1696,6 @@ struct PlayerView: View {
 
     private func vinylAlbumPanel(geo: GeometryProxy) -> some View {
         let size = min(304, min(geo.size.width * 0.72, geo.size.height * 0.48))
-        let showPreview = !lyrics.isEmpty
         return VStack(spacing: 12) {
             vinylCompactHeader
                 .padding(.horizontal, 18)
@@ -1741,17 +1718,6 @@ struct PlayerView: View {
                 data: $vinylLayoutData,
                 defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .vinylCover)
             ))
-
-            if showPreview {
-                vinylMiniLyricsPreview
-                    .padding(.top, 0)
-                    .modifier(Layoutable(
-                        part: .vinylPreviewLyric,
-                        enabled: layoutMode && !layoutEditorUsesIPadLandscape,
-                        data: $vinylLayoutData,
-                        defaultEntry: VinylPlayerLayoutStore.defaultEntry(for: .vinylPreviewLyric)
-                    ))
-            }
 
             Spacer(minLength: 0)
         }
@@ -1848,37 +1814,6 @@ struct PlayerView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var vinylMiniLyricsPreview: some View {
-        let rows = lyricPreviewRows
-        return VStack(spacing: 5) {
-            if rows.isEmpty {
-                Text("暂无歌词，点击唱盘查看完整歌词")
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(albumPreviewDimForeground)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-            } else {
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, item in
-                    HStack(spacing: 6) {
-                        Text(item.isCurrent ? "●" : "·")
-                            .font(BeansFont.appFont(8))
-                            .foregroundStyle(item.isCurrent ? albumPreviewLyricColor : albumPreviewDimColor.opacity(0.5))
-                        Text(item.text)
-                            .font(BeansFont.appFont(12, item.isCurrent ? .semibold : .regular))
-                            .foregroundStyle(item.isCurrent ? albumPreviewForeground : albumPreviewDimForeground)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-        }
-        .frame(height: 5 * 18 + 4 * 3)
-        .padding(.horizontal, 40)
-        .contentShape(Rectangle())
-        .onTapGesture { toggleLyrics() }
     }
 
     private func vinylLyricsPanel(geo: GeometryProxy) -> some View {
@@ -4104,7 +4039,7 @@ struct PlayerView: View {
             layoutSlider("Y", value: unifiedLayoutEntryBinding.y, range: unifiedLayoutYRange)
             layoutSlider("大小", value: unifiedLayoutEntryBinding.scale, range: 0.3...1.5, step: 0.05, format: "%.2f")
             layoutSlider("旋转", value: unifiedLayoutEntryBinding.rotation, range: -180...180, step: 1)
-            layoutSlider("透明度", value: unifiedLayoutEntryBinding.opacity, range: 0.15...1, step: 0.05, format: "%.2f")
+            layoutSlider("透明度", value: unifiedLayoutEntryBinding.opacity, range: 0...1, step: 0.05, format: "%.2f")
         }
         .padding(12)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -4249,7 +4184,7 @@ struct PlayerView: View {
             layoutSlider("Y", value: appleMusicEntryBinding.y, range: -240...240)
             layoutSlider("大小", value: appleMusicEntryBinding.scale, range: 0.3...1.5, step: 0.05, format: "%.2f")
             layoutSlider("旋转", value: appleMusicEntryBinding.rotation, range: -180...180, step: 1)
-            layoutSlider("透明度", value: appleMusicEntryBinding.opacity, range: 0.15...1, step: 0.05, format: "%.2f")
+            layoutSlider("透明度", value: appleMusicEntryBinding.opacity, range: 0...1, step: 0.05, format: "%.2f")
         }
     }
 

@@ -117,6 +117,21 @@ struct DiscoverView: View {
     @State private var playlistSearchLoading = false
     @State private var playlistSearchTask: Task<Void, Never>?
 
+    init() {
+        let savedRaw = UserDefaults.standard.string(forKey: "beans.homeSource")
+            ?? SearchProvider.netease.rawValue
+        let savedSource = SearchProvider(rawValue: savedRaw) ?? .netease
+        let snapshot = DiscoverCache.shared.cached(for: savedSource)
+        _topLists = State(initialValue: snapshot?.topLists ?? [])
+        _dailySongs = State(initialValue: snapshot?.dailySongs ?? [])
+        _newAlbums = State(initialValue: snapshot?.newAlbums ?? [])
+        _topArtists = State(initialValue: snapshot?.topArtists ?? [])
+        _personalized = State(initialValue: snapshot?.personalized ?? [])
+        _qqTopLists = State(initialValue: snapshot?.qqTopLists ?? [])
+        _kugouTopLists = State(initialValue: snapshot?.kugouTopLists ?? [])
+        _loading = State(initialValue: snapshot == nil || snapshot?.isEmpty == true)
+    }
+
     var body: some View {
         let _ = theme.accent
         BeansNavigationStackWithPath(path: $navigationPath) {
