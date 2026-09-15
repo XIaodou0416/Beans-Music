@@ -374,7 +374,7 @@ struct Playlist: Identifiable, Hashable, Codable {
     }
 }
 
-struct TopList: Identifiable, Hashable {
+struct TopList: Identifiable, Hashable, Codable {
     let id: Int
     let name: String
     let coverURL: URL?
@@ -391,7 +391,7 @@ struct TopList: Identifiable, Hashable {
 }
 
 /// QQ 峰尖榜总览项
-struct QQTopInfo: Identifiable, Hashable {
+struct QQTopInfo: Identifiable, Hashable, Codable {
     let id: Int
     let name: String
     let subTitle: String
@@ -400,7 +400,7 @@ struct QQTopInfo: Identifiable, Hashable {
 }
 
 /// 酷狗官方排行榜总览项
-struct KugouTopInfo: Identifiable, Hashable {
+struct KugouTopInfo: Identifiable, Hashable, Codable {
     let id: Int
     let name: String
     let updateFrequency: String

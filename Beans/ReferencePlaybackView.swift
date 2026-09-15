@@ -736,9 +736,6 @@ struct AppleMusicPlaybackControls: View {
 
                 HStack(spacing: 24) {
                     actionButton(icon: lyricsActive && !queueActive ? "quote.bubble.fill" : "quote.bubble", active: lyricsActive && !queueActive, action: onLyrics)
-                    actionButton(icon: player.playMode.icon, active: player.playMode == .shuffle) {
-                        player.togglePlayMode()
-                    }
                     actionButton(icon: "text.bubble", action: onComments)
                     actionButton(icon: "list.bullet", active: queueActive, action: onQueue)
                 }
@@ -750,16 +747,6 @@ struct AppleMusicPlaybackControls: View {
         .padding(.horizontal, 24)
         .padding(.top, 10)
         .padding(.bottom, max(14, bottomInset + 4))
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 25)
-                .onEnded { value in
-                    guard value.translation.height < -54,
-                          abs(value.translation.height) > abs(value.translation.width) else { return }
-                    BeansHaptics.medium()
-                    onComments()
-                },
-            including: .subviews
-        )
     }
 
     private func actionButton(
@@ -772,10 +759,11 @@ struct AppleMusicPlaybackControls: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(active ? accent : primary.opacity(0.78))
-                .frame(width: 58, height: 58)
-                .background { BeansGlass(shape: Circle(), forceLiquid: true) }
+                .frame(width: 44, height: 44)
+                .background(.white.opacity(0.08), in: Circle())
+                .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

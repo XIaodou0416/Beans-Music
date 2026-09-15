@@ -22,10 +22,17 @@ private func beansCommentCountText(songName: String, platform: String? = nil, co
 
 // MARK: - 评论区
 
+enum CommentsSheetPresentation: Equatable {
+    case standard
+    case reference
+}
+
 struct CommentsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
+    @Environment(\.dismiss) private var dismiss
     let song: Song
-    var isExpanded = false
+    var isExpanded: Bool
+    var presentation: CommentsSheetPresentation
 
     @State private var page: NetEaseAPI.SongCommentPage?
     @State private var qqHotComments: [SongComment] = []
@@ -39,11 +46,22 @@ struct CommentsSheet: View {
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var offset = 0
-    @State private var selectedSection: CommentSection = .latest
+    @State private var selectedSection: CommentSection
 
     private let limit = 30
     /// QQ 音乐每页条数（接口单页上限 25）
     private let qqPageSize = 25
+
+    init(
+        song: Song,
+        isExpanded: Bool = false,
+        presentation: CommentsSheetPresentation = .standard
+    ) {
+        self.song = song
+        self.isExpanded = isExpanded
+        self.presentation = presentation
+        _selectedSection = State(initialValue: presentation == .reference ? .hot : .latest)
+    }
 
     private enum CommentSection: String, CaseIterable, Identifiable {
         case latest
@@ -54,34 +72,155 @@ struct CommentsSheet: View {
     }
 
     var body: some View {
-        let _ = theme.accent
-        ZStack {
-            commentsBackground
-            BeansNavigationStack {
-                Group {
-                    if loading {
-                        LoadingStateView()
-                    } else if let errorMessage {
-                        ErrorStateView(message: errorMessage) {
-                            Task { await load(reset: true) }
-                        }
-                    } else if song.source == .kugou {
-                        kugouCommentList
-                    } else if song.source == .qq {
-                        qqCommentList
-                    } else if let page {
-                        if page.hot.isEmpty && page.comments.isEmpty {
-                            EmptyStateView(icon: "bubble.left", text: "暂无评论")
-                        } else {
-                            neteaseCommentList(page)
-                        }
-                    }
-                }
-                .navigationTitle("评论")
-                .navigationBarTitleDisplayMode(.inline)
+        Group {
+            if presentation == .reference {
+                referenceCommentsView
+            } else {
+                standardCommentsView
             }
         }
         .task { await load(reset: true) }
+    }
+
+    private var standardCommentsView: some View {
+        let _ = theme.accent
+        return ZStack {
+            commentsBackground
+            BeansNavigationStack {
+                commentsContent
+                    .navigationTitle("评论")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+    }
+
+    private var referenceCommentsView: some View {
+        BeansNavigationStack {
+            Group {
+                if loading {
+                    ProgressView("正在加载评论")
+                } else if let errorMessage {
+                    VStack(spacing: 14) {
+                        referenceEmptyState(
+                            title: "评论加载失败",
+                            detail: errorMessage,
+                            icon: "wifi.exclamationmark"
+                        )
+                        Button("重新加载") {
+                            Task { await load(reset: true) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                } else if selectedComments.isEmpty {
+                    referenceEmptyState(title: "暂无评论", detail: nil, icon: "text.bubble")
+                } else {
+                    VStack(spacing: 0) {
+                        Picker("评论排序", selection: $selectedSection) {
+                            ForEach(CommentSection.allCases) { section in
+                                Text(section.title).tag(section)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                        .padding(.vertical, 10)
+
+                        List {
+                            ForEach(selectedComments) { comment in
+                                ReferenceCommentRow(comment: comment)
+                            }
+                            if selectedSection == .latest && canLoadMore {
+                                Button("加载更多") {
+                                    Task { await loadNextPage() }
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .listStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("评论")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var commentsContent: some View {
+        if loading {
+            LoadingStateView()
+        } else if let errorMessage {
+            ErrorStateView(message: errorMessage) {
+                Task { await load(reset: true) }
+            }
+        } else if song.source == .kugou {
+            kugouCommentList
+        } else if song.source == .qq {
+            qqCommentList
+        } else if let page {
+            if page.hot.isEmpty && page.comments.isEmpty {
+                EmptyStateView(icon: "bubble.left", text: "暂无评论")
+            } else {
+                neteaseCommentList(page)
+            }
+        }
+    }
+
+    private var selectedComments: [SongComment] {
+        switch song.source {
+        case .netease:
+            guard let page else { return [] }
+            return selectedSection == .hot ? page.hot : page.comments
+        case .qq:
+            return selectedSection == .hot ? qqHotComments : qqLatestComments
+        case .kugou:
+            return selectedSection == .hot ? kugouHotComments : kugouLatestComments
+        }
+    }
+
+    private var canLoadMore: Bool {
+        switch song.source {
+        case .netease:
+            return (page?.comments.count ?? 0) >= limit
+        case .qq:
+            return qqTotal <= 0 || qqLatestComments.count < qqTotal
+        case .kugou:
+            return kugouTotal <= 0 || kugouLatestComments.count < kugouTotal
+        }
+    }
+
+    private func loadNextPage() async {
+        switch song.source {
+        case .netease:
+            await loadMore()
+        case .qq:
+            await loadQQMore()
+        case .kugou:
+            kugouPageNum += 1
+            await load(reset: false)
+        }
+    }
+
+    private func referenceEmptyState(title: String, detail: String?, icon: String) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            Text(title)
+                .font(.headline)
+            if let detail {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(32)
     }
 
     @ViewBuilder
@@ -335,12 +474,13 @@ struct CommentsSheet: View {
 /// 导致展开后背景仍然保持液态效果。
 struct CommentsSheetHost: View {
     let song: Song
+    var presentation: CommentsSheetPresentation = .standard
 
     var body: some View {
         if #available(iOS 16, *) {
-            CommentsSheetDetentHost(song: song)
+            CommentsSheetDetentHost(song: song, presentation: presentation)
         } else {
-            CommentsSheet(song: song)
+            CommentsSheet(song: song, presentation: presentation)
         }
     }
 }
@@ -348,20 +488,62 @@ struct CommentsSheetHost: View {
 @available(iOS 16, *)
 private struct CommentsSheetDetentHost: View {
     let song: Song
+    let presentation: CommentsSheetPresentation
     @State private var selectedDetent: PresentationDetent = .medium
 
     var body: some View {
-        let content = CommentsSheet(song: song, isExpanded: selectedDetent == .large)
+        let content = CommentsSheet(
+            song: song,
+            isExpanded: selectedDetent == .large,
+            presentation: presentation
+        )
             .presentationDetents([.medium, .large], selection: $selectedDetent)
             .presentationDragIndicator(.visible)
 
-        if #available(iOS 16.4, *) {
-            content
-                .presentationBackground(.clear)
-                .presentationCornerRadius(28)
+        if presentation == .standard {
+            if #available(iOS 16.4, *) {
+                content
+                    .presentationBackground(.clear)
+                    .presentationCornerRadius(28)
+            } else {
+                content
+            }
         } else {
             content
         }
+    }
+}
+
+private struct ReferenceCommentRow: View {
+    let comment: SongComment
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(comment.nickname)
+                    .font(BeansFont.appFont(15, .medium))
+                    .lineLimit(1)
+                Text(Self.dateFormatter.string(from: comment.time))
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("赞 \(comment.likedCount)")
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(comment.content)
+                .font(BeansFont.appFont(15))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 4)
     }
 }
 

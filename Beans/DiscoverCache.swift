@@ -7,7 +7,7 @@ final class DiscoverCache {
     static let shared = DiscoverCache()
 
     /// 单个平台的主页完整数据快照
-    struct Snapshot {
+    struct Snapshot: Codable {
         var dailySongs: [Song] = []
         var newAlbums: [Album] = []
         var topArtists: [Artist] = []
@@ -31,9 +31,16 @@ final class DiscoverCache {
     /// QQ 个性化推荐会随账号听歌行为变化，使用较短缓存避免首页长期展示旧结果。
     let qqRecommendationTTL: TimeInterval = 15 * 60
 
+    private let storageKey = "beans.discover.cache.v2"
     private var store: [String: Snapshot] = [:]
 
-    private init() {}
+    private init() {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let snapshots = try? JSONDecoder().decode([String: Snapshot].self, from: data) else {
+            return
+        }
+        store = snapshots
+    }
 
     func cached(for source: SearchProvider) -> Snapshot? {
         store[source.rawValue]
@@ -41,6 +48,12 @@ final class DiscoverCache {
 
     func save(_ snapshot: Snapshot, for source: SearchProvider) {
         store[source.rawValue] = snapshot
+        persist()
+    }
+
+    private func persist() {
+        guard let data = try? JSONEncoder().encode(store) else { return }
+        UserDefaults.standard.set(data, forKey: storageKey)
     }
 
     /// 返回当前进程中已经加载过的主页快照，供启动预加载复用已有封面地址。

@@ -17,6 +17,7 @@ struct PlayerView: View {
     @AppStorage("beans.player.lastLyricsPage") private var lastLyricsPage = false
     @State private var showQueue = false
     @State private var showAppleMusicQueue = false
+    @State private var showVinylQueue = false
     @State private var showSleepTimer = false
     @State private var showAddToPlaylist = false
     @State private var showComments = false
@@ -541,7 +542,6 @@ struct PlayerView: View {
                     }
                 }
                 .contentShape(Rectangle())
-                .simultaneousGesture(commentSwipeGesture, including: .all)
             } else if coverPlayerStyle == .vinyl {
                 GeometryReader { geo in
                     ZStack {
@@ -722,7 +722,10 @@ struct PlayerView: View {
         }
         .sheet(isPresented: $showComments) {
             if let song {
-                CommentsSheetHost(song: song)
+                CommentsSheetHost(
+                    song: song,
+                    presentation: coverPlayerStyle == .appleMusic ? .reference : .standard
+                )
             }
         }
         .fullScreenCover(isPresented: $showPlayerSettings) {
@@ -872,7 +875,8 @@ struct PlayerView: View {
                         ))
 
                         Group {
-                            if layoutRenderingStyle == .appleMusic && showAppleMusicQueue {
+                            if (layoutRenderingStyle == .appleMusic && showAppleMusicQueue)
+                                || (layoutRenderingStyle == .vinyl && showVinylQueue) {
                                 AppleMusicCompactQueueContent()
                                     .transition(.opacity)
                             } else {
@@ -1316,7 +1320,13 @@ struct PlayerView: View {
                 }
                 .frame(maxWidth: .infinity)
                 vinylSideControl(icon: "list.bullet", part: .queue, appliesPortraitLayout: false) {
-                    showQueue = true
+                    if layoutRenderingStyle == .vinyl {
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            showVinylQueue.toggle()
+                        }
+                    } else {
+                        showQueue = true
+                    }
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -1334,7 +1344,7 @@ struct PlayerView: View {
         .padding(.bottom, max(10, bottomInset + 2))
         .frame(maxWidth: .infinity)
         .simultaneousGesture(
-            layoutRenderingStyle == .vinyl || layoutRenderingStyle == .appleMusic
+            layoutRenderingStyle == .vinyl
                 ? AnyGesture(
                     DragGesture(minimumDistance: 24)
                         .onEnded { value in
@@ -1393,18 +1403,6 @@ struct PlayerView: View {
                 }
             },
             onComments: { showComments = true }
-        )
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { value in
-                    guard !showLyrics,
-                          !layoutMode,
-                          value.translation.height < -54,
-                          abs(value.translation.height) > abs(value.translation.width),
-                          song != nil else { return }
-                    BeansHaptics.medium()
-                    showComments = true
-                }
         )
     }
 
@@ -1669,7 +1667,10 @@ struct PlayerView: View {
             if song == nil {
                 placeholderView
             } else if layoutRenderingStyle == .vinyl {
-                if layoutRenderingShowLyrics {
+                if showVinylQueue {
+                    vinylQueuePanel
+                        .transition(.opacity)
+                } else if layoutRenderingShowLyrics {
                     vinylLyricsPanel(geo: geo)
                         .transition(.opacity)
                 } else {
@@ -1686,6 +1687,17 @@ struct PlayerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.22), value: layoutRenderingShowLyrics)
+        .animation(.easeInOut(duration: 0.22), value: showVinylQueue)
+    }
+
+    private var vinylQueuePanel: some View {
+        VStack(spacing: 12) {
+            vinylCompactHeader
+                .padding(.horizontal, 18)
+            AppleMusicCompactQueueContent()
+        }
+        .padding(.horizontal, 32)
+        .padding(.bottom, 4)
     }
 
     /// 封面尺寸：固定算法，与布局时序无关
@@ -2970,8 +2982,15 @@ struct PlayerView: View {
                 vinylTransportControl(icon: "forward.fill", size: 25, part: .next, appliesPortraitLayout: appliesPortraitLayout) {
                     player.next()
                 }
-                vinylSideControl(icon: "list.bullet", part: .queue, appliesPortraitLayout: appliesPortraitLayout) {
-                    showQueue = true
+                vinylSideControl(
+                    icon: "list.bullet",
+                    active: showVinylQueue,
+                    part: .queue,
+                    appliesPortraitLayout: appliesPortraitLayout
+                ) {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        showVinylQueue.toggle()
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
