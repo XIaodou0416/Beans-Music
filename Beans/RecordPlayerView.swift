@@ -16,6 +16,10 @@ struct RecordPlayerView: View {
     let onFavorite: () -> Void
     let onComments: () -> Void
     let onSettings: () -> Void
+    let onSleepTimer: () -> Void
+    let onAddToLocalPlaylist: () -> Void
+    let onDownload: () -> Void
+    let downloadFeatureUnlocked: Bool
 
     @State private var showLyrics = false
     @State private var showQueue = false
@@ -31,7 +35,11 @@ struct RecordPlayerView: View {
         isFavorite: Bool = false,
         onFavorite: @escaping () -> Void,
         onComments: @escaping () -> Void,
-        onSettings: @escaping () -> Void
+        onSettings: @escaping () -> Void,
+        onSleepTimer: @escaping () -> Void = {},
+        onAddToLocalPlaylist: @escaping () -> Void = {},
+        onDownload: @escaping () -> Void = {},
+        downloadFeatureUnlocked: Bool = false
     ) {
         self.song = song
         self.lyrics = lyrics
@@ -42,6 +50,10 @@ struct RecordPlayerView: View {
         self.onFavorite = onFavorite
         self.onComments = onComments
         self.onSettings = onSettings
+        self.onSleepTimer = onSleepTimer
+        self.onAddToLocalPlaylist = onAddToLocalPlaylist
+        self.onDownload = onDownload
+        self.downloadFeatureUnlocked = downloadFeatureUnlocked
         self._showLyrics = State(initialValue: initialShowsLyrics)
     }
 
@@ -63,11 +75,6 @@ struct RecordPlayerView: View {
         }
         .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.22), value: showLyrics)
-        .sheet(isPresented: $showQueue) {
-            QueueView()
-                .environmentObject(player)
-                .environmentObject(theme)
-        }
         .sheet(isPresented: $showQualityPicker) {
             RecordModeQualityPickerSheet(song: song)
                 .environmentObject(player)
@@ -102,7 +109,11 @@ struct RecordPlayerView: View {
         let artworkDimension = max(150, min(size.width - 72, size.height * 0.43, 310))
         return VStack(spacing: 16) {
             Spacer().frame(height: 34)
-            if showLyrics {
+            if showQueue {
+                recordQueuePage
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
+            } else if showLyrics {
                 lyricsColumn
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .transition(.opacity)
@@ -131,7 +142,11 @@ struct RecordPlayerView: View {
         let artworkDimension = min(190, max(120, size.height - 175))
         return VStack(spacing: 6) {
             HStack(spacing: 18) {
-                if showLyrics {
+                if showQueue {
+                    recordQueuePage
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .transition(.opacity)
+                } else if showLyrics {
                     lyricsColumn
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -162,26 +177,40 @@ struct RecordPlayerView: View {
 
     private func regularLayout(size: CGSize) -> some View {
         let artworkDimension = max(180, min(330, size.width * 0.30, size.height - 300))
-        return HStack(spacing: 0) {
-            VStack(spacing: 22) {
-                Spacer()
-                turntable(size: artworkDimension)
-                    .modifier(recordLayout(.vinylCover))
-                trackMetadata
-                    .modifier(recordLayout(.vinylTitle))
+        return Group {
+            if showQueue {
                 VStack(spacing: 14) {
+                    recordQueuePage
                     RecordModeScrubber()
                         .frame(maxWidth: 380)
                         .modifier(recordLayout(.progress))
                     controls
                         .modifier(recordLayout(.controls))
                 }
-                Spacer()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                HStack(spacing: 0) {
+                    VStack(spacing: 22) {
+                        Spacer()
+                        turntable(size: artworkDimension)
+                            .modifier(recordLayout(.vinylCover))
+                        trackMetadata
+                            .modifier(recordLayout(.vinylTitle))
+                        VStack(spacing: 14) {
+                            RecordModeScrubber()
+                                .frame(maxWidth: 380)
+                                .modifier(recordLayout(.progress))
+                            controls
+                                .modifier(recordLayout(.controls))
+                        }
+                        Spacer()
+                    }
+                    .padding(.trailing, 30)
+                    .frame(maxWidth: .infinity)
+                    lyricsColumn
+                        .frame(maxWidth: .infinity)
+                }
             }
-            .padding(.trailing, 30)
-            .frame(maxWidth: .infinity)
-            lyricsColumn
-                .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 48)
         .padding(.vertical, size.height < 500 ? 24 : 40)
@@ -245,8 +274,8 @@ struct RecordPlayerView: View {
 
     private var controls: some View {
         HStack(spacing: 0) {
-            circleButton(icon: "shuffle", size: 14, tint: player.playMode == .shuffle ? .red : nil) {
-                player.setPlayMode(player.playMode == .shuffle ? .sequential : .shuffle)
+            circleButton(icon: player.playMode.icon, size: 14, tint: player.playMode == .sequential ? nil : .red) {
+                player.togglePlayMode()
             }
             .frame(maxWidth: .infinity)
             circleButton(icon: "backward.fill", size: 16) { player.previous() }
@@ -256,7 +285,12 @@ struct RecordPlayerView: View {
             circleButton(icon: "forward.fill", size: 16) { player.next() }
                 .frame(maxWidth: .infinity)
             Button {
-                showQueue = true
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    showQueue.toggle()
+                    if showQueue {
+                        showLyrics = false
+                    }
+                }
             } label: {
                 Image(systemName: "list.bullet")
                     .font(.system(size: 17, weight: .medium))
@@ -265,8 +299,6 @@ struct RecordPlayerView: View {
                     .background(.white.opacity(0.1), in: Circle())
             }
             .buttonStyle(RecordModePressButtonStyle())
-                .frame(maxWidth: .infinity)
-            circleButton(icon: repeatIcon, size: 14, tint: repeatIsActive ? .red : nil, action: cycleRepeatMode)
                 .frame(maxWidth: .infinity)
         }
     }
@@ -324,23 +356,34 @@ struct RecordPlayerView: View {
         .buttonStyle(RecordModePressButtonStyle())
     }
 
-    private var repeatIcon: String {
-        player.playMode == .repeatOne ? "repeat.1" : "repeat"
-    }
-
-    private var repeatIsActive: Bool {
-        player.playMode == .repeatAll || player.playMode == .repeatOne
-    }
-
-    private func cycleRepeatMode() {
-        switch player.playMode {
-        case .repeatAll:
-            player.setPlayMode(.repeatOne)
-        case .repeatOne:
-            player.setPlayMode(.sequential)
-        case .shuffle, .sequential:
-            player.setPlayMode(.repeatAll)
+    private var recordQueuePage: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 11) {
+                CoverImage(url: song?.coverURL, size: 46, cornerRadius: 10)
+                    .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(song?.name ?? "未在播放")
+                        .font(BeansFont.appFont(16, .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(song?.artists ?? "")
+                        .font(BeansFont.appFont(12, .medium))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button(action: onFavorite) {
+                    Image(systemName: isFavorite ? "heart.fill" : "heart")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(isFavorite ? .red : .white.opacity(0.86))
+                        .frame(width: 38, height: 38)
+                }
+                .buttonStyle(RecordModePressButtonStyle())
+            }
+            .frame(maxWidth: 520)
+            AppleMusicCompactQueueContent()
         }
+        .padding(.horizontal, 8)
     }
 
     private var lyricsColumn: some View {
@@ -359,16 +402,20 @@ struct RecordPlayerView: View {
     private var recordHeader: some View {
         HStack {
             Menu {
-                if showLyrics {
+                if showLyrics || showQueue {
                     Button("返回唱片") {
                         withAnimation(.easeInOut(duration: 0.22)) {
                             showLyrics = false
+                            showQueue = false
                         }
                     }
                 }
+                Button("定时关闭", action: onSleepTimer)
+                Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                if downloadFeatureUnlocked {
+                    Button("下载歌曲", action: onDownload)
+                }
                 Button("播放器设置", action: onSettings)
-                Button("查看评论", action: onComments)
-                Divider()
                 Button("关闭播放器", role: .destructive) {
                     isPresented = false
                 }
@@ -616,7 +663,10 @@ private struct RecordModeTurntableView: View {
     var body: some View {
         let armHeight = size * 0.68
         ZStack(alignment: .top) {
-            TimelineView(.animation(paused: !isPlaying || isDragging || isTransitioningTrack || reduceMotion)) { timeline in
+            TimelineView(.animation(
+                minimumInterval: 1.0 / 30.0,
+                paused: !isPlaying || isDragging || isTransitioningTrack || reduceMotion
+            )) { timeline in
                 RecordModeDiscView(coverURL: coverURL, size: size)
                     .rotationEffect(.degrees(rotationState.currentAngle(at: timeline.date)))
             }

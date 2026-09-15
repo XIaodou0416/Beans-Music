@@ -1018,7 +1018,7 @@ final class QQMusicAPI {
         switch quality {
         case .standard: return "M500"
         case .higher, .exhigh: return "M800"
-        case .lossless, .hires: return "F000"
+        case .lossless, .hires, .master: return "F000"
         }
     }
 

@@ -536,7 +536,17 @@ struct PlayerView: View {
                     },
                     onSettings: {
                         openPlayerSettings()
-                    }
+                    },
+                    onSleepTimer: {
+                        showSleepTimer = true
+                    },
+                    onAddToLocalPlaylist: {
+                        showAddToLocalPlaylist = true
+                    },
+                    onDownload: {
+                        showDownloadPicker = true
+                    },
+                    downloadFeatureUnlocked: downloadFeatureUnlocked
                 )
             } else if coverPlayerStyle == .vinyl {
                 GeometryReader { geo in

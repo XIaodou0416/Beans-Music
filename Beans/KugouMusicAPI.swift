@@ -1298,7 +1298,7 @@ final class KugouMusicAPI {
             quality = "320"
         case .lossless:
             quality = "flac"
-        case .hires:
+        case .hires, .master:
             quality = "high"
         }
 
@@ -1356,7 +1356,7 @@ final class KugouMusicAPI {
             quality = "320"
         case .lossless:
             quality = "flac"
-        case .hires:
+        case .hires, .master:
             quality = "hires"
         }
         let userId = auth.userId.isEmpty ? "0" : auth.userId
@@ -2201,7 +2201,7 @@ final class KugouMusicAPI {
         let requested = requestedQuality ?? BeansAudioQuality.current
         let order: [String]
         switch requested {
-        case .hires:
+        case .hires, .master:
             order = ["hires", "lossless", "exhigh", "standard"]
         case .lossless:
             order = ["lossless", "exhigh", "standard"]

@@ -7,6 +7,7 @@ enum BeansAudioQuality: String, CaseIterable, Identifiable {
     case exhigh
     case lossless
     case hires
+    case master
 
     var id: String { rawValue }
 
@@ -17,11 +18,19 @@ enum BeansAudioQuality: String, CaseIterable, Identifiable {
         case .exhigh: return beansLocalized("极高", "Very High")
         case .lossless: return beansLocalized("无损", "Lossless")
         case .hires: return "Hi-Res"
+        case .master: return "Master"
         }
     }
 
     /// 网易云 songURL 的 level 参数
-    var level: String { rawValue }
+    var level: String {
+        switch self {
+        case .master:
+            return "jymaster"
+        default:
+            return rawValue
+        }
+    }
 
     /// 当前官方播放音质（默认 Hi-Res；服务端不可用时由各平台接口自行降级）。
     static var current: BeansAudioQuality {
