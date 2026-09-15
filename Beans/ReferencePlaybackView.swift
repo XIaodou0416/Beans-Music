@@ -32,7 +32,7 @@ struct ReferencePlaybackView: View {
     let onAddToLocalPlaylist: () -> Void
     let onDownload: () -> Void
     let onPlayerSettings: () -> Void
-    let onArtist: () -> Void = {}
+    let onArtist: () -> Void
 
     @AppStorage("beans.lyricOffset") private var lyricOffset = 0.0
     @AppStorage("beans.appleMusic.showVolume") private var showVolumeControl = false
