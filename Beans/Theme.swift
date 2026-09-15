@@ -315,10 +315,14 @@ enum BeansCoverPlayerStyle: String, CaseIterable, Identifiable {
 
     /// 播放器设置中显示全部可用的封面样式。
     static var availableCases: [BeansCoverPlayerStyle] {
-        allCases
+        allCases.filter { $0 != .vinyl }
     }
 
     static func resolved(rawValue: String) -> BeansCoverPlayerStyle {
+        // 旧版本保存的黑胶样式统一迁移到现在的唱片模式。
+        if rawValue == BeansCoverPlayerStyle.vinyl.rawValue {
+            return .record
+        }
         let stored = BeansCoverPlayerStyle(rawValue: rawValue) ?? .appleMusic
         return availableCases.contains(stored) ? stored : .appleMusic
     }

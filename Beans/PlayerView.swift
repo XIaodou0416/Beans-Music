@@ -3980,7 +3980,7 @@ struct PlayerView: View {
 
     private var layoutEditorStylePicker: some View {
         HStack(spacing: 8) {
-            ForEach(BeansCoverPlayerStyle.allCases) { style in
+            ForEach(BeansCoverPlayerStyle.availableCases) { style in
                 let selected = layoutEditorStyle == style
                 Button {
                     layoutEditorStyleRaw = style.rawValue
