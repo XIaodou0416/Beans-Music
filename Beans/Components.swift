@@ -217,7 +217,7 @@ struct GlobalFloatingEffectView: View {
                             let y = fall * canvasSize.height - canvasSize.height * 0.08
                             let drift = sin(time * 0.32 + seed * 1.7) * canvasSize.width * 0.012
                             let text = Text("❄️").font(.system(size: max(10, min(30, size * 14))))
-                            context.draw(text.foregroundStyle(.white.opacity(0.24)), at: CGPoint(x: x + drift, y: y))
+                            context.draw(text.foregroundColor(.white.opacity(0.24)), at: CGPoint(x: x + drift, y: y))
                         }
                     }
                 }
