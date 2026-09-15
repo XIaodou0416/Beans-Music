@@ -175,8 +175,9 @@ struct GlassBackdrop: View {
                     .blur(radius: 110)
                     .offset(x: -160, y: 340)
             }
-            if uiStyle != .nativeClean, !settingsPerformanceMode {
+            if !settingsPerformanceMode {
                 GlobalFloatingEffectView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(false)
             }
         }

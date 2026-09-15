@@ -166,8 +166,8 @@ struct ProfileView: View {
                     }
                     customAvatarCard
                     communityCard
-                    profileVersionFooter
                     donationCard
+                    profileVersionFooter
                 }
                 .padding(.horizontal, isNativeClean ? 24 : 16)
                 .padding(.top, isNativeClean ? 14 : 8)
@@ -1297,8 +1297,6 @@ struct SettingsView: View {
     @State private var backupIncludeAccounts = false
     @State private var backupIncludeWallpapers = false
     @State private var backupMessage: String?
-    /// 日志
-    @State private var showLogViewer = false
     @State private var showAccountHub = false
     @State private var showFeedback = false
     @State private var checkingUpdate = false
@@ -1564,8 +1562,6 @@ struct SettingsView: View {
                         equalizerSection
                         changelogSection
                         backupSection
-                        logSection
-                        footerNote
                         settingsSupportSection
                     }
                     .padding(.horizontal, 16)
@@ -1627,10 +1623,6 @@ struct SettingsView: View {
                 backupMessage = "导出失败：\(error.localizedDescription)"
                 ToastCenter.shared.show("导出失败")
             }
-        }
-        .sheet(isPresented: $showLogViewer) {
-            LogViewerSheet(importedText: nil)
-                .environmentObject(theme)
         }
         .sheet(isPresented: $showSourceManager) {
             ThirdPartySourceManagerSheet()
@@ -3143,58 +3135,6 @@ struct SettingsView: View {
         return nil
     }
 
-    /// 日志：查看 / 清空（导出入口放在日志查看器右上角）
-    private var logSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "日志")
-            VStack(spacing: 8) {
-                HStack(spacing: 10) {
-                    logActionButton(icon: "doc.text.magnifyingglass", title: "查看日志") {
-                        showLogViewer = true
-                    }
-                    logActionButton(icon: "trash", title: "清空日志") {
-                        BeansLogger.shared.clear()
-                        ToastCenter.shared.show("日志已清空")
-                    }
-                }
-            }
-            .padding(14)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            }
-        }
-    }
-
-    private func logActionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                Text(LocalizedStringKey(title))
-            }
-            .font(BeansFont.appFont(13, .semibold))
-            .foregroundStyle(Color.beansLabel)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 13, style: .continuous))
-            }
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.95))
-    }
-
-    private var footerNote: some View {
-        VStack(spacing: 6) {
-            Text("Beans Music · 仅供学习交流，纯 AI 实现此应用")
-                .font(BeansFont.appFont(11))
-                .foregroundStyle(Color.beansComment.opacity(0.7))
-            Text("接入网易云音乐、QQ 音乐等公开接口")
-                .font(BeansFont.appFont(11))
-                .foregroundStyle(Color.beansComment.opacity(0.7))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 4)
-    }
-
     private var settingsSupportSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: "帮助与说明")
@@ -3236,7 +3176,21 @@ struct SettingsView: View {
                         .font(BeansFont.appFont(14, .semibold))
                         .foregroundStyle(Color.beansLabel)
                 }
-                Text("Beans Music 仅作为个人音乐播放与管理工具，不提供音乐文件下载或存储服务。歌曲、封面、歌词、评论和歌单等内容来自第三方平台，版权归原权利人所有。请遵守所在地区法律法规及各平台服务条款，仅使用你有权访问的内容。由于网络、接口、设备和系统差异，部分功能的可用性可能发生变化。")
+                Text("""
+                Beans Music 是一款面向个人使用的音乐播放与管理工具。本应用本身不提供音乐版权内容，不以任何形式替代网易云音乐、QQ 音乐、酷狗音乐或其他内容平台，也不对第三方平台上的歌曲、专辑、歌单、封面、歌词、评论、艺人资料、播放地址和其他信息主张所有权。应用展示的内容来自用户主动选择的平台接口、公开页面或用户已经拥有访问权限的服务，具体内容、可用范围、地区限制、会员限制、试听限制和播放质量均由相应平台及其权利人决定。
+
+                使用本应用前，请确认你所在地区允许以当前方式访问和播放相关内容，并遵守适用的法律法规、版权规则、网络安全要求、隐私保护要求以及各内容平台的用户协议、服务条款和开发者政策。用户不得利用本应用绕过付费、会员、地区、设备、账号、版权或其他访问限制，不得批量抓取、传播、出售、出租、公开分享、重新上传、修改或以其他方式滥用受版权保护的内容。对于需要登录、授权、购买或填写个人密钥的功能，用户应当自行确认授权来源、使用范围和有效期限，并对自己输入、保存和使用的信息负责。
+
+                本应用可能提供播放、歌词同步、歌单整理、收藏、评论查看、下载入口、音质选择、后台播放、车载控制、主题效果和其他辅助功能。相关功能仅用于改善用户对合法可访问内容的管理与播放体验，并不保证对所有歌曲、平台、账号、网络环境、设备型号、系统版本或音频格式持续有效。第三方接口可能发生变更、限流、维护、下线、返回异常或停止服务；歌曲可能因为版权调整、账号状态变化、地区政策、平台规则或资源失效而无法搜索、播放、下载或同步。应用开发者不承诺任何特定歌曲、专辑、歌单、歌词、评论、封面、音质或播放地址一定存在，也不承诺服务始终连续、准确、完整、及时或没有错误。
+
+                网络请求可能受到运营商、局域网、防火墙、代理、DNS、系统权限、服务器状态和设备电量等因素影响。播放过程中出现缓冲、断流、暂停、音量变化、音频路线切换、歌词延迟、封面缺失、评论加载失败、后台被系统挂起或控制中心显示不完整等情况，可能是设备系统、网络环境、第三方服务或系统资源管理造成的。用户应根据实际情况检查网络、账号权限、系统设置和平台状态，不应将本应用视为稳定性、可用性或数据完整性的唯一保障。
+
+                本应用可能在设备本地保存必要的播放偏好、布局设置、收藏信息、缓存内容、反馈记录和诊断状态，以便恢复界面或改善体验。用户应当保护自己的设备、账号、授权信息和本地数据，不要在反馈、日志、截图或公开渠道中提交密码、Cookie、Token、私钥、音源密钥、身份证件、支付信息或其他敏感资料。任何因用户主动披露敏感信息、使用不安全网络、安装未经确认的签名包、导入未知文件、使用第三方插件或向他人共享授权信息而产生的风险，应由用户自行承担。
+
+                本应用不对第三方服务的内容、合法性、准确性、完整性、适用性、连续性或安全性作出保证，也不对因平台接口变化、资源失效、网络中断、设备故障、系统升级、账号异常、误操作、数据丢失、内容侵权、服务中断或间接损失造成的后果承担责任。用户在使用下载、分享、缓存、录音、投屏或其他可能产生本地副本的功能时，应自行确认是否拥有相应权利，并承担保存、传输和使用这些文件的全部责任。任何本地文件都应仅在法律允许和权利人授权的范围内使用。
+
+                如果你不同意本免责声明、相关法律法规或第三方平台规则，请停止使用本应用并删除本地数据。继续使用本应用，即表示你已阅读、理解并接受上述说明，并愿意自行承担使用过程中的全部责任。免责声明不影响用户依据适用法律享有的不可排除权利；如本说明部分内容与强制性法律规定冲突，应以适用法律为准，其余内容仍然有效。应用功能、隐私处理方式、第三方接口和本说明可能随版本更新而调整，用户应在使用重要功能前查看当前版本的说明。
+                """)
                     .font(BeansFont.appFont(11, .regular))
                     .foregroundStyle(Color.beansComment)
                     .fixedSize(horizontal: false, vertical: true)

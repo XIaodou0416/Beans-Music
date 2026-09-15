@@ -798,12 +798,12 @@ struct AppleMusicPlaybackControls: View {
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
-                HStack(spacing: 24) {
+                HStack(spacing: 44) {
                     actionButton(icon: lyricsActive && !queueActive ? "quote.bubble.fill" : "quote.bubble", active: lyricsActive && !queueActive, action: onLyrics)
                     actionButton(icon: "text.bubble", action: onComments)
                     actionButton(icon: "list.bullet", active: queueActive, action: onQueue)
                 }
-                .frame(maxWidth: 420)
+                .frame(maxWidth: 500)
                 .modifier(AppleMusicLayoutTransform(entry: layout.actions))
             }
             .modifier(AppleMusicLayoutTransform(entry: layout.container))

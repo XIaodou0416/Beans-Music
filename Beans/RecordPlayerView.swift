@@ -22,6 +22,7 @@ struct RecordPlayerView: View {
     let onAddToLocalPlaylist: () -> Void
     let onDownload: () -> Void
     let downloadFeatureUnlocked: Bool
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var storedDownloadFeatureUnlocked = false
 
     @State private var showLyrics = false
     @State private var showQueue = false
@@ -283,6 +284,10 @@ struct RecordPlayerView: View {
         }
     }
 
+    private var canDownload: Bool {
+        downloadFeatureUnlocked || storedDownloadFeatureUnlocked
+    }
+
     private var controls: some View {
         HStack(spacing: 0) {
             circleButton(icon: player.playMode.icon, size: 14, tint: player.playMode == .sequential ? nil : .red) {
@@ -430,6 +435,9 @@ struct RecordPlayerView: View {
                 }
                 Button("定时关闭", action: onSleepTimer)
                 Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                if canDownload {
+                    Button("下载歌曲", action: onDownload)
+                }
                 Button("播放器设置", action: onSettings)
             } label: {
                 Image(systemName: "ellipsis")
@@ -460,15 +468,6 @@ struct RecordPlayerView: View {
 
             Spacer()
 
-            Button(action: onFavorite) {
-                Image(systemName: isFavorite ? "heart.fill" : "heart")
-                    .font(.system(size: 21, weight: .medium))
-                    .foregroundStyle(isFavorite ? .red : .white.opacity(0.88))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(RecordModePressButtonStyle())
-            .accessibilityLabel(isFavorite ? "取消收藏" : "收藏")
         }
     }
 
