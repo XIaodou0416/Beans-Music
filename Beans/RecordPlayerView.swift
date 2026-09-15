@@ -293,6 +293,23 @@ struct RecordPlayerView: View {
         .padding(.top, 62)
     }
 
+    private func recordPageHeader(title: String, onBack: @escaping () -> Void) -> some View {
+        HStack(spacing: 10) {
+            Button(action: onBack) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 38, height: 38)
+                    .background(.white.opacity(0.12), in: Circle())
+            }
+            Text(title)
+                .font(BeansFont.appFont(18, .bold))
+            Spacer()
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 10)
+    }
+
     private func recordLayout(_ part: PlayerLayoutPart) -> some ViewModifier {
         RecordPlayerLayoutTransform(entry: layoutData[part.rawValue] ?? VinylPlayerLayoutStore.defaultEntry(for: part))
     }
