@@ -76,7 +76,6 @@ struct RootView: View {
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
-    @AppStorage("beans.duoEffectEnabled") private var duoEffectEnabled = false
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
     @AppStorage("beans.remoteAnnouncement.imageURL") private var remoteAnnouncementImageURL = ""
@@ -165,7 +164,6 @@ struct RootView: View {
                 value: isPadLandscape
             )
         }
-        .modifier(BeansDuoEffectModifier(isEnabled: duoEffectEnabled))
         .background {
             TabBarAppearanceConfigurator(
                 hidesSystemTabBarOnLegacy: !usesSystemFloatingTabBar,
@@ -547,7 +545,10 @@ struct RootView: View {
                 GlassBackdrop()
 
                 HStack(spacing: 0) {
-                    iPadSidebar
+                    iPadSidebar(
+                        safeAreaInsets: proxy.safeAreaInsets,
+                        reservesMiniPlayerSpace: player.currentSong != nil
+                    )
                         .frame(width: min(max(proxy.size.width * 0.17, 176), 228))
 
                     VStack(spacing: 0) {
@@ -568,7 +569,8 @@ struct RootView: View {
                             )
                                 .environmentObject(player.clock)
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
+                                .padding(.top, 10)
+                                .padding(.bottom, max(10, proxy.safeAreaInsets.bottom + 4))
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
@@ -580,7 +582,10 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.25), value: player.currentSong?.identityKey)
     }
 
-    private var iPadSidebar: some View {
+    private func iPadSidebar(
+        safeAreaInsets: EdgeInsets,
+        reservesMiniPlayerSpace: Bool
+    ) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("音乐")
@@ -644,7 +649,11 @@ struct RootView: View {
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 24)
+            .padding(.top, max(24, safeAreaInsets.top + 10))
+            .padding(
+                .bottom,
+                max(24, safeAreaInsets.bottom + (reservesMiniPlayerSpace ? 72 : 10))
+            )
         }
         .task(id: "\(auth.user?.uid ?? 0)-\(qqAuth.isLoggedIn)-\(kugouAuth.userId)") {
             await loadSidebarPlaylists()

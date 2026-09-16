@@ -439,7 +439,6 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     func setPlayMode(_ mode: PlayMode) {
-        guard playMode != mode else { return }
         playMode = mode
         buildPlayOrder()
     }

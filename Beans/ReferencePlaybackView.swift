@@ -851,39 +851,39 @@ struct AppleMusicPlaybackControls: View {
 
 struct AppleMusicCompactQueueContent: View {
     @EnvironmentObject private var player: PlayerManager
+    @State private var lastModeActivation = Date.distantPast
+    @State private var lastActivatedMode: PlayMode?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             HStack(spacing: 10) {
                 modeButton(
+                    mode: .sequential,
                     icon: "arrow.right",
                     label: "顺序播放",
                     isActive: player.playMode == .sequential
-                ) {
-                    player.setPlayMode(.sequential)
-                }
+                )
                 modeButton(
+                    mode: .shuffle,
                     icon: "shuffle",
                     label: "随机播放",
                     isActive: player.playMode == .shuffle
-                ) {
-                    player.setPlayMode(.shuffle)
-                }
+                )
                 modeButton(
+                    mode: .repeatAll,
                     icon: "repeat",
                     label: "列表循环",
                     isActive: player.playMode == .repeatAll
-                ) {
-                    player.setPlayMode(.repeatAll)
-                }
+                )
                 modeButton(
+                    mode: .repeatOne,
                     icon: "repeat.1",
                     label: "单曲循环",
                     isActive: player.playMode == .repeatOne
-                ) {
-                    player.setPlayMode(.repeatOne)
-                }
+                )
             }
+            .frame(maxWidth: .infinity)
+            .zIndex(10)
 
             HStack(alignment: .firstTextBaseline) {
                 Text("继续播放")
@@ -925,14 +925,13 @@ struct AppleMusicCompactQueueContent: View {
     }
 
     private func modeButton(
+        mode: PlayMode,
         icon: String,
         label: String,
-        isActive: Bool,
-        action: @escaping () -> Void
+        isActive: Bool
     ) -> some View {
         Button {
-            BeansHaptics.tap()
-            action()
+            activate(mode)
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .semibold))
@@ -945,9 +944,23 @@ struct AppleMusicCompactQueueContent: View {
         }
         .contentShape(Capsule())
         .buttonStyle(.plain)
-        .zIndex(2)
+        // The compact queue can sit inside a transformed player surface. Keep an
+        // explicit tap recognizer on each pill so that surface gestures cannot
+        // swallow the first two playback-mode controls.
+        .highPriorityGesture(TapGesture().onEnded { activate(mode) })
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private func activate(_ mode: PlayMode) {
+        let now = Date()
+        guard mode != lastActivatedMode || now.timeIntervalSince(lastModeActivation) > 0.12 else {
+            return
+        }
+        lastActivatedMode = mode
+        lastModeActivation = now
+        BeansHaptics.tap()
+        player.setPlayMode(mode)
     }
 }
 

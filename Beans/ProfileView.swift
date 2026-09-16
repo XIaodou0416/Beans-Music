@@ -1267,7 +1267,6 @@ struct SettingsView: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
-    @AppStorage("beans.duoEffectEnabled") private var duoEffectEnabled = false
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @AppStorage("beans.globalFloatingEffect") private var globalFloatingEffectRaw = BeansGlobalFloatingEffect.off.rawValue
     @AppStorage("beans.globalFloatingDensity") private var globalFloatingDensity = 1.0
@@ -1915,10 +1914,6 @@ struct SettingsView: View {
                         .font(BeansFont.appFont(15))
                         .tint(Color.beansAmber)
                 }
-
-                Toggle("Duo 动态玻璃", isOn: $duoEffectEnabled)
-                    .font(BeansFont.appFont(15))
-                    .tint(Color.beansAmber)
 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) {
