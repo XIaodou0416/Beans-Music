@@ -985,7 +985,7 @@ final class LXScriptSourceRunner {
                 )
             ]
         ]
-        guard let raw = runtime?.invokeRequest(payload: payload) else { return nil }
+        guard let raw = runtime.invokeRequest(payload: payload) else { return nil }
         guard let urlString = extractURLString(from: raw),
               let url = URL(string: urlString),
               let playable = playableURL(url, excludedHosts: excludedHosts) else {
