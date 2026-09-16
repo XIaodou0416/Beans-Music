@@ -110,6 +110,23 @@ final class FavoritesStore: ObservableObject {
         saveSongs(qqFavoriteSongs, key: qqKey)
     }
 
+    /// 网易云“我喜欢的音乐”使用明确状态写入，避免普通官方歌单的本地缓存影响切换判断。
+    @discardableResult
+    func setNeteaseOfficial(_ song: Song, liked: Bool) async -> Bool {
+        let previous = neteaseFavoriteSongs.contains { $0.id == song.id }
+        updateNetease(song, liked: liked)
+        do {
+            let ok = try await NetEaseAPI.shared.like(id: song.id, liked: liked)
+            if !ok {
+                updateNetease(song, liked: previous)
+            }
+            return ok
+        } catch {
+            updateNetease(song, liked: previous)
+            return false
+        }
+    }
+
     private func updateNetease(_ song: Song, liked: Bool) {
         if liked {
             neteaseFavoriteSongs.removeAll { $0.id == song.id }

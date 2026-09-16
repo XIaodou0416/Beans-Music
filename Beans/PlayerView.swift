@@ -331,10 +331,6 @@ struct PlayerView: View {
     }
 
     private func beginRemoveOfficialFavorite(_ song: Song) {
-        if song.source == .netease {
-            Task { await removeOfficialFavorite(song, playlist: nil) }
-            return
-        }
         Task { @MainActor in
             officialPlaylistLoading = true
             do {
@@ -342,7 +338,7 @@ struct PlayerView: View {
                 officialPlaylistMode = .remove
                 officialPlaylistLoading = false
                 showOfficialPlaylistPicker = !officialPlaylists.isEmpty
-                if officialPlaylists.isEmpty { ToastCenter.shared.show("未找到可取消的酷狗歌单") }
+                if officialPlaylists.isEmpty { ToastCenter.shared.show("未找到可取消的官方歌单") }
             } catch {
                 officialPlaylistLoading = false
                 ToastCenter.shared.show("读取官方歌单失败：\(error.localizedDescription)")
@@ -383,7 +379,7 @@ struct PlayerView: View {
             let success: Bool
             if playlist.isNetEaseLikedPlaylist {
                 // 网易云“我喜欢的音乐”只能通过专用红心接口写入，普通歌单编辑接口会被服务端拒绝。
-                success = await favorites.toggle(song)
+                success = await favorites.setNeteaseOfficial(song, liked: true)
             } else {
                 success = (try? await NetEaseAPI.shared.addToPlaylist(playlistID: playlist.id, songIDs: [song.id])) ?? false
             }
@@ -412,18 +408,15 @@ struct PlayerView: View {
     private func removeOfficialFavorite(_ song: Song, playlist: Playlist?) async {
         switch song.source {
         case .netease:
+            guard let playlist else { return }
             let success: Bool
-            if let playlist {
-                if playlist.isNetEaseLikedPlaylist {
-                    success = await favorites.toggle(song)
-                } else {
-                    success = (try? await NetEaseAPI.shared.removeFromPlaylist(playlistID: playlist.id, songIDs: [song.id])) ?? false
-                    if success { favorites.markNeteaseOfficial(song, liked: false) }
-                }
+            if playlist.isNetEaseLikedPlaylist {
+                success = await favorites.setNeteaseOfficial(song, liked: false)
             } else {
-                success = await favorites.toggle(song)
+                success = (try? await NetEaseAPI.shared.removeFromPlaylist(playlistID: playlist.id, songIDs: [song.id])) ?? false
+                if success { favorites.markNeteaseOfficial(song, liked: false) }
             }
-            ToastCenter.shared.show(success ? "已取消官方收藏" : "取消网易云收藏失败")
+            ToastCenter.shared.show(success ? "已从「\(playlist.name)」取消收藏" : "取消网易云收藏失败")
         case .kugou:
             guard let playlist else { return }
             do {
