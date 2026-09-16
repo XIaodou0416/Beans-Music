@@ -1576,11 +1576,11 @@ struct SettingsView: View {
                     LazyVStack(alignment: .leading, spacing: 16) {
                         accountSection
                         themeSection
-                        appIconSection
                         playbackSection
                         equalizerSection
                         changelogSection
                         backupSection
+                        appIconSection
                         settingsSupportSection
                     }
                     .padding(.horizontal, 16)
