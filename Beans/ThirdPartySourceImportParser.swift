@@ -69,6 +69,11 @@ enum ThirdPartySourceImportParser {
         guard let text else { throw ThirdPartySourceImportError.unsupported }
         let fallbackName = url.deletingPathExtension().lastPathComponent
         return try parse(text: text, fallbackName: fallbackName)
+            .map { source in
+                var imported = source
+                imported.sourceURL = url.absoluteString
+                return imported
+            }
     }
 
     // MARK: - JSON
@@ -98,16 +103,17 @@ enum ThirdPartySourceImportParser {
 
     private static func parseDictionary(_ dict: [String: Any]?, fallbackName: String?) -> ThirdPartySource? {
         guard let dict else { return nil }
-        let name = string(in: dict, keys: ["name", "title", "sourceName"])
+        let nestedInfo = dict["info"] as? [String: Any] ?? [:]
+        let name = firstString(in: [dict, nestedInfo], keys: ["name", "title", "sourceName"])
             ?? fallbackName
             ?? beansLocalized("未命名音源", "Untitled source")
-        let script = string(in: dict, keys: ["script", "scriptText", "code"])
-        let kind = string(in: dict, keys: ["kind", "type"])
+        let script = firstString(in: [dict, nestedInfo], keys: ["script", "scriptText", "code"])
+        let kind = firstString(in: [dict, nestedInfo], keys: ["kind", "type"])
             ?? (script == nil ? "keyword" : "script")
-        let urlPath = string(in: dict, keys: ["urlPath", "path"]) ?? "url"
+        let urlPath = firstString(in: [dict, nestedInfo], keys: ["urlPath", "path"]) ?? "url"
         let template = templateString(from: dict)
         guard !template.isEmpty || script?.isEmpty == false else { return nil }
-        let quality = string(in: dict, keys: ["quality", "br"]) ?? "320k"
+        let quality = firstString(in: [dict, nestedInfo], keys: ["quality", "br"]) ?? "320k"
 
         var headers = dictionary(in: dict, key: "headers")
         if let qualities = qualityStrings(in: dict), !qualities.isEmpty {
@@ -132,6 +138,11 @@ enum ThirdPartySourceImportParser {
             headers: headers,
             quality: quality,
             script: script,
+            sourceDescription: firstString(in: [dict, nestedInfo], keys: ["description", "desc"]) ?? "",
+            version: firstString(in: [dict, nestedInfo], keys: ["version", "ver", "sourceVersion"]) ?? "",
+            author: firstString(in: [dict, nestedInfo], keys: ["author"]) ?? "",
+            homepage: firstString(in: [dict, nestedInfo], keys: ["homepage", "homePage"]) ?? "",
+            sourceURL: firstString(in: [dict, nestedInfo], keys: ["sourceURL", "sourceUrl"]),
             enabled: enabled
         )
     }
@@ -231,7 +242,8 @@ enum ThirdPartySourceImportParser {
 
     private static func parseLooseScript(_ text: String, fallbackName: String?) -> [ThirdPartySource]? {
         guard looksLikeScript(text) else { return nil }
-        let name = extractHeaderName(text) ?? fallbackName ?? beansLocalized("未命名脚本音源", "Untitled script source")
+        let metadata = extractScriptMetadata(from: text)
+        let name = metadata.name ?? fallbackName ?? beansLocalized("未命名脚本音源", "Untitled script source")
         let headers = extractLooseHeaders(from: text)
         let quality = headers["quality"] ?? headers["br"] ?? "320k"
         let source = ThirdPartySource(
@@ -242,6 +254,10 @@ enum ThirdPartySourceImportParser {
             headers: headers,
             quality: quality,
             script: text,
+            sourceDescription: metadata.description,
+            version: metadata.version,
+            author: metadata.author,
+            homepage: metadata.homepage,
             enabled: true
         )
         return [source]
@@ -280,16 +296,42 @@ enum ThirdPartySourceImportParser {
         return markers.contains { text.contains($0) }
     }
 
-    private static func extractHeaderName(_ text: String) -> String? {
-        guard let block = extractCommentBlock(text) else { return nil }
+    private struct ScriptMetadata {
+        var name: String?
+        var description = ""
+        var version = ""
+        var author = ""
+        var homepage = ""
+    }
+
+    private static func extractScriptMetadata(from text: String) -> ScriptMetadata {
+        guard let block = extractCommentBlock(text) else { return ScriptMetadata() }
+        var result = ScriptMetadata()
         for line in block.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             let cleaned = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "* "))
-            guard cleaned.hasPrefix("@name") else { continue }
-            let value = cleaned.dropFirst("@name".count).trimmingCharacters(in: .whitespacesAndNewlines)
-            if !value.isEmpty { return value }
+            guard cleaned.hasPrefix("@") else { continue }
+            let content = cleaned.dropFirst()
+            let pieces = content.split(maxSplits: 1, omittingEmptySubsequences: false) { $0 == " " || $0 == "\t" || $0 == "=" }
+            guard let rawKey = pieces.first else { continue }
+            let value = pieces.count > 1
+                ? String(pieces[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+                : ""
+            guard !value.isEmpty else { continue }
+            switch String(rawKey).lowercased() {
+            case "name": result.name = value
+            case "description", "desc": result.description = value
+            case "version", "ver": result.version = value
+            case "author": result.author = value
+            case "homepage", "home", "url": result.homepage = value
+            default: break
+            }
         }
-        return nil
+        return result
+    }
+
+    private static func extractHeaderName(_ text: String) -> String? {
+        extractScriptMetadata(from: text).name
     }
 
     private static func extractLooseHeaders(from text: String) -> [String: String] {
@@ -350,6 +392,15 @@ enum ThirdPartySourceImportParser {
             }
             if let value = dict[key] as? NSNumber {
                 return value.stringValue
+            }
+        }
+        return nil
+    }
+
+    private static func firstString(in dictionaries: [[String: Any]], keys: [String]) -> String? {
+        for dictionary in dictionaries {
+            if let value = string(in: dictionary, keys: keys) {
+                return value
             }
         }
         return nil

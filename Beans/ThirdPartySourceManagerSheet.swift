@@ -14,6 +14,8 @@ struct ThirdPartySourceManagerSheet: View {
     @State private var importErrorMessage = ""
     @State private var showFilePicker = false
     @State private var editingDraft: ThirdPartySourceDraft?
+    @State private var testingSourceID: String?
+    @State private var sourceCheckResults: [String: LXScriptSourceRunner.SourceCheckResult] = [:]
 
     var body: some View {
         NavigationView {
@@ -78,7 +80,7 @@ struct ThirdPartySourceManagerSheet: View {
                     Text(beansLocalized("支持本地文件、远程 URL 和粘贴文本。", "Supports local files, remote URLs, and pasted text."))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
-                    Text(beansLocalized("也支持 LX Music / BakaMusic 风格的 JS 音源脚本。", "Also supports LX Music / BakaMusic style JS source scripts."))
+                    Text(beansLocalized("支持 LX User API 的 JSON、JS、本地文件与在线 URL；在线导入后会保存本地副本。", "Supports LX User API JSON, JS, local files and online URLs; online imports are saved locally."))
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -207,7 +209,7 @@ struct ThirdPartySourceManagerSheet: View {
                 .buttonStyle(GlassPressButtonStyle(scale: 0.97))
             }
 
-            Text(beansLocalized("支持 JSON 数组、单个配置、`SERVER_SCRIPT_CONFIG` 片段，以及 `@name` / `@template` 头部格式。", "Supports JSON arrays, single configs, `SERVER_SCRIPT_CONFIG` fragments, and `@name` / `@template` header-style blocks."))
+            Text(beansLocalized("支持 JSON 数组、LX User API 导出 JSON、JS 脚本、`SERVER_SCRIPT_CONFIG` 片段，以及 `@name` / `@template` 头部格式。", "Supports JSON arrays, LX User API export JSON, JS scripts, `SERVER_SCRIPT_CONFIG` fragments, and `@name` / `@template` header-style blocks."))
                 .font(BeansFont.appFont(11))
                 .foregroundStyle(Color.beansComment)
                 .fixedSize(horizontal: false, vertical: true)
@@ -257,7 +259,13 @@ struct ThirdPartySourceManagerSheet: View {
                             },
                             onToggle: { enabled in
                                 store.updateEnabled(id: source.id, enabled: enabled)
-                            }
+                            },
+                            onCheck: {
+                                checkSource(source)
+                            },
+                            isChecking: testingSourceID == source.id,
+                            checkResult: sourceCheckResults[source.id]
+                            )
                         )
                     }
                 }
@@ -323,6 +331,18 @@ struct ThirdPartySourceManagerSheet: View {
         }
     }
 
+    private func checkSource(_ source: ThirdPartySource) {
+        guard testingSourceID == nil else { return }
+        testingSourceID = source.id
+        Task {
+            let result = await LXScriptSourceRunner.shared.inspect(source: source)
+            await MainActor.run {
+                sourceCheckResults[source.id] = result
+                testingSourceID = nil
+            }
+        }
+    }
+
     @MainActor
     private func showImportError(message: String) {
         importErrorMessage = message
@@ -355,6 +375,9 @@ private struct SourceRow: View {
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
     let onToggle: (Bool) -> Void
+    let onCheck: () -> Void
+    let isChecking: Bool
+    let checkResult: LXScriptSourceRunner.SourceCheckResult?
 
     private var subtitle: String {
         let platform = source.headers["source"].map { ThirdPartySourcePlatform(code: $0).title } ?? ""
@@ -386,6 +409,22 @@ private struct SourceRow: View {
                         .foregroundStyle(Color.beansComment)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
+                    if !source.sourceDescription.isEmpty {
+                        Text(source.sourceDescription)
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment.opacity(0.86))
+                            .lineLimit(2)
+                    }
+                    if let checkResult {
+                        Label(checkResult.message, systemImage: checkResult.isAvailable ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(BeansFont.appFont(11, .medium))
+                            .foregroundStyle(checkResult.isAvailable ? Color.green : Color.red)
+                            .lineLimit(2)
+                        Text(checkResult.detail)
+                            .font(BeansFont.appFont(10))
+                            .foregroundStyle(Color.beansComment)
+                            .lineLimit(3)
+                    }
                 }
                 Spacer()
                 Toggle("", isOn: Binding(get: { source.enabled }, set: onToggle))
@@ -401,6 +440,21 @@ private struct SourceRow: View {
                         .foregroundStyle(Color.beansAmber)
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.96))
+
+                Button(action: onCheck) {
+                    if isChecking {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 28, height: 28)
+                    } else {
+                        Image(systemName: "checkmark.shield")
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28, height: 28)
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(isChecking)
+                .accessibilityLabel(beansLocalized("检测音源状态", "Check source status"))
 
                 Button {
                     onMoveUp()
@@ -447,6 +501,11 @@ private struct ThirdPartySourceDraft: Identifiable {
     var headersText: String = ""
     var quality: String = "320k"
     var scriptText: String = ""
+    var sourceDescription: String = ""
+    var version: String = ""
+    var author: String = ""
+    var homepage: String = ""
+    var sourceURL: String?
     var enabled: Bool = true
     var platform: ThirdPartySourcePlatform = .all
 
@@ -460,6 +519,11 @@ private struct ThirdPartySourceDraft: Identifiable {
         urlPath = source.urlPath
         quality = source.quality.isEmpty ? "320k" : source.quality
         scriptText = source.script ?? ""
+        sourceDescription = source.sourceDescription
+        version = source.version
+        author = source.author
+        homepage = source.homepage
+        sourceURL = source.sourceURL
         enabled = source.enabled
         if let code = source.headers["source"] {
             platform = ThirdPartySourcePlatform(code: code)
@@ -486,6 +550,11 @@ private struct ThirdPartySourceDraft: Identifiable {
             headers: headers,
             quality: quality.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "320k" : quality,
             script: scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : scriptText,
+            sourceDescription: sourceDescription.trimmingCharacters(in: .whitespacesAndNewlines),
+            version: version.trimmingCharacters(in: .whitespacesAndNewlines),
+            author: author.trimmingCharacters(in: .whitespacesAndNewlines),
+            homepage: homepage.trimmingCharacters(in: .whitespacesAndNewlines),
+            sourceURL: sourceURL,
             enabled: enabled
         )
     }
@@ -592,6 +661,32 @@ private struct SourceEditorSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             TextField(beansLocalized("音源名称", "Source Name"), text: $draft.name)
                 .font(BeansFont.appFont(14))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+
+            TextField(beansLocalized("作者（可选）", "Author (optional)"), text: $draft.author)
+                .font(BeansFont.appFont(14))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+
+            TextField(beansLocalized("版本（可选）", "Version (optional)"), text: $draft.version)
+                .font(BeansFont.appFont(14))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+
+            TextField(beansLocalized("描述（可选）", "Description (optional)"), text: $draft.sourceDescription)
+                .font(BeansFont.appFont(14))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+
+            TextField(beansLocalized("主页（可选）", "Homepage (optional)"), text: $draft.homepage)
+                .font(BeansFont.appFont(14))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }

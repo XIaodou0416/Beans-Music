@@ -32,6 +32,12 @@ import JavaScriptCore
     func reject(_ value: JSValue?)
 }
 
+@objc protocol BeansLXScriptTimerExports: JSExport {
+    func schedule(_ delay: Double, _ callback: JSValue) -> Int
+    func scheduleRepeating(_ delay: Double, _ callback: JSValue) -> Int
+    func cancel(_ id: Int)
+}
+
 final class BeansLXScriptBufferBridge: NSObject, BeansLXScriptBufferExports {
     func from(_ text: String, _ encoding: String) -> NSDictionary {
         Self.dictionary(for: data(from: text, encoding: encoding))
@@ -223,7 +229,10 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
         self.version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.6.5.1"
         self.currentScriptInfo = [
             "name": source.name,
-            "version": source.headers["version"] ?? "",
+            "description": source.sourceDescription,
+            "version": source.version.isEmpty ? (source.headers["version"] ?? "") : source.version,
+            "author": source.author,
+            "homepage": source.homepage,
             "rawScript": script
         ]
         let config = URLSessionConfiguration.default
@@ -347,18 +356,93 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
     }
 }
 
+final class BeansLXScriptTimerBridge: NSObject, BeansLXScriptTimerExports {
+    private let runtimeQueue: DispatchQueue
+    private let lock = NSLock()
+    private var nextID = 0
+    private var workItems: [Int: DispatchWorkItem] = [:]
+    private var repeatingTimers: [Int: DispatchSourceTimer] = [:]
+
+    init(runtimeQueue: DispatchQueue) {
+        self.runtimeQueue = runtimeQueue
+    }
+
+    func schedule(_ delay: Double, _ callback: JSValue) -> Int {
+        lock.lock()
+        nextID += 1
+        let id = nextID
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.runtimeQueue.async {
+                callback.call(withArguments: [])
+            }
+            self.lock.lock()
+            self.workItems.removeValue(forKey: id)
+            self.lock.unlock()
+        }
+        workItems[id] = workItem
+        lock.unlock()
+
+        DispatchQueue.global(qos: .utility).asyncAfter(
+            deadline: .now() + max(0, delay) / 1000.0,
+            execute: workItem
+        )
+        return id
+    }
+
+    func scheduleRepeating(_ delay: Double, _ callback: JSValue) -> Int {
+        lock.lock()
+        nextID += 1
+        let id = nextID
+        lock.unlock()
+
+        let interval = max(0.001, delay / 1000.0)
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [weak self] in
+            self?.runtimeQueue.async {
+                callback.call(withArguments: [])
+            }
+        }
+        lock.lock()
+        repeatingTimers[id] = timer
+        lock.unlock()
+        timer.resume()
+        return id
+    }
+
+    func cancel(_ id: Int) {
+        lock.lock()
+        let workItem = workItems.removeValue(forKey: id)
+        let timer = repeatingTimers.removeValue(forKey: id)
+        lock.unlock()
+        workItem?.cancel()
+        timer?.setEventHandler {}
+        timer?.cancel()
+    }
+}
+
 final class BeansLXScriptRuntime {
+    struct CapabilitySnapshot: Sendable {
+        let platforms: [String: [String]]
+        let qualities: [String: [String]]
+    }
+
     private let sourceID: String
     private let queue = DispatchQueue(label: "Beans.LXScriptRuntime")
     private let context: JSContext
     private let bridge: BeansLXScriptBridge
+    private let timers: BeansLXScriptTimerBridge
     private var handlers: [String: JSValue] = [:]
+    private var capabilities: [String: [String]] = [:]
+    private var qualityCapabilities: [String: [String]] = [:]
 
     init?(source: ThirdPartySource, script: String) {
         sourceID = source.id
         guard let context = JSContext() else { return nil }
         self.context = context
         self.bridge = BeansLXScriptBridge(runtimeQueue: queue, source: source, script: script)
+        self.timers = BeansLXScriptTimerBridge(runtimeQueue: queue)
         self.bridge.runtime = self
 
         context.exceptionHandler = { _, exception in
@@ -368,6 +452,7 @@ final class BeansLXScriptRuntime {
         }
 
         context.setObject(bridge, forKeyedSubscript: "lx" as NSString)
+        context.setObject(timers, forKeyedSubscript: "__beansTimers" as NSString)
         var initialized = false
         queue.sync {
             context.evaluateScript("if (typeof globalThis === 'undefined') { var globalThis = this; }")
@@ -472,6 +557,30 @@ final class BeansLXScriptRuntime {
                         }
                     };
                 }
+                if (typeof globalThis.setTimeout !== 'function') {
+                    globalThis.setTimeout = function(callback, delay) {
+                        return __beansTimers.schedule(Number(delay) || 0, callback);
+                    };
+                    globalThis.clearTimeout = function(id) {
+                        __beansTimers.cancel(Number(id) || 0);
+                    };
+                }
+                if (typeof globalThis.setInterval !== 'function') {
+                    globalThis.setInterval = function(callback, delay) {
+                        return __beansTimers.scheduleRepeating(Number(delay) || 0, callback);
+                    };
+                    globalThis.clearInterval = globalThis.clearTimeout;
+                }
+                if (typeof globalThis.btoa !== 'function') {
+                    globalThis.btoa = function(value) {
+                        return Buffer.from(String(value), 'utf8').toString('base64');
+                    };
+                }
+                if (typeof globalThis.atob !== 'function') {
+                    globalThis.atob = function(value) {
+                        return Buffer.from(String(value), 'base64').toString('utf8');
+                    };
+                }
                 if (typeof Promise.any !== 'function') {
                     Promise.any = function(iterable) {
                         return new Promise(function(resolve, reject) {
@@ -521,12 +630,46 @@ final class BeansLXScriptRuntime {
 
     func receive(event: String, payload: Any?) {
         guard event == "inited" else { return }
-        if let dict = payload as? [String: Any], let sources = dict["sources"] as? [String: Any] {
-            BeansLogger.shared.log("第三方脚本初始化：\(sourceID) sources=\(sources.keys.sorted().joined(separator: ","))", level: .debug)
-        } else if let dict = payload as? NSDictionary,
-                  let sources = dict["sources"] as? NSDictionary {
-            let names = sources.allKeys.compactMap { $0 as? String }.sorted().joined(separator: ",")
-            BeansLogger.shared.log("第三方脚本初始化：\(sourceID) sources=\(names)", level: .debug)
+        guard let dictionary = stringKeyedDictionary(from: payload),
+              let sources = stringKeyedDictionary(from: dictionary["sources"]) else { return }
+        capabilities = sources.reduce(into: [:]) { result, pair in
+            guard let source = stringKeyedDictionary(from: pair.value) else { return }
+            result[pair.key] = stringArray(from: source["actions"])
+        }
+        qualityCapabilities = sources.reduce(into: [:]) { result, pair in
+            guard let source = stringKeyedDictionary(from: pair.value) else { return }
+            result[pair.key] = stringArray(from: source["qualitys"] ?? source["qualities"])
+        }
+        BeansLogger.shared.log("第三方脚本初始化：\(sourceID) sources=\(capabilities.keys.sorted().joined(separator: ","))", level: .debug)
+    }
+
+    private func stringKeyedDictionary(from raw: Any?) -> [String: Any]? {
+        if let dictionary = raw as? [String: Any] {
+            return dictionary
+        }
+        if let dictionary = raw as? NSDictionary {
+            return dictionary.reduce(into: [String: Any]()) { result, pair in
+                if let key = pair.key as? String {
+                    result[key] = pair.value
+                }
+            }
+        }
+        return nil
+    }
+
+    private func stringArray(from raw: Any?) -> [String] {
+        if let values = raw as? [String] {
+            return values
+        }
+        if let values = raw as? NSArray {
+            return values.compactMap { $0 as? String }
+        }
+        return []
+    }
+
+    func capabilitySnapshot() -> CapabilitySnapshot {
+        queue.sync {
+            CapabilitySnapshot(platforms: capabilities, qualities: qualityCapabilities)
         }
     }
 
@@ -620,6 +763,79 @@ final class LXScriptSourceRunner {
 
     private let runtimeQueue = DispatchQueue(label: "Beans.LXScriptSourceRunner")
     private var cache: [String: BeansLXScriptRuntime] = [:]
+
+    struct SourceCheckResult: Sendable {
+        enum Status: Sendable, Equatable {
+            case available
+            case unavailable
+        }
+
+        let status: Status
+        let message: String
+        let detail: String
+
+        var isAvailable: Bool { status == .available }
+    }
+
+    func inspect(source: ThirdPartySource) async -> SourceCheckResult {
+        await withCheckedContinuation { continuation in
+            runtimeQueue.async {
+                guard let script = source.script?.trimmingCharacters(in: .whitespacesAndNewlines), !script.isEmpty else {
+                    let normalizedTemplate = source.template
+                        .replacingOccurrences(of: "{id}", with: "1")
+                        .replacingOccurrences(of: "{source}", with: "wy")
+                        .replacingOccurrences(of: "{quality}", with: "320k")
+                    guard let url = URL(string: normalizedTemplate),
+                          let scheme = url.scheme?.lowercased(),
+                          ["http", "https"].contains(scheme),
+                          url.host != nil else {
+                        continuation.resume(returning: SourceCheckResult(
+                            status: .unavailable,
+                            message: "配置不完整",
+                            detail: "缺少可识别的 HTTP 请求地址。"
+                        ))
+                        return
+                    }
+                    continuation.resume(returning: SourceCheckResult(
+                        status: .available,
+                        message: "配置音源已识别",
+                        detail: "可用平台：\(source.headers[\"source\"] ?? \"全部\")；未发送播放请求。"
+                    ))
+                    return
+                }
+                guard let runtime = self.runtime(for: source, script: script) else {
+                    continuation.resume(returning: SourceCheckResult(
+                        status: .unavailable,
+                        message: "脚本初始化失败",
+                        detail: "当前脚本无法在 LX User API 运行环境中加载。"
+                    ))
+                    return
+                }
+                let snapshot = runtime.capabilitySnapshot()
+                let usable = snapshot.platforms
+                    .filter { $0.value.contains("musicUrl") }
+                    .keys
+                    .sorted()
+                guard !usable.isEmpty else {
+                    continuation.resume(returning: SourceCheckResult(
+                        status: .unavailable,
+                        message: "未发现 musicUrl 接口",
+                        detail: "脚本已加载，但没有声明可用的播放地址能力。"
+                    ))
+                    return
+                }
+                let details = usable.map { platform -> String in
+                    let qualities = snapshot.qualities[platform] ?? []
+                    return qualities.isEmpty ? platform : "\(platform)（\(qualities.joined(separator: ", "))）"
+                }
+                continuation.resume(returning: SourceCheckResult(
+                    status: .available,
+                    message: "LX User API 音源可用",
+                    detail: "支持：\(details.joined(separator: "；"))"
+                ))
+            }
+        }
+    }
 
     func resolve(
         source: ThirdPartySource,

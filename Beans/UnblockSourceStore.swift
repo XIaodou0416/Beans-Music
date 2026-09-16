@@ -15,10 +15,18 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
     var headers: [String: String] = [:]
     var quality: String = "320k"
     var script: String?
+    /// LX User API 元信息只用于管理界面展示和导入来源追溯，不参与播放请求。
+    var sourceDescription: String = ""
+    var version: String = ""
+    var author: String = ""
+    var homepage: String = ""
+    var sourceURL: String?
     var enabled: Bool = true
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, template, urlPath, headers, quality, script, enabled
+        case id, name, kind, template, urlPath, headers, quality, script
+        case sourceDescription, description, desc, version, author, homepage, sourceURL, sourceUrl, url
+        case enabled
     }
 
     init(
@@ -30,6 +38,11 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         headers: [String: String] = [:],
         quality: String = "320k",
         script: String? = nil,
+        sourceDescription: String = "",
+        version: String = "",
+        author: String = "",
+        homepage: String = "",
+        sourceURL: String? = nil,
         enabled: Bool = true
     ) {
         self.id = id
@@ -40,6 +53,11 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         self.headers = headers
         self.quality = quality
         self.script = script
+        self.sourceDescription = sourceDescription
+        self.version = version
+        self.author = author
+        self.homepage = homepage
+        self.sourceURL = sourceURL
         self.enabled = enabled
     }
 
@@ -53,6 +71,16 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         headers = try container.decodeIfPresent([String: String].self, forKey: .headers) ?? [:]
         quality = try container.decodeIfPresent(String.self, forKey: .quality) ?? headers["quality"] ?? "320k"
         script = try container.decodeIfPresent(String.self, forKey: .script)
+        sourceDescription = (try container.decodeIfPresent(String.self, forKey: .sourceDescription))
+            ?? (try container.decodeIfPresent(String.self, forKey: .description))
+            ?? (try container.decodeIfPresent(String.self, forKey: .desc))
+            ?? ""
+        version = try container.decodeIfPresent(String.self, forKey: .version) ?? ""
+        author = try container.decodeIfPresent(String.self, forKey: .author) ?? ""
+        homepage = try container.decodeIfPresent(String.self, forKey: .homepage) ?? ""
+        sourceURL = (try container.decodeIfPresent(String.self, forKey: .sourceURL))
+            ?? (try container.decodeIfPresent(String.self, forKey: .sourceUrl))
+            ?? (try container.decodeIfPresent(String.self, forKey: .url))
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
     }
 }
