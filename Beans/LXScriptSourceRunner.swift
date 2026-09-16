@@ -781,6 +781,7 @@ final class LXScriptSourceRunner {
         await withCheckedContinuation { continuation in
             runtimeQueue.async {
                 guard let script = source.script?.trimmingCharacters(in: .whitespacesAndNewlines), !script.isEmpty else {
+                    let platform = source.headers["source"] ?? "全部"
                     let normalizedTemplate = source.template
                         .replacingOccurrences(of: "{id}", with: "1")
                         .replacingOccurrences(of: "{source}", with: "wy")
@@ -799,7 +800,7 @@ final class LXScriptSourceRunner {
                     continuation.resume(returning: SourceCheckResult(
                         status: .available,
                         message: "配置音源已识别",
-                        detail: "可用平台：\(source.headers[\"source\"] ?? \"全部\")；未发送播放请求。"
+                        detail: "可用平台：\(platform)；未发送播放请求。"
                     ))
                     return
                 }

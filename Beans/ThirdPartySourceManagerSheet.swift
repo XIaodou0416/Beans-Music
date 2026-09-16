@@ -265,7 +265,6 @@ struct ThirdPartySourceManagerSheet: View {
                             },
                             isChecking: testingSourceID == source.id,
                             checkResult: sourceCheckResults[source.id]
-                            )
                         )
                     }
                 }
