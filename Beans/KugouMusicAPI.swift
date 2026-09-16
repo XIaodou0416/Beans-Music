@@ -234,13 +234,8 @@ final class KugouMusicAPI {
     func removeFromPlaylist(playlistID: Int, songs: [Song]) async throws -> Bool {
         let auth = KugouMusicAuth.shared
         guard auth.isLoggedIn else { throw NetEaseError.unknown("请先登录酷狗音乐") }
-        let fileIDs = songs.compactMap { song -> String? in
-            if let audioID = song.kugouAlbumAudioId?.trimmingCharacters(in: .whitespacesAndNewlines), !audioID.isEmpty {
-                return audioID
-            }
-            return nil
-        }
-        guard !fileIDs.isEmpty else { throw NetEaseError.unknown("当前歌曲缺少酷狗歌单标识") }
+        let fileIDs = try await playlistFileIDs(playlistID: playlistID, matching: songs)
+        guard !fileIDs.isEmpty else { throw NetEaseError.unknown("未在所选酷狗歌单中找到该歌曲") }
         let json = try await cloudlistRequest(
             "/v4/delete_songs",
             params: ["last_time": "\(Int(Date().timeIntervalSince1970))", "last_area": "gztx"],
@@ -250,11 +245,65 @@ final class KugouMusicAPI {
                 "token": auth.token,
                 "type": 0,
                 "list_ver": 0,
-                "data": fileIDs.map { ["fileid": Int($0) ?? 0] as [String: Any] },
+                "data": fileIDs.map { ["fileid": $0] as [String: Any] },
             ]
         )
         let code = Self.int(json["status"] ?? json["code"] ?? json["errcode"] ?? (json["data"] as? [String: Any])?["code"])
         return code == 0 || code == 1 || code == 200
+    }
+
+    /// 酷狗删除歌单歌曲需要歌单条目 fileid，而不是全局 audio_id。
+    private func playlistFileIDs(playlistID: Int, matching songs: [Song]) async throws -> [Int] {
+        let auth = KugouMusicAuth.shared
+        let hashes = Set(songs.compactMap { song -> String? in
+            guard let hash = song.kugouHash?.trimmingCharacters(in: .whitespacesAndNewlines), !hash.isEmpty else { return nil }
+            return hash.lowercased()
+        })
+        let audioIDs = Set(songs.compactMap { song -> String? in
+            guard let id = song.kugouAlbumAudioId?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else { return nil }
+            return id
+        })
+        guard !hashes.isEmpty || !audioIDs.isEmpty else {
+            throw NetEaseError.unknown("当前歌曲缺少酷狗歌曲标识")
+        }
+
+        let pageSize = 200
+        let maximumPages = 50
+        var matchedIDs = Set<Int>()
+
+        for page in 1...maximumPages {
+            let body: [String: Any] = [
+                "listid": "\(playlistID)",
+                "page": page,
+                "pagesize": pageSize,
+                "area_code": 1,
+                "show_relate_goods": 0,
+                "allplatform": 1,
+                "show_cover": 1,
+                "type": 0,
+                "userid": Int(auth.userId) ?? 0,
+                "token": auth.token,
+            ]
+            let json = try await cloudlistRequest(
+                "/v4/get_list_all_file",
+                params: ["listid": "\(playlistID)", "page": "\(page)", "pagesize": "\(pageSize)"],
+                data: body
+            )
+            let entries = Self.deepArrays(json, names: ["songs", "songlist", "list", "info", "files", "data"])
+            for entry in entries {
+                let hash = Self.string(entry["hash"] ?? entry["Hash"] ?? entry["file_hash"] ?? entry["FileHash"]).lowercased()
+                let audioID = Self.string(entry["album_audio_id"] ?? entry["audio_id"] ?? entry["audioid"] ?? entry["mixsongid"])
+                let matches = (!hash.isEmpty && hashes.contains(hash)) || (!audioID.isEmpty && audioIDs.contains(audioID))
+                guard matches else { continue }
+
+                let fileID = Self.int(entry["fileid"] ?? entry["file_id"] ?? entry["fileId"] ?? entry["list_file_id"])
+                if fileID > 0 {
+                    matchedIDs.insert(fileID)
+                }
+            }
+            if !matchedIDs.isEmpty || entries.count < pageSize { break }
+        }
+        return Array(matchedIDs)
     }
 
     func deletePlaylist(playlistID: Int) async throws -> Bool {
