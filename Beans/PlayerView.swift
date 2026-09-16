@@ -11,6 +11,7 @@ struct PlayerView: View {
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @Environment(\.colorScheme) private var colorScheme
     @Binding var isPresented: Bool
+    @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var lyrics: [LyricLine] = []
     @State private var showLyrics = false
@@ -51,6 +52,10 @@ struct PlayerView: View {
     fileprivate enum OfficialPlaylistMode: Equatable {
         case save
         case remove
+    }
+
+    private var selectedThemeMode: BeansThemeMode {
+        BeansThemeMode(rawValue: themeModeRaw) ?? .system
     }
     @AppStorage("beans.djVisual") private var djVisualEnabled = false
     @AppStorage("beans.djVisualIntensity") private var djVisualIntensity = 0.8
@@ -1043,6 +1048,9 @@ struct PlayerView: View {
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
+        // The record player uses a dark presentation surface by design, but its
+        // child sheets must continue to follow the app's selected appearance.
+        .preferredColorScheme(selectedThemeMode.colorScheme)
     }
 
     // MARK: - 背景（主题渐变兜底 + 封面毛玻璃 + 可读性遮罩）
@@ -2078,7 +2086,7 @@ struct PlayerView: View {
                 guard let song else { return }
                 toggleLocalFavorite(song)
             } label: {
-                FavoriteHeartView(mark: favoriteMark(for: song), size: 17, inactiveColor: albumTitleForeground.opacity(0.78))
+                FavoriteHeartView(mark: favoriteMark(for: song), size: 17, inactiveColor: albumTitleColor.opacity(0.78))
                     .frame(width: 38, height: 38)
                     .contentShape(Rectangle())
             }
@@ -6968,16 +6976,16 @@ private struct OfficialPlaylistPickerSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
-                if mode == .save {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            newName = ""
-                            showCreate = true
-                        } label: {
-                            Image(systemName: "plus")
-                        }
-                        .accessibilityLabel("新建官方歌单")
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        newName = ""
+                        showCreate = true
+                    } label: {
+                        Image(systemName: "plus")
                     }
+                    .disabled(mode != .save)
+                    .opacity(mode == .save ? 1 : 0)
+                    .accessibilityLabel("新建官方歌单")
                 }
             }
         }

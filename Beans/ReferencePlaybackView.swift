@@ -704,6 +704,33 @@ struct ReferencePlaybackView: View {
         if volumeHex.hasPrefix("#"), let color = Color(hex: volumeHex) { return color }
         return primaryColor
     }
+
+    private func favoriteActionButton() -> some View {
+        Button {
+            BeansHaptics.tap()
+            onFavorite()
+        } label: {
+            FavoriteHeartView(
+                mark: favoriteMark,
+                size: 17,
+                inactiveColor: primaryColor.opacity(0.78)
+            )
+            .frame(width: 38, height: 38)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var favoriteMark: FavoriteMark {
+        guard let song else { return .none }
+        let local = localLibrary.containsSong(song)
+        let official = favorites.isOfficiallyLiked(song)
+        switch (local, official) {
+        case (true, true): return .both
+        case (true, false): return .local
+        case (false, true): return .official
+        case (false, false): return .none
+        }
+    }
 }
 
 struct AppleMusicPlaybackControlLayout {
@@ -820,32 +847,6 @@ struct AppleMusicPlaybackControls: View {
         .buttonStyle(.plain)
     }
 
-    private func favoriteActionButton() -> some View {
-        Button {
-            BeansHaptics.tap()
-            onFavorite()
-        } label: {
-            FavoriteHeartView(
-                mark: favoriteMark,
-                size: 17,
-                inactiveColor: primaryColor.opacity(0.78)
-            )
-            .frame(width: 38, height: 38)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var favoriteMark: FavoriteMark {
-        guard let song else { return .none }
-        let local = localLibrary.containsSong(song)
-        let official = favorites.isOfficiallyLiked(song)
-        switch (local, official) {
-        case (true, true): return .both
-        case (true, false): return .local
-        case (false, true): return .official
-        case (false, false): return .none
-        }
-    }
 }
 
 struct AppleMusicCompactQueueContent: View {
