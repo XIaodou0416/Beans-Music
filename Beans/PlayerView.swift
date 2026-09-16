@@ -5164,11 +5164,11 @@ struct PlayerView: View {
         if song.source == .kugou, let hash = song.kugouHash {
             let payload = await KugouMusicAPI.shared.lyricPayload(hash: hash, duration: song.duration)
             apply(LyricParser.parse(payload.lrc, wordRaw: payload.krc, wordFormat: .kugouKRC))
-            LyricsCache.shared.save(lyric: payload.lrc, wordTiming: payload.krc, wordFormat: .kugouKRC, for: cacheKey)
+            LyricsCache.shared.save(lyric: payload.lrc, translation: nil, wordTiming: payload.krc, wordFormat: .kugouKRC, for: cacheKey)
         } else if song.source == .qq, let mid = song.qqMid {
             if let payload = try? await QQMusicAPI.shared.lyricPayload(songmid: mid) {
                 apply(LyricParser.parse(payload.lrc ?? "", wordRaw: payload.qrc, wordFormat: .qqQRC))
-                LyricsCache.shared.save(lyric: payload.lrc ?? "", wordTiming: payload.qrc, wordFormat: .qqQRC, for: cacheKey)
+                LyricsCache.shared.save(lyric: payload.lrc ?? "", translation: nil, wordTiming: payload.qrc, wordFormat: .qqQRC, for: cacheKey)
             }
         } else {
             if let (lrc, tlyric, yrc) = try? await NetEaseAPI.shared.lyricWithTranslation(id: song.id) {
