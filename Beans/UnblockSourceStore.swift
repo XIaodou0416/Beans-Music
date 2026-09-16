@@ -71,17 +71,36 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
         headers = try container.decodeIfPresent([String: String].self, forKey: .headers) ?? [:]
         quality = try container.decodeIfPresent(String.self, forKey: .quality) ?? headers["quality"] ?? "320k"
         script = try container.decodeIfPresent(String.self, forKey: .script)
-        sourceDescription = (try container.decodeIfPresent(String.self, forKey: .sourceDescription))
-            ?? (try container.decodeIfPresent(String.self, forKey: .description))
-            ?? (try container.decodeIfPresent(String.self, forKey: .desc))
-            ?? ""
+        let explicitDescription = try container.decodeIfPresent(String.self, forKey: .sourceDescription)
+        let legacyDescription = try container.decodeIfPresent(String.self, forKey: .description)
+        let legacyDesc = try container.decodeIfPresent(String.self, forKey: .desc)
+        sourceDescription = explicitDescription ?? legacyDescription ?? legacyDesc ?? ""
         version = try container.decodeIfPresent(String.self, forKey: .version) ?? ""
         author = try container.decodeIfPresent(String.self, forKey: .author) ?? ""
         homepage = try container.decodeIfPresent(String.self, forKey: .homepage) ?? ""
-        sourceURL = (try container.decodeIfPresent(String.self, forKey: .sourceURL))
-            ?? (try container.decodeIfPresent(String.self, forKey: .sourceUrl))
-            ?? (try container.decodeIfPresent(String.self, forKey: .url))
+        let explicitSourceURL = try container.decodeIfPresent(String.self, forKey: .sourceURL)
+        let legacySourceURL = try container.decodeIfPresent(String.self, forKey: .sourceUrl)
+        let legacyURL = try container.decodeIfPresent(String.self, forKey: .url)
+        sourceURL = explicitSourceURL ?? legacySourceURL ?? legacyURL
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(template, forKey: .template)
+        try container.encode(urlPath, forKey: .urlPath)
+        try container.encode(headers, forKey: .headers)
+        try container.encode(quality, forKey: .quality)
+        try container.encodeIfPresent(script, forKey: .script)
+        try container.encode(sourceDescription, forKey: .sourceDescription)
+        try container.encode(version, forKey: .version)
+        try container.encode(author, forKey: .author)
+        try container.encode(homepage, forKey: .homepage)
+        try container.encodeIfPresent(sourceURL, forKey: .sourceURL)
+        try container.encode(enabled, forKey: .enabled)
     }
 }
 
