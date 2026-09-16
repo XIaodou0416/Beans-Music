@@ -128,8 +128,8 @@ struct RootView: View {
     }
 
     private var usesSystemPlayerDismissal: Bool {
-        // iOS 26 及以上使用系统播放器交互，保留原生下划返回动画。
-        if #available(iOS 26.0, *) { return true }
+        // iOS 26 的系统下拉呈现会抢占全屏播放器内的触摸，
+        // 尤其是 Apple Music 队列的播放模式控制。统一使用顶部起始的兼容下拉手势。
         return false
     }
 
@@ -568,7 +568,7 @@ struct RootView: View {
                         if player.currentSong != nil {
                             MiniPlayerView(
                                 showPlayer: $showPlayer,
-                                presentation: .accessory,
+                                presentation: .dock,
                                 transitionNamespace: nowPlayingTransition
                             )
                                 .environmentObject(player.clock)
