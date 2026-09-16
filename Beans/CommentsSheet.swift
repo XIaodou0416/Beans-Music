@@ -5,7 +5,7 @@ import SwiftUI
 private let beansCommentDateFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "zh_CN")
-    formatter.dateFormat = "yyyy-MM-dd"
+    formatter.dateFormat = "yyyy-MM-dd HH:mm"
     return formatter
 }()
 
@@ -517,20 +517,13 @@ private struct CommentsSheetDetentHost: View {
 private struct ReferenceCommentRow: View {
     let comment: SongComment
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(comment.nickname)
                     .font(BeansFont.appFont(15, .medium))
                     .lineLimit(1)
-                Text(Self.dateFormatter.string(from: comment.time))
+                Text(beansCommentDate(comment.time))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(.secondary)
                 Spacer()

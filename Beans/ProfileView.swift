@@ -46,7 +46,6 @@ struct ProfileView: View {
     @State private var showAvatarPicker = false
     @State private var easterEggStep = 0
     @State private var easterEggPrompt = "点我有惊喜"
-    @State private var showEasterEgg = false
     @AppStorage("beans.profile.customNickname") private var customNickname = ""
     @ObservedObject private var feedbackHistory = FeedbackHistoryStore.shared
     @ObservedObject private var avatarStore = BeansAvatarStore.shared
@@ -249,16 +248,6 @@ struct ProfileView: View {
         .overlay {
             if showDownloadOverlay { downloadProgressOverlay }
         }
-        .overlay {
-            if showEasterEgg {
-                EasterEggOverlay {
-                    showEasterEgg = false
-                    easterEggStep = 0
-                    easterEggPrompt = "点我有惊喜"
-                }
-                .transition(.opacity)
-            }
-        }
         .alert("下载新版", isPresented: $showDownloadOutcome, presenting: downloadOutcome) { outcome in
             switch outcome {
             case .success:
@@ -332,9 +321,9 @@ struct ProfileView: View {
                 easterEggStep = 2
                 easterEggPrompt = ["最后一下！！", "马上出来了！！", "啊啊我要来了"].randomElement() ?? "最后一下！！"
             default:
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showEasterEgg = true
-                }
+                NotificationCenter.default.post(name: .beansEasterEggRequested, object: nil)
+                easterEggStep = 0
+                easterEggPrompt = "点我有惊喜"
             }
         } label: {
             HStack(spacing: 11) {

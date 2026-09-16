@@ -121,46 +121,6 @@ private struct BeansDuoGlassOverlay: View {
     }
 }
 
-private struct BeansDuoSystemChrome: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var chromeColor: Color {
-        colorScheme == .dark ? .white : .black
-    }
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 20)) { timeline in
-            GeometryReader { proxy in
-                VStack(spacing: 0) {
-                    HStack(spacing: 7) {
-                        Text(timeline.date, format: .dateTime.hour().minute())
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                        Spacer()
-                        Image(systemName: "cellularbars")
-                        Image(systemName: "wifi")
-                        Image(systemName: "battery.100percent")
-                    }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(chromeColor)
-                    .padding(.horizontal, 24)
-                    .padding(.top, max(proxy.safeAreaInsets.top + 4, 14))
-
-                    Spacer(minLength: 0)
-
-                    Capsule()
-                        .fill(chromeColor)
-                        .frame(width: 132, height: 5)
-                        .padding(.bottom, max(proxy.safeAreaInsets.bottom + 8, 14))
-                }
-                .frame(width: proxy.size.width, height: proxy.size.height)
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
 struct BeansDuoEffectModifier: ViewModifier {
     let isEnabled: Bool
 
@@ -176,12 +136,9 @@ struct BeansDuoEffectModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        let transformedContent = Group {
+        Group {
             if isEnabled && !reduceMotion {
                 content
-                    .overlay {
-                        BeansDuoSystemChrome()
-                    }
                     .background(Color.black)
                     .rotation3DEffect(
                         .radians(clampedAngle),
@@ -198,22 +155,10 @@ struct BeansDuoEffectModifier: ViewModifier {
                 content
             }
         }
-        .statusBar(hidden: isEnabled && !reduceMotion)
-
-        if #available(iOS 16.0, *) {
-            transformedContent
-                .persistentSystemOverlays(isEnabled && !reduceMotion ? .hidden : .visible)
-                .onAppear { updateMotion() }
-                .onChange(of: isEnabled) { _ in updateMotion() }
-                .onChange(of: reduceMotion) { _ in updateMotion() }
-                .onDisappear { motion.stop() }
-        } else {
-            transformedContent
-                .onAppear { updateMotion() }
-                .onChange(of: isEnabled) { _ in updateMotion() }
-                .onChange(of: reduceMotion) { _ in updateMotion() }
-                .onDisappear { motion.stop() }
-        }
+        .onAppear { updateMotion() }
+        .onChange(of: isEnabled) { _ in updateMotion() }
+        .onChange(of: reduceMotion) { _ in updateMotion() }
+        .onDisappear { motion.stop() }
     }
 
     private func updateMotion() {

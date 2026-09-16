@@ -2,6 +2,10 @@ import SwiftUI
 import AVFoundation
 import WebKit
 
+extension Notification.Name {
+    static let beansEasterEggRequested = Notification.Name("beans.easterEggRequested")
+}
+
 @MainActor
 private final class EasterEggAudioPlayer {
     static let shared = EasterEggAudioPlayer()

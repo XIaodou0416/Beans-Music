@@ -11,6 +11,7 @@ struct BeansApp: App {
     /// 免责声明确认状态：未确认前主界面在模糊层下方可见，确认后移除门禁
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
+    @State private var showEasterEgg = false
 
     init() {
         // 闪退检测：优先初始化，检测上次异常退出并安装崩溃捕获
@@ -48,8 +49,21 @@ struct BeansApp: App {
                 if !disclaimerAccepted {
                     OnboardingView { disclaimerAccepted = true }
                 }
+                if showEasterEgg {
+                    EasterEggOverlay {
+                        showEasterEgg = false
+                    }
+                    .transition(.opacity)
+                    .zIndex(100)
+                }
             }
             .environment(\.locale, Locale(identifier: languageRaw))
+            .onReceive(NotificationCenter.default.publisher(for: .beansEasterEggRequested)) { _ in
+                guard !showEasterEgg else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showEasterEgg = true
+                }
+            }
             .onAppear {
                 BeansCarPlayCoordinator.shared.configure(player: player)
             }
