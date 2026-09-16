@@ -930,24 +930,21 @@ struct AppleMusicCompactQueueContent: View {
         label: String,
         isActive: Bool
     ) -> some View {
-        Button {
-            activate(mode)
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(isActive ? Color.black.opacity(0.76) : .white.opacity(0.76))
-                .frame(maxWidth: .infinity, minHeight: 42)
-                .background(
-                    isActive ? AnyShapeStyle(.white.opacity(0.66)) : AnyShapeStyle(.white.opacity(0.1)),
-                    in: Capsule()
-                )
-        }
+        Image(systemName: icon)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(isActive ? Color.black.opacity(0.76) : .white.opacity(0.76))
+            .frame(maxWidth: .infinity, minHeight: 42)
+            .background(
+                isActive ? AnyShapeStyle(.white.opacity(0.66)) : AnyShapeStyle(.white.opacity(0.1)),
+                in: Capsule()
+            )
         .contentShape(Capsule())
-        .buttonStyle(.plain)
-        // The compact queue can sit inside a transformed player surface. Keep an
-        // explicit tap recognizer on each pill so that surface gestures cannot
-        // swallow the first two playback-mode controls.
-        .highPriorityGesture(TapGesture().onEnded { activate(mode) })
+        .overlay {
+            QueueModeTapTarget(label: label) {
+                activate(mode)
+            }
+        }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
@@ -961,6 +958,44 @@ struct AppleMusicCompactQueueContent: View {
         lastModeActivation = now
         BeansHaptics.tap()
         player.setPlayMode(mode)
+    }
+}
+
+/// A UIKit control keeps queue-mode taps out of the surrounding transparent
+/// SwiftUI composition layer, which otherwise absorbs them on some devices.
+private struct QueueModeTapTarget: UIViewRepresentable {
+    let label: String
+    let action: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(action: action)
+    }
+
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .custom)
+        button.backgroundColor = .clear
+        button.isAccessibilityElement = true
+        button.accessibilityTraits = .button
+        button.accessibilityLabel = label
+        button.addTarget(context.coordinator, action: #selector(Coordinator.activate), for: .touchUpInside)
+        return button
+    }
+
+    func updateUIView(_ button: UIButton, context: Context) {
+        context.coordinator.action = action
+        button.accessibilityLabel = label
+    }
+
+    final class Coordinator: NSObject {
+        var action: () -> Void
+
+        init(action: @escaping () -> Void) {
+            self.action = action
+        }
+
+        @objc func activate() {
+            action()
+        }
     }
 }
 
