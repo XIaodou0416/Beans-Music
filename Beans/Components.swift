@@ -196,9 +196,16 @@ struct GlobalFloatingEffectView: View {
     @AppStorage("beans.globalFloatingText") private var floatingText = "❄️"
     @AppStorage("beans.globalFloatingRotation") private var rotation = 0.0
     @AppStorage("beans.globalFloatingSkew") private var skew = 0.0
+    @AppStorage("beans.globalFloatingImageData") private var floatingImageData = ""
 
     private var effect: BeansGlobalFloatingEffect {
         BeansGlobalFloatingEffect(rawValue: effectRaw) ?? .off
+    }
+
+    private var floatingImage: UIImage? {
+        guard !floatingImageData.isEmpty,
+              let data = Data(base64Encoded: floatingImageData) else { return nil }
+        return UIImage(data: data)
     }
 
     var body: some View {
@@ -216,8 +223,9 @@ struct GlobalFloatingEffectView: View {
                             let fall = ((time * (0.035 + seed.truncatingRemainder(dividingBy: 7) * 0.006) + seed * 0.071).truncatingRemainder(dividingBy: 1.15))
                             let y = fall * canvasSize.height - canvasSize.height * 0.08
                             let drift = sin(time * 0.32 + seed * 1.7) * canvasSize.width * 0.012
-                            let text = Text("❄️").font(.system(size: max(10, min(30, size * 14))))
-                            context.draw(text.foregroundColor(.white.opacity(0.24)), at: CGPoint(x: x + drift, y: y))
+                            let radius = max(1.2, min(4.2, size * (1.2 + seed.truncatingRemainder(dividingBy: 3) * 0.45)))
+                            let rect = CGRect(x: x + drift, y: y, width: radius * 2, height: radius * 2)
+                            context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.08 + 0.04 * sin(seed))) )
                         }
                     }
                 }
@@ -227,12 +235,22 @@ struct GlobalFloatingEffectView: View {
                             let seed = Double(index)
                             let x = ((seed * 0.173).truncatingRemainder(dividingBy: 1.0)) * geometry.size.width
                             let y = ((time * (0.035 + seed.truncatingRemainder(dividingBy: 7) * 0.006) + seed * 0.071).truncatingRemainder(dividingBy: 1.15)) * geometry.size.height
-                            Text(floatingText.isEmpty ? "✦" : floatingText)
-                                .font(.system(size: max(10, min(30, size * 14)), weight: .medium))
-                                .foregroundStyle(accent.opacity(0.24))
-                                .rotationEffect(.degrees(rotation + sin(time * 0.4 + seed) * 8))
-                                .transformEffect(CGAffineTransform(a: 1, b: 0, c: CGFloat(tan(skew * .pi / 180)), d: 1, tx: 0, ty: 0))
-                                .position(x: x, y: y)
+                            Group {
+                                if let floatingImage {
+                                    Image(uiImage: floatingImage)
+                                        .resizable()
+                                        .scaledToFit()
+                                } else {
+                                    Text(floatingText.isEmpty ? "✦" : floatingText)
+                                        .font(.system(size: max(10, min(30, size * 14)), weight: .medium))
+                                        .foregroundStyle(accent.opacity(0.24))
+                                }
+                            }
+                            .frame(width: max(14, min(42, size * 20)), height: max(14, min(42, size * 20)))
+                            .opacity(floatingImage == nil ? 1 : 0.72)
+                            .rotationEffect(.degrees(rotation + sin(time * 0.4 + seed) * 8))
+                            .transformEffect(CGAffineTransform(a: 1, b: 0, c: CGFloat(tan(skew * .pi / 180)), d: 1, tx: 0, ty: 0))
+                            .position(x: x, y: y)
                         }
                     }
                 }
@@ -274,6 +292,7 @@ struct WallpaperImage: View {
 struct BeansGlass<S: Shape>: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
+    @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
     @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
 
     let shape: S
@@ -284,7 +303,7 @@ struct BeansGlass<S: Shape>: View {
     }
 
     private var isLiquid: Bool {
-        forceLiquid || uiStyle == .liquid || (uiStyle == .nativeClean && !appleSolidSurface)
+        !disableLiquidGlass && (forceLiquid || uiStyle == .liquid || (uiStyle == .nativeClean && !appleSolidSurface))
     }
 
     @ViewBuilder
@@ -353,6 +372,7 @@ struct GlassCard<Content: View>: View {
     var cornerRadius: CGFloat = 24
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
+    @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
     @ViewBuilder var content: () -> Content
 
     private var uiStyle: BeansUIStyle {
@@ -360,7 +380,7 @@ struct GlassCard<Content: View>: View {
     }
 
     private var isLiquid: Bool {
-        uiStyle == .liquid || (uiStyle == .nativeClean && !appleSolidSurface)
+        !disableLiquidGlass && (uiStyle == .liquid || (uiStyle == .nativeClean && !appleSolidSurface))
     }
 
     private var resolvedCornerRadius: CGFloat {

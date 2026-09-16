@@ -1218,6 +1218,7 @@ struct SettingsView: View {
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
+    @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @AppStorage("beans.globalFloatingEffect") private var globalFloatingEffectRaw = BeansGlobalFloatingEffect.off.rawValue
     @AppStorage("beans.globalFloatingDensity") private var globalFloatingDensity = 1.0
@@ -1226,6 +1227,7 @@ struct SettingsView: View {
     @AppStorage("beans.globalFloatingText") private var globalFloatingText = "❄️"
     @AppStorage("beans.globalFloatingRotation") private var globalFloatingRotation = 0.0
     @AppStorage("beans.globalFloatingSkew") private var globalFloatingSkew = 0.0
+    @AppStorage("beans.globalFloatingImageData") private var globalFloatingImageData = ""
     @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
@@ -1309,6 +1311,7 @@ struct SettingsView: View {
     @State private var updateResult: UpdateChecker.CheckResult?
     @State private var showUpdateResult = false
     @State private var disclaimerExpanded = false
+    @State private var showFloatingImagePicker = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1600,6 +1603,14 @@ struct SettingsView: View {
             }
             .ignoresSafeArea()
         }
+        .sheet(isPresented: $showFloatingImagePicker) {
+            WallpaperPhotoPicker(allowsMultiple: false) { data in
+                if let base64 = normalizedFloatingImageBase64(from: data) {
+                    globalFloatingImageData = base64
+                }
+            }
+            .ignoresSafeArea()
+        }
         .fullScreenCover(isPresented: $showFontImporter) {
             FontDocumentPicker { url in
                 installFont(from: url)
@@ -1849,6 +1860,12 @@ struct SettingsView: View {
                 .pickerStyle(.menu)
                 .tint(Color.beansAmber)
 
+                if #available(iOS 26, *) {
+                    Toggle("关闭液态模式", isOn: $disableLiquidGlass)
+                        .font(BeansFont.appFont(15))
+                        .tint(Color.beansAmber)
+                }
+
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) {
                         Image(systemName: "sparkles")
@@ -1874,6 +1891,29 @@ struct SettingsView: View {
                         layoutSettingSlider("动画速度", value: $globalFloatingSpeed, range: 0.4...1.8, step: 0.1, format: "%.1fx")
                         if globalFloatingEffectRaw == BeansGlobalFloatingEffect.customText.rawValue {
                             TextField("文字或 Emoji", text: $globalFloatingText)
+                                .textFieldStyle(.roundedBorder)
+                                .font(BeansFont.appFont(14))
+                            HStack(spacing: 12) {
+                                Button {
+                                    showFloatingImagePicker = true
+                                } label: {
+                                    Label(
+                                        globalFloatingImageData.isEmpty ? "上传漂浮图片" : "更换漂浮图片",
+                                        systemImage: "photo.badge.plus"
+                                    )
+                                    .font(BeansFont.appFont(13, .medium))
+                                    .foregroundStyle(Color.beansAmber)
+                                }
+                                .buttonStyle(.plain)
+                                if !globalFloatingImageData.isEmpty {
+                                    Button("清除图片") {
+                                        globalFloatingImageData = ""
+                                    }
+                                    .font(BeansFont.appFont(12))
+                                    .foregroundStyle(Color.beansComment)
+                                    .buttonStyle(.plain)
+                                }
+                            }
                             layoutSettingSlider("旋转", value: $globalFloatingRotation, range: -180...180, step: 1, format: "%.0f°")
                             layoutSettingSlider("倾斜", value: $globalFloatingSkew, range: -45...45, step: 1, format: "%.0f°")
                         }
@@ -3236,6 +3276,22 @@ struct SettingsView: View {
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.98))
         .disabled(checkingUpdate && title.hasPrefix("正在"))
+    }
+
+    private func normalizedFloatingImageBase64(from data: Data) -> String? {
+        guard let image = UIImage(data: data) else { return nil }
+        let maxDimension: CGFloat = 240
+        let longestSide = max(image.size.width, image.size.height)
+        let scale = longestSide > maxDimension ? maxDimension / longestSide : 1
+        let size = CGSize(
+            width: max(1, image.size.width * scale),
+            height: max(1, image.size.height * scale)
+        )
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let normalized = renderer.jpegData(withCompressionQuality: 0.82) { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return normalized.base64EncodedString()
     }
 
     /// 壁纸格子：点击应用到所选外观；使用中的壁纸显示主题色边框+勾选；右上角删除
