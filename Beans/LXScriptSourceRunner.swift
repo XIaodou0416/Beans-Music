@@ -293,11 +293,11 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
             guard let self else { return }
             self.runtimeQueue.async {
                 if let error {
-                    callback.call(withArguments: [[ "message": error.localizedDescription ], NSNull()])
+                    callback.call(withArguments: [[ "message": error.localizedDescription ], NSNull(), NSNull()])
                     return
                 }
                 guard let http = response as? HTTPURLResponse else {
-                    callback.call(withArguments: [[ "message": "No HTTP response" ], NSNull()])
+                    callback.call(withArguments: [[ "message": "No HTTP response" ], NSNull(), NSNull()])
                     return
                 }
                 let parsed = self.parseBody(data)
@@ -314,9 +314,11 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
                     "ok": (200..<300).contains(http.statusCode)
                 ]
                 if http.statusCode >= 400 {
-                    callback.call(withArguments: [[ "message": "HTTP \(http.statusCode)" ], responseObject])
+                    callback.call(withArguments: [[ "message": "HTTP \(http.statusCode)" ], responseObject, body])
                 } else {
-                    callback.call(withArguments: [NSNull(), responseObject])
+                    // Accept both callback forms used by LX scripts:
+                    // (error, response) and (error, response, body).
+                    callback.call(withArguments: [NSNull(), responseObject, body])
                 }
             }
         }.resume()
@@ -707,6 +709,23 @@ final class BeansLXScriptRuntime {
         }
     }
 
+    /// Older script releases may register a request handler without publishing
+    /// an `inited` capability map. They are still valid playback scripts.
+    func hasPlaybackResolver() -> Bool {
+        queue.sync {
+            guard handlers["request"] == nil else { return true }
+            let kind = context.evaluateScript("""
+            (function() {
+                if (typeof __beansPlugin !== 'undefined' && typeof __beansPlugin.musicUrl === 'function') return 'musicUrl';
+                if (typeof __beansMusicPlugin !== 'undefined' && typeof __beansMusicPlugin.getMusicUrl === 'function') return 'musicPluginGetMusicUrl';
+                if (typeof __beansPlugin !== 'undefined' && typeof __beansPlugin.getMusicUrl === 'function') return 'pluginGetMusicUrl';
+                return '';
+            })()
+            """)?.toString() ?? ""
+            return !kind.isEmpty
+        }
+    }
+
     func invokeRequest(payload: [String: Any], timeout: TimeInterval = 12) -> Any? {
         let semaphore = DispatchSemaphore(value: 0)
         var result: Any?
@@ -846,7 +865,8 @@ final class LXScriptSourceRunner {
                     ))
                     return
                 }
-                guard runtime.waitForInitialization(timeout: 10) else {
+                let didInitialize = runtime.waitForInitialization(timeout: 10)
+                guard didInitialize || runtime.hasPlaybackResolver() else {
                     continuation.resume(returning: SourceCheckResult(
                         status: .unavailable,
                         message: "脚本初始化超时",
@@ -856,9 +876,19 @@ final class LXScriptSourceRunner {
                 }
                 let snapshot = runtime.capabilitySnapshot()
                 let usable = snapshot.platforms
-                    .filter { $0.value.contains("musicUrl") }
+                    .filter { _, actions in
+                        actions.contains { $0.caseInsensitiveCompare("musicUrl") == .orderedSame }
+                    }
                     .keys
                     .sorted()
+                if usable.isEmpty, runtime.hasPlaybackResolver() {
+                    continuation.resume(returning: SourceCheckResult(
+                        status: .available,
+                        message: "LX request handler loaded",
+                        detail: "The script did not publish a platform capability list; playback will request the current song platform and quality."
+                    ))
+                    return
+                }
                 guard !usable.isEmpty else {
                     continuation.resume(returning: SourceCheckResult(
                         status: .unavailable,
