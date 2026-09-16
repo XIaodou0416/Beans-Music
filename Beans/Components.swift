@@ -630,16 +630,23 @@ struct BeansShimmerSkeleton: View {
     var baseOpacity: Double = 0.12
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let height = proxy.size.height
             let bandWidth = max(width * 0.6, 1)
+            let baseColor = colorScheme == .dark ? Color.white : Color.black
+            let highlightColor = colorScheme == .dark ? Color.white : Color.white
 
             ZStack {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color.primary.opacity(baseOpacity))
+                    .fill(baseColor.opacity(max(baseOpacity, 0.14)))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .strokeBorder(baseColor.opacity(0.10), lineWidth: 0.6)
+                    }
 
                 if reduceMotion {
                     Color.clear
@@ -651,7 +658,8 @@ struct BeansShimmerSkeleton: View {
                         LinearGradient(
                             colors: [
                                 .clear,
-                                Color.primary.opacity(0.08),
+                                highlightColor.opacity(0.22),
+                                baseColor.opacity(0.08),
                                 .clear
                             ],
                             startPoint: .leading,

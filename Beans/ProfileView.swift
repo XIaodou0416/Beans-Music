@@ -763,6 +763,12 @@ struct ProfileView: View {
                                 .shadow(color: sponsorRankColor(for: index).opacity(0.22), radius: 12, y: 4)
                         }
                     }
+                    .overlay {
+                        if index < 3 {
+                            SponsorRankHighlight(color: sponsorRankColor(for: index), rank: index)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                    }
                     if index < displayedDonors.count - 1 {
                         Divider().overlay(Color.beansComment.opacity(0.12))
                     }
@@ -3234,14 +3240,14 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 if disclaimerExpanded {
-                    Text("""
-                Beans Music 是一款面向个人使用的音乐播放与管理工具，不提供音乐版权内容，也不替代任何第三方音乐平台。歌曲、专辑、歌单、封面、歌词、评论、艺人资料和播放地址等内容来自相应平台或用户主动配置的服务，相关版权和使用规则归原权利人所有。用户应遵守所在地区法律法规以及各平台的用户协议，不得绕过付费、会员、地区、设备或账号限制，不得批量抓取、传播、出售或滥用受版权保护的内容。
-
-                本应用的播放、歌词、收藏、评论、下载入口、后台播放、音质选择和主题设置等功能仅用于管理合法可访问的内容，不保证所有歌曲、平台、账号、设备、系统和音频格式始终可用。网络波动、接口变更、版权调整、地区限制、账号状态、系统资源或设备故障可能造成缓冲、断流、暂停、歌词延迟、封面缺失或功能不可用。继续使用本应用即表示你已阅读并接受本说明，并自行承担使用相关服务和内容的责任；如不同意，请停止使用并删除本地数据。
-""")
-                        .font(BeansFont.appFont(11, .regular))
-                        .foregroundStyle(Color.beansComment)
-                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 9) {
+                        disclaimerRow(1, "本软件仅为个人技术学习与开源展示用途，非商业软件、无任何盈利行为。")
+                        disclaimerRow(2, "本软件所有音乐、歌词、图片等内容版权归原版权方所有，仅来源于公开网络接口聚合展示。")
+                        disclaimerRow(3, "本软件不存储、不上传、不私自分发任何版权资源，仅提供在线试听与检索工具能力。")
+                        disclaimerRow(4, "用户下载、保存、传播音频资源的一切行为由用户自行承担法律责任，与软件开发者无关。")
+                        disclaimerRow(5, "若有版权侵权问题，版权方可联系开发者，我方将第一时间下架相关内容。")
+                        disclaimerRow(6, "使用者默认同意本免责条款，禁止用于商业、盈利、侵权传播场景。")
+                    }
                 }
             }
             .padding(14)
@@ -3249,6 +3255,40 @@ struct SettingsView: View {
                 BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
         }
+    }
+
+    private func disclaimerRow(_ index: Int, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Text("\(index)")
+                .font(BeansFont.appFont(11, .bold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.beansAmber, Color.beansHighlight],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+            Text(text)
+                .font(BeansFont.appFont(13, .semibold))
+                .foregroundStyle(Color.beansAmber)
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.beansAmber.opacity(0.075))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.beansAmber.opacity(0.22), lineWidth: 0.8)
+                }
+        )
     }
 
     private func settingsSupportButton(
@@ -3800,6 +3840,39 @@ struct WallpaperPhotoPicker: UIViewControllerRepresentable {
                 }
             }
         }
+    }
+}
+
+/// 赞助排行前三名的动态边框高光，不参与交互，也不影响列表布局。
+private struct SponsorRankHighlight: View {
+    let color: Color
+    let rank: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
+            GeometryReader { proxy in
+                let phase = proxy.size.width > 1
+                    ? timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.8) / 2.8
+                    : 0
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(
+                        AngularGradient(
+                            colors: [
+                                color.opacity(0.05),
+                                color.opacity(0.86),
+                                Color.white.opacity(rank == 0 ? 0.88 : 0.56),
+                                color.opacity(0.05)
+                            ],
+                            center: .center,
+                            angle: .degrees(phase * 360 + Double(rank * 80))
+                        ),
+                        lineWidth: rank == 0 ? 1.7 : 1.25
+                    )
+                    .shadow(color: color.opacity(rank == 0 ? 0.42 : 0.28), radius: rank == 0 ? 10 : 7)
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 
