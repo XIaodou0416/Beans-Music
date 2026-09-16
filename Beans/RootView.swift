@@ -164,7 +164,7 @@ struct RootView: View {
                 value: isPadLandscape
             )
         }
-        .modifier(BeansDuoEffectModifier(isEnabled: duoEffectEnabled))
+        .modifier(BeansDuoEffectModifier(isEnabled: duoEffectEnabled && !showPlayer))
         .background {
             TabBarAppearanceConfigurator(
                 hidesSystemTabBarOnLegacy: !usesSystemFloatingTabBar,
@@ -460,6 +460,7 @@ struct RootView: View {
                 .environmentObject(player)
                 .environmentObject(player.clock)
                 .environmentObject(auth)
+                .modifier(BeansDuoEffectModifier(isEnabled: duoEffectEnabled))
         }
     }
 
