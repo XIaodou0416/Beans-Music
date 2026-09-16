@@ -160,6 +160,17 @@ enum SongSource: String, Codable, Sendable {
     }
 }
 
+enum FavoriteMark: Equatable {
+    case none
+    case local
+    case official
+    case both
+
+    var isLiked: Bool {
+        self != .none
+    }
+}
+
 struct Song: Identifiable, Hashable, Codable {
     let id: Int
     let name: String

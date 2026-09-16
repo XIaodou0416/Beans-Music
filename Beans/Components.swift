@@ -1,4 +1,36 @@
 import SwiftUI
+
+struct FavoriteHeartView: View {
+    let mark: FavoriteMark
+    var size: CGFloat = 17
+    var inactiveColor: Color = .white.opacity(0.78)
+
+    @ViewBuilder
+    var body: some View {
+        switch mark {
+        case .both:
+            Image(systemName: "heart.fill")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(LinearGradient(
+                    colors: [.red, Color.beansAmber],
+                    startPoint: .bottomLeading,
+                    endPoint: .topTrailing
+                ))
+        case .official:
+            Image(systemName: "heart.fill")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(Color.beansAmber)
+        case .local:
+            Image(systemName: "heart.fill")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(Color.red)
+        case .none:
+            Image(systemName: "heart")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(inactiveColor)
+        }
+    }
+}
 import CoreImage.CIFilterBuiltins
 
 private struct BeansSettingsPerformanceModeKey: EnvironmentKey {

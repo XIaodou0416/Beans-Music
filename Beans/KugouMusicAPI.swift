@@ -219,6 +219,51 @@ final class KugouMusicAPI {
         return code == 0 || code == 1 || code == 200
     }
 
+    func removeFromPlaylist(playlistID: Int, songs: [Song]) async throws -> Bool {
+        let auth = KugouMusicAuth.shared
+        guard auth.isLoggedIn else { throw NetEaseError.unknown("请先登录酷狗音乐") }
+        let fileIDs = songs.compactMap { song -> String? in
+            if let audioID = song.kugouAlbumAudioId?.trimmingCharacters(in: .whitespacesAndNewlines), !audioID.isEmpty {
+                return audioID
+            }
+            return nil
+        }
+        guard !fileIDs.isEmpty else { throw NetEaseError.unknown("当前歌曲缺少酷狗歌单标识") }
+        let json = try await cloudlistRequest(
+            "/v4/delete_songs",
+            params: ["last_time": "\(Int(Date().timeIntervalSince1970))", "last_area": "gztx"],
+            data: [
+                "listid": playlistID,
+                "userid": Int(auth.userId) ?? 0,
+                "token": auth.token,
+                "type": 0,
+                "list_ver": 0,
+                "data": fileIDs.map { ["fileid": Int($0) ?? 0] as [String: Any] },
+            ]
+        )
+        let code = Self.int(json["status"] ?? json["code"] ?? json["errcode"] ?? (json["data"] as? [String: Any])?["code"])
+        return code == 0 || code == 1 || code == 200
+    }
+
+    func deletePlaylist(playlistID: Int) async throws -> Bool {
+        let auth = KugouMusicAuth.shared
+        guard auth.isLoggedIn else { throw NetEaseError.unknown("请先登录酷狗音乐") }
+        auth.prepareDevice()
+        let json = try await cloudlistRequest(
+            "/v2/delete_list",
+            params: ["last_time": "\(Int(Date().timeIntervalSince1970))", "last_area": "gztx"],
+            data: [
+                "listid": playlistID,
+                "total_ver": 0,
+                "type": 1,
+                "userid": Int(auth.userId) ?? 0,
+                "token": auth.token,
+            ]
+        )
+        let code = Self.int(json["status"] ?? json["code"] ?? json["errcode"] ?? (json["data"] as? [String: Any])?["code"])
+        return code == 0 || code == 1 || code == 200
+    }
+
     /// 酷狗私人漫游：使用 KuGouMusicApi 的 personal_fm 请求协议，连续取几批推荐，
     /// 让首页不会被固定在首批三首歌曲。
     func personalFM(limit: Int = 12) async throws -> [Song] {

@@ -18,6 +18,7 @@ struct ReferencePlaybackView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
+    @EnvironmentObject private var favorites: FavoritesStore
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
@@ -249,10 +250,7 @@ struct ReferencePlaybackView: View {
                     .onTapGesture(perform: onArtist)
             }
             Spacer(minLength: 0)
-            compactActionButton(
-                icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
-                active: localLibrary.containsSong(song)
-            ) { onFavorite() }
+            favoriteActionButton()
             Menu {
                 Button("定时关闭", action: onSleepTimer)
                 Button("添加到本地歌单", action: onAddToLocalPlaylist)
@@ -372,12 +370,7 @@ struct ReferencePlaybackView: View {
             }
             Spacer(minLength: 0)
             HStack(spacing: 0) {
-                compactActionButton(
-                    icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
-                    active: localLibrary.containsSong(song)
-                ) {
-                    onFavorite()
-                }
+                favoriteActionButton()
                 Menu {
                     Button("定时关闭", action: onSleepTimer)
                     Button("添加到本地歌单", action: onAddToLocalPlaylist)
@@ -467,12 +460,7 @@ struct ReferencePlaybackView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            compactActionButton(
-                icon: localLibrary.containsSong(song) ? "heart.fill" : "heart",
-                active: localLibrary.containsSong(song)
-            ) {
-                onFavorite()
-            }
+            favoriteActionButton()
 
             Menu {
                 Button("清空播放列表", role: .destructive) {
@@ -830,6 +818,33 @@ struct AppleMusicPlaybackControls: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func favoriteActionButton() -> some View {
+        Button {
+            BeansHaptics.tap()
+            onFavorite()
+        } label: {
+            FavoriteHeartView(
+                mark: favoriteMark,
+                size: 17,
+                inactiveColor: primaryColor.opacity(0.78)
+            )
+            .frame(width: 38, height: 38)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var favoriteMark: FavoriteMark {
+        guard let song else { return .none }
+        let local = localLibrary.containsSong(song)
+        let official = favorites.isOfficiallyLiked(song)
+        switch (local, official) {
+        case (true, true): return .both
+        case (true, false): return .local
+        case (false, true): return .official
+        case (false, false): return .none
+        }
     }
 }
 

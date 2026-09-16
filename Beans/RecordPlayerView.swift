@@ -14,6 +14,7 @@ struct RecordPlayerView: View {
     let layoutData: [String: PlayerLayoutEntry]
     let initialShowsLyrics: Bool
     let isFavorite: Bool
+    let favoriteMark: FavoriteMark
     let onFavorite: () -> Void
     let onComments: () -> Void
     let onSettings: () -> Void
@@ -37,6 +38,7 @@ struct RecordPlayerView: View {
         layoutData: [String: PlayerLayoutEntry] = [:],
         initialShowsLyrics: Bool = false,
         isFavorite: Bool = false,
+        favoriteMark: FavoriteMark = .none,
         onFavorite: @escaping () -> Void,
         onComments: @escaping () -> Void,
         onSettings: @escaping () -> Void,
@@ -53,6 +55,7 @@ struct RecordPlayerView: View {
         self.layoutData = layoutData
         self.initialShowsLyrics = initialShowsLyrics
         self.isFavorite = isFavorite
+        self.favoriteMark = favoriteMark
         self.onFavorite = onFavorite
         self.onComments = onComments
         self.onSettings = onSettings
@@ -81,7 +84,6 @@ struct RecordPlayerView: View {
             .contentShape(Rectangle())
             .simultaneousGesture(dismissGesture)
         }
-        .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.22), value: showLyrics)
         .sheet(isPresented: $showQualityPicker) {
             RecordModeQualityPickerSheet(song: song)
@@ -399,9 +401,7 @@ struct RecordPlayerView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Button(action: onFavorite) {
-                    Image(systemName: isFavorite ? "heart.fill" : "heart")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(isFavorite ? .red : .white.opacity(0.86))
+                    FavoriteHeartView(mark: favoriteMark.isLiked ? favoriteMark : (isFavorite ? .local : .none), size: 17)
                         .frame(width: 38, height: 38)
                 }
                 .buttonStyle(RecordModePressButtonStyle())

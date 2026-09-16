@@ -44,6 +44,18 @@ final class FavoritesStore: ObservableObject {
         }
     }
 
+    func isOfficiallyLiked(_ song: Song?) -> Bool {
+        guard let song else { return false }
+        switch song.source {
+        case .netease:
+            return neteaseFavoriteSongs.contains { $0.id == song.id }
+        case .kugou:
+            return kugouOfficialFavoriteSongs.contains { $0.identityKey == song.identityKey }
+        case .qq:
+            return false
+        }
+    }
+
     /// 切换收藏状态；返回是否成功（云端同步失败时网易云会回滚）
     @discardableResult
     func toggle(_ song: Song) async -> Bool {
@@ -160,5 +172,9 @@ final class FavoritesStore: ObservableObject {
             kugouOfficialFavoriteSongs.removeAll { $0.identityKey == song.identityKey }
         }
         saveSongs(kugouOfficialFavoriteSongs, key: kugouOfficialKey)
+    }
+
+    func markNeteaseOfficial(_ song: Song, liked: Bool) {
+        updateNetease(song, liked: liked)
     }
 }
