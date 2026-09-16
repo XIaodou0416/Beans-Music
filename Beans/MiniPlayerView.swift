@@ -14,6 +14,7 @@ struct MiniPlayerView: View {
 
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Binding var showPlayer: Bool
     var presentation: Presentation = .dock
     var transitionNamespace: Namespace.ID?
@@ -51,15 +52,24 @@ struct MiniPlayerView: View {
     private var playerBarSurface: some View {
         if presentation.drawsBackground {
             content
-                .background(.regularMaterial, in: Capsule())
+                .background(miniPlayerMaterial, in: Capsule())
                 .overlay {
                     Capsule()
-                        .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
+                        .strokeBorder(.primary.opacity(isIPadLandscape ? 0.06 : 0.08), lineWidth: 0.5)
                 }
-                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                .shadow(color: .black.opacity(isIPadLandscape ? 0.08 : 0.12), radius: 10, y: 4)
         } else {
             content
         }
+    }
+
+    /// 横屏 iPad 的悬浮播放器使用更薄的材质，让主页内容本身成为玻璃后的底图。
+    private var isIPadLandscape: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && verticalSizeClass == .compact
+    }
+
+    private var miniPlayerMaterial: Material {
+        isIPadLandscape ? .ultraThinMaterial : .regularMaterial
     }
 
     private var content: some View {

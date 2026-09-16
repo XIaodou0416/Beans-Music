@@ -559,7 +559,9 @@ struct RootView: View {
                         .padding(.vertical, 10)
                         .padding(.trailing, 8)
 
-                    VStack(spacing: 0) {
+                    // 迷你播放器悬浮在页面之上，而不是占用主页的底部布局空间。
+                    // 这样滚动到下方的首页内容会作为玻璃胶囊的真实底图参与合成。
+                    ZStack(alignment: .bottom) {
                         ZStack {
                             legacyPage(.discover) { DiscoverView().environment(\.beansUsesSharedRootBackdrop, true) }
                             legacyPage(.playlists) { PlaylistSquareView().environment(\.beansUsesSharedRootBackdrop, true) }
@@ -577,7 +579,6 @@ struct RootView: View {
                             )
                                 .environmentObject(player.clock)
                                 .padding(.horizontal, 16)
-                                .padding(.top, 10)
                                 .padding(.bottom, max(10, proxy.safeAreaInsets.bottom + 4))
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
