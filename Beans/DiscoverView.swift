@@ -99,6 +99,8 @@ struct DiscoverView: View {
     @State private var playlistsExpanded = false
     /// 首页加载去重：SwiftUI 视图刷新时 .task 可能被重复触发，避免网络请求风暴。
     @State private var activeLoadKey: String?
+    /// 当前请求令牌：登录切换触发强制刷新时，旧请求即使晚返回也不能覆盖新账号结果。
+    @State private var activeLoadToken: UUID?
     @State private var lastLoadedKey = ""
     @State private var lastLoadedAt = Date.distantPast
     /// 登录后让对应平台绕过缓存重新拉取主页数据。
@@ -1820,7 +1822,9 @@ struct DiscoverView: View {
         // 网易云非「全部」分类的歌单不缓存（切换分类即重新拉取）
         let requestedCat = neteaseCat
         let loadKey = "\(requestedSource.rawValue)|\(requestedCat)"
-        if activeLoadKey == loadKey {
+        // 普通重复任务直接复用当前请求；强制刷新必须允许替换旧请求，
+        // 否则登录通知到达时会被首次启动时尚未完成的匿名请求拦截。
+        if activeLoadKey == loadKey, !force {
             return
         }
         if !force,
@@ -1831,15 +1835,18 @@ struct DiscoverView: View {
             errorMessage = nil
             return
         }
+        let loadToken = UUID()
         activeLoadKey = loadKey
+        activeLoadToken = loadToken
         defer {
-            if activeLoadKey == loadKey {
+            if activeLoadToken == loadToken {
+                activeLoadToken = nil
                 activeLoadKey = nil
             }
         }
         let cacheable = requestedCat == "全部" || requestedSource != .netease
         if let cached = cache.cached(for: requestedSource), !force, cacheable {
-            guard !Task.isCancelled, requestedSource == source else { return }
+            guard !Task.isCancelled, activeLoadToken == loadToken, requestedSource == source else { return }
             apply(cached)
             loading = false
             errorMessage = nil
@@ -1854,7 +1861,7 @@ struct DiscoverView: View {
 
         do {
             let snapshot = try await fetchSnapshot(for: requestedSource, neteaseCat: requestedCat)
-            guard !Task.isCancelled, requestedSource == source else { return }
+            guard !Task.isCancelled, activeLoadToken == loadToken, requestedSource == source else { return }
             apply(snapshot)
             if cacheable, !snapshot.isEmpty {
                 cache.save(snapshot, for: requestedSource)
@@ -1864,7 +1871,7 @@ struct DiscoverView: View {
             lastLoadedKey = loadKey
             lastLoadedAt = Date()
         } catch {
-            guard !Task.isCancelled, requestedSource == source else { return }
+            guard !Task.isCancelled, activeLoadToken == loadToken, requestedSource == source else { return }
             loading = false
             if !hasAnyData {
                 errorMessage = error.localizedDescription

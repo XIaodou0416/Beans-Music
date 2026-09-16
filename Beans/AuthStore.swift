@@ -47,6 +47,7 @@ final class AuthStore: ObservableObject {
         if let data = try? JSONEncoder().encode(account) {
             defaults.set(data, forKey: userKey)
         }
+        DiscoverCache.shared.invalidate(.netease)
         NotificationCenter.default.post(name: .beansNeteaseLoginDidUpdate, object: nil)
     }
 
@@ -90,5 +91,6 @@ final class AuthStore: ObservableObject {
         playlists = []
         isLoggedIn = false
         defaults.removeObject(forKey: userKey)
+        DiscoverCache.shared.invalidate(.netease)
     }
 }

@@ -51,6 +51,12 @@ final class DiscoverCache {
         persist()
     }
 
+    /// 登录账号发生变化时清除该平台的主页快照，避免匿名或旧账号的每日推荐被继续复用。
+    func invalidate(_ source: SearchProvider) {
+        store.removeValue(forKey: source.rawValue)
+        persist()
+    }
+
     private func persist() {
         guard let data = try? JSONEncoder().encode(store) else { return }
         UserDefaults.standard.set(data, forKey: storageKey)
