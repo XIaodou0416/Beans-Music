@@ -1319,6 +1319,7 @@ struct SettingsView: View {
     @State private var showUpdateResult = false
     @State private var disclaimerExpanded = false
     @State private var showFloatingImagePicker = false
+    @State private var showAppIconPicker = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1575,6 +1576,7 @@ struct SettingsView: View {
                     LazyVStack(alignment: .leading, spacing: 16) {
                         accountSection
                         themeSection
+                        appIconSection
                         playbackSection
                         equalizerSection
                         changelogSection
@@ -1617,6 +1619,10 @@ struct SettingsView: View {
                 }
             }
             .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showAppIconPicker) {
+            AppIconPickerSheet()
+                .environmentObject(theme)
         }
         .fullScreenCover(isPresented: $showFontImporter) {
             FontDocumentPicker { url in
@@ -1713,6 +1719,40 @@ struct SettingsView: View {
             appearanceSection
             platformSection
         }
+    }
+
+    private var appIconSection: some View {
+        Button {
+            BeansHaptics.tap()
+            showAppIconPicker = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "app.dashed")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("软件图标")
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(AppIconManager.shared.currentPreset.title)
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.beansComment.opacity(0.65))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
     }
 
     private var accountSection: some View {

@@ -6945,7 +6945,14 @@ private struct OfficialPlaylistPickerSheet: View {
                 } header: {
                     Text(source == .netease ? "网易云音乐" : "酷狗音乐")
                 } footer: {
-                    Text(mode == .save ? "选择后歌曲会保存到该官方歌单。" : "选择后只会取消该官方歌单中的歌曲。")
+                    if source == .kugou {
+                        Text(
+                            (mode == .save ? "选择后歌曲会保存到该官方歌单。" : "选择后只会取消该官方歌单中的歌曲。")
+                            + "\n\n保存或取消官方歌单后，因酷狗客户端本身的刷新限制，请完全退出官方客户端后重新打开，以刷新歌单。"
+                        )
+                    } else {
+                        Text(mode == .save ? "选择后歌曲会保存到该官方歌单。" : "选择后只会取消该官方歌单中的歌曲。")
+                    }
                 }
             }
             .beansScrollContentBackgroundHidden()
