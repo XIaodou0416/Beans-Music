@@ -12,6 +12,7 @@ struct PlayerView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var isPresented: Bool
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
+    @AppStorage("beans.favoriteDestination") private var favoriteDestinationRaw = FavoriteDestination.local.rawValue
 
     @State private var lyrics: [LyricLine] = []
     @State private var showLyrics = false
@@ -22,8 +23,6 @@ struct PlayerView: View {
     @State private var showSleepTimer = false
     @State private var showAddToPlaylist = false
     @State private var showComments = false
-    @State private var showFavoriteDestination = false
-    @State private var showFavoriteRemovalChoice = false
     @State private var showOfficialPlaylistPicker = false
     @State private var officialPlaylistMode: OfficialPlaylistMode = .save
     @State private var officialPlaylists: [Playlist] = []
@@ -56,6 +55,10 @@ struct PlayerView: View {
 
     private var selectedThemeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
+    }
+
+    private var favoriteDestination: FavoriteDestination {
+        FavoriteDestination(rawValue: favoriteDestinationRaw) ?? .local
     }
     @AppStorage("beans.djVisual") private var djVisualEnabled = false
     @AppStorage("beans.djVisualIntensity") private var djVisualIntensity = 0.8
@@ -274,11 +277,23 @@ struct PlayerView: View {
 
     private func toggleLocalFavorite(_ song: Song) {
         favoriteCandidate = song
-        if localLibrary.containsSong(song) || favorites.isOfficiallyLiked(song) {
-            showFavoriteRemovalChoice = true
+        if usesOfficialFavoriteDestination(for: song) {
+            if favorites.isOfficiallyLiked(song) {
+                beginRemoveOfficialFavorite(song)
+            } else {
+                beginOfficialFavorite(song)
+            }
         } else {
-            showFavoriteDestination = true
+            if localLibrary.containsSong(song) {
+                removeLocalFavorite(song)
+            } else {
+                saveFavoriteLocally(song)
+            }
         }
+    }
+
+    private func usesOfficialFavoriteDestination(for song: Song) -> Bool {
+        favoriteDestination == .official && song.source != .qq
     }
 
     private func favoriteMark(for song: Song?) -> FavoriteMark {
@@ -365,9 +380,15 @@ struct PlayerView: View {
                 ToastCenter.shared.show("请先登录网易云音乐")
                 return
             }
-            let success = (try? await NetEaseAPI.shared.addToPlaylist(playlistID: playlist.id, songIDs: [song.id])) ?? false
+            let success: Bool
+            if playlist.isNetEaseLikedPlaylist {
+                // 网易云“我喜欢的音乐”只能通过专用红心接口写入，普通歌单编辑接口会被服务端拒绝。
+                success = await favorites.toggle(song)
+            } else {
+                success = (try? await NetEaseAPI.shared.addToPlaylist(playlistID: playlist.id, songIDs: [song.id])) ?? false
+            }
             if success { favorites.markNeteaseOfficial(song, liked: true) }
-            ToastCenter.shared.show(success ? "已收藏到网易云音乐" : "网易云音乐收藏失败")
+            ToastCenter.shared.show(success ? "已收藏到「\(playlist.name)」" : "网易云音乐收藏失败")
         case .kugou:
             guard KugouMusicAuth.shared.isLoggedIn else {
                 ToastCenter.shared.show("请先登录酷狗音乐")
@@ -984,41 +1005,6 @@ struct PlayerView: View {
                 }
             }
             Button("取消", role: .cancel) {}
-        }
-        .confirmationDialog("选择收藏位置", isPresented: $showFavoriteDestination, titleVisibility: .visible) {
-            Button("保存到本地歌单") {
-                if let favoriteCandidate {
-                    saveFavoriteLocally(favoriteCandidate)
-                }
-                favoriteCandidate = nil
-            }
-            Button("保存到官方平台歌单") {
-                if let favoriteCandidate {
-                    beginOfficialFavorite(favoriteCandidate)
-                }
-            }
-            Button("取消", role: .cancel) {
-                favoriteCandidate = nil
-            }
-        } message: {
-            Text("网易云音乐和酷狗音乐支持保存到对应账号的官方歌单")
-        }
-        .confirmationDialog("选择取消收藏位置", isPresented: $showFavoriteRemovalChoice, titleVisibility: .visible) {
-            if let favoriteCandidate, localLibrary.containsSong(favoriteCandidate) {
-                Button("取消本地收藏") {
-                    removeLocalFavorite(favoriteCandidate)
-                }
-            }
-            if let favoriteCandidate, favorites.isOfficiallyLiked(favoriteCandidate) {
-                Button("取消官方收藏") {
-                    beginRemoveOfficialFavorite(favoriteCandidate)
-                }
-            }
-            Button("取消", role: .cancel) {
-                favoriteCandidate = nil
-            }
-        } message: {
-            Text("请选择要取消的收藏来源")
         }
         .confirmationDialog("下载《\(song?.name ?? "当前歌曲")》", isPresented: $showDownloadPicker, titleVisibility: .visible) {
             ForEach(downloadQualityOptions) { quality in

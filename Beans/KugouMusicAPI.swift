@@ -178,9 +178,21 @@ final class KugouMusicAPI {
             params: ["last_time": "\(Int(Date().timeIntervalSince1970))", "last_area": "gztx"],
             data: body
         )
-        let id = Self.int(json["listid"] ?? json["list_id"] ?? json["id"] ?? (json["data"] as? [String: Any])?["listid"])
-        guard id > 0 else { throw NetEaseError.unknown("酷狗歌单创建失败") }
-        return Playlist(id: id, name: trimmedName, coverURL: nil, source: .kugou)
+        let id = Self.deepInt(json, names: ["listid", "list_id", "playlist_id", "id"])
+        if id > 0 {
+            return Playlist(id: id, name: trimmedName, coverURL: nil, source: .kugou)
+        }
+
+        // 部分客户端版本的创建接口只返回成功状态，不返回 listid；刷新用户歌单确认实际创建结果。
+        let code = Self.deepInt(json, names: ["status", "code", "errcode"])
+        guard code == 0 || code == 1 || code == 200 else {
+            throw NetEaseError.unknown("酷狗歌单创建失败")
+        }
+        let refreshedPlaylists = try await userPlaylists()
+        if let created = refreshedPlaylists.first(where: { $0.name == trimmedName }) {
+            return created
+        }
+        throw NetEaseError.unknown("酷狗歌单已提交创建，请刷新歌单后确认")
     }
 
     func addToPlaylist(playlistID: Int, songs: [Song]) async throws -> Bool {

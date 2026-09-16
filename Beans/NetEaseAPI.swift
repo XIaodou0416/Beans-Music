@@ -735,14 +735,22 @@ final class NetEaseAPI {
     }
 
     func addToPlaylist(playlistID: Int, songIDs: [Int]) async throws -> Bool {
-        let tracks = "[" + songIDs.map(String.init).joined(separator: ",") + "]"
-        let json = try await request("/api/playlist/manipulate/tracks", payload: ["op": "add", "pid": playlistID, "tracks": tracks], crypto: "weapi")
+        let trackIDs = "[" + songIDs.map(String.init).joined(separator: ",") + "]"
+        let json = try await request(
+            "/api/playlist/manipulate/tracks",
+            payload: ["op": "add", "pid": playlistID, "trackIds": trackIDs, "imme": "true"],
+            crypto: "weapi"
+        )
         return (json["code"] as? Int) == 200
     }
 
     func removeFromPlaylist(playlistID: Int, songIDs: [Int]) async throws -> Bool {
-        let tracks = "[" + songIDs.map(String.init).joined(separator: ",") + "]"
-        let json = try await request("/api/playlist/manipulate/tracks", payload: ["op": "del", "pid": playlistID, "tracks": tracks], crypto: "weapi")
+        let trackIDs = "[" + songIDs.map(String.init).joined(separator: ",") + "]"
+        let json = try await request(
+            "/api/playlist/manipulate/tracks",
+            payload: ["op": "del", "pid": playlistID, "trackIds": trackIDs, "imme": "true"],
+            crypto: "weapi"
+        )
         return (json["code"] as? Int) == 200
     }
 

@@ -8,19 +8,7 @@ struct FavoriteHeartView: View {
     @ViewBuilder
     var body: some View {
         switch mark {
-        case .both:
-            Image(systemName: "heart.fill")
-                .font(.system(size: size, weight: .semibold))
-                .foregroundStyle(LinearGradient(
-                    colors: [.red, Color.beansAmber],
-                    startPoint: .bottomLeading,
-                    endPoint: .topTrailing
-                ))
-        case .official:
-            Image(systemName: "heart.fill")
-                .font(.system(size: size, weight: .semibold))
-                .foregroundStyle(Color.beansAmber)
-        case .local:
+        case .both, .official, .local:
             Image(systemName: "heart.fill")
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(Color.red)

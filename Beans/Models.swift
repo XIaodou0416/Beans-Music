@@ -171,6 +171,20 @@ enum FavoriteMark: Equatable {
     }
 }
 
+enum FavoriteDestination: String, CaseIterable, Identifiable {
+    case local
+    case official
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .local: return "本地收藏"
+        case .official: return "官方歌单"
+        }
+    }
+}
+
 struct Song: Identifiable, Hashable, Codable {
     let id: Int
     let name: String

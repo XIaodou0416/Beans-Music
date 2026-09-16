@@ -1249,6 +1249,7 @@ struct SettingsView: View {
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
     @AppStorage("beans.nowPlaying.enabled.v1") private var nowPlayingEnabled = true
     @AppStorage("beans.audioQuality") private var playbackAudioQualityRaw = BeansAudioQuality.hires.rawValue
+    @AppStorage("beans.favoriteDestination") private var favoriteDestinationRaw = FavoriteDestination.local.rawValue
     @AppStorage(BeansHaptics.enabledKey) private var hapticsEnabled = true
     @AppStorage("beans.playback.autoResumeLast") private var autoResumeLastPlayback = false
     @AppStorage("beans.labelColorHex") private var labelColorHex = ""
@@ -2656,6 +2657,31 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .tint(Color.beansAmber)
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("收藏保存位置")
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text("QQ 音乐始终保存到本地收藏")
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                    Picker("收藏保存位置", selection: $favoriteDestinationRaw) {
+                        ForEach(FavoriteDestination.allCases) { destination in
+                            Text(destination.title).tag(destination.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
