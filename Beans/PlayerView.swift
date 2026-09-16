@@ -6295,6 +6295,7 @@ struct PlayerSettingsSheet: View {
                 LazyVStack(spacing: 12) {
                     layoutCard
                     coverCard
+                    lyricDisplayCard
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
@@ -6532,7 +6533,7 @@ struct PlayerSettingsSheet: View {
         }
     }
 
-    /// 歌词显示卡片：字号 / 行距 / 翻译
+    /// 歌词设置卡片：字号 / 行距 / 翻译 / 逐字歌词
     private var lyricOffsetText: String {
         if lyricOffset == 0 { return "同步" }
         return lyricOffset > 0
@@ -6541,7 +6542,7 @@ struct PlayerSettingsSheet: View {
     }
 
     private var lyricDisplayCard: some View {
-        settingCard("歌词显示", isExpanded: $lyricDisplayExpanded) {
+        settingCard("歌词设置") {
             settingSlider("歌词字号", valueText: "\(fontSize) pt") {
                 Slider(
                     value: Binding(get: { Double(fontSize) }, set: { fontSize = Int($0) }),

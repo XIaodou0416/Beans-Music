@@ -247,7 +247,7 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
         let requestOptions = dictionary(from: options?.toObject())
         guard let requestURL = URL(string: url) else {
             runtimeQueue.async {
-                callback.call(withArguments: [[ "message": "Invalid URL" ], NSNull()])
+                callback.call(withArguments: [[ "message": "Invalid URL" ], NSNull(), NSNull()])
             }
             return
         }
@@ -499,9 +499,15 @@ final class BeansLXScriptRuntime {
                             return nativeLX.request(url, options || {}, callback);
                         }
                         return new Promise(function(resolve, reject) {
-                            nativeLX.request(url, options || {}, function(error, response) {
+                            nativeLX.request(url, options || {}, function(error, response, body) {
                                 if (error && error.message) reject(error);
-                                else resolve(response);
+                                else if (typeof body !== 'undefined' && body !== null) {
+                                    if (response && typeof response === 'object') {
+                                        response.body = body;
+                                        if (typeof body === 'string') response.bodyText = body;
+                                    }
+                                    resolve(response);
+                                } else resolve(response);
                             });
                         });
                     }
@@ -955,8 +961,14 @@ final class LXScriptSourceRunner {
         quality: String,
         excludedHosts: Set<String>
     ) -> UnblockService.Resolved? {
-        let runtime = runtime(for: source, script: script)
-        guard runtime?.waitForInitialization(timeout: 10) == true else { return nil }
+        guard let runtime = runtime(for: source, script: script) else { return nil }
+
+        // Some LX User API scripts register their playback handler synchronously
+        // but never publish an `inited` capability event. Do not block valid
+        // playback on that optional status message.
+        if !runtime.hasPlaybackResolver(), !runtime.waitForInitialization(timeout: 10) {
+            return nil
+        }
         let payload: [String: Any] = [
             "action": "musicUrl",
             "source": providerCode(for: songSource),
