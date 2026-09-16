@@ -508,9 +508,16 @@ struct BeansNavigationStack<Content: View>: View {
 
     var body: some View {
         if #available(iOS 16, *) {
-            NavigationStack { content() }
+            NavigationStack {
+                content()
+                    .background(BeansNavigationSurfaceClearer())
+            }
         } else {
-            NavigationView { content() }.navigationViewStyle(.stack)
+            NavigationView {
+                content()
+                    .background(BeansNavigationSurfaceClearer())
+            }
+            .navigationViewStyle(.stack)
         }
     }
 }
@@ -522,9 +529,42 @@ struct BeansNavigationStackWithPath<Route: Hashable, Content: View>: View {
 
     var body: some View {
         if #available(iOS 16, *) {
-            NavigationStack(path: $path) { content() }
+            NavigationStack(path: $path) {
+                content()
+                    .background(BeansNavigationSurfaceClearer())
+            }
         } else {
-            NavigationView { content() }.navigationViewStyle(.stack)
+            NavigationView {
+                content()
+                    .background(BeansNavigationSurfaceClearer())
+            }
+            .navigationViewStyle(.stack)
+        }
+    }
+}
+
+/// SwiftUI 的 NavigationStack 会在透明内容后方保留系统默认底色。
+/// 将导航容器和承载控制器设为透明后，iPad 横屏页面才能透出根层唯一的主页壁纸。
+private struct BeansNavigationSurfaceClearer: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        let controller = UIViewController()
+        controller.view.backgroundColor = .clear
+        controller.view.isUserInteractionEnabled = false
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        DispatchQueue.main.async {
+            var current: UIViewController? = uiViewController
+            while let controller = current {
+                controller.view.backgroundColor = .clear
+                if let navigationController = controller as? UINavigationController {
+                    navigationController.view.backgroundColor = .clear
+                    navigationController.topViewController?.view.backgroundColor = .clear
+                    break
+                }
+                current = controller.parent
+            }
         }
     }
 }
