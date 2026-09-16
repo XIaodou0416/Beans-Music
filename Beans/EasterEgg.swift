@@ -105,10 +105,12 @@ struct EasterEggOverlay: View {
             (0.67, 0.64, -20), (0.77, 0.76, 15), (0.88, 0.61, -7),
             (0.13, 0.69, 20), (0.23, 0.58, -12), (0.34, 0.74, 9),
             (0.52, 0.63, -17), (0.63, 0.73, 14), (0.74, 0.59, -8),
-            (0.94, 0.68, 18)
+            (0.94, 0.68, 18), (0.06, 0.57, -6), (0.30, 0.67, 16),
+            (0.41, 0.55, -15), (0.58, 0.65, 7), (0.70, 0.75, -19),
+            (0.82, 0.56, 12), (0.97, 0.64, -10), (0.49, 0.71, 21)
         ]
         let travelDuration = max(1.65, min(3.1, audioDuration * 0.48))
-        let count = min(patterns.count, max(14, Int((audioDuration / 0.46).rounded(.up))))
+        let count = min(patterns.count, max(22, Int((audioDuration / 0.30).rounded(.up))))
         let finalDelay = max(0, audioDuration - travelDuration - 0.08)
         return patterns.prefix(count).enumerated().map { index, pattern in
             FallingFoot(

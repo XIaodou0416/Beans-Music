@@ -75,6 +75,7 @@ struct RootView: View {
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage("beans.duoEffectEnabled") private var duoEffectEnabled = false
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
     @AppStorage("beans.remoteAnnouncement.imageURL") private var remoteAnnouncementImageURL = ""
@@ -163,6 +164,7 @@ struct RootView: View {
                 value: isPadLandscape
             )
         }
+        .modifier(BeansDuoEffectModifier(isEnabled: duoEffectEnabled))
         .background {
             TabBarAppearanceConfigurator(
                 hidesSystemTabBarOnLegacy: !usesSystemFloatingTabBar,

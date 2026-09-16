@@ -31,3 +31,34 @@ Reference revision: v1.0.14 (ddfb8f742b56df949c9afb657ae2b9eb72f69c10).
 The adapted implementation is distributed under the terms of GNU Lesser General
 Public License version 3.0. The upstream copyright and license notices remain
 applicable.
+
+## Duo dynamic glass effect
+
+The optional device-tilt glass fold effect is adapted from DuoLikeAnimation by
+Elijah Semyonov.
+
+Source: https://github.com/elijah-semyonov/DuoLikeAnimation
+
+Reference revision: 0aa525639a494be8abdf4c4e1e25dcb52d372d94.
+
+MIT License
+
+Copyright (c) 2026 Elijah Semyonov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
