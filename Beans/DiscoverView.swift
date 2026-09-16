@@ -2348,6 +2348,9 @@ struct DailySongsSheet: View {
                     .accessibilityLabel(Text("刷新每日推荐"))
                 }
             }
+            .task {
+                await refreshDailySongs()
+            }
     }
 
     private var filteredSongs: [Song] {
