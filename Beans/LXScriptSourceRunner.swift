@@ -247,7 +247,7 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
         let requestOptions = dictionary(from: options?.toObject())
         guard let requestURL = URL(string: url) else {
             runtimeQueue.async {
-                callback.call(withArguments: [[ "message": "Invalid URL" ], NSNull(), NSNull()])
+                callback.call(withArguments: [[ "message": "Invalid URL" ], NSNull()])
             }
             return
         }
@@ -293,11 +293,11 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
             guard let self else { return }
             self.runtimeQueue.async {
                 if let error {
-                    callback.call(withArguments: [[ "message": error.localizedDescription ], NSNull(), NSNull()])
+                    callback.call(withArguments: [[ "message": error.localizedDescription ], NSNull()])
                     return
                 }
                 guard let http = response as? HTTPURLResponse else {
-                    callback.call(withArguments: [[ "message": "No HTTP response" ], NSNull(), NSNull()])
+                    callback.call(withArguments: [[ "message": "No HTTP response" ], NSNull()])
                     return
                 }
                 let parsed = self.parseBody(data)
@@ -314,11 +314,9 @@ final class BeansLXScriptBridge: NSObject, BeansLXScriptBridgeExports {
                     "ok": (200..<300).contains(http.statusCode)
                 ]
                 if http.statusCode >= 400 {
-                    callback.call(withArguments: [[ "message": "HTTP \(http.statusCode)" ], responseObject, body])
+                    callback.call(withArguments: [[ "message": "HTTP \(http.statusCode)" ], responseObject])
                 } else {
-                    // Accept both callback forms used by LX scripts:
-                    // (error, response) and (error, response, body).
-                    callback.call(withArguments: [NSNull(), responseObject, body])
+                    callback.call(withArguments: [NSNull(), responseObject])
                 }
             }
         }.resume()
@@ -438,9 +436,6 @@ final class BeansLXScriptRuntime {
     private var handlers: [String: JSValue] = [:]
     private var capabilities: [String: [String]] = [:]
     private var qualityCapabilities: [String: [String]] = [:]
-    private let readinessLock = NSLock()
-    private let readinessSemaphore = DispatchSemaphore(value: 0)
-    private var didReceiveInitialization = false
 
     init?(source: ThirdPartySource, script: String) {
         sourceID = source.id
@@ -499,15 +494,9 @@ final class BeansLXScriptRuntime {
                             return nativeLX.request(url, options || {}, callback);
                         }
                         return new Promise(function(resolve, reject) {
-                            nativeLX.request(url, options || {}, function(error, response, body) {
+                            nativeLX.request(url, options || {}, function(error, response) {
                                 if (error && error.message) reject(error);
-                                else if (typeof body !== 'undefined' && body !== null) {
-                                    if (response && typeof response === 'object') {
-                                        response.body = body;
-                                        if (typeof body === 'string') response.bodyText = body;
-                                    }
-                                    resolve(response);
-                                } else resolve(response);
+                                else resolve(response);
                             });
                         });
                     }
@@ -614,16 +603,6 @@ final class BeansLXScriptRuntime {
                         });
                     };
                 }
-                if (typeof Promise.allSettled !== 'function') {
-                    Promise.allSettled = function(iterable) {
-                        return Promise.all(Array.prototype.slice.call(iterable || []).map(function(value) {
-                            return Promise.resolve(value).then(
-                                function(result) { return { status: 'fulfilled', value: result }; },
-                                function(reason) { return { status: 'rejected', reason: reason }; }
-                            );
-                        }));
-                    };
-                }
                 if (!JSON.__beansOriginalParse) {
                     JSON.__beansOriginalParse = JSON.parse;
                     JSON.parse = function(value) {
@@ -651,38 +630,17 @@ final class BeansLXScriptRuntime {
 
     func receive(event: String, payload: Any?) {
         guard event == "inited" else { return }
-        if let dictionary = stringKeyedDictionary(from: payload),
-           let sources = stringKeyedDictionary(from: dictionary["sources"]) {
-            capabilities = sources.reduce(into: [:]) { result, pair in
-                guard let source = stringKeyedDictionary(from: pair.value) else { return }
-                result[pair.key] = stringArray(from: source["actions"])
-            }
-            qualityCapabilities = sources.reduce(into: [:]) { result, pair in
-                guard let source = stringKeyedDictionary(from: pair.value) else { return }
-                result[pair.key] = stringArray(from: source["qualitys"] ?? source["qualities"])
-            }
-            BeansLogger.shared.log("第三方脚本初始化：\(sourceID) sources=\(capabilities.keys.sorted().joined(separator: ","))", level: .debug)
+        guard let dictionary = stringKeyedDictionary(from: payload),
+              let sources = stringKeyedDictionary(from: dictionary["sources"]) else { return }
+        capabilities = sources.reduce(into: [:]) { result, pair in
+            guard let source = stringKeyedDictionary(from: pair.value) else { return }
+            result[pair.key] = stringArray(from: source["actions"])
         }
-        readinessLock.lock()
-        let shouldSignal = !didReceiveInitialization
-        didReceiveInitialization = true
-        readinessLock.unlock()
-        if shouldSignal { readinessSemaphore.signal() }
-    }
-
-    /// LX scripts commonly initialize asynchronously after checking a remote source list.
-    /// Waiting here prevents a valid script from being reported as unsupported immediately
-    /// after evaluation.
-    func waitForInitialization(timeout: TimeInterval = 10) -> Bool {
-        readinessLock.lock()
-        let ready = didReceiveInitialization
-        readinessLock.unlock()
-        if ready { return true }
-        _ = readinessSemaphore.wait(timeout: .now() + timeout)
-        readinessLock.lock()
-        let finished = didReceiveInitialization
-        readinessLock.unlock()
-        return finished
+        qualityCapabilities = sources.reduce(into: [:]) { result, pair in
+            guard let source = stringKeyedDictionary(from: pair.value) else { return }
+            result[pair.key] = stringArray(from: source["qualitys"] ?? source["qualities"])
+        }
+        BeansLogger.shared.log("第三方脚本初始化：\(sourceID) sources=\(capabilities.keys.sorted().joined(separator: ","))", level: .debug)
     }
 
     private func stringKeyedDictionary(from raw: Any?) -> [String: Any]? {
@@ -712,23 +670,6 @@ final class BeansLXScriptRuntime {
     func capabilitySnapshot() -> CapabilitySnapshot {
         queue.sync {
             CapabilitySnapshot(platforms: capabilities, qualities: qualityCapabilities)
-        }
-    }
-
-    /// Older script releases may register a request handler without publishing
-    /// an `inited` capability map. They are still valid playback scripts.
-    func hasPlaybackResolver() -> Bool {
-        queue.sync {
-            guard handlers["request"] == nil else { return true }
-            let kind = context.evaluateScript("""
-            (function() {
-                if (typeof __beansPlugin !== 'undefined' && typeof __beansPlugin.musicUrl === 'function') return 'musicUrl';
-                if (typeof __beansMusicPlugin !== 'undefined' && typeof __beansMusicPlugin.getMusicUrl === 'function') return 'musicPluginGetMusicUrl';
-                if (typeof __beansPlugin !== 'undefined' && typeof __beansPlugin.getMusicUrl === 'function') return 'pluginGetMusicUrl';
-                return '';
-            })()
-            """)?.toString() ?? ""
-            return !kind.isEmpty
         }
     }
 
@@ -871,30 +812,11 @@ final class LXScriptSourceRunner {
                     ))
                     return
                 }
-                let didInitialize = runtime.waitForInitialization(timeout: 10)
-                guard didInitialize || runtime.hasPlaybackResolver() else {
-                    continuation.resume(returning: SourceCheckResult(
-                        status: .unavailable,
-                        message: "脚本初始化超时",
-                        detail: "脚本未在限定时间内返回音源能力列表。"
-                    ))
-                    return
-                }
                 let snapshot = runtime.capabilitySnapshot()
                 let usable = snapshot.platforms
-                    .filter { _, actions in
-                        actions.contains { $0.caseInsensitiveCompare("musicUrl") == .orderedSame }
-                    }
+                    .filter { $0.value.contains("musicUrl") }
                     .keys
                     .sorted()
-                if usable.isEmpty, runtime.hasPlaybackResolver() {
-                    continuation.resume(returning: SourceCheckResult(
-                        status: .available,
-                        message: "LX request handler loaded",
-                        detail: "The script did not publish a platform capability list; playback will request the current song platform and quality."
-                    ))
-                    return
-                }
                 guard !usable.isEmpty else {
                     continuation.resume(returning: SourceCheckResult(
                         status: .unavailable,
@@ -961,14 +883,7 @@ final class LXScriptSourceRunner {
         quality: String,
         excludedHosts: Set<String>
     ) -> UnblockService.Resolved? {
-        guard let runtime = runtime(for: source, script: script) else { return nil }
-
-        // Some LX User API scripts register their playback handler synchronously
-        // but never publish an `inited` capability event. Do not block valid
-        // playback on that optional status message.
-        if !runtime.hasPlaybackResolver(), !runtime.waitForInitialization(timeout: 10) {
-            return nil
-        }
+        let runtime = runtime(for: source, script: script)
         let payload: [String: Any] = [
             "action": "musicUrl",
             "source": providerCode(for: songSource),
@@ -985,7 +900,7 @@ final class LXScriptSourceRunner {
                 )
             ]
         ]
-        guard let raw = runtime.invokeRequest(payload: payload) else { return nil }
+        guard let raw = runtime?.invokeRequest(payload: payload) else { return nil }
         guard let urlString = extractURLString(from: raw),
               let url = URL(string: urlString),
               let playable = playableURL(url, excludedHosts: excludedHosts) else {
