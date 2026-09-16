@@ -22,6 +22,7 @@ struct RecordPlayerView: View {
     let onAddToLocalPlaylist: () -> Void
     let onDownload: () -> Void
     let downloadFeatureUnlocked: Bool
+    let visualsActive: Bool
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var storedDownloadFeatureUnlocked = false
 
     @State private var showLyrics = false
@@ -43,7 +44,8 @@ struct RecordPlayerView: View {
         onSleepTimer: @escaping () -> Void = {},
         onAddToLocalPlaylist: @escaping () -> Void = {},
         onDownload: @escaping () -> Void = {},
-        downloadFeatureUnlocked: Bool = false
+        downloadFeatureUnlocked: Bool = false,
+        visualsActive: Bool = true
     ) {
         self.song = song
         self.lyrics = lyrics
@@ -59,6 +61,7 @@ struct RecordPlayerView: View {
         self.onAddToLocalPlaylist = onAddToLocalPlaylist
         self.onDownload = onDownload
         self.downloadFeatureUnlocked = downloadFeatureUnlocked
+        self.visualsActive = visualsActive
         self._showLyrics = State(initialValue: initialShowsLyrics)
     }
 
@@ -94,7 +97,7 @@ struct RecordPlayerView: View {
 
     private var backdrop: some View {
         ZStack {
-            CoverBlurBackground(url: song?.coverURL, scheme: colorScheme)
+            CoverBlurBackground(url: song?.coverURL, scheme: colorScheme, animationsEnabled: visualsActive)
             RadialGradient(
                 colors: [.white.opacity(0.12), .clear],
                 center: .topLeading,
@@ -224,7 +227,7 @@ struct RecordPlayerView: View {
     private func turntable(size: CGFloat) -> some View {
         RecordModeTurntableView(
             coverURL: song?.coverURL,
-            isPlaying: player.isPlaying,
+            isPlaying: visualsActive && player.isPlaying,
             trackId: song?.id,
             size: size,
             onTap: { withAnimation(.easeInOut(duration: 0.22)) { showLyrics = true } },

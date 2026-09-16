@@ -186,6 +186,21 @@ struct Song: Identifiable, Hashable, Codable {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
+    var officialURL: URL? {
+        switch source {
+        case .netease:
+            return URL(string: "https://music.163.com/#/song?id=\(id)")
+        case .qq:
+            let identifier = qqMid?.isEmpty == false ? qqMid! : String(id)
+            return URL(string: "https://y.qq.com/n/ryqq/songDetail/\(identifier)")
+        case .kugou:
+            guard let hash = kugouHash?.trimmingCharacters(in: .whitespacesAndNewlines), !hash.isEmpty else {
+                return nil
+            }
+            return URL(string: "https://www.kugou.com/song/#hash=\(hash)")
+        }
+    }
+
     /// 跨平台唯一标识（避免网易云与 QQ 音乐歌曲 id 撞车）
     var identityKey: String {
         switch source {

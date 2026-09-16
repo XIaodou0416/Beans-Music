@@ -11,16 +11,20 @@ final class FavoritesStore: ObservableObject {
     @Published private(set) var neteaseFavoriteSongs: [Song] = []
     /// 酷狗红心收藏（本地持久化，酷狗暂无稳定云端红心写入接口）
     @Published private(set) var kugouFavoriteSongs: [Song] = []
+    /// 酷狗官方歌单收藏的本地镜像，用于显示收藏状态，不替代设备本地歌单。
+    @Published private(set) var kugouOfficialFavoriteSongs: [Song] = []
 
     private let defaults = UserDefaults.standard
     private let neteaseKey = "beans.fav.netease.v1"
     private let qqKey = "beans.fav.qq.v1"
     private let kugouKey = "beans.fav.kugou.v1"
+    private let kugouOfficialKey = "beans.fav.kugou.official.v1"
 
     private init() {
         qqFavoriteSongs = Self.loadSongs(qqKey)
         neteaseFavoriteSongs = Self.loadSongs(neteaseKey)
         kugouFavoriteSongs = Self.loadSongs(kugouKey)
+        kugouOfficialFavoriteSongs = Self.loadSongs(kugouOfficialKey)
     }
 
     /// 该歌曲是否已收藏
@@ -36,6 +40,7 @@ final class FavoritesStore: ObservableObject {
             return qqFavoriteSongs.contains { $0.identityKey == song.identityKey }
         case .kugou:
             return kugouFavoriteSongs.contains { $0.identityKey == song.identityKey }
+                || kugouOfficialFavoriteSongs.contains { $0.identityKey == song.identityKey }
         }
     }
 
@@ -145,5 +150,15 @@ final class FavoritesStore: ObservableObject {
     func resetNetease() {
         neteaseFavoriteSongs = []
         defaults.removeObject(forKey: neteaseKey)
+    }
+
+    func markKugouOfficial(_ song: Song, liked: Bool) {
+        if liked {
+            kugouOfficialFavoriteSongs.removeAll { $0.identityKey == song.identityKey }
+            kugouOfficialFavoriteSongs.insert(song, at: 0)
+        } else {
+            kugouOfficialFavoriteSongs.removeAll { $0.identityKey == song.identityKey }
+        }
+        saveSongs(kugouOfficialFavoriteSongs, key: kugouOfficialKey)
     }
 }

@@ -19,16 +19,19 @@ import CoreImage.CIFilterBuiltins
 struct CoverBlurBackground: UIViewRepresentable {
     let url: URL?
     let scheme: ColorScheme
+    var animationsEnabled = true
 
     func makeUIView(context: Context) -> CoverBlurView {
         let view = CoverBlurView()
         view.updateScheme(scheme)
+        view.setAnimationsEnabled(animationsEnabled)
         view.load(url: url)
         return view
     }
 
     func updateUIView(_ uiView: CoverBlurView, context: Context) {
         uiView.updateScheme(scheme)
+        uiView.setAnimationsEnabled(animationsEnabled)
         uiView.load(url: url)
     }
 }
@@ -39,6 +42,7 @@ final class CoverBlurView: UIView {
     private let gradientHost = UIView()
     private let tintView = UIView()
     private var currentURL: URL?
+    private var animationsEnabled = true
     private static let imageCache = NSCache<NSURL, UIImage>()
     private static let blurQueue = DispatchQueue(label: "beans.coverblur", qos: .utility)
     private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -79,6 +83,7 @@ final class CoverBlurView: UIView {
     /// 背景动态效果：模糊封面缓慢呼吸缩放（UIView 循环动画，可靠运行）+ 主色渐变端点缓慢摆动。
     /// 长周期低频 + GPU 合成，不触发 SwiftUI 布局，也几乎不增加耗电。
     private func startBackgroundAnimations() {
+        guard animationsEnabled else { return }
         // 重新触发时先取消旧动画，避免堆叠
         imageView.layer.removeAnimation(forKey: "beansBgBreathe")
         gradientLayer.removeAnimation(forKey: "beansGradStart")
@@ -111,6 +116,18 @@ final class CoverBlurView: UIView {
         end.repeatCount = .infinity
         end.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         gradientLayer.add(end, forKey: "beansGradEnd")
+    }
+
+    func setAnimationsEnabled(_ enabled: Bool) {
+        guard animationsEnabled != enabled else { return }
+        animationsEnabled = enabled
+        if enabled {
+            startBackgroundAnimations()
+        } else {
+            imageView.layer.removeAnimation(forKey: "beansBgBreathe")
+            gradientLayer.removeAnimation(forKey: "beansGradStart")
+            gradientLayer.removeAnimation(forKey: "beansGradEnd")
+        }
     }
 
     func updateScheme(_ scheme: ColorScheme) {
@@ -154,6 +171,13 @@ final class CoverBlurView: UIView {
 
     /// 应用封面主色渐变（带过渡动画）
     private func applyGradient(_ colors: (top: UIColor, bottom: UIColor)) {
+        guard animationsEnabled else {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            gradientLayer.colors = [colors.top.cgColor, colors.bottom.cgColor]
+            CATransaction.commit()
+            return
+        }
         CATransaction.begin()
         CATransaction.setAnimationDuration(0.6)
         CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeInEaseOut))
@@ -166,7 +190,8 @@ final class CoverBlurView: UIView {
         if let cached = Self.imageCache.object(forKey: url as NSURL) {
             let colors = Self.extractGradientColors(from: cached)
             CATransaction.begin()
-            CATransaction.setAnimationDuration(0.6)
+            CATransaction.setDisableActions(!animationsEnabled)
+            CATransaction.setAnimationDuration(animationsEnabled ? 0.6 : 0)
             gradientLayer.colors = [colors.top.cgColor, colors.bottom.cgColor]
             CATransaction.commit()
         }
@@ -229,7 +254,7 @@ final class CoverBlurView: UIView {
     }
 
     private func setImage(_ image: UIImage, animated: Bool) {
-        guard animated, imageView.image != nil else {
+        guard animated, animationsEnabled, imageView.image != nil else {
             imageView.image = image
             startBackgroundAnimations()
             return

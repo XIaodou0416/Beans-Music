@@ -21,6 +21,8 @@ struct PlayerView: View {
     @State private var showSleepTimer = false
     @State private var showAddToPlaylist = false
     @State private var showComments = false
+    @State private var showFavoriteDestination = false
+    @State private var favoriteCandidate: Song?
     @State private var showDownloadPicker = false
     @State private var showMoreActions = false
     @State private var showNativeMoreActions = false
@@ -260,11 +262,58 @@ struct PlayerView: View {
             let removed = localLibrary.removeSongFromAllPlaylists(song)
             ToastCenter.shared.show(removed > 0 ? "已取消收藏" : "歌曲不在本地歌单中")
             BeansHaptics.success()
-        } else if localLibrary.playlists.count > 1 {
+        } else {
+            favoriteCandidate = song
+            showFavoriteDestination = true
+        }
+    }
+
+    private func saveFavoriteLocally(_ song: Song) {
+        if localLibrary.playlists.count > 1 {
             showAddToLocalPlaylist = true
         } else {
             ToastCenter.shared.show(localLibrary.addToDefaultFavorites(song))
             BeansHaptics.success()
+        }
+    }
+
+    @MainActor
+    private func saveFavoriteOfficially(_ song: Song) async {
+        switch song.source {
+        case .netease:
+            guard auth.isLoggedIn else {
+                ToastCenter.shared.show("请先登录网易云音乐")
+                return
+            }
+            let success = await favorites.toggle(song)
+            ToastCenter.shared.show(success ? "已收藏到网易云音乐" : "网易云音乐收藏失败")
+        case .kugou:
+            guard KugouMusicAuth.shared.isLoggedIn else {
+                ToastCenter.shared.show("请先登录酷狗音乐")
+                return
+            }
+            do {
+                let playlists = try await KugouMusicAPI.shared.userPlaylists()
+                let liked = playlists.first { playlist in
+                    let normalized = playlist.name.replacingOccurrences(of: " ", with: "")
+                    return normalized.contains("喜欢") || normalized.contains("收藏") || normalized.contains("红心")
+                }
+                let target: Playlist
+                if let liked {
+                    target = liked
+                } else {
+                    target = try await KugouMusicAPI.shared.createPlaylist(name: "我的收藏")
+                }
+                let success = try await KugouMusicAPI.shared.addToPlaylist(playlistID: target.id, songs: [song])
+                if success {
+                    favorites.markKugouOfficial(song, liked: true)
+                }
+                ToastCenter.shared.show(success ? "已收藏到酷狗音乐歌单" : "酷狗音乐收藏失败")
+            } catch {
+                ToastCenter.shared.show("酷狗音乐收藏失败：\(error.localizedDescription)")
+            }
+        case .qq:
+            ToastCenter.shared.show("当前仅支持网易云音乐和酷狗音乐官方收藏")
         }
     }
 
@@ -764,6 +813,25 @@ struct PlayerView: View {
                 }
             }
             Button("取消", role: .cancel) {}
+        }
+        .confirmationDialog("选择收藏位置", isPresented: $showFavoriteDestination, titleVisibility: .visible) {
+            Button("保存到本地歌单") {
+                if let favoriteCandidate {
+                    saveFavoriteLocally(favoriteCandidate)
+                }
+                favoriteCandidate = nil
+            }
+            Button("保存到官方平台歌单") {
+                if let favoriteCandidate {
+                    Task { await saveFavoriteOfficially(favoriteCandidate) }
+                }
+                favoriteCandidate = nil
+            }
+            Button("取消", role: .cancel) {
+                favoriteCandidate = nil
+            }
+        } message: {
+            Text("网易云音乐和酷狗音乐支持保存到对应账号的官方歌单")
         }
         .confirmationDialog("下载《\(song?.name ?? "当前歌曲")》", isPresented: $showDownloadPicker, titleVisibility: .visible) {
             ForEach(downloadQualityOptions) { quality in
@@ -2501,7 +2569,7 @@ struct PlayerView: View {
                 HStack(spacing: 12) {
                     controlPanelAction(icon: favorites.isLiked(song) ? "heart.fill" : "heart", title: "收藏", active: favorites.isLiked(song)) {
                         if let song {
-                            Task { _ = await favorites.toggle(song) }
+                            toggleLocalFavorite(song)
                         }
                     }
                     controlPanelAction(icon: "text.bubble", title: "评论") {
@@ -3696,6 +3764,7 @@ struct PlayerView: View {
                                     layoutData: vinylLayoutData,
                                     initialShowsLyrics: layoutRenderingShowLyrics,
                                     isFavorite: song.map { localLibrary.containsSong($0) } ?? false,
+                                    visualsActive: false,
                                     onFavorite: {},
                                     onComments: {},
                                     onSettings: {}
@@ -4261,6 +4330,7 @@ struct PlayerView: View {
                         layoutData: vinylLayoutData,
                         initialShowsLyrics: layoutRenderingShowLyrics,
                         isFavorite: song.map { localLibrary.containsSong($0) } ?? false,
+                        visualsActive: false,
                         onFavorite: {},
                         onComments: {},
                         onSettings: {}

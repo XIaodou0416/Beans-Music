@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - 本地音乐库区块（音乐库页面顶部：本机歌单，可新建 / 播放 / 添加歌曲）
 
@@ -187,8 +188,8 @@ struct LocalMusicSection: View {
 
     private func sync(targets: Set<SyncTarget>) async {
         guard !syncing else { return }
-        guard targets.count >= 2 else {
-            ToastCenter.shared.show("至少选择两个平台")
+        guard !targets.isEmpty else {
+            ToastCenter.shared.show("至少选择一个平台")
             return
         }
         syncing = true
@@ -319,7 +320,7 @@ fileprivate struct SyncPlatformPicker: View {
     let onConfirm: () -> Void
 
     private var canConfirm: Bool {
-        selectedTargets.count >= 2
+        !selectedTargets.isEmpty
     }
 
     var body: some View {
@@ -343,7 +344,7 @@ fileprivate struct SyncPlatformPicker: View {
                 } header: {
                     Text("同步平台")
                 } footer: {
-                    Text(LocalizedStringKey(canConfirm ? "所选平台的喜欢歌曲会合并到同一个本地歌单。" : "至少选择两个平台。"))
+                    Text(LocalizedStringKey(canConfirm ? "可同步单个平台，也可以同时合并多个平台的喜欢歌曲。" : "至少选择一个平台。"))
                 }
             }
             .navigationTitle("一键同步歌单")
@@ -390,6 +391,7 @@ struct LocalPlaylistDetailSheet: View {
     @State private var multiSelectMode = false
     @State private var selectedSongKeys: Set<String> = []
     @State private var showAddSelectedDestination = false
+    @State private var exportFile: ShareFileItem?
 
     private var playlist: LocalPlaylist? {
         store.playlists.first { $0.id == playlistID }
@@ -495,6 +497,16 @@ struct LocalPlaylistDetailSheet: View {
                             Label(multiSelectMode ? "退出多选" : "多选编辑", systemImage: multiSelectMode ? "xmark.circle" : "checklist")
                         }
                         if multiSelectMode {
+                            Button {
+                                copyAllSongTitles()
+                            } label: {
+                                Label("复制全部歌名", systemImage: "doc.on.doc")
+                            }
+                            Button {
+                                exportPlaylistAsText()
+                            } label: {
+                                Label("导出 TXT", systemImage: "square.and.arrow.up")
+                            }
                             Button(role: .destructive) {
                                 removeSelectedSongs()
                             } label: {
@@ -541,6 +553,9 @@ struct LocalPlaylistDetailSheet: View {
             LocalSearchAddSheet(playlistID: playlistID)
                 .environmentObject(player)
                 .environmentObject(auth)
+        }
+        .sheet(item: $exportFile) { item in
+            ShareSheet(items: [item.url])
         }
         .alert("重命名歌单", isPresented: $showRename) {
             TextField("歌单名称", text: $renameText)
@@ -604,6 +619,50 @@ struct LocalPlaylistDetailSheet: View {
         ToastCenter.shared.show(added == songs.count
             ? "已添加 \(added) 首到「\(targetName)」"
             : "已添加 \(added) 首到「\(targetName)」（重复歌曲已跳过）")
+    }
+
+    private func copyAllSongTitles() {
+        guard let playlist, !playlist.songs.isEmpty else {
+            ToastCenter.shared.show("当前歌单没有歌曲")
+            return
+        }
+        UIPasteboard.general.string = playlist.songs.map(\.name).joined(separator: "\n")
+        BeansHaptics.success()
+        ToastCenter.shared.show("已复制全部歌名")
+    }
+
+    private func exportPlaylistAsText() {
+        guard let playlist, !playlist.songs.isEmpty else {
+            ToastCenter.shared.show("当前歌单没有歌曲")
+            return
+        }
+        let lines = playlist.songs.map { song in
+            let link = song.officialURL?.absoluteString ?? "无"
+            return [
+                "平台：\(sourceName(for: song))",
+                "歌手：\(song.artists.isEmpty ? "未知" : song.artists)",
+                "歌名：\(song.name)",
+                "时长：\(song.formattedDuration)",
+                "官方链接：\(link)",
+            ].joined(separator: "\n")
+        }
+        let content = lines.joined(separator: "\n\n") + "\n"
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(playlist.name)-歌曲清单-\(Int(Date().timeIntervalSince1970)).txt")
+        do {
+            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            exportFile = ShareFileItem(url: fileURL)
+        } catch {
+            ToastCenter.shared.show("导出失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func sourceName(for song: Song) -> String {
+        switch song.source {
+        case .netease: return "网易云音乐"
+        case .qq: return "QQ音乐"
+        case .kugou: return "酷狗音乐"
+        }
     }
 }
 

@@ -154,6 +154,71 @@ final class KugouMusicAPI {
         return result
     }
 
+    func createPlaylist(name: String) async throws -> Playlist {
+        let auth = KugouMusicAuth.shared
+        guard auth.isLoggedIn else { throw NetEaseError.unknown("请先登录酷狗音乐") }
+        auth.prepareDevice()
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { throw NetEaseError.unknown("歌单名称不能为空") }
+        let body: [String: Any] = [
+            "userid": Int(auth.userId) ?? 0,
+            "token": auth.token,
+            "total_ver": 0,
+            "name": trimmedName,
+            "type": 0,
+            "source": 1,
+            "is_pri": 0,
+            "list_create_userid": auth.userId,
+            "list_create_listid": 0,
+            "list_create_gid": "",
+            "from_shupinmv": 0,
+        ]
+        let json = try await cloudlistRequest(
+            "/v5/add_list",
+            params: ["last_time": "\(Int(Date().timeIntervalSince1970))", "last_area": "gztx"],
+            data: body
+        )
+        let id = Self.int(json["listid"] ?? json["list_id"] ?? json["id"] ?? (json["data"] as? [String: Any])?["listid"])
+        guard id > 0 else { throw NetEaseError.unknown("酷狗歌单创建失败") }
+        return Playlist(id: id, name: trimmedName, coverURL: nil, source: .kugou)
+    }
+
+    func addToPlaylist(playlistID: Int, songs: [Song]) async throws -> Bool {
+        let auth = KugouMusicAuth.shared
+        guard auth.isLoggedIn else { throw NetEaseError.unknown("请先登录酷狗音乐") }
+        let resources: [[String: Any]] = songs.compactMap { song in
+            guard let hash = song.kugouHash?.trimmingCharacters(in: .whitespacesAndNewlines), !hash.isEmpty else { return nil }
+            return [
+                "number": 1,
+                "name": song.name,
+                "hash": hash,
+                "size": 0,
+                "sort": 0,
+                "timelen": max(0, Int(song.duration)),
+                "bitrate": 0,
+                "album_id": Int(song.kugouAlbumId ?? "0") ?? 0,
+                "mixsongid": Int(song.kugouAlbumAudioId ?? "0") ?? 0,
+            ]
+        }
+        guard !resources.isEmpty else { throw NetEaseError.unknown("当前歌曲缺少酷狗歌曲标识") }
+        let json = try await cloudlistRequest(
+            "/v6/add_song",
+            params: ["last_time": "\(Int(Date().timeIntervalSince1970))", "last_area": "gztx"],
+            data: [
+                "userid": Int(auth.userId) ?? 0,
+                "token": auth.token,
+                "listid": playlistID,
+                "list_ver": 0,
+                "type": 0,
+                "slow_upload": 1,
+                "scene": "false;null",
+                "data": resources,
+            ]
+        )
+        let code = Self.int(json["status"] ?? json["code"] ?? json["errcode"] ?? (json["data"] as? [String: Any])?["code"])
+        return code == 0 || code == 1 || code == 200
+    }
+
     /// 酷狗私人漫游：使用 KuGouMusicApi 的 personal_fm 请求协议，连续取几批推荐，
     /// 让首页不会被固定在首批三首歌曲。
     func personalFM(limit: Int = 12) async throws -> [Song] {
