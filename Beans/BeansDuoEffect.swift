@@ -87,30 +87,37 @@ final class BeansDuoMotionModel: ObservableObject {
     }
 }
 
-private struct BeansDuoParameters {
-    let eyeDistancePoints: CGFloat = 1_920
-    let blurSpread: CGFloat = 0.12
-    let darkening: CGFloat = 0.015
-}
+private struct BeansDuoGlassOverlay: View {
+    let angle: Double
 
-@available(iOS 17.0, *)
-private extension View {
-    func beansDuoFoldEffect(angle: Double) -> some View {
-        let parameters = BeansDuoParameters()
-        return compositingGroup()
-            .visualEffect { content, _ in
-                content.layerEffect(
-                    ShaderLibrary.beansDuoFold(
-                        .boundingRect,
-                        .float(angle),
-                        .float(parameters.eyeDistancePoints),
-                        .float(parameters.blurSpread),
-                        .float(parameters.darkening)
-                    ),
-                    maxSampleOffset: .zero,
-                    isEnabled: abs(angle) > 0.0001
-                )
-            }
+    private var strength: Double {
+        min(1, abs(angle) / 0.48)
+    }
+
+    private var hingeAtTrailingEdge: Bool {
+        angle > 0
+    }
+
+    var body: some View {
+        let start = hingeAtTrailingEdge ? UnitPoint.trailing : .leading
+        let end = hingeAtTrailingEdge ? UnitPoint.leading : .trailing
+        ZStack {
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.25 * strength)],
+                startPoint: start,
+                endPoint: end
+            )
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(0.62 * strength)
+                .mask {
+                    LinearGradient(
+                        colors: [.clear, .white],
+                        startPoint: start,
+                        endPoint: end
+                    )
+                }
+        }
     }
 }
 
@@ -120,14 +127,30 @@ struct BeansDuoEffectModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var motion = BeansDuoMotionModel()
 
+    private var clampedAngle: Double {
+        min(0.48, max(-0.48, motion.tiltAngle))
+    }
+
+    private var rotationAnchor: UnitPoint {
+        clampedAngle > 0 ? .trailing : .leading
+    }
+
     func body(content: Content) -> some View {
         Group {
             if isEnabled && !reduceMotion {
-                if #available(iOS 17.0, *) {
-                    content.beansDuoFoldEffect(angle: motion.tiltAngle)
-                } else {
-                    content
-                }
+                content
+                    .background(Color.black)
+                    .rotation3DEffect(
+                        .radians(clampedAngle),
+                        axis: (x: 0, y: 1, z: 0),
+                        anchor: rotationAnchor,
+                        perspective: 0.72
+                    )
+                    .overlay {
+                        BeansDuoGlassOverlay(angle: clampedAngle)
+                            .allowsHitTesting(false)
+                    }
+                    .clipped()
             } else {
                 content
             }
@@ -143,7 +166,6 @@ struct BeansDuoEffectModifier: ViewModifier {
             motion.stop()
             return
         }
-        guard #available(iOS 17.0, *) else { return }
         motion.start()
     }
 }

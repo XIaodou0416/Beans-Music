@@ -1927,11 +1927,9 @@ struct SettingsView: View {
                         .tint(Color.beansAmber)
                 }
 
-                if #available(iOS 17, *) {
-                    Toggle("Duo 动态玻璃", isOn: $duoEffectEnabled)
-                        .font(BeansFont.appFont(15))
-                        .tint(Color.beansAmber)
-                }
+                Toggle("Duo 动态玻璃", isOn: $duoEffectEnabled)
+                    .font(BeansFont.appFont(15))
+                    .tint(Color.beansAmber)
 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) {
