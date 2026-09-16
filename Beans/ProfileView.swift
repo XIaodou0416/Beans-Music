@@ -1372,7 +1372,6 @@ struct SettingsView: View {
     @State private var showUpdateResult = false
     @State private var disclaimerExpanded = false
     @State private var showFloatingImagePicker = false
-    @State private var showAppIconPicker = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1633,7 +1632,6 @@ struct SettingsView: View {
                         equalizerSection
                         changelogSection
                         backupSection
-                        appIconSection
                         settingsSupportSection
                     }
                     .padding(.horizontal, 16)
@@ -1672,10 +1670,6 @@ struct SettingsView: View {
                 }
             }
             .ignoresSafeArea()
-        }
-        .sheet(isPresented: $showAppIconPicker) {
-            AppIconPickerSheet()
-                .environmentObject(theme)
         }
         .fullScreenCover(isPresented: $showFontImporter) {
             FontDocumentPicker { url in
@@ -1772,36 +1766,6 @@ struct SettingsView: View {
             appearanceSection
             platformSection
         }
-    }
-
-    private var appIconSection: some View {
-        Button {
-            BeansHaptics.tap()
-            showAppIconPicker = true
-        } label: {
-            HStack(spacing: 12) {
-                Image(AppIconManager.shared.currentPreset.previewAssetName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 34, height: 34)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                Text("软件图标")
-                    .font(BeansFont.appFont(15, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.beansComment.opacity(0.65))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
     }
 
     private var accountSection: some View {

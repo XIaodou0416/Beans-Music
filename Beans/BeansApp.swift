@@ -32,8 +32,7 @@ struct BeansApp: App {
             "beans.haptics.enabled": true,
             "beans.playback.autoResumeLast": false,
             "beans.playback.autoSkipOnFailure": true,
-            "beans.nowPlaying.enabled.v1": true,
-            "beans.appIconPreset": BeansAppIconPreset.standard.rawValue
+            "beans.nowPlaying.enabled.v1": true
         ])
     }
 

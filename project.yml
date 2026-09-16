@@ -25,7 +25,6 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_OBJC_BRIDGING_HEADER: Beans/Beans-Bridging-Header.h
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIconSideHug AppIconFoldedArms AppIconRedCharacter AppIconBlackNote"
         CODE_SIGN_ENTITLEMENTS: Beans/Beans.entitlements
     info:
       path: Beans/Info.plist
