@@ -851,8 +851,6 @@ struct AppleMusicPlaybackControls: View {
 
 struct AppleMusicCompactQueueContent: View {
     @EnvironmentObject private var player: PlayerManager
-    @State private var lastModeActivation = Date.distantPast
-    @State private var lastActivatedMode: PlayMode?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -884,6 +882,25 @@ struct AppleMusicCompactQueueContent: View {
             }
             .frame(maxWidth: .infinity)
             .zIndex(10)
+            .overlay {
+                GeometryReader { proxy in
+                    Color.clear
+                        .allowsHitTesting(true)
+                        .contentShape(Rectangle())
+                        .highPriorityGesture(
+                            DragGesture(minimumDistance: 0)
+                                .onEnded { value in
+                                    let translation = value.translation
+                                    guard abs(translation.width) < 16,
+                                          abs(translation.height) < 16,
+                                          proxy.size.width > 0 else { return }
+                                    let position = min(max(value.location.x / proxy.size.width, 0), 0.999)
+                                    let modes: [PlayMode] = [.sequential, .shuffle, .repeatAll, .repeatOne]
+                                    activate(modes[Int(position * CGFloat(modes.count))])
+                                }
+                        )
+                }
+            }
 
             HStack(alignment: .firstTextBaseline) {
                 Text("继续播放")
@@ -939,63 +956,14 @@ struct AppleMusicCompactQueueContent: View {
                 in: Capsule()
             )
         .contentShape(Capsule())
-        .overlay {
-            QueueModeTapTarget(label: label) {
-                activate(mode)
-            }
-        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     private func activate(_ mode: PlayMode) {
-        let now = Date()
-        guard mode != lastActivatedMode || now.timeIntervalSince(lastModeActivation) > 0.12 else {
-            return
-        }
-        lastActivatedMode = mode
-        lastModeActivation = now
         BeansHaptics.tap()
         player.setPlayMode(mode)
-    }
-}
-
-/// A UIKit control keeps queue-mode taps out of the surrounding transparent
-/// SwiftUI composition layer, which otherwise absorbs them on some devices.
-private struct QueueModeTapTarget: UIViewRepresentable {
-    let label: String
-    let action: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(action: action)
-    }
-
-    func makeUIView(context: Context) -> UIButton {
-        let button = UIButton(type: .custom)
-        button.backgroundColor = .clear
-        button.isAccessibilityElement = true
-        button.accessibilityTraits = .button
-        button.accessibilityLabel = label
-        button.addTarget(context.coordinator, action: #selector(Coordinator.activate), for: .touchUpInside)
-        return button
-    }
-
-    func updateUIView(_ button: UIButton, context: Context) {
-        context.coordinator.action = action
-        button.accessibilityLabel = label
-    }
-
-    final class Coordinator: NSObject {
-        var action: () -> Void
-
-        init(action: @escaping () -> Void) {
-            self.action = action
-        }
-
-        @objc func activate() {
-            action()
-        }
     }
 }
 

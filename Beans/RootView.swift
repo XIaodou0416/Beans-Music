@@ -550,6 +550,10 @@ struct RootView: View {
                         reservesMiniPlayerSpace: player.currentSong != nil
                     )
                         .frame(width: min(max(proxy.size.width * 0.17, 176), 228))
+                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        .padding(.leading, 10)
+                        .padding(.vertical, 10)
+                        .padding(.trailing, 8)
 
                     VStack(spacing: 0) {
                         ZStack {
@@ -564,7 +568,7 @@ struct RootView: View {
                         if player.currentSong != nil {
                             MiniPlayerView(
                                 showPlayer: $showPlayer,
-                                presentation: .dock,
+                                presentation: .accessory,
                                 transitionNamespace: nowPlayingTransition
                             )
                                 .environmentObject(player.clock)
