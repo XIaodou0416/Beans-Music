@@ -312,11 +312,12 @@ final class NetEaseAPI {
     }
 
     /// 歌词 + 翻译（tlyric），用于歌词翻译显示
-    func lyricWithTranslation(id: Int) async throws -> (lrc: String?, tlyric: String?) {
+    func lyricWithTranslation(id: Int) async throws -> (lrc: String?, tlyric: String?, yrc: String?) {
         let json = try await request("/api/song/lyric", payload: ["id": id, "lv": -1, "kv": -1, "tv": -1], crypto: "weapi")
         let lrc = (json["lrc"] as? [String: Any])?["lyric"] as? String
         let tlyric = (json["tlyric"] as? [String: Any])?["lyric"] as? String
-        return (lrc, tlyric)
+        let yrc = (json["yrc"] as? [String: Any])?["lyric"] as? String
+        return (lrc, tlyric, yrc)
     }
 
     // MARK: - 评论

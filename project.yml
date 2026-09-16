@@ -57,6 +57,16 @@ targets:
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+  BeansTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - BeansTests
+    dependencies:
+      - target: Beans
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.tests
 
 schemes:
   Beans:
@@ -67,3 +77,6 @@ schemes:
       config: Debug
     archive:
       config: Release
+    test:
+      targets:
+        - BeansTests

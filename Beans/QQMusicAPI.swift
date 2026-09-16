@@ -1052,11 +1052,34 @@ final class QQMusicAPI {
 
     /// QQ 音乐歌词（LRC 文本）
     func lyric(songmid: String) async throws -> String? {
-        guard let mid = songmid.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
+        (try await lyricPayload(songmid: songmid)).lrc
+    }
+
+    struct LyricPayload {
+        let lrc: String?
+        let qrc: String?
+    }
+
+    /// 同时保留 QQ 的逐字 QRC；部分接口只返回普通 LRC，因此字段均可为空。
+    func lyricPayload(songmid: String) async throws -> LyricPayload {
+        guard let mid = songmid.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            throw NetEaseError.unknown("QQ 歌曲 ID 无效")
+        }
         let url = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=\(mid)&format=json&nobase64=1&g_tk=5381"
         let json = try await get(url, referer: "https://y.qq.com/portal/player.html")
-        guard let lyric = json["lyric"] as? String, !lyric.isEmpty else { return nil }
-        return lyric
+        let lyric = Self.lyricText(json["lyric"])
+        let qrc = Self.lyricText(json["qrc"])
+        return LyricPayload(lrc: lyric, qrc: qrc)
+    }
+
+    private static func lyricText(_ value: Any?) -> String? {
+        guard let value = value as? String, !value.isEmpty else { return nil }
+        if let data = Data(base64Encoded: value, options: [.ignoreUnknownCharacters]),
+           let decoded = String(data: data, encoding: .utf8),
+           decoded.contains("[") {
+            return decoded
+        }
+        return value
     }
 
     // MARK: - 评论区 / 排行榜 / 推荐 / 歌单

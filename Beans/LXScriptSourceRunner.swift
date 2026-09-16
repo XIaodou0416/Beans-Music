@@ -436,6 +436,9 @@ final class BeansLXScriptRuntime {
     private var handlers: [String: JSValue] = [:]
     private var capabilities: [String: [String]] = [:]
     private var qualityCapabilities: [String: [String]] = [:]
+    private let readinessLock = NSLock()
+    private let readinessSemaphore = DispatchSemaphore(value: 0)
+    private var didReceiveInitialization = false
 
     init?(source: ThirdPartySource, script: String) {
         sourceID = source.id
@@ -603,6 +606,16 @@ final class BeansLXScriptRuntime {
                         });
                     };
                 }
+                if (typeof Promise.allSettled !== 'function') {
+                    Promise.allSettled = function(iterable) {
+                        return Promise.all(Array.prototype.slice.call(iterable || []).map(function(value) {
+                            return Promise.resolve(value).then(
+                                function(result) { return { status: 'fulfilled', value: result }; },
+                                function(reason) { return { status: 'rejected', reason: reason }; }
+                            );
+                        }));
+                    };
+                }
                 if (!JSON.__beansOriginalParse) {
                     JSON.__beansOriginalParse = JSON.parse;
                     JSON.parse = function(value) {
@@ -630,17 +643,38 @@ final class BeansLXScriptRuntime {
 
     func receive(event: String, payload: Any?) {
         guard event == "inited" else { return }
-        guard let dictionary = stringKeyedDictionary(from: payload),
-              let sources = stringKeyedDictionary(from: dictionary["sources"]) else { return }
-        capabilities = sources.reduce(into: [:]) { result, pair in
-            guard let source = stringKeyedDictionary(from: pair.value) else { return }
-            result[pair.key] = stringArray(from: source["actions"])
+        if let dictionary = stringKeyedDictionary(from: payload),
+           let sources = stringKeyedDictionary(from: dictionary["sources"]) {
+            capabilities = sources.reduce(into: [:]) { result, pair in
+                guard let source = stringKeyedDictionary(from: pair.value) else { return }
+                result[pair.key] = stringArray(from: source["actions"])
+            }
+            qualityCapabilities = sources.reduce(into: [:]) { result, pair in
+                guard let source = stringKeyedDictionary(from: pair.value) else { return }
+                result[pair.key] = stringArray(from: source["qualitys"] ?? source["qualities"])
+            }
+            BeansLogger.shared.log("第三方脚本初始化：\(sourceID) sources=\(capabilities.keys.sorted().joined(separator: ","))", level: .debug)
         }
-        qualityCapabilities = sources.reduce(into: [:]) { result, pair in
-            guard let source = stringKeyedDictionary(from: pair.value) else { return }
-            result[pair.key] = stringArray(from: source["qualitys"] ?? source["qualities"])
-        }
-        BeansLogger.shared.log("第三方脚本初始化：\(sourceID) sources=\(capabilities.keys.sorted().joined(separator: ","))", level: .debug)
+        readinessLock.lock()
+        let shouldSignal = !didReceiveInitialization
+        didReceiveInitialization = true
+        readinessLock.unlock()
+        if shouldSignal { readinessSemaphore.signal() }
+    }
+
+    /// LX scripts commonly initialize asynchronously after checking a remote source list.
+    /// Waiting here prevents a valid script from being reported as unsupported immediately
+    /// after evaluation.
+    func waitForInitialization(timeout: TimeInterval = 10) -> Bool {
+        readinessLock.lock()
+        let ready = didReceiveInitialization
+        readinessLock.unlock()
+        if ready { return true }
+        _ = readinessSemaphore.wait(timeout: .now() + timeout)
+        readinessLock.lock()
+        let finished = didReceiveInitialization
+        readinessLock.unlock()
+        return finished
     }
 
     private func stringKeyedDictionary(from raw: Any?) -> [String: Any]? {
@@ -812,6 +846,14 @@ final class LXScriptSourceRunner {
                     ))
                     return
                 }
+                guard runtime.waitForInitialization(timeout: 10) else {
+                    continuation.resume(returning: SourceCheckResult(
+                        status: .unavailable,
+                        message: "脚本初始化超时",
+                        detail: "脚本未在限定时间内返回音源能力列表。"
+                    ))
+                    return
+                }
                 let snapshot = runtime.capabilitySnapshot()
                 let usable = snapshot.platforms
                     .filter { $0.value.contains("musicUrl") }
@@ -884,6 +926,7 @@ final class LXScriptSourceRunner {
         excludedHosts: Set<String>
     ) -> UnblockService.Resolved? {
         let runtime = runtime(for: source, script: script)
+        guard runtime?.waitForInitialization(timeout: 10) == true else { return nil }
         let payload: [String: Any] = [
             "action": "musicUrl",
             "source": providerCode(for: songSource),

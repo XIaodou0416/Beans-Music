@@ -90,6 +90,7 @@ struct PlayerView: View {
     @AppStorage("beans.appleMusic.secondaryHex") private var appleMusicSecondaryHex = ""
     @AppStorage("beans.appleMusic.accentHex") private var appleMusicAccentHex = ""
     @AppStorage("beans.lyricTranslation") private var lyricTranslation = true
+    @AppStorage("beans.lyricKaraokeEnabled") private var lyricKaraokeEnabled = true
     /// 进度条样式：0 流光 / 1 辉光 / 2 极光 / 3 波浪
     @AppStorage("beans.progressBarStyle") private var progressBarStyle = 0
     /// 进度条单独强调色；空值时跟随播放控件颜色
@@ -1178,6 +1179,7 @@ struct PlayerView: View {
                     lineSpacing: CGFloat(lyricLineSpacing),
                     glowRadius: lyricGlowRadius,
                     showTranslation: lyricTranslation,
+                    karaokeEnabled: lyricKaraokeEnabled,
                     alignment: lyricAlign,
                     offsetX: CGFloat(lyricOffsetX),
                     anchor: lyricAnchor,
@@ -2288,11 +2290,19 @@ struct PlayerView: View {
     private func vinylLyricLine(_ line: LyricLine, index: Int, isFocused: Bool, proxy: ScrollViewProxy) -> some View {
         let isSelected = vinylSelectedLyricIndex == index || (vinylIsDraggingLyrics && isFocused)
         let visualFocus = isFocused || isSelected
+        let isActive = vinylCurrentLyricIndex == index
         return VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(line.text.isEmpty ? " " : line.text)
-                    .font(BeansFont.appFont(visualFocus ? 27 : 23, visualFocus ? .bold : .semibold))
-                    .foregroundStyle(albumTitleForeground.opacity(visualFocus ? 1 : 0.36))
+                KaraokeLyricText(
+                    line: line,
+                    currentTime: LyricTiming.effectiveProgress(clock.progress, userOffset: lyricOffset),
+                    isPlaying: player.isPlaying,
+                    isActive: isActive,
+                    enabled: lyricKaraokeEnabled,
+                    font: BeansFont.appFont(visualFocus ? 27 : 23, visualFocus ? .bold : .semibold),
+                    style: AnyShapeStyle(albumTitleForeground),
+                    fallbackOpacity: visualFocus ? 1 : 0.36
+                )
                     .fixedSize(horizontal: false, vertical: true)
                 if isSelected {
                     Spacer(minLength: 8)
@@ -2991,6 +3001,7 @@ struct PlayerView: View {
                         lineSpacing: CGFloat(lyricLineSpacing),
                         glowRadius: lyricGlowRadius,
                         showTranslation: lyricTranslation,
+                        karaokeEnabled: lyricKaraokeEnabled,
                         alignment: lyricAlign,
                         offsetX: CGFloat(lyricOffsetX),
                         anchor: lyricAnchor,
@@ -5142,23 +5153,28 @@ struct PlayerView: View {
             cacheKey = "netease:\(song.id)"
         }
         if let cached = LyricsCache.shared.value(for: cacheKey) {
-            apply(LyricParser.parse(cached.lyric, translationRaw: cached.translation))
+            apply(LyricParser.parse(
+                cached.lyric,
+                translationRaw: cached.translation,
+                wordRaw: cached.wordTiming,
+                wordFormat: cached.wordFormat
+            ))
         }
 
         if song.source == .kugou, let hash = song.kugouHash {
-            let raw = await KugouMusicAPI.shared.lyric(hash: hash, duration: song.duration)
-            apply(LyricParser.parse(raw))
-            LyricsCache.shared.save(lyric: raw, translation: nil, for: cacheKey)
+            let payload = await KugouMusicAPI.shared.lyricPayload(hash: hash, duration: song.duration)
+            apply(LyricParser.parse(payload.lrc, wordRaw: payload.krc, wordFormat: .kugouKRC))
+            LyricsCache.shared.save(lyric: payload.lrc, wordTiming: payload.krc, wordFormat: .kugouKRC, for: cacheKey)
         } else if song.source == .qq, let mid = song.qqMid {
-            if let raw = try? await QQMusicAPI.shared.lyric(songmid: mid) {
-                apply(LyricParser.parse(raw))
-                LyricsCache.shared.save(lyric: raw, translation: nil, for: cacheKey)
+            if let payload = try? await QQMusicAPI.shared.lyricPayload(songmid: mid) {
+                apply(LyricParser.parse(payload.lrc ?? "", wordRaw: payload.qrc, wordFormat: .qqQRC))
+                LyricsCache.shared.save(lyric: payload.lrc ?? "", wordTiming: payload.qrc, wordFormat: .qqQRC, for: cacheKey)
             }
         } else {
-            if let (lrc, tlyric) = try? await NetEaseAPI.shared.lyricWithTranslation(id: song.id) {
-                apply(LyricParser.parse(lrc ?? "", translationRaw: tlyric))
+            if let (lrc, tlyric, yrc) = try? await NetEaseAPI.shared.lyricWithTranslation(id: song.id) {
+                apply(LyricParser.parse(lrc ?? "", translationRaw: tlyric, wordRaw: yrc, wordFormat: .neteaseYRC))
                 if let lrc, !lrc.isEmpty {
-                    LyricsCache.shared.save(lyric: lrc, translation: tlyric, for: cacheKey)
+                    LyricsCache.shared.save(lyric: lrc, translation: tlyric, wordTiming: yrc, wordFormat: .neteaseYRC, for: cacheKey)
                 }
             }
         }
@@ -5536,6 +5552,8 @@ struct LyricsSection: View {
     var glowRadius: CGFloat = 9
     /// 显示歌词翻译（当前行下方小字）
     var showTranslation: Bool = false
+    /// 逐字卡拉 OK 开关；关闭时回到原有整行高亮。
+    var karaokeEnabled: Bool = true
     /// 歌词对齐样式（居中 / 居左）
     var alignment: HorizontalAlignment = .center
     /// 歌词水平偏移
@@ -5773,9 +5791,16 @@ struct LyricsSection: View {
         let translationText = (isCurrent && showTranslation) ? line.translation : nil
 
         return VStack(alignment: alignment == .leading ? .leading : .center, spacing: 3) {
-            Text(line.text.isEmpty ? " " : line.text)
-                .font(lineFont)
-                .foregroundStyle(lineStyle)
+            KaraokeLyricText(
+                line: line,
+                currentTime: LyricTiming.effectiveProgress(clock.progress, userOffset: Double(lyricOffset)),
+                isPlaying: player.isPlaying,
+                isActive: isCurrent,
+                enabled: karaokeEnabled,
+                font: lineFont,
+                style: lineStyle,
+                fallbackOpacity: max(opacity, 0.15)
+            )
                 // 双层光晕：内层亮、外层宽，发光更明显
                 .shadow(
                     color: isCurrent ? glowColor.opacity(glowRadius > 0 ? 0.9 : 0) : .clear,
@@ -5786,7 +5811,6 @@ struct LyricsSection: View {
                     radius: isCurrent ? glowRadius : 0
                 )
                 .blur(radius: blurRadius)
-                .opacity(max(opacity, 0.15))
                 .scaleEffect(isFocused ? 1.05 : 1, anchor: .leading)
                 .multilineTextAlignment(alignment == .leading ? .leading : .center)
                 .lineLimit(nil)
@@ -5974,6 +5998,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.lyricGradEnd") private var gradEndRaw = ""
     @AppStorage("beans.lyricGradMode") private var gradMode = 0
     @AppStorage("beans.lyricTranslation") private var lyricTranslation = true
+    @AppStorage("beans.lyricKaraokeEnabled") private var lyricKaraokeEnabled = true
     @Binding private var layoutMode: Bool
     @AppStorage("beans.playerLayoutSelectedPart") private var layoutPartRaw = PlayerLayoutPart.progress.rawValue
     @AppStorage("beans.lyricAlignRaw") private var lyricAlignRaw = "center"
@@ -6552,6 +6577,9 @@ struct PlayerSettingsSheet: View {
             Divider().opacity(0.5)
             settingToggle("显示歌词翻译", isOn: $lyricTranslation,
                           caption: "当前播放歌词下方显示译文（网易云 tlyric）")
+            Divider().opacity(0.5)
+            settingToggle("逐字歌词（卡拉 OK）", isOn: $lyricKaraokeEnabled,
+                          caption: "有真实逐字时间轴时按字渐亮，没有时保留整行同步高亮")
         }
     }
 

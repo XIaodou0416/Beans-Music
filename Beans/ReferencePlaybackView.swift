@@ -1086,6 +1086,7 @@ struct ReferenceScrubber: View {
 struct AppleMusicLyricsSection: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
+    @AppStorage("beans.lyricKaraokeEnabled") private var karaokeEnabled = true
 
     let lyrics: [LyricLine]
     let primary: Color
@@ -1208,11 +1209,19 @@ struct AppleMusicLyricsSection: View {
     private func lyricLine(_ line: LyricLine, isFocused: Bool, proxy: ScrollViewProxy) -> some View {
         let isSelected = selectedLyricID == line.id || (isDraggingLyrics && isFocused)
         let visualFocus = isFocused || isSelected
+        let isActive = line.id == currentPlaybackLyricID
         return VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(line.text.isEmpty ? " " : line.text)
-                    .font(BeansFont.appFont(visualFocus ? 27 : 23, visualFocus ? .bold : .semibold))
-                    .foregroundStyle(primary.opacity(visualFocus ? 1 : 0.36))
+                KaraokeLyricText(
+                    line: line,
+                    currentTime: LyricTiming.effectiveProgress(clock.progress, userOffset: Double(lyricOffset)),
+                    isPlaying: player.isPlaying,
+                    isActive: isActive,
+                    enabled: karaokeEnabled,
+                    font: BeansFont.appFont(visualFocus ? 27 : 23, visualFocus ? .bold : .semibold),
+                    style: AnyShapeStyle(primary),
+                    fallbackOpacity: visualFocus ? 1 : 0.36
+                )
                     .fixedSize(horizontal: false, vertical: true)
                 if isSelected {
                     Spacer(minLength: 8)

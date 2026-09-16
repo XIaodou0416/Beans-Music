@@ -456,38 +456,131 @@ struct KugouTopInfo: Identifiable, Hashable, Codable {
     let coverURL: URL?
 }
 
+struct LyricWord: Hashable, Codable {
+    let text: String
+    let start: Double
+    let duration: Double
+}
+
+enum LyricKaraokeTiming {
+    static func opacity(for word: LyricWord, at time: TimeInterval) -> Double {
+        let fraction = min(max((time - word.start) / max(word.duration, 0.001), 0), 1)
+        return 0.28 + fraction * 0.72
+    }
+}
+
+enum LyricWordFormat: String, Codable {
+    case neteaseYRC
+    case qqQRC
+    case kugouKRC
+}
+
 struct LyricLine: Identifiable, Hashable {
     let id: UUID
     let time: Double
     let text: String
     /// 歌词翻译（网易云 tlyric，可空）
     var translation: String?
+    /// 可选的真实逐字时间轴；旧 LRC 缓存没有此字段时保持 nil。
+    var words: [LyricWord]?
 
-    init(time: Double, text: String, translation: String? = nil) {
+    init(time: Double, text: String, translation: String? = nil, words: [LyricWord]? = nil) {
         self.id = UUID()
         self.time = time
         self.text = text
         self.translation = translation
+        self.words = words
     }
 }
 
 enum LyricParser {
-    /// 解析歌词；可选传入翻译歌词（网易云 tlyric），按时间戳合并到对应行
-    static func parse(_ raw: String, translationRaw: String? = nil) -> [LyricLine] {
+    /// 解析普通 LRC，并可合并平台提供的逐字歌词文本。
+    static func parse(
+        _ raw: String,
+        translationRaw: String? = nil,
+        wordRaw: String? = nil,
+        wordFormat: LyricWordFormat? = nil
+    ) -> [LyricLine] {
         var lines = parseCore(raw, offset: declaredOffsetSeconds(in: raw))
-        if let translationRaw, !translationRaw.isEmpty {
-            let trans = parseCore(translationRaw, offset: declaredOffsetSeconds(in: translationRaw))
-            var byTime: [Double: String] = [:]
-            for t in trans where !t.text.isEmpty {
-                byTime[t.time] = t.text
-            }
-            for i in lines.indices {
-                if let tr = byTime[lines[i].time], !tr.isEmpty {
-                    lines[i].translation = tr
+        if let wordRaw, let wordFormat {
+            let timed = parseWordLines(wordRaw, format: wordFormat)
+            if !timed.isEmpty {
+                if lines.isEmpty {
+                    lines = timed
+                } else {
+                    for index in lines.indices {
+                        guard let match = timed.min(by: { abs($0.time - lines[index].time) < abs($1.time - lines[index].time) }),
+                              abs(match.time - lines[index].time) < 0.35 else { continue }
+                        lines[index].words = match.words
+                    }
                 }
             }
         }
+        mergeTranslation(&lines, raw: translationRaw)
         return lines
+    }
+
+    /// 解析歌词；可选传入翻译歌词（网易云 tlyric），按时间戳合并到对应行
+    static func parse(_ raw: String, translationRaw: String? = nil) -> [LyricLine] {
+        parse(raw, translationRaw: translationRaw, wordRaw: nil, wordFormat: nil)
+    }
+
+    private static func mergeTranslation(_ lines: inout [LyricLine], raw: String?) {
+        guard let raw, !raw.isEmpty else { return }
+        let trans = parseCore(raw, offset: declaredOffsetSeconds(in: raw))
+        for i in lines.indices {
+            if let match = trans.min(by: { abs($0.time - lines[i].time) < abs($1.time - lines[i].time) }),
+               abs(match.time - lines[i].time) < 0.35, !match.text.isEmpty {
+                lines[i].translation = match.text
+            }
+        }
+    }
+
+    private static func parseWordLines(_ raw: String, format: LyricWordFormat) -> [LyricLine] {
+        let scale: Double = 0.001
+        var result: [LyricLine] = []
+        let linePattern = #"\[(\d+),(\d+)\]"#
+        guard let lineRegex = try? NSRegularExpression(pattern: linePattern) else { return [] }
+        for rawLine in raw.components(separatedBy: .newlines) {
+            let nsRange = NSRange(rawLine.startIndex..., in: rawLine)
+            guard let lineMatch = lineRegex.firstMatch(in: rawLine, range: nsRange),
+                  let startRange = Range(lineMatch.range(at: 1), in: rawLine),
+                  let durationRange = Range(lineMatch.range(at: 2), in: rawLine),
+                  let lineStart = Double(rawLine[startRange]),
+                  let lineDuration = Double(rawLine[durationRange]) else { continue }
+            let contentStart = rawLine.index(rawLine.startIndex, offsetBy: lineMatch.range.upperBound)
+            let content = String(rawLine[contentStart...])
+            let markerPattern = format == .kugouKRC
+                ? #"<(\d+),(\d+)(?:,\d+)?>"#
+                : #"\((\d+),(\d+)(?:,\d+)?\)"#
+            guard let markerRegex = try? NSRegularExpression(pattern: markerPattern) else { continue }
+            let markers = markerRegex.matches(in: content, range: NSRange(content.startIndex..., in: content))
+            guard !markers.isEmpty else { continue }
+            var words: [LyricWord] = []
+            for (index, marker) in markers.enumerated() {
+                guard let startRange = Range(marker.range(at: 1), in: content),
+                      let durationRange = Range(marker.range(at: 2), in: content),
+                      let wordStart = Double(content[startRange]),
+                      let wordDuration = Double(content[durationRange]) else { continue }
+                let textStart = content.index(content.startIndex, offsetBy: marker.range.upperBound)
+                let textEnd: String.Index = index + 1 < markers.count
+                    ? content.index(content.startIndex, offsetBy: markers[index + 1].range.location)
+                    : content.endIndex
+                guard textStart <= textEnd else { continue }
+                let text = String(content[textStart..<textEnd])
+                let absoluteStart = format == .kugouKRC
+                    ? lineStart * scale + wordStart * scale
+                    : wordStart * scale
+                words.append(LyricWord(text: text, start: absoluteStart, duration: max(wordDuration * scale, 0.001)))
+            }
+            let text = words.map(\.text).joined()
+            if !text.isEmpty {
+                result.append(LyricLine(time: lineStart * scale, text: text, words: words))
+            } else if lineDuration > 0 {
+                result.append(LyricLine(time: lineStart * scale, text: " "))
+            }
+        }
+        return result.sorted { $0.time < $1.time }
     }
 
     private static func parseCore(_ raw: String, offset: Double) -> [LyricLine] {

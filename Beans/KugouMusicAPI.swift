@@ -1,4 +1,5 @@
 import Foundation
+import Compression
 import Security
 import UIKit
 
@@ -1697,7 +1698,17 @@ final class KugouMusicAPI {
     }
 
     func lyric(hash: String, duration: TimeInterval) async -> String {
-        guard !hash.isEmpty else { return "" }
+        (await lyricPayload(hash: hash, duration: duration)).lrc
+    }
+
+    struct LyricPayload {
+        let lrc: String
+        let krc: String?
+    }
+
+    /// 酷狗歌词接口在可用时返回 KRC 逐字时间轴；失败时仍保留普通 LRC。
+    func lyricPayload(hash: String, duration: TimeInterval) async -> LyricPayload {
+        guard !hash.isEmpty else { return LyricPayload(lrc: "", krc: nil) }
         var search = URLComponents(string: "http://lyrics.kugou.com/search")!
         search.queryItems = [
             URLQueryItem(name: "ver", value: "1"),
@@ -1708,20 +1719,61 @@ final class KugouMusicAPI {
         ]
         guard let sjson = try? await getJSON(search.url!, ua: Self.browserUA),
               let first = (sjson["candidates"] as? [[String: Any]])?.first,
-              let id = first["id"], let accessKey = first["accesskey"] else { return "" }
-        var download = URLComponents(string: "http://lyrics.kugou.com/download")!
-        download.queryItems = [
-            URLQueryItem(name: "ver", value: "1"),
-            URLQueryItem(name: "client", value: "pc"),
-            URLQueryItem(name: "id", value: "\(id)"),
-            URLQueryItem(name: "accesskey", value: "\(accessKey)"),
-            URLQueryItem(name: "fmt", value: "lrc"),
-            URLQueryItem(name: "charset", value: "utf8"),
-        ]
-        guard let djson = try? await getJSON(download.url!, ua: Self.browserUA),
-              let content = djson["content"] as? String,
-              let data = Data(base64Encoded: content.replacingOccurrences(of: "\n", with: "")) else { return "" }
-        return String(data: data, encoding: .utf8) ?? ""
+              let id = first["id"], let accessKey = first["accesskey"] else { return LyricPayload(lrc: "", krc: nil) }
+        func download(_ format: String) async -> Data? {
+            var request = URLComponents(string: "http://lyrics.kugou.com/download")!
+            request.queryItems = [
+                URLQueryItem(name: "ver", value: "1"),
+                URLQueryItem(name: "client", value: "pc"),
+                URLQueryItem(name: "id", value: "\(id)"),
+                URLQueryItem(name: "accesskey", value: "\(accessKey)"),
+                URLQueryItem(name: "fmt", value: format),
+                URLQueryItem(name: "charset", value: "utf8"),
+            ]
+            guard let djson = try? await getJSON(request.url!, ua: Self.browserUA),
+                  let content = djson["content"] as? String,
+                  let data = Data(base64Encoded: content.replacingOccurrences(of: "\n", with: "")) else { return nil }
+            return data
+        }
+        func integer(_ value: Any?) -> Int {
+            if let value = value as? Int { return value }
+            if let value = value as? NSNumber { return value.intValue }
+            return Int(String(describing: value ?? "")) ?? 0
+        }
+        let isKRC = integer(first["krctype"]) == 1 && integer(first["contenttype"]) != 1
+        let raw = await download(isKRC ? "krc" : "lrc")
+        if isKRC, let raw, let decoded = Self.decodeKRC(raw) {
+            return LyricPayload(lrc: decoded.lrc, krc: decoded.krc)
+        }
+        let lrc = raw.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        return LyricPayload(lrc: lrc, krc: nil)
+    }
+
+    private static func decodeKRC(_ data: Data) -> (lrc: String, krc: String?)? {
+        guard data.count > 4 else { return nil }
+        let key: [UInt8] = [0x40, 0x47, 0x61, 0x77, 0x5e, 0x32, 0x74, 0x47,
+                            0x51, 0x36, 0x31, 0x2d, 0xce, 0xd2, 0x6e, 0x69]
+        var encrypted = Array(data.dropFirst(4))
+        for index in encrypted.indices { encrypted[index] ^= key[index % key.count] }
+        var output = Data()
+        var capacity = max(encrypted.count * 4, 4096)
+        for _ in 0..<8 {
+            var buffer = [UInt8](repeating: 0, count: capacity)
+            let count = buffer.withUnsafeMutableBytes { destination in
+                encrypted.withUnsafeBytes { source in
+                    compression_decode_buffer(destination.bindMemory(to: UInt8.self).baseAddress!, capacity,
+                                              source.bindMemory(to: UInt8.self).baseAddress!, encrypted.count,
+                                              nil, COMPRESSION_ZLIB)
+                }
+            }
+            if count > 0 {
+                output = Data(buffer.prefix(count))
+                break
+            }
+            capacity *= 2
+        }
+        guard let text = String(data: output, encoding: .utf8), !text.isEmpty else { return nil }
+        return (text, text.contains("(") ? text : nil)
     }
 
     // MARK: - 酷狗评论
