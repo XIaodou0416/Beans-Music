@@ -311,7 +311,9 @@ struct DiscoverView: View {
                 .environmentObject(player)
                 .environmentObject(auth)
         case .dailySongs(let songs):
-            DailySongsSheet(songs: songs)
+            DailySongsSheet(songs: songs, source: source) { refreshedSongs in
+                replaceDailySongs(refreshedSongs, for: source)
+            }
                 .environmentObject(player)
                 .environmentObject(auth)
         }
@@ -1958,6 +1960,16 @@ struct DiscoverView: View {
         }
     }
 
+    @MainActor
+    private func replaceDailySongs(_ songs: [Song], for source: SearchProvider) {
+        guard !songs.isEmpty else { return }
+        dailySongs = songs
+        guard var snapshot = DiscoverCache.shared.cached(for: source) else { return }
+        snapshot.dailySongs = songs
+        snapshot.savedAt = Date()
+        DiscoverCache.shared.save(snapshot, for: source)
+    }
+
     private var homeGreetingColor: Color {
         if let color = Color(hex: homeGreetingColorHex) { return color }
         return Color.beansLabel
@@ -2258,17 +2270,35 @@ struct DailySongsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
 
     let songs: [Song]
+    let source: SearchProvider
+    var onRefreshed: (([Song]) -> Void)? = nil
     @State private var searchText = ""
+    @State private var displayedSongs: [Song]
+    @State private var isRefreshing = false
+    @State private var refreshError: String?
+
+    init(songs: [Song], source: SearchProvider, onRefreshed: (([Song]) -> Void)? = nil) {
+        self.songs = songs
+        self.source = source
+        self.onRefreshed = onRefreshed
+        _displayedSongs = State(initialValue: songs)
+    }
 
     var body: some View {
         let _ = theme.accent
         ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
-                if songs.isEmpty {
+                if displayedSongs.isEmpty {
                     EmptyStateView(icon: "sparkles", text: "今日推荐加载中，请稍后重试")
                 } else {
                     List {
+                    if let refreshError {
+                        Text(refreshError)
+                            .font(BeansFont.appFont(12, .medium))
+                            .foregroundStyle(.red)
+                            .listRowBackground(Color.clear)
+                    }
                     Section {
                         HStack(spacing: 12) {
                             GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
@@ -2298,22 +2328,73 @@ struct DailySongsSheet: View {
                 }
                 .beansScrollContentBackgroundHidden()
                 .listStyle(.plain)
+                .refreshable {
+                    await refreshDailySongs()
+                }
                 }
             }
             }
             .navigationTitle("今日推荐")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索每日推荐", "Search daily recommendations"))
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        Task { await refreshDailySongs() }
+                    } label: {
+                        Image(systemName: isRefreshing ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
+                    }
+                    .disabled(isRefreshing)
+                    .accessibilityLabel(Text("刷新每日推荐"))
+                }
+            }
     }
 
     private var filteredSongs: [Song] {
         let kw = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !kw.isEmpty else { return songs }
-        return songs.filter { song in
+        guard !kw.isEmpty else { return displayedSongs }
+        return displayedSongs.filter { song in
             song.name.lowercased().contains(kw)
                 || song.artists.lowercased().contains(kw)
                 || song.album.lowercased().contains(kw)
         }
+    }
+
+    @MainActor
+    private func refreshDailySongs() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        refreshError = nil
+        defer { isRefreshing = false }
+
+        do {
+            let refreshed: [Song]
+            switch source {
+            case .netease:
+                refreshed = try await NetEaseAPI.shared.dailyRecommend()
+            case .qq:
+                refreshed = try await QQMusicAPI.shared.recommendSongs(limit: 30)
+            case .kugou:
+                if let songs = try? await KugouMusicAPI.shared.everydayRecommend(limit: 30), !songs.isEmpty {
+                    refreshed = songs
+                } else {
+                    refreshed = try await KugouMusicAPI.shared.searchSongs(keyword: "热门歌曲", limit: 30)
+                }
+            }
+            guard !refreshed.isEmpty else { throw BeansDailyRecommendError.empty }
+            displayedSongs = refreshed
+            onRefreshed?(refreshed)
+        } catch {
+            refreshError = "刷新失败：\(error.localizedDescription)"
+        }
+    }
+}
+
+private enum BeansDailyRecommendError: LocalizedError {
+    case empty
+
+    var errorDescription: String? {
+        "当前账号没有返回新的每日推荐内容"
     }
 }
 // MARK: - 排行榜详情
