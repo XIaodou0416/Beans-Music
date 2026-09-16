@@ -3764,10 +3764,10 @@ struct PlayerView: View {
                                     layoutData: vinylLayoutData,
                                     initialShowsLyrics: layoutRenderingShowLyrics,
                                     isFavorite: song.map { localLibrary.containsSong($0) } ?? false,
-                                    visualsActive: false,
                                     onFavorite: {},
                                     onComments: {},
-                                    onSettings: {}
+                                    onSettings: {},
+                                    visualsActive: false
                                 )
                                 .id("record-layout-preview-\(layoutRenderingShowLyrics)")
                                 .environmentObject(player)
@@ -4330,10 +4330,10 @@ struct PlayerView: View {
                         layoutData: vinylLayoutData,
                         initialShowsLyrics: layoutRenderingShowLyrics,
                         isFavorite: song.map { localLibrary.containsSong($0) } ?? false,
-                        visualsActive: false,
                         onFavorite: {},
                         onComments: {},
-                        onSettings: {}
+                        onSettings: {},
+                        visualsActive: false
                     )
                     .id("record-ipad-layout-preview-\(layoutRenderingShowLyrics)")
                     .environmentObject(player)
