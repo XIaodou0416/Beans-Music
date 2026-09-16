@@ -930,7 +930,10 @@ struct AppleMusicCompactQueueContent: View {
         isActive: Bool,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        Button {
+            BeansHaptics.tap()
+            action()
+        } label: {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(isActive ? Color.black.opacity(0.76) : .white.opacity(0.76))
@@ -940,7 +943,9 @@ struct AppleMusicCompactQueueContent: View {
                     in: Capsule()
                 )
         }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.96))
+        .contentShape(Capsule())
+        .buttonStyle(.plain)
+        .zIndex(2)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
