@@ -1,16 +1,16 @@
 import SwiftUI
 
-// MARK: - 相对时间
+// MARK: - 评论日期
 
-func beansRelativeTime(_ date: Date) -> String {
-    let interval = Date().timeIntervalSince(date)
-    if interval < 60 { return NSLocalizedString("刚刚", comment: "") }
-    if interval < 3600 { return String(format: NSLocalizedString("%d 分钟前", comment: ""), Int(interval / 60)) }
-    if interval < 86400 { return String(format: NSLocalizedString("%d 小时前", comment: ""), Int(interval / 3600)) }
-    if interval < 86400 * 30 { return String(format: NSLocalizedString("%d 天前", comment: ""), Int(interval / 86400)) }
+private let beansCommentDateFormatter: DateFormatter = {
     let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "zh_CN")
     formatter.dateFormat = "yyyy-MM-dd"
-    return formatter.string(from: date)
+    return formatter
+}()
+
+func beansCommentDate(_ date: Date) -> String {
+    beansCommentDateFormatter.string(from: date)
 }
 
 private func beansCommentCountText(songName: String, platform: String? = nil, count: Int) -> String {
@@ -584,7 +584,7 @@ struct CommentRow: View {
                             .background(LinearGradient.beansAccent, in: Capsule())
                     }
                     Spacer()
-                    Text(beansRelativeTime(comment.time))
+                    Text(beansCommentDate(comment.time))
                         .font(BeansFont.appFont(11))
                         .foregroundStyle(Color.beansComment.opacity(0.8))
                 }
