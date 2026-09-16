@@ -4,56 +4,40 @@ import UIKit
 /// App icon presets are declared here so newly bundled icons can be enabled without changing the settings UI.
 enum BeansAppIconPreset: String, CaseIterable, Identifiable {
     case standard
-    case stretch
-    case soles
     case sideHug
     case foldedArms
-    case shy
-    case heart
-    case wave
-    case night
+    case redCharacter
+    case blackNote
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .standard: return "默认图标"
-        case .stretch: return "举手"
-        case .soles: return "脚印"
         case .sideHug: return "侧抱"
         case .foldedArms: return "抱臂"
-        case .shy: return "托腮"
-        case .heart: return "爱心"
-        case .wave: return "挥手"
-        case .night: return "夜色"
+        case .redCharacter: return "红色角色"
+        case .blackNote: return "黑色音符"
         }
     }
 
     var alternateIconName: String? {
         switch self {
         case .standard: return nil
-        case .stretch: return "AppIconStretch"
-        case .soles: return "AppIconSoles"
         case .sideHug: return "AppIconSideHug"
         case .foldedArms: return "AppIconFoldedArms"
-        case .shy: return "AppIconShy"
-        case .heart: return "AppIconHeart"
-        case .wave: return "AppIconWave"
-        case .night: return "AppIconNight"
+        case .redCharacter: return "AppIconRedCharacter"
+        case .blackNote: return "AppIconBlackNote"
         }
     }
 
     var previewAssetName: String {
         switch self {
         case .standard: return "AppIconPreviewDefault"
-        case .stretch: return "AppIconPreviewStretch"
-        case .soles: return "AppIconPreviewSoles"
         case .sideHug: return "AppIconPreviewSideHug"
         case .foldedArms: return "AppIconPreviewFoldedArms"
-        case .shy: return "AppIconPreviewShy"
-        case .heart: return "AppIconPreviewHeart"
-        case .wave: return "AppIconPreviewWave"
-        case .night: return "AppIconPreviewNight"
+        case .redCharacter: return "AppIconPreviewRedCharacter"
+        case .blackNote: return "AppIconPreviewBlackNote"
         }
     }
 }
@@ -111,37 +95,38 @@ struct AppIconPickerSheet: View {
         BeansNavigationStack {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
-                List {
-                    Section {
+                ScrollView {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 3),
+                        spacing: 18
+                    ) {
                         ForEach(BeansAppIconPreset.allCases) { preset in
                             Button {
                                 iconManager.select(preset)
                                 BeansHaptics.select()
                             } label: {
-                                HStack(spacing: 12) {
-                                    Image(preset.previewAssetName)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 48, height: 48)
-                                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                                    Text(preset.title)
-                                        .font(BeansFont.appFont(15, .medium))
-                                        .foregroundStyle(Color.beansLabel)
-                                    Spacer()
-                                    if iconManager.currentPreset == preset {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 13, weight: .bold))
-                                            .foregroundStyle(Color.beansAmber)
+                                Image(preset.previewAssetName)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(maxWidth: .infinity)
+                                    .aspectRatio(1, contentMode: .fit)
+                                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    .overlay(alignment: .topTrailing) {
+                                        if iconManager.currentPreset == preset {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.system(size: 22, weight: .bold))
+                                                .foregroundStyle(Color.beansAmber, Color.white)
+                                                .padding(6)
+                                        }
                                     }
-                                }
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(preset.title)
                         }
-                    } footer: {
-                        Text("选择后会更新主屏幕上的软件图标。")
                     }
+                    .padding(18)
                 }
-                .beansScrollContentBackgroundHidden()
+                .beansScrollIndicatorsHidden()
             }
             .navigationTitle("软件图标")
             .navigationBarTitleDisplayMode(.inline)

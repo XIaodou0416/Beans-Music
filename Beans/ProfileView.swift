@@ -44,6 +44,9 @@ struct ProfileView: View {
     @State private var showWeChatOpenError = false
     @State private var showFeedback = false
     @State private var showAvatarPicker = false
+    @State private var easterEggStep = 0
+    @State private var easterEggPrompt = "点我有惊喜"
+    @State private var showEasterEgg = false
     @AppStorage("beans.profile.customNickname") private var customNickname = ""
     @ObservedObject private var feedbackHistory = FeedbackHistoryStore.shared
     @ObservedObject private var avatarStore = BeansAvatarStore.shared
@@ -170,6 +173,7 @@ struct ProfileView: View {
                     customAvatarCard
                     communityCard
                     donationCard
+                    easterEggCard
                     profileVersionFooter
                 }
                 .padding(.horizontal, isNativeClean ? 24 : 16)
@@ -245,6 +249,16 @@ struct ProfileView: View {
         .overlay {
             if showDownloadOverlay { downloadProgressOverlay }
         }
+        .overlay {
+            if showEasterEgg {
+                EasterEggOverlay {
+                    showEasterEgg = false
+                    easterEggStep = 0
+                    easterEggPrompt = "点我有惊喜"
+                }
+                .transition(.opacity)
+            }
+        }
         .alert("下载新版", isPresented: $showDownloadOutcome, presenting: downloadOutcome) { outcome in
             switch outcome {
             case .success:
@@ -305,6 +319,45 @@ struct ProfileView: View {
             .padding(32)
         }
         .transition(.opacity)
+    }
+
+    private var easterEggCard: some View {
+        Button {
+            BeansHaptics.tap()
+            switch easterEggStep {
+            case 0:
+                easterEggStep = 1
+                easterEggPrompt = ["再点一下", "求你了，再点一下", "哥哥我要来了"].randomElement() ?? "再点一下"
+            case 1:
+                easterEggStep = 2
+                easterEggPrompt = ["最后一下！！", "马上出来了！！", "啊啊我要来了"].randomElement() ?? "最后一下！！"
+            default:
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showEasterEgg = true
+                }
+            }
+        } label: {
+            HStack(spacing: 11) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 28)
+                Text(easterEggPrompt)
+                    .font(BeansFont.appFont(14, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.beansComment.opacity(0.65))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
     }
 
     private var userCard: some View {
@@ -1727,18 +1780,14 @@ struct SettingsView: View {
             showAppIconPicker = true
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: "app.dashed")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(width: 28)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("软件图标")
-                        .font(BeansFont.appFont(15, .semibold))
-                        .foregroundStyle(Color.beansLabel)
-                    Text(AppIconManager.shared.currentPreset.title)
-                        .font(BeansFont.appFont(12))
-                        .foregroundStyle(Color.beansComment)
-                }
+                Image(AppIconManager.shared.currentPreset.previewAssetName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 34, height: 34)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text("软件图标")
+                    .font(BeansFont.appFont(15, .semibold))
+                    .foregroundStyle(Color.beansLabel)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
