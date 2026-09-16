@@ -38,7 +38,7 @@ private struct FallingFoot: Identifiable {
 struct EasterEggOverlay: View {
     let onDismiss: () -> Void
 
-    @State private var animatedFootScale: CGFloat = 0.84
+    @State private var animatedFootScale: CGFloat = 0.24
     @State private var fallingFoots: [FallingFoot] = []
     @State private var fallingFootsStarted = false
     @State private var didStart = false
@@ -53,7 +53,10 @@ struct EasterEggOverlay: View {
                     .ignoresSafeArea()
 
                 AnimatedWebPView(resourceName: "EasterEggFoot")
-                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .frame(
+                        width: min(proxy.size.width * 0.92, 620),
+                        height: min(proxy.size.height * 0.72, 620)
+                    )
                     .scaleEffect(animatedFootScale)
                     .shadow(color: .black.opacity(0.34), radius: 26, y: 12)
 
@@ -97,12 +100,15 @@ struct EasterEggOverlay: View {
 
     private func makeFallingFoots(for audioDuration: TimeInterval) -> [FallingFoot] {
         let patterns: [(CGFloat, CGFloat, Double)] = [
-            (0.12, 0.72, -18), (0.33, 0.82, 13), (0.54, 0.68, -9),
-            (0.76, 0.78, 19), (0.90, 0.64, -15), (0.23, 0.74, 10),
-            (0.46, 0.86, -21), (0.68, 0.70, 16), (0.84, 0.80, -7)
+            (0.08, 0.62, -18), (0.17, 0.72, 11), (0.27, 0.66, -9),
+            (0.37, 0.78, 17), (0.47, 0.60, -14), (0.57, 0.70, 8),
+            (0.67, 0.64, -20), (0.77, 0.76, 15), (0.88, 0.61, -7),
+            (0.13, 0.69, 20), (0.23, 0.58, -12), (0.34, 0.74, 9),
+            (0.52, 0.63, -17), (0.63, 0.73, 14), (0.74, 0.59, -8),
+            (0.94, 0.68, 18)
         ]
         let travelDuration = max(1.65, min(3.1, audioDuration * 0.48))
-        let count = min(patterns.count, max(5, Int((audioDuration / 0.72).rounded(.up))))
+        let count = min(patterns.count, max(14, Int((audioDuration / 0.46).rounded(.up))))
         let finalDelay = max(0, audioDuration - travelDuration - 0.08)
         return patterns.prefix(count).enumerated().map { index, pattern in
             FallingFoot(
@@ -132,7 +138,7 @@ private struct AnimatedWebPView: UIViewRepresentable {
 
         if let url = Bundle.main.url(forResource: resourceName, withExtension: "webp") {
             let html = """
-            <!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}img{width:100%;height:100%;object-fit:cover}</style></head><body><img src=\"\(url.lastPathComponent)\" /></body></html>
+            <!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}img{width:100%;height:100%;object-fit:contain}</style></head><body><img src=\"\(url.lastPathComponent)\" /></body></html>
             """
             webView.loadHTMLString(html, baseURL: url.deletingLastPathComponent())
         }
