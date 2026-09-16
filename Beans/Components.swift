@@ -1,5 +1,16 @@
 import SwiftUI
 
+private struct BeansSharedRootBackdropKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var beansUsesSharedRootBackdrop: Bool {
+        get { self[BeansSharedRootBackdropKey.self] }
+        set { self[BeansSharedRootBackdropKey.self] = newValue }
+    }
+}
+
 struct FavoriteHeartView: View {
     let mark: FavoriteMark
     var size: CGFloat = 17

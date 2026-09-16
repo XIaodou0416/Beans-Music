@@ -54,6 +54,7 @@ struct LibraryView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var favorites: FavoritesStore
+    @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
@@ -130,8 +131,10 @@ struct LibraryView: View {
         let _ = theme.accent
         BeansNavigationStackWithPath(path: $navigationPath) {
         ZStack {
-            // 页面背景：同步开启时显示壁纸/背景色，否则默认氛围渐变
-            GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            if !usesSharedRootBackdrop {
+                // 页面背景：同步开启时显示壁纸/背景色，否则默认氛围渐变
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            }
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
             if #unavailable(iOS 16.0) {

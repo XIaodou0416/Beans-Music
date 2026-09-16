@@ -4,6 +4,7 @@ import SwiftUI
 struct PlaylistSquareView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
+    @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
     @AppStorage("beans.playlistSquareSource") private var playlistSourceRaw = SearchProvider.netease.rawValue
@@ -62,7 +63,9 @@ struct PlaylistSquareView: View {
         let _ = theme.accent
         BeansNavigationStack {
             ZStack {
-                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                if !usesSharedRootBackdrop {
+                    GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                }
 
                 VStack(spacing: 0) {
                     headerTitle

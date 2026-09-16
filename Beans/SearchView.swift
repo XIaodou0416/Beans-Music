@@ -91,6 +91,7 @@ struct SearchView: View {
     @EnvironmentObject private var auth: AuthStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
 
@@ -128,8 +129,10 @@ struct SearchView: View {
     var body: some View {
         let _ = theme.accent
         ZStack(alignment: .top) {
-            // 页面背景：同步开启时显示壁纸/背景色，否则默认氛围渐变
-            GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            if !usesSharedRootBackdrop {
+                // 页面背景：同步开启时显示壁纸/背景色，否则默认氛围渐变
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            }
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
             ScrollView {

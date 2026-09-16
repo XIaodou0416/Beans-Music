@@ -76,6 +76,7 @@ struct RootView: View {
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
+    @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
     @AppStorage("beans.remoteAnnouncement.imageURL") private var remoteAnnouncementImageURL = ""
@@ -540,9 +541,12 @@ struct RootView: View {
     private var iPadSidebarRoot: some View {
         GeometryReader { proxy in
             ZStack {
-                // Keep a live backdrop beneath the sidebar so iPad glass can refract
-                // wallpaper and the app's ambient colors instead of a flat system fill.
-                GlassBackdrop()
+                // iPad 横屏只绘制一次完整主页背景，侧栏和迷你播放器都在这张背景之上合成。
+                GlassBackdrop(
+                    customColor: theme.customBackground,
+                    homeMode: true,
+                    wallpaperBlur: CGFloat(homeWallpaperBlur)
+                )
 
                 HStack(spacing: 0) {
                     iPadSidebar(
@@ -557,11 +561,11 @@ struct RootView: View {
 
                     VStack(spacing: 0) {
                         ZStack {
-                            legacyPage(.discover) { DiscoverView() }
-                            legacyPage(.playlists) { PlaylistSquareView() }
-                            legacyPage(.search) { SearchView() }
-                            legacyPage(.library) { LibraryView() }
-                            legacyPage(.profile) { ProfileView() }
+                            legacyPage(.discover) { DiscoverView().environment(\.beansUsesSharedRootBackdrop, true) }
+                            legacyPage(.playlists) { PlaylistSquareView().environment(\.beansUsesSharedRootBackdrop, true) }
+                            legacyPage(.search) { SearchView().environment(\.beansUsesSharedRootBackdrop, true) }
+                            legacyPage(.library) { LibraryView().environment(\.beansUsesSharedRootBackdrop, true) }
+                            legacyPage(.profile) { ProfileView().environment(\.beansUsesSharedRootBackdrop, true) }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 

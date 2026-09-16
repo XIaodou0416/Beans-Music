@@ -15,6 +15,7 @@ struct DiscoverView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
+    @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
     @State private var topLists: [TopList] = []
@@ -138,8 +139,10 @@ struct DiscoverView: View {
         let _ = theme.accent
         BeansNavigationStackWithPath(path: $navigationPath) {
         ZStack {
-            // 主页背景：壁纸/背景色永远在发现页生效（homeMode），同步开启时其他页面也生效
-            GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(homeWallpaperBlur))
+            if !usesSharedRootBackdrop {
+                // 主页背景：壁纸/背景色永远在发现页生效（homeMode），同步开启时其他页面也生效
+                GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(homeWallpaperBlur))
+            }
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
             if #unavailable(iOS 16.0) {
