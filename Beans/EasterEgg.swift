@@ -75,9 +75,12 @@ struct EasterEggOverlay: View {
                             .allowsHitTesting(false)
                     }
                 }
+
+                // The easter egg is intentionally modal until its audio completes.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {}
             }
-            .contentShape(Rectangle())
-            .onTapGesture { onDismiss() }
             .onAppear {
                 guard !didStart else { return }
                 didStart = true

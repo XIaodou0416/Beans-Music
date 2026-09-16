@@ -75,6 +75,7 @@ struct RootView: View {
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
     @AppStorage("beans.legacyTabOffsetY") private var legacyTabOffsetY = 0.0
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
     @AppStorage("beans.duoEffectEnabled") private var duoEffectEnabled = false
     @AppStorage("beans.remoteAnnouncement.enabled") private var remoteAnnouncementEnabled = false
     @AppStorage("beans.remoteAnnouncement.text") private var remoteAnnouncementText = ""
@@ -541,35 +542,40 @@ struct RootView: View {
     /// iPad 横屏侧栏：页面复用原有 Tab 内容，歌单与播放列表固定在左侧。
     private var iPadSidebarRoot: some View {
         GeometryReader { proxy in
-            HStack(spacing: 0) {
-                iPadSidebar
-                    .frame(width: min(max(proxy.size.width * 0.17, 176), 228))
+            ZStack {
+                // Keep a live backdrop beneath the sidebar so iPad glass can refract
+                // wallpaper and the app's ambient colors instead of a flat system fill.
+                GlassBackdrop()
 
-                VStack(spacing: 0) {
-                    ZStack {
-                        legacyPage(.discover) { DiscoverView() }
-                        legacyPage(.playlists) { PlaylistSquareView() }
-                        legacyPage(.search) { SearchView() }
-                        legacyPage(.library) { LibraryView() }
-                        legacyPage(.profile) { ProfileView() }
+                HStack(spacing: 0) {
+                    iPadSidebar
+                        .frame(width: min(max(proxy.size.width * 0.17, 176), 228))
+
+                    VStack(spacing: 0) {
+                        ZStack {
+                            legacyPage(.discover) { DiscoverView() }
+                            legacyPage(.playlists) { PlaylistSquareView() }
+                            legacyPage(.search) { SearchView() }
+                            legacyPage(.library) { LibraryView() }
+                            legacyPage(.profile) { ProfileView() }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        if player.currentSong != nil {
+                            MiniPlayerView(
+                                showPlayer: $showPlayer,
+                                presentation: .dock,
+                                transitionNamespace: nowPlayingTransition
+                            )
+                                .environmentObject(player.clock)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    if player.currentSong != nil {
-                        MiniPlayerView(
-                            showPlayer: $showPlayer,
-                            presentation: .dock,
-                            transitionNamespace: nowPlayingTransition
-                        )
-                            .environmentObject(player.clock)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         }
         .animation(.easeInOut(duration: 0.25), value: selection)
         .animation(.easeInOut(duration: 0.25), value: player.currentSong?.identityKey)
@@ -646,9 +652,15 @@ struct RootView: View {
         }
         .background {
             if #available(iOS 26.0, *) {
-                Rectangle()
-                    .fill(.clear)
-                    .glassEffect(.regular, in: .rect)
+                if disableLiquidGlass {
+                    Rectangle().fill(.regularMaterial)
+                } else {
+                    GlassEffectContainer {
+                        Rectangle()
+                            .fill(.clear)
+                            .glassEffect(.regular, in: .rect)
+                    }
+                }
             } else {
                 Rectangle()
                     .fill(.regularMaterial)
