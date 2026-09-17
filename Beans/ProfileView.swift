@@ -1293,7 +1293,6 @@ struct SettingsView: View {
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
     @AppStorage("beans.nowPlaying.enabled.v1") private var nowPlayingEnabled = true
-    @AppStorage("beans.lyricKaraokeEnabled") private var lyricKaraokeEnabled = true
     @AppStorage("beans.audioQuality") private var playbackAudioQualityRaw = BeansAudioQuality.hires.rawValue
     @AppStorage("beans.favoriteDestination") private var favoriteDestinationRaw = FavoriteDestination.local.rawValue
     @AppStorage(BeansHaptics.enabledKey) private var hapticsEnabled = true
@@ -2696,27 +2695,6 @@ struct SettingsView: View {
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
                             Text(beansLocalized("打开软件后自动恢复上次未播放完的歌曲", "Automatically resume the last unfinished song when the app starts."))
-                                .font(BeansFont.appFont(11))
-                                .foregroundStyle(Color.beansComment)
-                        }
-                    }
-                }
-                .toggleStyle(.switch)
-                .tint(Color.beansAmber)
-
-                Divider().overlay(Color.beansComment.opacity(0.15))
-
-                Toggle(isOn: $lyricKaraokeEnabled) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "text.line.first.and.arrowtriangle.forward")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("逐字歌词（卡拉 OK）")
-                                .font(BeansFont.appFont(15))
-                                .foregroundStyle(Color.beansLabel)
-                            Text("仅 Apple Music 和唱片模式使用真实逐字时间轴")
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }
