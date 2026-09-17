@@ -396,10 +396,10 @@ struct BeansGlass<S: Shape>: View {
 
     var body: some View {
         if settingsPerformanceMode {
-            // Settings uses the system grouped background directly; controls
-            // keep their layout without adding a glass or frosted container.
+            // Use an opaque system surface in settings. This preserves clear
+            // control boundaries without a liquid or live-blur layer.
             shape
-                .fill(.clear)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
                 .allowsHitTesting(false)
         } else {
             regularBody

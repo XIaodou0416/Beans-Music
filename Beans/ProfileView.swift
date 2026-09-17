@@ -1703,8 +1703,16 @@ struct SettingsView: View {
     var body: some View {
         BeansNavigationStack {
             ZStack {
-                Color(uiColor: .systemGroupedBackground)
-                    .ignoresSafeArea()
+                // Keep the settings page on the same wallpaper/background as
+                // the home page while its controls remain plain surfaces.
+                GlassBackdrop(
+                    customColor: theme.customBackground,
+                    homeMode: true,
+                    wallpaperBlur: CGFloat(homeWallpaperBlur)
+                )
+                // The backdrop is decorative only; it must never participate
+                // in hit testing above the settings controls.
+                .allowsHitTesting(false)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 16) {
                         accountSection
