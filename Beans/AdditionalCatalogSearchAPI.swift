@@ -134,7 +134,7 @@ enum AdditionalCatalogSearchAPI {
                   let data = root["data"] as? [String: Any] else { continue }
             let rows = dictionaries(in: data["lists"] ?? data["list"] ?? data["data"])
             let grouped = rows.flatMap { dictionaries(in: $0["Grp"]) }
-            let songs = (rows + grouped).compactMap(kugouCatalogSong)
+            let songs = (rows + grouped).compactMap { kugouCatalogSong($0) }
             if !songs.isEmpty { return songs }
         }
         throw AdditionalCatalogSearchError.invalidResponse
@@ -524,7 +524,7 @@ enum AdditionalCatalogSearchAPI {
         _ url: URL,
         method: String = "GET",
         body: Data? = nil,
-        headers: [String: String]
+        headers: [String: String] = [:]
     ) async throws -> [String: Any] {
         var request = URLRequest(url: url)
         request.httpMethod = method

@@ -663,7 +663,7 @@ struct SearchView: View {
 
     private var hotSearchLoadingState: some View {
         LazyVGrid(columns: hotSearchColumns, alignment: .leading, spacing: 10) {
-            ForEach(0..<10, id: \.self) { _ in
+                ForEach(0..<6, id: \.self) { _ in
                 BeansShimmerSkeleton(cornerRadius: 22)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
@@ -1163,7 +1163,7 @@ struct SearchView: View {
             hotWords = Array(values.flatMap { $0 }.filter {
                 let normalized = $0.trimmingCharacters(in: .whitespacesAndNewlines)
                 return !normalized.isEmpty && seen.insert(normalized.localizedLowercase).inserted
-            }.prefix(12))
+            }.prefix(8))
         } else if provider == .qq {
             if let words = try? await QQMusicAPI.shared.hotKeys() {
                 hotWords = words
@@ -1175,7 +1175,7 @@ struct SearchView: View {
         } else if let words = try? await NetEaseAPI.shared.hotSearch() {
             hotWords = words
         }
-        hotWords = Array(hotWords.prefix(12))
+        hotWords = Array(hotWords.prefix(8))
     }
 
     private func startSearch(_ text: String) async {
