@@ -391,9 +391,10 @@ struct BeansGlass<S: Shape>: View {
 
     var body: some View {
         if settingsPerformanceMode {
-            // 编辑器和设置页只保留不参与实时合成的表面，减少滚动时的 GPU 合成压力。
+            // Settings uses the system grouped background directly; controls
+            // keep their layout without adding a glass or frosted container.
             shape
-                .fill(Color.beansGlassFill.opacity(0.86))
+                .fill(.clear)
                 .allowsHitTesting(false)
         } else {
             regularBody

@@ -1309,42 +1309,6 @@ private extension ProfileView {
 }
 
 struct SettingsView: View {
-    private enum SettingsGroup: String, Identifiable {
-        case appearance
-        case playback
-        case sources
-        case data
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .appearance: return "外观与布局"
-            case .playback: return "播放与歌词"
-            case .sources: return "音源与音质"
-            case .data: return "数据与帮助"
-            }
-        }
-
-        var subtitle: String {
-            switch self {
-            case .appearance: return "主题、壁纸、主页与平台显示"
-            case .playback: return "播放行为、锁屏与均衡器"
-            case .sources: return "网络音质与音源管理"
-            case .data: return "备份、更新、反馈与说明"
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .appearance: return "paintpalette.fill"
-            case .playback: return "play.circle.fill"
-            case .sources: return "waveform.badge.magnifyingglass"
-            case .data: return "externaldrive.fill"
-            }
-        }
-    }
-
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
@@ -1455,7 +1419,6 @@ struct SettingsView: View {
     @State private var showUpdateResult = false
     @State private var disclaimerExpanded = false
     @State private var showFloatingImagePicker = false
-    @State private var activeSettingsGroup: SettingsGroup?
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1739,16 +1702,18 @@ struct SettingsView: View {
     var body: some View {
         BeansNavigationStack {
             ZStack {
-                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                Color(uiColor: .systemGroupedBackground)
+                    .ignoresSafeArea()
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 16) {
                         accountSection
-                        if let activeSettingsGroup {
-                            settingsGroupHeader(activeSettingsGroup)
-                            settingsGroupContent(activeSettingsGroup)
-                        } else {
-                            settingsOverview
-                        }
+                        themeSection
+                        audioQualitySection
+                        playbackSection
+                        equalizerSection
+                        backupSection
+                        changelogSection
+                        settingsSupportSection
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
@@ -1765,6 +1730,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .environment(\.beansSettingsPerformanceMode, true)
         .preferredColorScheme(themeMode.colorScheme)
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
@@ -1873,105 +1839,6 @@ struct SettingsView: View {
             if #unavailable(iOS 26) {
                 HighRefreshKeeper.shared.resumeAfterTemporaryPause()
             }
-        }
-    }
-
-    private var settingsOverview: some View {
-        VStack(spacing: 0) {
-            ForEach([SettingsGroup.appearance, .playback, .sources, .data]) { group in
-                settingsCategoryRow(group)
-                if group != .data {
-                    Divider()
-                        .overlay(Color.beansComment.opacity(0.16))
-                        .padding(.leading, 54)
-                }
-            }
-        }
-        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 8, style: .continuous)) }
-        .beansCardShadow(radius: 7, y: 3)
-    }
-
-    private func settingsCategoryRow(_ group: SettingsGroup) -> some View {
-        Button {
-            BeansHaptics.tap()
-            withAnimation(.easeInOut(duration: 0.22)) {
-                activeSettingsGroup = group
-                switch group {
-                case .appearance:
-                    appearanceExpanded = true
-                case .playback:
-                    playbackExpanded = true
-                case .sources:
-                    audioQualityExpanded = true
-                case .data:
-                    backupExpanded = true
-                }
-            }
-        } label: {
-            HStack(spacing: 13) {
-                Image(systemName: group.icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(width: 26)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(group.title)
-                        .font(BeansFont.appFont(15, .semibold))
-                        .foregroundStyle(Color.beansLabel)
-                    Text(group.subtitle)
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 12)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.beansComment.opacity(0.65))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.99))
-    }
-
-    private func settingsGroupHeader(_ group: SettingsGroup) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                BeansHaptics.select()
-                withAnimation(.easeInOut(duration: 0.20)) {
-                    activeSettingsGroup = nil
-                }
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(width: 34, height: 34)
-                    .background(Color.beansLabel.opacity(0.08), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("全部设置")
-
-            Text(group.title)
-                .font(BeansFont.appFont(18, .bold))
-                .foregroundStyle(Color.beansLabel)
-            Spacer()
-        }
-        .padding(.top, 2)
-    }
-
-    @ViewBuilder
-    private func settingsGroupContent(_ group: SettingsGroup) -> some View {
-        switch group {
-        case .appearance:
-            themeSection
-        case .playback:
-            playbackSection
-            equalizerSection
-        case .sources:
-            audioQualitySection
-        case .data:
-            backupSection
-            changelogSection
-            settingsSupportSection
         }
     }
 
