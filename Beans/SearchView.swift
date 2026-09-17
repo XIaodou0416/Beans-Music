@@ -276,7 +276,6 @@ struct SearchView: View {
         BeansNavigationStack {
             pageContent
                 .navigationTitle(keyword.isEmpty ? "搜索" : keyword)
-                .navigationBarTitleDisplayMode(.inline)
         }
         .task(id: provider) {
             guard hotLoadedProvider != provider else { return }
@@ -431,7 +430,7 @@ struct SearchView: View {
                 typeTabs
                 resultsArea
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
     }
 
@@ -737,14 +736,31 @@ struct SearchView: View {
                     if !songResults.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             searchSectionHeader("单曲") { resultType = .song }
+                            HStack {
+                                Text("\(min(songResults.count, 6)) 首歌曲")
+                                    .font(BeansFont.appFont(14, .medium))
+                                    .foregroundStyle(Color.beansComment)
+                                Spacer(minLength: 8)
+                                if downloadFeatureUnlocked, songResults.count > 1 {
+                                    Button {
+                                        BeansHaptics.tap()
+                                        showBatchDownload = true
+                                    } label: {
+                                        Label("批量下载", systemImage: "arrow.down.circle")
+                                            .font(BeansFont.appFont(13, .semibold))
+                                            .foregroundStyle(Color.beansAmber)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 7)
+                                            .background { Capsule().fill(Color.beansAmber.opacity(0.14)) }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
                             ForEach(Array(songResults.prefix(6).enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, suppressNativeCleanRowGlass: isNativeClean) {
+                                BeansSearchSongRow(song: song) {
                                     BeansHaptics.tap()
                                     player.play(songs: songResults, startAt: index)
                                 }
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
                             }
                         }
                     }
@@ -786,16 +802,18 @@ struct SearchView: View {
 
     private func searchSectionHeader(_ title: String, action: @escaping () -> Void) -> some View {
         HStack {
-            Text(title)
-                .font(BeansFont.appFont(17, .bold))
-                .foregroundStyle(Color.beansLabel)
-            Spacer(minLength: 8)
             Button(action: action) {
-                Label("查看全部", systemImage: "chevron.right")
-                    .font(BeansFont.appFont(12, .medium))
-                    .foregroundStyle(Color.beansComment)
+                HStack(spacing: 5) {
+                    Text(title)
+                        .font(BeansFont.appFont(27, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color.beansComment)
+                }
             }
             .buttonStyle(.plain)
+            Spacer(minLength: 8)
         }
     }
 
@@ -933,14 +951,9 @@ struct SearchView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 8)
                         ForEach(Array(songResults.enumerated()), id: \.element.identityKey) { index, song in
-                            SongCell(song: song, suppressNativeCleanRowGlass: isNativeClean) {
+                            BeansSearchSongRow(song: song) {
                                 BeansHaptics.tap()
                                 player.play(songs: songResults, startAt: index)
-                            }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background {
-                                BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             }
                         }
                     }
@@ -1147,10 +1160,10 @@ struct SearchView: View {
                 return collected
             }
             var seen = Set<String>()
-            hotWords = values.flatMap { $0 }.filter {
+            hotWords = Array(values.flatMap { $0 }.filter {
                 let normalized = $0.trimmingCharacters(in: .whitespacesAndNewlines)
                 return !normalized.isEmpty && seen.insert(normalized.localizedLowercase).inserted
-            }
+            }.prefix(12))
         } else if provider == .qq {
             if let words = try? await QQMusicAPI.shared.hotKeys() {
                 hotWords = words
@@ -1162,6 +1175,7 @@ struct SearchView: View {
         } else if let words = try? await NetEaseAPI.shared.hotSearch() {
             hotWords = words
         }
+        hotWords = Array(hotWords.prefix(12))
     }
 
     private func startSearch(_ text: String) async {
@@ -1319,12 +1333,18 @@ struct SearchView: View {
     ) async -> [Song] {
         switch provider {
         case .aggregate:
-            async let netease: [Song] = (try? await NetEaseAPI.shared.search(keyword: keyword, limit: limit)) ?? []
-            async let qq: [Song] = (try? await QQMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
-            async let kugou: [Song] = (try? await KugouMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
-            async let kuwo: [Song] = (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: keyword, limit: limit)) ?? []
-            async let migu: [Song] = (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: keyword, limit: limit)) ?? []
-            return deduplicatedSongs(await (netease + qq + kugou + kuwo + migu))
+            let providers: [SearchCatalogProvider] = [.netease, .qq, .kugou, .kuwo, .migu]
+            let completedResults = await withTaskGroup(of: [Song].self, returning: [[Song]].self) { group in
+                for candidate in providers {
+                    group.addTask {
+                        await self.catalogSongs(keyword: keyword, provider: candidate, limit: limit)
+                    }
+                }
+                var values: [[Song]] = []
+                for await value in group { values.append(value) }
+                return values
+            }
+            return deduplicatedSongs(completedResults.flatMap { $0 })
         case .kuwo:
             return (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: keyword, limit: limit)) ?? []
         case .migu:
@@ -1420,6 +1440,63 @@ struct SearchView: View {
             ))
         }
         return (artists, albums)
+    }
+}
+
+private struct BeansSearchSongRow: View {
+    let song: Song
+    let onTap: () -> Void
+
+    private var sourceName: String {
+        switch song.source {
+        case .netease: return "网易云"
+        case .qq: return "QQ音乐"
+        case .kugou: return "酷狗"
+        case .kuwo: return "酷我"
+        case .migu: return "咪咕"
+        }
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                CoverImage(url: song.coverURL, song: song, size: 56, cornerRadius: 10)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 7) {
+                        Text(song.name)
+                            .font(BeansFont.appFont(17, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        if song.isVIP {
+                            Text("VIP")
+                                .font(BeansFont.appFont(10, .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.red))
+                        }
+                    }
+                    Text(song.artists.isEmpty ? song.album : song.artists)
+                        .font(BeansFont.appFont(14))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Text("来源：\(sourceName) · 音质：待检测")
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment.opacity(0.72))
+                        .lineLimit(1)
+                }
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                Text(song.formattedDuration)
+                    .font(BeansFont.appFont(14, .regular, .monospaced))
+                    .foregroundStyle(Color.beansComment)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
