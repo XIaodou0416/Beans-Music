@@ -1254,7 +1254,7 @@ private extension ProfileView {
                         .lineLimit(1)
                     Text(isEnglish ? "Your Beans listening record" : "Beans 本机听歌记录")
                         .font(BeansFont.appFont(12, .medium))
-                        .foregroundStyle(Color.beansSecondaryLabel)
+                        .foregroundStyle(Color.beansSecondary)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "waveform")
@@ -1295,7 +1295,7 @@ private extension ProfileView {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(BeansFont.appFont(11, .medium))
-                    .foregroundStyle(Color.beansSecondaryLabel)
+                    .foregroundStyle(Color.beansSecondary)
                 Text(value)
                     .font(BeansFont.appFont(15, .semibold))
                     .foregroundStyle(Color.beansLabel)
