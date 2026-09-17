@@ -7049,17 +7049,61 @@ struct ShareSheet: UIViewControllerRepresentable {
 struct CoverSpin: ViewModifier {
     let enabled: Bool
     let isPlaying: Bool
+    var degreesPerSecond: Double = 15
+
+    @State private var pausedAngle = 0.0
+    @State private var startedAt: Date?
+    @State private var renderedAngle = 0.0
 
     func body(content: Content) -> some View {
-        if enabled {
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isPlaying)) { context in
-                let angle = (context.date.timeIntervalSinceReferenceDate * 15)
-                    .truncatingRemainder(dividingBy: 360)
-                return content
-                    .rotationEffect(.degrees(angle))
-            }
-        } else {
-            content
+        content
+            .rotationEffect(.degrees(enabled ? renderedAngle : 0))
+            .onAppear { updateAnimation() }
+            .onChange(of: isPlaying) { _ in updateAnimation() }
+            .onChange(of: enabled) { _ in updateAnimation() }
+    }
+
+    private func updateAnimation() {
+        guard enabled else {
+            stop(at: Date())
+            pausedAngle = 0
+            setRenderedAngle(0)
+            return
         }
+        if isPlaying {
+            start(at: Date())
+        } else {
+            stop(at: Date())
+        }
+    }
+
+    private func start(at date: Date) {
+        guard startedAt == nil else { return }
+        let angle = normalized(pausedAngle)
+        setRenderedAngle(angle)
+        startedAt = date
+        withAnimation(.linear(duration: 360 / max(degreesPerSecond, 1)).repeatForever(autoreverses: false)) {
+            renderedAngle = angle + 360
+        }
+    }
+
+    private func stop(at date: Date) {
+        guard let startedAt else { return }
+        pausedAngle = normalized(pausedAngle + date.timeIntervalSince(startedAt) * degreesPerSecond)
+        self.startedAt = nil
+        setRenderedAngle(pausedAngle)
+    }
+
+    private func setRenderedAngle(_ angle: Double) {
+        var transaction = Transaction()
+        transaction.animation = nil
+        withTransaction(transaction) {
+            renderedAngle = angle
+        }
+    }
+
+    private func normalized(_ angle: Double) -> Double {
+        let remainder = angle.truncatingRemainder(dividingBy: 360)
+        return remainder >= 0 ? remainder : remainder + 360
     }
 }

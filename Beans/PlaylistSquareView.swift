@@ -73,6 +73,15 @@ struct PlaylistSquareView: View {
                         .padding(.top, 8)
                         .padding(.bottom, 10)
 
+                    NativeSearchBar(
+                        text: $searchText,
+                        placeholder: beansLocalized("搜索歌单", "Search playlists"),
+                        onSubmit: { _ in submitSearch() }
+                    )
+                    .frame(height: 46)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
                             if categories.count > 1 {
@@ -121,14 +130,6 @@ struct PlaylistSquareView: View {
                     playlistSourceRaw = (providers.first ?? .netease).rawValue
                     playlists = []
                 }
-            }
-            .searchable(
-                text: $searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: beansLocalized("搜索歌单", "Search playlists")
-            )
-            .onSubmit(of: .search) {
-                submitSearch()
             }
             .onChange(of: searchText) { value in
                 if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, isSearching {

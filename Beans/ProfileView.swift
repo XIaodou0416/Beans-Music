@@ -1743,7 +1743,6 @@ struct SettingsView: View {
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(Color.accentColor)
                             .frame(width: 42, height: 42)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Circle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -3684,7 +3683,8 @@ struct SettingsView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.beansComment.opacity(0.65))
             }
-            .padding(15)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.98))

@@ -274,80 +274,19 @@ struct SearchView: View {
     // MARK: - 搜索框（液态玻璃胶囊）
 
     private var searchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.beansComment)
-            // UIKit 输入框：回车/点搜索时先 unmarkText 强制提交拼音，再读取最新文本，
-            // 根治 SwiftUI TextField 在中文组字中 onSubmit 后输入消失、搜索无结果的问题
-            SearchTextField(
-                text: $keyword,
-                controller: searchController,
-                placeholder: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
-                textColor: UIColor.beansLabel,
-                onSubmit: { text in
-                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    debounceTask?.cancel()
-                    historyStore.record(trimmed)
-                    Task { await startSearch(trimmed) }
-                }
-            )
-            .frame(height: 32)
-            .frame(maxWidth: .infinity)
-            ZStack {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(Color.beansAmber)
-                    .opacity(searching ? 1 : 0)
-            }
-            .frame(width: 20, height: 22)
-            .animation(nil, value: searching)
-            ZStack {
-                Button {
-                    keyword = ""
-                    songResults = []
-                    artistResults = []
-                    albumResults = []
-                    errorMessage = nil
-                    debounceTask?.cancel()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.beansComment.opacity(0.85))
-                }
-                .buttonStyle(.plain)
-                .opacity(keyword.isEmpty ? 0 : 1)
-                .disabled(keyword.isEmpty)
-            }
-            .frame(width: 20, height: 22)
-            Button {
-                // 先提交拼音再读取，避免组字中读到旧值或输入被清空
-                let text = searchController.commit()
+        NativeSearchBar(
+            text: $keyword,
+            controller: searchController,
+            placeholder: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
+            onSubmit: { text in
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
                 debounceTask?.cancel()
                 historyStore.record(trimmed)
                 Task { await startSearch(trimmed) }
-            } label: {
-                Text("搜索")
-                    .font(BeansFont.appFont(13, .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 6)
-                    .background { BeansGlass(shape: Capsule()) }
             }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.9))
-            .frame(width: 54, height: 30)
-        }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 6)
-        .background {
-            BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .beansCardShadow(radius: 4, y: 2)
-        .frame(maxWidth: .infinity)
+        )
+        .frame(height: 46)
     }
 
     // MARK: - 平台选择（等宽分段控件）
@@ -1169,9 +1108,19 @@ struct AlbumDetailView: View {
 /// 搜索输入框控制器：持有 UITextField 弱引用，供“搜索”按钮与热搜标签操作
 final class SearchFieldController {
     weak var textField: UITextField?
+    weak var searchBar: UISearchBar?
 
     /// 提交拼音组字并返回最新文本，同时收起键盘（点“搜索”按钮调用）
     func commit() -> String {
+        if let bar = searchBar {
+            let field = bar.searchTextField
+            if field.markedTextRange != nil {
+                field.unmarkText()
+            }
+            let text = field.text ?? ""
+            field.resignFirstResponder()
+            return text
+        }
         guard let field = textField else { return "" }
         if field.markedTextRange != nil {
             field.unmarkText()
@@ -1184,6 +1133,67 @@ final class SearchFieldController {
     /// 收起键盘（点热搜标签 / 歌手 / 专辑时调用）
     func dismissKeyboard() {
         textField?.resignFirstResponder()
+        searchBar?.searchTextField.resignFirstResponder()
+    }
+}
+
+/// 原生 UISearchBar 封装，保留中文输入法提交和 SwiftUI 状态同步。
+struct NativeSearchBar: UIViewRepresentable {
+    @Binding var text: String
+    var controller: SearchFieldController? = nil
+    var placeholder: String = ""
+    let onSubmit: (String) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeUIView(context: Context) -> UISearchBar {
+        let bar = UISearchBar()
+        bar.searchBarStyle = .minimal
+        bar.placeholder = NSLocalizedString(placeholder, comment: "")
+        bar.autocorrectionType = .no
+        bar.autocapitalizationType = .none
+        bar.spellCheckingType = .no
+        bar.returnKeyType = .search
+        bar.delegate = context.coordinator
+        bar.text = text
+        bar.searchTextField.font = BeansFont.appUIFont(15)
+        controller?.searchBar = bar
+        return bar
+    }
+
+    func updateUIView(_ uiView: UISearchBar, context: Context) {
+        context.coordinator.parent = self
+        if uiView.text != text {
+            uiView.text = text
+        }
+        uiView.placeholder = NSLocalizedString(placeholder, comment: "")
+        uiView.searchTextField.font = BeansFont.appUIFont(15)
+        controller?.searchBar = uiView
+    }
+
+    final class Coordinator: NSObject, UISearchBarDelegate {
+        var parent: NativeSearchBar
+
+        init(_ parent: NativeSearchBar) {
+            self.parent = parent
+        }
+
+        func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+            parent.text = searchText
+        }
+
+        func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+            let field = searchBar.searchTextField
+            if field.markedTextRange != nil {
+                field.unmarkText()
+            }
+            let value = field.text ?? ""
+            parent.text = value
+            parent.onSubmit(value)
+            field.resignFirstResponder()
+        }
     }
 }
 

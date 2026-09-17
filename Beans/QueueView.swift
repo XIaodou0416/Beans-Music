@@ -6,6 +6,7 @@ struct QueueView: View {
     @EnvironmentObject private var player: PlayerManager
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("beans.queueOverlayPresented") private var queueOverlayPresented = false
 
     var body: some View {
         let _ = theme.accent
@@ -27,7 +28,7 @@ struct QueueView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
-                    .padding(.bottom, 150)
+                    .padding(.bottom, 220)
                 }
             }
             .navigationTitle("播放列表")
@@ -51,6 +52,8 @@ struct QueueView: View {
         }
         .modifier(BeansSheetModifier(detents: [.medium, .large], dragIndicator: true))
         .modifier(QueueSheetPresentation())
+        .onAppear { queueOverlayPresented = true }
+        .onDisappear { queueOverlayPresented = false }
     }
 
     private var queueHeader: some View {
@@ -231,7 +234,7 @@ private struct QueueSheetPresentation: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 16.4, *) {
             content
-                .presentationBackground(.clear)
+                .presentationBackground(.regularMaterial)
                 .presentationCornerRadius(28)
         } else {
             content

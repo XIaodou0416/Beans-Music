@@ -1,44 +1,5 @@
 import SwiftUI
 
-private struct RecordRotationState: Equatable, Sendable {
-    static let defaultDegreesPerSecond: Double = 24.0
-
-    let degreesPerSecond: Double
-    private(set) var isAnimating: Bool = false
-    private var baseAngle: Double = 0.0
-    private var startedAt: Date = Date(timeIntervalSinceReferenceDate: 0)
-    private var stoppedAngle: Double = 0.0
-
-    init(degreesPerSecond: Double = Self.defaultDegreesPerSecond) {
-        self.degreesPerSecond = degreesPerSecond
-    }
-
-    mutating func start(at date: Date = Date()) {
-        guard !isAnimating else { return }
-        baseAngle = stoppedAngle
-        startedAt = date
-        isAnimating = true
-    }
-
-    mutating func stop(at date: Date = Date(), extraTravelDegrees: Double = 0) {
-        guard isAnimating else { return }
-        stoppedAngle = currentAngle(at: date) + extraTravelDegrees
-        isAnimating = false
-    }
-
-    func currentAngle(at date: Date) -> Double {
-        guard isAnimating else { return stoppedAngle }
-        let elapsed = max(0, date.timeIntervalSince(startedAt))
-        return baseAngle + elapsed * degreesPerSecond
-    }
-
-    mutating func reset(to angle: Double = 0) {
-        baseAngle = angle
-        stoppedAngle = angle
-        isAnimating = false
-    }
-}
-
 struct VinylTurntableView: View {
     let coverURL: URL?
     let isPlaying: Bool
@@ -49,7 +10,6 @@ struct VinylTurntableView: View {
     var onNextTrack: (() -> Void)? = nil
     var onPreviousTrack: (() -> Void)? = nil
 
-    @State private var rotationState = RecordRotationState()
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
     @State private var isTransitioningTrack = false
@@ -61,15 +21,18 @@ struct VinylTurntableView: View {
         let stageHeight = discSize + armHeight * 0.38
 
         return ZStack(alignment: .top) {
-            TimelineView(.animation(paused: !isPlaying || isDragging || isTransitioningTrack)) { timeline in
-                let currentAngle = rotationState.currentAngle(at: timeline.date)
-                VinylRecordView(
-                    coverURL: coverURL,
-                    size: discSize,
-                    playsCoverVideoAudio: playsCoverVideoAudio
+            VinylRecordView(
+                coverURL: coverURL,
+                size: discSize,
+                playsCoverVideoAudio: playsCoverVideoAudio
+            )
+            .modifier(
+                CoverSpin(
+                    enabled: true,
+                    isPlaying: isPlaying && !isDragging && !isTransitioningTrack,
+                    degreesPerSecond: 24
                 )
-                    .rotationEffect(.degrees(currentAngle))
-            }
+            )
             .offset(x: dragOffset)
             .padding(.top, armHeight * 0.36)
             .contentShape(Circle())
@@ -86,16 +49,6 @@ struct VinylTurntableView: View {
             .zIndex(2)
         }
         .frame(width: stageWidth, height: stageHeight, alignment: .top)
-        .onAppear {
-            if isPlaying { rotationState.start(at: Date()) }
-        }
-        .onChange(of: isPlaying) { playing in
-            if playing {
-                rotationState.start(at: Date())
-            } else {
-                rotationState.stop(at: Date())
-            }
-        }
         .onChange(of: trackId) { _ in
             isTransitioningTrack = true
             Task { @MainActor in
@@ -385,7 +338,7 @@ struct VinylTonearmView: View {
             pivotBase(size: pivotSize)
                 .zIndex(3)
 
-            TimelineView(.animation(paused: !isPlaying || reduceMotion)) { timeline in
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying || reduceMotion)) { timeline in
                 let wobble = wobbleDegrees(at: timeline.date)
                 armAssembly(width: width, height: height)
                     .rotationEffect(

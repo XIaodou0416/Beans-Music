@@ -87,6 +87,7 @@ struct RootView: View {
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
     @AppStorage("beans.tabIconStyle") private var tabIconStyleRaw = BeansTabIconStyle.appleMusic.rawValue
+    @AppStorage("beans.queueOverlayPresented") private var queueOverlayPresented = false
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
     /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
@@ -173,7 +174,7 @@ struct RootView: View {
                     nativeTabs(isPadLandscape: false)
                         .modifier(
                             MiniPlayerAccessoryModifier(
-                                isActive: player.currentSong != nil,
+                                isActive: player.currentSong != nil && !queueOverlayPresented,
                                 showPlayer: $showPlayer,
                                 clock: player.clock,
                                 colorScheme: colorScheme,
@@ -420,7 +421,7 @@ struct RootView: View {
 
     private var legacyFloatingTabBar: some View {
         VStack(spacing: 8) {
-            if player.currentSong != nil {
+            if player.currentSong != nil && !queueOverlayPresented {
                 MiniPlayerView(
                     showPlayer: $showPlayer,
                     presentation: .dock,
@@ -591,7 +592,7 @@ struct RootView: View {
                         activeTabPage(usesSharedRootBackdrop: true)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                        if player.currentSong != nil {
+                        if player.currentSong != nil && !queueOverlayPresented {
                             MiniPlayerView(
                                 showPlayer: $showPlayer,
                                 presentation: .dock,
