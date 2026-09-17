@@ -1392,6 +1392,7 @@ struct SettingsView: View {
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
 
     @State private var appearanceExpanded = false
+    @State private var appearanceDetailsExpanded = false
     @State private var platformExpanded = false
     @State private var playbackExpanded = false
     @State private var audioQualityExpanded = false
@@ -2169,6 +2170,8 @@ struct SettingsView: View {
                         .tint(Color.beansAmber)
                 }
 
+                DisclosureGroup(isExpanded: $appearanceDetailsExpanded) {
+                    VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) {
                         Image(systemName: "sparkles")
@@ -2812,6 +2815,13 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                     Spacer()
                 }
+                    }
+                } label: {
+                    Label("更多外观与主页设置", systemImage: "slider.horizontal.3")
+                        .font(BeansFont.appFont(14, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                }
+                .tint(Color.beansAmber)
             }
             .padding(16)
             .background {

@@ -360,7 +360,12 @@ struct BeansGlass<S: Shape>: View {
     @ViewBuilder
     private var regularBody: some View {
         Group {
-            if isLiquid {
+            if disableLiquidGlass {
+                // Disabling liquid glass must not fall back to a live blur.
+                // A stable opaque fill is cheaper to composite while scrolling.
+                shape
+                    .fill(Color.beansGlassFill.opacity(0.94))
+            } else if isLiquid {
                 if #available(iOS 26, *) {
                     GlassEffectContainer {
                         shape
