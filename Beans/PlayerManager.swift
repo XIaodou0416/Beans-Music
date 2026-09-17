@@ -112,6 +112,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var timeControlStatusObserver: NSKeyValueObservation?
     private var equalizerSettingsObserver: NSObjectProtocol?
     private var backendBlockObserver: NSObjectProtocol?
+    private var customCoverObserver: NSObjectProtocol?
     private var playbackConfirmed = false
     private var pendingThirdPartyVIPNotice: ThirdPartyVIPNotice?
     private var sessionConfigured = false
@@ -246,6 +247,13 @@ final class PlayerManager: NSObject, ObservableObject {
         ) { [weak self] _ in
             self?.stopPlaybackIfBackendBlocked()
         }
+        customCoverObserver = NotificationCenter.default.addObserver(
+            forName: .beansCustomSongCoverDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateNowPlaying()
+        }
     }
 
     deinit {
@@ -257,6 +265,9 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         if let backendBlockObserver {
             NotificationCenter.default.removeObserver(backendBlockObserver)
+        }
+        if let customCoverObserver {
+            NotificationCenter.default.removeObserver(customCoverObserver)
         }
     }
 
@@ -2057,14 +2068,22 @@ final class PlayerManager: NSObject, ObservableObject {
         if sameSong, let artwork = nowPlayingInfo[MPMediaItemPropertyArtwork] {
             info[MPMediaItemPropertyArtwork] = artwork
         }
-        if let artworkURL = song.coverURL {
+        if let artworkURL = CustomSongCoverStore.shared.url(for: song) ?? song.coverURL {
             let artworkKey = song.identityKey + "|" + artworkURL.absoluteString
             if let cached = Self.nowPlayingArtworkCache.object(forKey: artworkURL as NSURL) {
                 info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cached.size) { _ in cached }
             } else if lastNowPlayingArtworkKey != artworkKey {
                 lastNowPlayingArtworkKey = artworkKey
                 DispatchQueue.global(qos: .utility).async { [weak self] in
-                    if let data = try? Data(contentsOf: artworkURL), let image = UIImage(data: data) {
+                    let image: UIImage?
+                    if artworkURL.isFileURL {
+                        image = CustomCoverMedia.previewImage(at: artworkURL)
+                    } else if let data = try? Data(contentsOf: artworkURL) {
+                        image = UIImage(data: data)
+                    } else {
+                        image = nil
+                    }
+                    if let image {
                         Self.nowPlayingArtworkCache.setObject(image, forKey: artworkURL as NSURL)
                         let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                         DispatchQueue.main.async {
@@ -2097,7 +2116,7 @@ final class PlayerManager: NSObject, ObservableObject {
         nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = progress
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? rate : 0.0
         nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = max(duration, song.duration)
-        if let artworkURL = song.coverURL,
+        if let artworkURL = CustomSongCoverStore.shared.url(for: song) ?? song.coverURL,
            let cached = Self.nowPlayingArtworkCache.object(forKey: artworkURL as NSURL) {
             nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cached.size) { _ in cached }
         }

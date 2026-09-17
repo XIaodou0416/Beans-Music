@@ -395,7 +395,7 @@ struct RecordPlayerView: View {
     private var recordQueuePage: some View {
         VStack(spacing: 12) {
             HStack(spacing: 11) {
-                CoverImage(url: song?.coverURL, size: 46, cornerRadius: 10)
+                CoverImage(url: displayCoverURL, size: 46, cornerRadius: 10)
                     .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(song?.name ?? "未在播放")
@@ -456,6 +456,15 @@ struct RecordPlayerView: View {
                 Button("添加到本地歌单", action: onAddToLocalPlaylist)
                 Button("更换自定义封面") {
                     showCustomCoverPicker = true
+                }
+                if customCovers.isVideoCover(for: song) {
+                    Toggle(
+                        "播放视频封面声音",
+                        isOn: Binding(
+                            get: { customCovers.videoAudioEnabled(for: customCovers.url(for: song)) },
+                            set: { customCovers.setVideoAudioEnabled($0, for: song) }
+                        )
+                    )
                 }
                 if customCovers.hasCover(for: song) {
                     Button("恢复默认封面", role: .destructive) {
@@ -721,6 +730,7 @@ private struct RecordModeTurntableView: View {
     let isPlaying: Bool
     let trackId: Int?
     let size: CGFloat
+    var playsCoverVideoAudio = true
     var onTap: (() -> Void)?
     var onNextTrack: (() -> Void)?
     var onPreviousTrack: (() -> Void)?
@@ -738,7 +748,11 @@ private struct RecordModeTurntableView: View {
                 minimumInterval: 1.0 / 30.0,
                 paused: !isPlaying || isDragging || isTransitioningTrack || reduceMotion
             )) { timeline in
-                RecordModeDiscView(coverURL: coverURL, size: size)
+                RecordModeDiscView(
+                    coverURL: coverURL,
+                    size: size,
+                    playsCoverVideoAudio: playsCoverVideoAudio
+                )
                     .rotationEffect(.degrees(rotationState.currentAngle(at: timeline.date)))
             }
             .offset(x: dragOffset)
@@ -812,6 +826,7 @@ private struct RecordModeTurntableView: View {
 private struct RecordModeDiscView: View {
     let coverURL: URL?
     let size: CGFloat
+    var playsCoverVideoAudio = false
 
     var body: some View {
         let labelSize = size * 0.64
@@ -895,7 +910,13 @@ private struct RecordModeDiscView: View {
                     .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
                 Group {
                     if coverURL != nil {
-                        CoverImage(url: coverURL, size: labelSize, cornerRadius: labelSize / 2, emptyHint: nil)
+                        CoverImage(
+                            url: coverURL,
+                            size: labelSize,
+                            cornerRadius: labelSize / 2,
+                            emptyHint: nil,
+                            playsCoverVideoAudio: playsCoverVideoAudio
+                        )
                     } else {
                         ZStack {
                             LinearGradient(

@@ -753,22 +753,26 @@ struct CoverImage: View {
     var cornerRadius: CGFloat = 12
     /// 封面未加载时的提示文字（播放器大封面用：等待开始播放）；nil 显示中性图标
     var emptyHint: String? = nil
+    var playsCoverVideoAudio = false
 
     @StateObject private var imageLoader = BeansCoverImageLoader()
+    @ObservedObject private var customCovers = CustomSongCoverStore.shared
 
     // 布局尺寸完全由外层固定容器决定；AsyncImage 只放在 overlay 中渲染，
     // 图片加载完成与否都不会改变任何布局尺寸（根治"封面加载后错乱"）。
     var body: some View {
-        let usesCustomMediaRenderer = CustomSongCoverStore.shared.isStoredCover(url)
-        let cachedImage = imageLoader.image ?? BeansCoverImageStore.cachedImage(for: url)
+        let resolvedURL = customCovers.resolvedURL(for: url)
+        let usesCustomMediaRenderer = customCovers.isStoredCover(resolvedURL)
+        let cachedImage = imageLoader.image ?? BeansCoverImageStore.cachedImage(for: resolvedURL)
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(Color.beansGlassFill)
             .frame(width: size * max(aspectRatio, 0.1), height: size)
             .overlay {
                 Group {
-                    if let url, usesCustomMediaRenderer {
+                    if let resolvedURL, usesCustomMediaRenderer {
                         CustomCoverMediaView(
-                            url: url
+                            url: resolvedURL,
+                            isMuted: !playsCoverVideoAudio || !customCovers.videoAudioEnabled(for: resolvedURL)
                         )
                     } else if let image = cachedImage {
                         Image(uiImage: image)
@@ -786,11 +790,12 @@ struct CoverImage: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .onAppear {
-                if !usesCustomMediaRenderer { imageLoader.load(url: url) }
+                if !usesCustomMediaRenderer { imageLoader.load(url: resolvedURL) }
             }
             .onChange(of: url) { nextURL in
-                if !CustomSongCoverStore.shared.isStoredCover(nextURL) {
-                    imageLoader.load(url: nextURL)
+                let resolvedURL = customCovers.resolvedURL(for: nextURL)
+                if !customCovers.isStoredCover(resolvedURL) {
+                    imageLoader.load(url: resolvedURL)
                 }
             }
     }

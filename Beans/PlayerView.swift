@@ -1685,6 +1685,7 @@ struct PlayerView: View {
                     isPlaying: playerVisualsActive,
                     trackId: song?.id,
                     size: size,
+                    playsCoverVideoAudio: true,
                     onTap: { toggleLyrics() },
                     onNextTrack: { player.next() },
                     onPreviousTrack: { player.previous() }
@@ -1703,7 +1704,7 @@ struct PlayerView: View {
                             .frame(width: size * 1.10, height: size * 1.10)
                             .shadow(color: .black.opacity(0.28), radius: 22, y: 10)
 
-                        CoverImage(url: displayCoverURL, size: size, cornerRadius: cornerRadius)
+                        CoverImage(url: displayCoverURL, size: size, cornerRadius: cornerRadius, playsCoverVideoAudio: true)
                             .frame(width: size, height: size)
                             .clipShape(Circle())
                             .modifier(CoverSpin(enabled: circularCoverSpin, isPlaying: playerVisualsActive))
@@ -1711,7 +1712,7 @@ struct PlayerView: View {
                     }
                     .frame(width: size * 1.10, height: size * 1.10)
                 } else {
-                    CoverImage(url: displayCoverURL, size: size, cornerRadius: cornerRadius)
+                    CoverImage(url: displayCoverURL, size: size, cornerRadius: cornerRadius, playsCoverVideoAudio: true)
                         .frame(width: size, height: size)
                         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                         .shadow(color: .black.opacity(0.38), radius: 24, y: 12)
@@ -2017,6 +2018,7 @@ struct PlayerView: View {
                 isPlaying: playerVisualsActive,
                 trackId: song?.id,
                 size: size,
+                playsCoverVideoAudio: true,
                 onTap: { toggleLyrics() },
                 onNextTrack: { player.next() },
                 onPreviousTrack: { player.previous() }
@@ -2532,7 +2534,13 @@ struct PlayerView: View {
                     .allowsHitTesting(false)
 
                     // 封面（静态）
-                    CoverImage(url: displayCoverURL, size: size, cornerRadius: coverRadius, emptyHint: player.isBuffering ? "等待开始播放…" : nil)
+                    CoverImage(
+                        url: displayCoverURL,
+                        size: size,
+                        cornerRadius: coverRadius,
+                        emptyHint: player.isBuffering ? "等待开始播放…" : nil,
+                        playsCoverVideoAudio: true
+                    )
                         .matchedGeometryEffect(id: "playerCover", in: coverNS)
                         .id(song?.identityKey ?? "empty-cover")
                         .modifier(CoverSpin(enabled: circularCover && circularCoverSpin, isPlaying: playerVisualsActive))
@@ -5091,9 +5099,18 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var customCoverActions: some View {
-        if song != nil {
+        if let song {
             Button("更换自定义封面") {
                 showCustomCoverPicker = true
+            }
+            if customCovers.isVideoCover(for: song) {
+                Toggle(
+                    "播放视频封面声音",
+                    isOn: Binding(
+                        get: { customCovers.videoAudioEnabled(for: customCovers.url(for: song)) },
+                        set: { customCovers.setVideoAudioEnabled($0, for: song) }
+                    )
+                )
             }
             if customCovers.hasCover(for: song) {
                 Button("恢复默认封面", role: .destructive) {

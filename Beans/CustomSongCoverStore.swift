@@ -65,7 +65,6 @@ enum CustomCoverMedia {
     }
 }
 
-@MainActor
 final class CustomSongCoverStore: ObservableObject {
     static let shared = CustomSongCoverStore()
 
@@ -73,6 +72,8 @@ final class CustomSongCoverStore: ObservableObject {
 
     private struct Entry: Codable, Equatable {
         let filename: String
+        let sourceCoverURL: String?
+        let videoAudioEnabled: Bool?
     }
 
     private let legacyDefaultsKey = "beans.player.customSongCovers.v1"
@@ -89,9 +90,28 @@ final class CustomSongCoverStore: ObservableObject {
     }
 
     func url(for song: Song?) -> URL? {
-        guard let song, let entry = entries[song.identityKey] else { return nil }
+        guard let song, var entry = entries[song.identityKey] else { return nil }
         let url = directory.appendingPathComponent(entry.filename)
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        if entry.sourceCoverURL == nil, let sourceCoverURL = song.coverURL?.absoluteString {
+            entry = Entry(
+                filename: entry.filename,
+                sourceCoverURL: sourceCoverURL,
+                videoAudioEnabled: entry.videoAudioEnabled
+            )
+            entries[song.identityKey] = entry
+            persist()
+        }
+        return url
+    }
+
+    func resolvedURL(for sourceURL: URL?) -> URL? {
+        guard let sourceURL else { return nil }
+        guard let entry = entries.values.first(where: { $0.sourceCoverURL == sourceURL.absoluteString }) else {
+            return sourceURL
+        }
+        let customURL = directory.appendingPathComponent(entry.filename)
+        return FileManager.default.fileExists(atPath: customURL.path) ? customURL : sourceURL
     }
 
     func isStoredCover(_ url: URL?) -> Bool {
@@ -101,6 +121,28 @@ final class CustomSongCoverStore: ObservableObject {
 
     func hasCover(for song: Song?) -> Bool {
         url(for: song) != nil
+    }
+
+    func isVideoCover(for song: Song?) -> Bool {
+        guard let url = url(for: song) else { return false }
+        return CustomCoverMedia.kind(for: url) == .video
+    }
+
+    func videoAudioEnabled(for url: URL?) -> Bool {
+        guard let url else { return false }
+        return entries.values.first(where: { $0.filename == url.lastPathComponent })?.videoAudioEnabled ?? false
+    }
+
+    func setVideoAudioEnabled(_ enabled: Bool, for song: Song?) {
+        guard let song, let entry = entries[song.identityKey] else { return }
+        entries[song.identityKey] = Entry(
+            filename: entry.filename,
+            sourceCoverURL: entry.sourceCoverURL,
+            videoAudioEnabled: enabled
+        )
+        persist()
+        revision &+= 1
+        NotificationCenter.default.post(name: .beansCustomSongCoverDidChange, object: song.identityKey)
     }
 
     func saveCover(from sourceURL: URL, for song: Song) throws {
@@ -134,7 +176,12 @@ final class CustomSongCoverStore: ObservableObject {
         let destination = directory.appendingPathComponent(filename)
         try dataToWrite.write(to: destination, options: .atomic)
 
-        if let previous = entries.updateValue(Entry(filename: filename), forKey: song.identityKey), previous.filename != filename {
+        let entry = Entry(
+            filename: filename,
+            sourceCoverURL: song.coverURL?.absoluteString,
+            videoAudioEnabled: false
+        )
+        if let previous = entries.updateValue(entry, forKey: song.identityKey), previous.filename != filename {
             let previousURL = directory.appendingPathComponent(previous.filename)
             try? FileManager.default.removeItem(at: previousURL)
             BeansImageFileCache.remove(previousURL.path)
@@ -142,6 +189,7 @@ final class CustomSongCoverStore: ObservableObject {
         persist()
         BeansImageFileCache.remove(destination.path)
         revision &+= 1
+        NotificationCenter.default.post(name: .beansCustomSongCoverDidChange, object: song.identityKey)
     }
 
     func removeCover(for song: Song?) {
@@ -151,6 +199,7 @@ final class CustomSongCoverStore: ObservableObject {
         BeansImageFileCache.remove(url.path)
         persist()
         revision &+= 1
+        NotificationCenter.default.post(name: .beansCustomSongCoverDidChange, object: song.identityKey)
     }
 
     private static func loadEntries(defaultsKey: String, legacyDefaultsKey: String) -> [String: Entry] {
@@ -159,7 +208,7 @@ final class CustomSongCoverStore: ObservableObject {
             return decoded
         }
         let legacy = UserDefaults.standard.dictionary(forKey: legacyDefaultsKey) as? [String: String] ?? [:]
-        return legacy.mapValues { Entry(filename: $0) }
+        return legacy.mapValues { Entry(filename: $0, sourceCoverURL: nil, videoAudioEnabled: false) }
     }
 
     private func persist() {
@@ -206,6 +255,10 @@ enum CustomSongCoverError: LocalizedError {
         case .invalidMedia: return "请选择有效的图片、GIF 或视频"
         }
     }
+}
+
+extension Notification.Name {
+    static let beansCustomSongCoverDidChange = Notification.Name("beans.customSongCoverDidChange")
 }
 
 struct CustomSongCoverPicker: View {
@@ -290,15 +343,16 @@ private struct CustomSongCoverPhotoPicker: UIViewControllerRepresentable {
 
 struct CustomCoverMediaView: UIViewRepresentable {
     let url: URL
+    let isMuted: Bool
 
     func makeUIView(context: Context) -> CustomCoverMediaUIView {
         let view = CustomCoverMediaUIView()
-        view.configure(url: url)
+        view.configure(url: url, isMuted: isMuted)
         return view
     }
 
     func updateUIView(_ uiView: CustomCoverMediaUIView, context: Context) {
-        uiView.configure(url: url)
+        uiView.configure(url: url, isMuted: isMuted)
     }
 }
 
@@ -332,9 +386,12 @@ final class CustomCoverMediaUIView: UIView {
         videoLayer?.frame = videoHost.bounds
     }
 
-    func configure(url: URL) {
+    func configure(url: URL, isMuted: Bool) {
         let kind = CustomCoverMedia.kind(for: url)
-        guard currentURL != url || currentKind != kind else { return }
+        guard currentURL != url || currentKind != kind else {
+            player?.isMuted = isMuted
+            return
+        }
         currentURL = url
         currentKind = kind
         imageView.stopAnimating()
@@ -360,7 +417,7 @@ final class CustomCoverMediaUIView: UIView {
             videoHost.isHidden = false
             let item = AVPlayerItem(url: url)
             let player = AVQueuePlayer()
-            player.isMuted = true
+            player.isMuted = isMuted
             self.player = player
             looper = AVPlayerLooper(player: player, templateItem: item)
             let layer = AVPlayerLayer(player: player)

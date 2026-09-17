@@ -138,7 +138,7 @@ final class CoverBlurView: UIView {
     }
 
     func load(url: URL?) {
-        guard let url else {
+        guard let url = CustomSongCoverStore.shared.resolvedURL(for: url) else {
             imageView.image = nil
             return
         }

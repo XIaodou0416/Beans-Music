@@ -44,6 +44,7 @@ struct VinylTurntableView: View {
     let isPlaying: Bool
     let trackId: Int?
     let size: CGFloat
+    var playsCoverVideoAudio = false
     var onTap: (() -> Void)? = nil
     var onNextTrack: (() -> Void)? = nil
     var onPreviousTrack: (() -> Void)? = nil
@@ -62,7 +63,11 @@ struct VinylTurntableView: View {
         return ZStack(alignment: .top) {
             TimelineView(.animation(paused: !isPlaying || isDragging || isTransitioningTrack)) { timeline in
                 let currentAngle = rotationState.currentAngle(at: timeline.date)
-                VinylRecordView(coverURL: coverURL, size: discSize)
+                VinylRecordView(
+                    coverURL: coverURL,
+                    size: discSize,
+                    playsCoverVideoAudio: playsCoverVideoAudio
+                )
                     .rotationEffect(.degrees(currentAngle))
             }
             .offset(x: dragOffset)
@@ -150,6 +155,7 @@ struct VinylTurntableView: View {
 struct VinylRecordView: View {
     let coverURL: URL?
     let size: CGFloat
+    var playsCoverVideoAudio = false
 
     var body: some View {
         let discDiameter = size
@@ -278,7 +284,13 @@ struct VinylRecordView: View {
 
                 Group {
                     if coverURL != nil {
-                        CoverImage(url: coverURL, size: labelDiameter, cornerRadius: labelDiameter / 2, emptyHint: nil)
+                        CoverImage(
+                            url: coverURL,
+                            size: labelDiameter,
+                            cornerRadius: labelDiameter / 2,
+                            emptyHint: nil,
+                            playsCoverVideoAudio: playsCoverVideoAudio
+                        )
                     } else {
                         ZStack {
                             LinearGradient(
