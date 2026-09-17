@@ -1742,7 +1742,7 @@ struct SettingsView: View {
                     } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Color.beansAmber)
                             .frame(width: 42, height: 42)
                     }
                     .buttonStyle(.plain)
@@ -2061,9 +2061,9 @@ struct SettingsView: View {
                 }
             } label: {
                 HStack(spacing: 12) {
-                Image(systemName: "waveform.badge.magnifyingglass")
+                Image(systemName: "waveform")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.beansAmber)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("音源与音质")
@@ -2158,7 +2158,7 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: "person.crop.circle.badge.checkmark")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.beansAmber)
                     .frame(width: 30)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(beansLocalized("账号登录", "Account sign-in"))
@@ -2218,7 +2218,7 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "checklist")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.beansAmber)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("平台显示")
@@ -2258,7 +2258,7 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "paintpalette.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.beansAmber)
                         .frame(width: 28)
                     Text("主题模式")
                         .font(BeansFont.appFont(15))
@@ -2965,7 +2965,7 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.beansAmber)
                     .frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(beansLocalized("均衡器", "Equalizer"))
@@ -2998,7 +2998,7 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.beansAmber)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("播放设置")
@@ -3178,7 +3178,7 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.beansAmber)
                         .frame(width: 28)
                     Text("更新日志")
                         .font(BeansFont.appFont(15))
@@ -3207,7 +3207,7 @@ struct SettingsView: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "externaldrive.fill")
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.beansAmber)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("备份与恢复")
                             .font(BeansFont.appFont(15))
@@ -3586,7 +3586,7 @@ struct SettingsView: View {
                 settingsSupportButton(
                     icon: checkingUpdate ? "arrow.triangle.2.circlepath" : "checkmark.circle.fill",
                     title: checkingUpdate ? "正在检查更新…" : "检查更新",
-                    tint: Color.accentColor
+                    tint: Color.beansAmber
                 ) {
                     guard !checkingUpdate else { return }
                     checkingUpdate = true
@@ -3603,7 +3603,7 @@ struct SettingsView: View {
                 settingsSupportButton(
                     icon: "bubble.left.and.exclamationmark.bubble.right.fill",
                     title: "问题反馈",
-                    tint: Color.accentColor
+                    tint: Color.beansAmber
                 ) {
                     showFeedback = true
                 }

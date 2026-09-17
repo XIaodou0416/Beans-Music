@@ -656,6 +656,16 @@ struct BeansSheetModifier: ViewModifier {
 }
 
 extension View {
+    /// 主页在 iOS 26+ 使用透明导航栏，让壁纸和内容可延伸到顶部安全区域。
+    @ViewBuilder
+    func beansHomeNavigationBarTransparent() -> some View {
+        if #available(iOS 26, *) {
+            self.toolbarBackground(.hidden, for: .navigationBar)
+        } else {
+            self
+        }
+    }
+
     /// iOS 16+ 隐藏滚动条，低版本保持默认
     @ViewBuilder
     func beansScrollIndicatorsHidden() -> some View {

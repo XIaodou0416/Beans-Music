@@ -76,6 +76,7 @@ struct PlaylistSquareView: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
                             playlistSearchField
+                                .padding(.horizontal, isNativeClean ? -4 : 0)
 
                             if categories.count > 1 {
                                 categoryChips
@@ -262,7 +263,7 @@ struct PlaylistSquareView: View {
                 },
                 onSubmit: { _ in submitSearch() }
             )
-            .frame(height: 46)
+            .frame(height: 44)
         } else {
             legacyPlaylistSearchField
         }
@@ -299,7 +300,7 @@ struct PlaylistSquareView: View {
             .opacity(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
         }
         .padding(.horizontal, 13)
-        .frame(height: 42)
+        .frame(height: 44)
         .background {
             if usesSolidSurface {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)

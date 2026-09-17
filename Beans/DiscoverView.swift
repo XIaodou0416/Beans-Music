@@ -287,6 +287,7 @@ struct DiscoverView: View {
             .beansNavigationDestination(for: DiscoverRoute.self) { route in
                 discoverDestination(route)
             }
+            .beansHomeNavigationBarTransparent()
         }
     }
 

@@ -143,7 +143,7 @@ struct SearchView: View {
                         .padding(.bottom, 10)
 
                     searchField
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 16)
                         .padding(.bottom, 10)
 
                     if !hidePlatformPicker {
@@ -288,7 +288,7 @@ struct SearchView: View {
                     Task { await startSearch(trimmed) }
                 }
             )
-            .frame(height: 46)
+            .frame(height: 44)
         } else {
             legacySearchField
         }
