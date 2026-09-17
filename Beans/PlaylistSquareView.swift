@@ -75,8 +75,11 @@ struct PlaylistSquareView: View {
 
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
-                            playlistSearchField
-                                .padding(.horizontal, isNativeClean ? -4 : 0)
+                            if #available(iOS 26, *) {
+                                EmptyView()
+                            } else {
+                                playlistSearchField
+                            }
 
                             if categories.count > 1 {
                                 categoryChips
@@ -131,6 +134,13 @@ struct PlaylistSquareView: View {
                 }
             }
         }
+        .modifier(
+            BeansSystemSearchModifier(
+                text: $searchText,
+                prompt: beansLocalized("搜索歌单", "Search playlists"),
+                onSubmit: { _ in submitSearch() }
+            )
+        )
     }
 
     private var headerTitle: some View {

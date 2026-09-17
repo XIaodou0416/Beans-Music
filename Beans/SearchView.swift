@@ -85,7 +85,7 @@ enum SearchResultType: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-/// 搜索页和歌单广场共享同一个输入控件，确保不同入口的尺寸与交互一致。
+/// 低系统使用的内嵌搜索控件。iOS 26 及以上统一交给系统 searchable 呈现。
 struct BeansUnifiedSearchField: View {
     @Binding var text: String
     var controller: SearchFieldController? = nil
@@ -96,22 +96,7 @@ struct BeansUnifiedSearchField: View {
     let onSubmit: (String) -> Void
 
     var body: some View {
-        if #available(iOS 26, *) {
-            NativeSearchBar(
-                text: $text,
-                controller: controller,
-                placeholder: placeholder,
-                onTextChange: { value in
-                    if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        onClear()
-                    }
-                },
-                onSubmit: onSubmit
-            )
-            .frame(height: 44)
-        } else {
-            legacyField
-        }
+        legacyField
     }
 
     private var legacyField: some View {
@@ -175,6 +160,30 @@ struct BeansUnifiedSearchField: View {
     }
 }
 
+/// 仅在 iOS 26 及以上使用系统搜索栏，保证入口与设置页由同一套系统组件负责布局和交互。
+struct BeansSystemSearchModifier: ViewModifier {
+    @Binding var text: String
+    let prompt: String
+    let onSubmit: (String) -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .searchable(
+                    text: $text,
+                    placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: prompt
+                )
+                .onSubmit(of: .search) {
+                    onSubmit(text)
+                }
+        } else {
+            content
+        }
+    }
+}
+
 struct SearchView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
@@ -217,38 +226,21 @@ struct SearchView: View {
     }
 
     var body: some View {
-        let _ = theme.accent
-        ZStack(alignment: .top) {
-            if !usesSharedRootBackdrop {
-                // 页面背景：同步开启时显示壁纸/背景色，否则默认氛围渐变
-                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
-            }
-            // 实例级 UITabBar 清透风格（固定全透明，无需调节）
-            TabBarAppearanceConfigurator()
-            ScrollView {
-                VStack(spacing: 0) {
-                    headerTitle
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .padding(.bottom, 10)
-
-                    searchField
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
-
-                    if !hidePlatformPicker {
-                        providerPicker
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 8)
-                    }
-
-                    contentArea
-                        .frame(maxWidth: .infinity, alignment: .top)
+        Group {
+            if #available(iOS 26, *) {
+                BeansNavigationStack {
+                    pageContent
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
+                .modifier(
+                    BeansSystemSearchModifier(
+                        text: $keyword,
+                        prompt: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
+                        onSubmit: submitSearch
+                    )
+                )
+            } else {
+                pageContent
             }
-            .beansScrollIndicatorsHidden()
-            .beansScrollDismissesKeyboard()
         }
         .task(id: provider) {
             guard hotLoadedProvider != provider else { return }
@@ -301,6 +293,46 @@ struct SearchView: View {
             AlbumDetailView(album: album)
                 .environmentObject(player)
                 .environmentObject(theme)
+        }
+    }
+
+    private var pageContent: some View {
+        let _ = theme.accent
+        ZStack(alignment: .top) {
+            if !usesSharedRootBackdrop {
+                // 页面背景：同步开启时显示壁纸/背景色，否则默认氛围渐变
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            }
+            // 实例级 UITabBar 清透风格（固定全透明，无需调节）
+            TabBarAppearanceConfigurator()
+            ScrollView {
+                VStack(spacing: 0) {
+                    headerTitle
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 10)
+
+                    if #available(iOS 26, *) {
+                        EmptyView()
+                    } else {
+                        searchField
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 10)
+                    }
+
+                    if !hidePlatformPicker {
+                        providerPicker
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
+                    }
+
+                    contentArea
+                        .frame(maxWidth: .infinity, alignment: .top)
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .beansScrollIndicatorsHidden()
+            .beansScrollDismissesKeyboard()
         }
     }
 
@@ -376,14 +408,16 @@ struct SearchView: View {
                 errorMessage = nil
                 debounceTask?.cancel()
             },
-            onSubmit: { text in
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return }
-                debounceTask?.cancel()
-                historyStore.record(trimmed)
-                Task { await startSearch(trimmed) }
-            }
+            onSubmit: submitSearch
         )
+    }
+
+    private func submitSearch(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        debounceTask?.cancel()
+        historyStore.record(trimmed)
+        Task { await startSearch(trimmed) }
     }
 
     // MARK: - 平台选择（等宽分段控件）
