@@ -1240,7 +1240,7 @@ private extension ProfileView {
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(Color.white)
                                 .frame(width: 20, height: 20)
-                                .background(theme.accent, in: Circle())
+                                .background(Color.beansAmber, in: Circle())
                                 .overlay(Circle().stroke(Color.beansBackground, lineWidth: 2))
                         }
                 }
@@ -1259,7 +1259,7 @@ private extension ProfileView {
                 Spacer(minLength: 8)
                 Image(systemName: "waveform")
                     .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(theme.accent)
+                    .foregroundStyle(Color.beansAmber)
             }
 
             Rectangle()
@@ -1291,7 +1291,7 @@ private extension ProfileView {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(theme.accent)
+                .foregroundStyle(Color.beansAmber)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(BeansFont.appFont(11, .medium))
