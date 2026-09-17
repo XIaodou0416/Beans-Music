@@ -395,7 +395,7 @@ private struct CustomSongCoverCropEditor: View {
                 VStack(spacing: 8) {
                     Slider(value: $zoom, in: 1...4, step: 0.01)
                         .tint(Color.beansAmber)
-                        .onChange(of: zoom) { committedZoom = zoom }
+                        .onChange(of: zoom) { _ in committedZoom = zoom }
                     Text("拖动调整位置，双指缩放裁剪区域")
                         .font(BeansFont.appFont(13, .medium))
                         .foregroundStyle(Color.beansComment)
