@@ -21,7 +21,16 @@ enum RootTab: String, CaseIterable, Identifiable {
         }
     }
 
-    var icon: String {
+    func icon(for style: BeansTabIconStyle) -> String {
+        if style == .appleMusic {
+            switch self {
+            case .discover: return "house.fill"
+            case .playlists: return "dot.radiowaves.left.and.right"
+            case .library: return "music.note.list"
+            case .profile: return "person.crop.circle"
+            case .search: return "magnifyingglass"
+            }
+        }
         switch self {
         case .discover: return "house"
         case .playlists: return "square.grid.2x2"
@@ -31,8 +40,14 @@ enum RootTab: String, CaseIterable, Identifiable {
         }
     }
 
-    var assetName: String? {
-        nil
+    func assetName(for style: BeansTabIconStyle) -> String? {
+        guard style == .appleMusic else { return nil }
+        switch self {
+        case .discover: return "BottomHome"
+        case .playlists: return "BottomBroadcast"
+        case .library: return "BottomLibrary"
+        case .profile, .search: return nil
+        }
     }
 
     static let bottomTabs: [RootTab] = [.discover, .playlists, .library, .profile, .search]
@@ -62,6 +77,7 @@ struct RootView: View {
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
+    @AppStorage("beans.tabIconStyle") private var tabIconStyleRaw = BeansTabIconStyle.appleMusic.rawValue
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
     /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
@@ -93,6 +109,10 @@ struct RootView: View {
     @State private var showHomePlatformMenu = false
     @State private var sidebarRemotePlaylists: [Playlist] = []
     @State private var sidebarLocalPlaylist: LocalPlaylist?
+
+    private var tabIconStyle: BeansTabIconStyle {
+        BeansTabIconStyle(rawValue: tabIconStyleRaw) ?? .appleMusic
+    }
     @State private var sidebarPlaylist: Playlist?
     @State private var showSidebarQueue = false
     @State private var sidebarPlaylistsExpanded = true
@@ -406,8 +426,8 @@ struct RootView: View {
                         GlassTabBar.Item(
                             tab: $0,
                             title: LocalizedStringKey($0.title),
-                            icon: $0.icon,
-                            assetName: $0.assetName
+                            icon: $0.icon(for: tabIconStyle),
+                            assetName: $0.assetName(for: tabIconStyle)
                         )
                     },
                     selection: $selection,
@@ -519,14 +539,14 @@ struct RootView: View {
         Label {
             Text(nativeTabTitle(tab))
         } icon: {
-            if let assetName = tab.assetName {
+            if let assetName = tab.assetName(for: tabIconStyle) {
                 Image(assetName)
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
                     .frame(width: 25, height: 25)
             } else {
-                Image(systemName: tab.icon)
+                Image(systemName: tab.icon(for: tabIconStyle))
                     .font(.system(size: 25, weight: .semibold))
             }
         }
@@ -871,14 +891,14 @@ struct RootView: View {
             }
         } label: {
             HStack(spacing: 14) {
-                if let assetName = tab.assetName {
+                if let assetName = tab.assetName(for: tabIconStyle) {
                     Image(assetName)
                         .resizable()
                         .renderingMode(.template)
                         .scaledToFit()
                         .frame(width: 25, height: 25)
                 } else {
-                    Image(systemName: tab.icon)
+                    Image(systemName: tab.icon(for: tabIconStyle))
                         .font(.system(size: 25, weight: .semibold))
                         .frame(width: 25, height: 25)
                 }

@@ -141,7 +141,8 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastPersistedProgress: Double = -1
     private var lastListeningProgress: Double?
     private var lastListeningSongKey: String?
-    private var lastPersistedListeningDuration: TimeInterval = 0
+    private var pendingListeningDuration: TimeInterval = 0
+    private var lastListeningPublishUptime = 0.0
     private var lastNowPlayingArtworkKey: String?
     private var nowPlayingSongKey: String?
     private var nowPlayingInfo: [String: Any] = [:]
@@ -257,7 +258,7 @@ final class PlayerManager: NSObject, ObservableObject {
         loadHistory()
         loadPlayCounts()
         listeningDuration = Self.storedListeningDuration
-        lastPersistedListeningDuration = listeningDuration
+        lastListeningPublishUptime = ProcessInfo.processInfo.systemUptime
         restorePersistedPlaybackState()
         equalizerSettingsObserver = NotificationCenter.default.addObserver(
             forName: BeansEqualizer.settingsDidChange,
@@ -283,7 +284,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     deinit {
-        persistListeningDuration()
+        flushListeningDuration()
         interruptionResumeWorkItem?.cancel()
         audioRecoveryWorkItem?.cancel()
         audioSessionWatchdogTimer?.invalidate()
@@ -376,7 +377,7 @@ final class PlayerManager: NSObject, ObservableObject {
             clearAudioRecoveryIntent()
             isPlaying = false
             player.pause()
-            persistListeningDuration()
+            flushListeningDuration()
             resetListeningProgress()
             stopAudioSessionWatchdog()
         } else {
@@ -662,7 +663,7 @@ final class PlayerManager: NSObject, ObservableObject {
         thirdPartyPrefetchTask?.cancel()
         thirdPartyPrefetchTask = nil
         qqThirdPartyFallbackSongKey = nil
-        persistListeningDuration()
+        flushListeningDuration()
         resetListeningProgress()
         let initialProgress = max(0, min(resumeAt ?? 0, max(song.duration, 0)))
         // 切歌时同时解除旧 item，避免旧音频在新播放器建立期间残留输出。
@@ -1547,7 +1548,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
     private func removeCurrentObservers() {
         stopAudioSessionWatchdog()
-        persistListeningDuration()
+        flushListeningDuration()
         resetListeningProgress()
         if let timeObserver {
             player?.removeTimeObserver(timeObserver)
@@ -1603,16 +1604,20 @@ final class PlayerManager: NSObject, ObservableObject {
         let delta = playbackTime - previous
         guard delta > 0, delta <= 1.0 else { return }
 
-        listeningDuration += delta
-        if listeningDuration - lastPersistedListeningDuration >= 5 {
-            persistListeningDuration()
+        pendingListeningDuration += delta
+        let uptime = ProcessInfo.processInfo.systemUptime
+        if uptime - lastListeningPublishUptime >= 15 {
+            flushListeningDuration()
         }
     }
 
-    private func persistListeningDuration() {
+    private func flushListeningDuration() {
+        guard pendingListeningDuration > 0 else { return }
+        listeningDuration += pendingListeningDuration
+        pendingListeningDuration = 0
         let value = max(0, listeningDuration)
         defaults.set(value, forKey: Self.listeningDurationKey)
-        lastPersistedListeningDuration = value
+        lastListeningPublishUptime = ProcessInfo.processInfo.systemUptime
     }
 
     /// 均衡器通过 AVAudioMix 的音频处理 tap 工作，不改动 URL、队列或播放器状态。

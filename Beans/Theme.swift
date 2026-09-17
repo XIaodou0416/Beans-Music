@@ -223,6 +223,20 @@ enum BeansUIStyle: String, CaseIterable {
     }
 }
 
+enum BeansTabIconStyle: String, CaseIterable, Identifiable {
+    case appleMusic
+    case other
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .appleMusic: return "Apple Music"
+        case .other: return "其他样式"
+        }
+    }
+}
+
 // MARK: - 播放器按钮样式
 
 enum BeansPlayerButtonStyle: String, CaseIterable, Identifiable {
