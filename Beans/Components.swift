@@ -239,7 +239,8 @@ struct GlobalFloatingEffectView: View {
     }
 
     var body: some View {
-        if effect != .off {
+        Group {
+            if effect != .off {
             TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
                 let time = timeline.date.timeIntervalSinceReferenceDate * max(0.25, min(speed, 2.0))
                 let accent = theme.customAccent ?? (colorScheme == .dark ? Color.beansAmber : Color.beansHighlight)
@@ -286,6 +287,7 @@ struct GlobalFloatingEffectView: View {
                         }
                     }
                 }
+            }
             }
         }
         .allowsHitTesting(false)

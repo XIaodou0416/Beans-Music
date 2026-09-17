@@ -7,7 +7,6 @@ final class HighRefreshKeeper {
     static let shared = HighRefreshKeeper()
     static let defaultsKey = "beans.enableHighRefresh"
 
-    private weak var attachedScene: UIWindowScene?
     private var displayLink: CADisplayLink?
     private var wasRunningBeforeTemporaryPause = false
 
@@ -32,24 +31,15 @@ final class HighRefreshKeeper {
     }
 
     func attach(to view: UIView) {
-        if let scene = view.window?.windowScene {
-            attachedScene = scene
-            applyPreferredFrameRate(to: scene)
-        } else {
-            // The representable can be updated before UIKit attaches its view.
-            // The host view calls us again from didMoveToWindow.
-            startLegacyDisplayLinkIfNeeded()
-        }
+        _ = view
+        start()
     }
 
-    /// 设置页展开大量控件时暂停空转的显示链接，避免低系统滚动时额外占用主线程。
+    /// 设置页展开大量控件时暂停刷新率请求，避免额外占用主线程。
     func suspendTemporarily() {
-        guard attachedScene != nil || displayLink != nil else { return }
+        guard displayLink != nil else { return }
         wasRunningBeforeTemporaryPause = true
-        if #available(iOS 15.0, *), let attachedScene {
-            attachedScene.preferredFrameRateRange = .default
-        }
-        stopLegacyDisplayLink()
+        stop()
     }
 
     func resumeAfterTemporaryPause() {
@@ -60,69 +50,37 @@ final class HighRefreshKeeper {
     }
 
     private func start() {
-        if #available(iOS 15.0, *), let attachedScene {
-            applyPreferredFrameRate(to: attachedScene)
-        } else {
-            startLegacyDisplayLinkIfNeeded()
-        }
-    }
-
-    private func applyPreferredFrameRate(to scene: UIWindowScene) {
-        guard UserDefaults.standard.bool(forKey: Self.defaultsKey) else {
-            scene.preferredFrameRateRange = .default
-            return
-        }
+        guard displayLink == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(tick))
         if #available(iOS 15.0, *) {
             let maximum = Float(min(120, max(60, UIScreen.main.maximumFramesPerSecond)))
-            scene.preferredFrameRateRange = CAFrameRateRange(
-                minimum: maximum >= 120 ? 120 : maximum,
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: 60,
                 maximum: maximum,
                 preferred: maximum
             )
-            stopLegacyDisplayLink()
         } else {
-            startLegacyDisplayLinkIfNeeded()
+            link.preferredFramesPerSecond = 60
         }
-    }
-
-    private func startLegacyDisplayLinkIfNeeded() {
-        guard displayLink == nil else { return }
-        let link = CADisplayLink(target: self, selector: #selector(tick))
-        link.preferredFramesPerSecond = 60
-        link.add(to: .main, forMode: .common)
+        // Keep the no-op link out of tracking mode so it cannot add work to
+        // scrolling and drag gestures while retaining the preferred refresh rate.
+        link.add(to: .main, forMode: .default)
         displayLink = link
     }
 
     private func stop() {
-        if #available(iOS 15.0, *), let attachedScene {
-            attachedScene.preferredFrameRateRange = .default
-        }
-        stopLegacyDisplayLink()
-    }
-
-    private func stopLegacyDisplayLink() {
         displayLink?.invalidate()
         displayLink = nil
     }
 
-    @objc private func tick() {
-        // Pre-iOS 15 has no scene frame-rate preference API. Keeping this
-        // lightweight display link preserves the legacy high-refresh request.
-    }
-}
-
-private final class HighRefreshHostView: UIView {
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        HighRefreshKeeper.shared.attach(to: self)
-    }
+    @objc private func tick() {}
 }
 
 struct HighRefreshConfigurator: UIViewRepresentable {
     @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
 
     func makeUIView(context: Context) -> UIView {
-        let view = HighRefreshHostView(frame: .zero)
+        let view = UIView(frame: .zero)
         view.isUserInteractionEnabled = false
         return view
     }
