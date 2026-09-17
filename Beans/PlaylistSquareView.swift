@@ -141,6 +141,8 @@ struct PlaylistSquareView: View {
                 onSubmit: { _ in submitSearch() }
             )
         )
+        // 保留系统搜索栏，但让顶部导航区域随滚动内容透明化，歌单封面可以自然透出。
+        .beansHomeNavigationBarTransparent()
     }
 
     private var headerTitle: some View {
