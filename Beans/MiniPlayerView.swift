@@ -52,7 +52,13 @@ struct MiniPlayerView: View {
     private var playerBarSurface: some View {
         if presentation.drawsBackground {
             content
-                .background(miniPlayerMaterial, in: Capsule())
+                .background {
+                    if #available(iOS 26.0, *) {
+                        BeansGlass(shape: Capsule(), forceLiquid: true)
+                    } else {
+                        Capsule().fill(miniPlayerMaterial)
+                    }
+                }
                 .overlay {
                     Capsule()
                         .strokeBorder(.primary.opacity(isIPadLandscape ? 0.06 : 0.08), lineWidth: 0.5)

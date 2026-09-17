@@ -939,26 +939,6 @@ struct AppleMusicCompactQueueContent: View {
                 )
             }
             .frame(maxWidth: .infinity)
-            .zIndex(10)
-            .overlay {
-                GeometryReader { proxy in
-                    Color.clear
-                        .allowsHitTesting(true)
-                        .contentShape(Rectangle())
-                        .highPriorityGesture(
-                            DragGesture(minimumDistance: 0)
-                                .onEnded { value in
-                                    let translation = value.translation
-                                    guard abs(translation.width) < 16,
-                                          abs(translation.height) < 16,
-                                          proxy.size.width > 0 else { return }
-                                    let position = min(max(value.location.x / proxy.size.width, 0), 0.999)
-                                    let modes: [PlayMode] = [.sequential, .shuffle, .repeatAll, .repeatOne]
-                                    activate(modes[Int(position * CGFloat(modes.count))])
-                                }
-                        )
-                }
-            }
 
             HStack(alignment: .firstTextBaseline) {
                 Text("继续播放")
@@ -1005,16 +985,20 @@ struct AppleMusicCompactQueueContent: View {
         label: String,
         isActive: Bool
     ) -> some View {
-        Image(systemName: icon)
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(isActive ? Color.black.opacity(0.76) : .white.opacity(0.76))
-            .frame(maxWidth: .infinity, minHeight: 42)
-            .background(
-                isActive ? AnyShapeStyle(.white.opacity(0.66)) : AnyShapeStyle(.white.opacity(0.1)),
-                in: Capsule()
-            )
-        .contentShape(Capsule())
-        .accessibilityElement(children: .ignore)
+        Button {
+            activate(mode)
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(isActive ? Color.black.opacity(0.76) : .white.opacity(0.76))
+                .frame(maxWidth: .infinity, minHeight: 42)
+                .background(
+                    isActive ? AnyShapeStyle(.white.opacity(0.66)) : AnyShapeStyle(.white.opacity(0.1)),
+                    in: Capsule()
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }

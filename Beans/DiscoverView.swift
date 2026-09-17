@@ -280,6 +280,8 @@ struct DiscoverView: View {
                     .environmentObject(theme)
                     .environmentObject(auth)
                     .environmentObject(player)
+                    .environment(\.beansUsesSharedRootBackdrop, true)
+                    .modifier(DiscoverProfileSheetBackground())
             }
         }
             .beansNavigationDestination(for: DiscoverRoute.self) { route in
@@ -2392,6 +2394,17 @@ struct DailySongsSheet: View {
             onRefreshed?(refreshed)
         } catch {
             refreshError = "刷新失败：\(error.localizedDescription)"
+        }
+    }
+}
+
+private struct DiscoverProfileSheetBackground: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.presentationBackground(.clear)
+        } else {
+            content
         }
     }
 }
