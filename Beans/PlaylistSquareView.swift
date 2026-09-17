@@ -25,6 +25,7 @@ struct PlaylistSquareView: View {
     @State private var neteaseHasMore = false
     @State private var neteaseOffset = 0
     @State private var isLoadingMore = false
+    @State private var showPlaylistPlatformMenu = false
 
     private let neteasePageSize = 30
 
@@ -141,6 +142,18 @@ struct PlaylistSquareView: View {
                 onSubmit: { _ in submitSearch() }
             )
         )
+        .confirmationDialog("精选平台", isPresented: $showPlaylistPlatformMenu, titleVisibility: .visible) {
+            ForEach(providers) { provider in
+                Button {
+                    selectSource(provider)
+                } label: {
+                    Label(
+                        LocalizedStringKey(provider.rawValue),
+                        systemImage: provider == source ? "checkmark" : provider.icon
+                    )
+                }
+            }
+        }
         // 保留系统搜索栏，但让顶部导航区域随滚动内容透明化，歌单封面可以自然透出。
         .beansHomeNavigationBarTransparent()
     }
@@ -152,65 +165,31 @@ struct PlaylistSquareView: View {
                  : beansLocalized("歌单广场", "Playlist Square"))
                 .font(BeansFont.appFont(32, .bold))
                 .foregroundStyle(Color.beansLabel)
+                .contentShape(Rectangle())
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.55)
+                        .onEnded { _ in
+                            guard providers.count > 1 else { return }
+                            BeansHaptics.select()
+                            showPlaylistPlatformMenu = true
+                        }
+                )
 
             Spacer(minLength: 0)
-
-            // 右上角快捷平台切换，不再占用内容区一整行。
-            Menu {
-                ForEach(providers) { provider in
-                    Button {
-                        BeansHaptics.tap()
-                        guard source != provider else { return }
-                        playlistSourceRaw = provider.rawValue
-                        selectedCategory = PlaylistSquareCategory.all.id
-                        playlists = []
-                        categories = [.all]
-                        expanded = false
-                        resetNeteasePaging()
-                        loadRequestID = UUID()
-                        clearSearch()
-                    } label: {
-                        Label(
-                            LocalizedStringKey(provider.rawValue),
-                            systemImage: provider == source ? "checkmark" : provider.icon
-                        )
-                    }
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    if let imageName = source.brandImageName {
-                        Image(imageName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 15, height: 15)
-                    } else {
-                        Image(systemName: source.icon)
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    Text(LocalizedStringKey(source.rawValue))
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                }
-                .font(BeansFont.appFont(12, .semibold))
-                .foregroundStyle(Color.beansComment)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 7)
-                .background {
-                    if usesSolidSurface {
-                        Capsule().fill(Color.primary.opacity(0.045))
-                    } else {
-                        BeansGlass(shape: Capsule())
-                    }
-                }
-                .overlay {
-                    if usesSolidSurface {
-                        Capsule().strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.7)
-                    }
-                }
-            }
-            .disabled(providers.count < 2)
         }
+    }
+
+    private func selectSource(_ provider: SearchProvider) {
+        BeansHaptics.tap()
+        guard source != provider else { return }
+        playlistSourceRaw = provider.rawValue
+        selectedCategory = PlaylistSquareCategory.all.id
+        playlists = []
+        categories = [.all]
+        expanded = false
+        resetNeteasePaging()
+        loadRequestID = UUID()
+        clearSearch()
     }
 
     private var categoryChips: some View {

@@ -208,11 +208,9 @@ struct GlassBackdrop: View {
                     .blur(radius: 110)
                     .offset(x: -160, y: 340)
             }
-            if !settingsPerformanceMode {
-                GlobalFloatingEffectView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .allowsHitTesting(false)
-            }
+            GlobalFloatingEffectView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
         }
         .ignoresSafeArea()
     }
@@ -256,9 +254,21 @@ struct GlobalFloatingEffectView: View {
                                 let fall = ((time * (0.035 + seed.truncatingRemainder(dividingBy: 7) * 0.006) + seed * 0.071).truncatingRemainder(dividingBy: 1.15))
                                 let y = fall * canvasSize.height - canvasSize.height * 0.08
                                 let drift = sin(time * 0.32 + seed * 1.7) * canvasSize.width * 0.012
-                                let radius = max(1.2, min(4.2, size * (1.2 + seed.truncatingRemainder(dividingBy: 3) * 0.45)))
-                                let rect = CGRect(x: x + drift, y: y, width: radius * 2, height: radius * 2)
-                                context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.08 + 0.04 * sin(seed))) )
+                                let center = CGPoint(x: x + drift, y: y)
+                                let arm = max(3.4, min(10.5, size * (4.0 + seed.truncatingRemainder(dividingBy: 3) * 1.4)))
+                                var flake = Path()
+                                for armIndex in 0..<3 {
+                                    let angle = Double(armIndex) * .pi / 3
+                                    let dx = cos(angle) * arm
+                                    let dy = sin(angle) * arm
+                                    flake.move(to: CGPoint(x: center.x - dx, y: center.y - dy))
+                                    flake.addLine(to: CGPoint(x: center.x + dx, y: center.y + dy))
+                                }
+                                context.stroke(
+                                    flake,
+                                    with: .color(.white.opacity(0.34 + 0.14 * sin(seed))),
+                                    lineWidth: max(0.8, min(1.5, size * 0.9))
+                                )
                             }
                         }
                     }

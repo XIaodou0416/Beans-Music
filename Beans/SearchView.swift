@@ -225,21 +225,10 @@ struct SearchView: View {
     }
 
     var body: some View {
-        Group {
-            if #available(iOS 26, *) {
-                BeansNavigationStack {
-                    pageContent
-                }
-                .modifier(
-                    BeansSystemSearchModifier(
-                        text: $keyword,
-                        prompt: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
-                        onSubmit: submitSearch
-                    )
-                )
-            } else {
-                pageContent
-            }
+        BeansNavigationStack {
+            pageContent
+                .navigationTitle(keyword.isEmpty ? "搜索" : keyword)
+                .navigationBarTitleDisplayMode(.inline)
         }
         .task(id: provider) {
             guard hotLoadedProvider != provider else { return }
@@ -298,46 +287,26 @@ struct SearchView: View {
     @ViewBuilder
     private var pageContent: some View {
         let _ = theme.accent
-        ZStack(alignment: .top) {
+        ZStack {
             if !usesSharedRootBackdrop {
-                // 页面背景：同步开启时显示壁纸/背景色，否则默认氛围渐变
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
             }
-            // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
             ScrollView {
-                VStack(spacing: 0) {
-                    headerTitle
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .padding(.bottom, 10)
-
-                    if #available(iOS 26, *) {
-                        EmptyView()
-                    } else {
-                        searchField
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 10)
-                    }
-
+                VStack(alignment: .leading, spacing: 20) {
                     contentArea
-                        .frame(maxWidth: .infinity, alignment: .top)
+                    Color.clear.frame(height: 74)
                 }
+                .padding(.top, 8)
                 .frame(maxWidth: .infinity, alignment: .top)
             }
             .beansScrollIndicatorsHidden()
             .beansScrollDismissesKeyboard()
         }
-    }
-
-    // MARK: - 顶部标题
-
-    private var headerTitle: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Text("搜索")
-                .font(BeansFont.appFont(32, .bold))
-                .foregroundStyle(Color.beansLabel)
-            Spacer(minLength: 0)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            searchField
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
         }
     }
 
@@ -377,8 +346,14 @@ struct SearchView: View {
     }
 
     private func submitSearch(_ text: String) {
+        performSearch(text)
+    }
+
+    private func performSearch(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        keyword = trimmed
+        searchController.dismissKeyboard()
         debounceTask?.cancel()
         historyStore.record(trimmed)
         Task { await startSearch(trimmed) }
@@ -387,10 +362,10 @@ struct SearchView: View {
     // MARK: - 搜索结果平台选择
 
     private var resultProviderPicker: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
                 Text("搜索平台")
-                    .font(BeansFont.appFont(13, .medium))
+                    .font(BeansFont.appFont(14, .medium))
                     .foregroundStyle(Color.beansComment)
                 Spacer(minLength: 0)
                 Text(LocalizedStringKey(provider.rawValue))
@@ -406,19 +381,10 @@ struct SearchView: View {
                             guard provider != candidate else { return }
                             provider = candidate
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 5) {
                                 if provider == candidate {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 10, weight: .bold))
-                                }
-                                if let imageName = candidate.brandImageName {
-                                    Image(imageName)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 14, height: 14)
-                                } else {
-                                    Image(systemName: candidate.icon)
-                                        .font(.system(size: 12, weight: .semibold))
                                 }
                                 Text(LocalizedStringKey(candidate.rawValue))
                             }
@@ -428,13 +394,14 @@ struct SearchView: View {
                             .padding(.vertical, 9)
                             .background {
                                 if provider == candidate {
-                                    Capsule().fill(candidate.tint)
+                                    Capsule().fill(Color.beansAmber)
                                 } else {
-                                    Capsule().fill(Color.beansLabel.opacity(colorScheme == .dark ? 0.12 : 0.08))
+                                    Capsule().fill(Color.beansLabel.opacity(colorScheme == .dark ? 0.14 : 0.10))
                                 }
                             }
                         }
-                        .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+                        .buttonStyle(.plain)
+                        .frame(minHeight: 44)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -447,203 +414,167 @@ struct SearchView: View {
     // MARK: - 分类选择（歌曲 / 歌手 / 专辑）
 
     private var typeTabs: some View {
-        HStack(spacing: 4) {
+        Picker("搜索类型", selection: Binding(
+            get: { resultType },
+            set: { selectResultType($0) }
+        )) {
             ForEach(SearchResultType.allCases) { type in
-                Button {
-                    BeansHaptics.tap()
-                    guard resultType != type else { return }
-                    resultType = type
-                    let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    // 切换分类：清空该分类旧结果并立即进入加载态，避免显示过期数据或空态闪烁
-                    debounceTask?.cancel()
-                    searchTask?.cancel()
-                    switch type {
-                    case .song: songResults = []
-                    case .artist: artistResults = []
-                    case .album: albumResults = []
-                    }
-                    errorMessage = nil
-                    searching = true
-                    Task { await startSearch(trimmed) }
-                } label: {
-                        Text(LocalizedStringKey(type.rawValue))
-                        .font(BeansFont.appFont(13, .semibold))
-                        .foregroundStyle(resultType == type ? Color.beansLabel : Color.beansComment)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background {
-                            if resultType == type {
-                                Capsule().fill(.white.opacity(colorScheme == .dark ? 0.24 : 0.20))
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
+                Text(LocalizedStringKey(type.rawValue)).tag(type)
             }
         }
-        .padding(4)
-        .background {
-            BeansSurface(shape: Capsule())
-        }
-        .clipShape(Capsule())
+        .pickerStyle(.segmented)
+        .labelsHidden()
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
+    }
+
+    private func selectResultType(_ type: SearchResultType) {
+        BeansHaptics.tap()
+        guard resultType != type else { return }
+        resultType = type
+        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        debounceTask?.cancel()
+        searchTask?.cancel()
+        switch type {
+        case .song: songResults = []
+        case .artist: artistResults = []
+        case .album: albumResults = []
+        }
+        errorMessage = nil
+        searching = true
+        Task { await startSearch(trimmed) }
     }
 
     // MARK: - 热门搜索
 
     private var hotSection: some View {
         VStack(alignment: .leading, spacing: 18) {
-            SearchHistorySection { word in
-                keyword = word
-                searchController.dismissKeyboard()
-                debounceTask?.cancel()
-                historyStore.record(word)
-                Task { await startSearch(word) }
+            VStack(spacing: 12) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 48, weight: .light))
+                    .foregroundStyle(Color.beansComment.opacity(0.72))
+                    .padding(.top, 44)
+                Text("搜索歌曲、歌手或专辑")
+                    .font(BeansFont.appFont(18, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                Text("使用底部搜索框开始搜索")
+                    .font(BeansFont.appFont(13))
+                    .foregroundStyle(Color.beansComment)
+                    .multilineTextAlignment(.center)
             }
+            .frame(maxWidth: .infinity)
 
-            hotSearchHeader
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("热门搜索", systemImage: "flame.fill")
+                        .font(BeansFont.appFont(16, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                    Spacer(minLength: 0)
+                    Text(LocalizedStringKey(provider.rawValue))
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                }
 
-            if hotWords.isEmpty {
-                hotSearchLoadingState
-            } else {
-                LazyVGrid(columns: hotSearchColumns, alignment: .leading, spacing: 10) {
-                    ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
-                        hotTag(index: index, word: word)
+                if hotWords.isEmpty {
+                    hotSearchLoadingState
+                } else {
+                    LazyVGrid(columns: hotSearchColumns, alignment: .leading, spacing: 10) {
+                        ForEach(hotWords, id: \.self) { word in
+                            searchTag(word, icon: "magnifyingglass")
+                        }
                     }
                 }
             }
-            Spacer().frame(height: 130)
+
+            if !historyStore.history.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Label("搜索历史", systemImage: "clock.arrow.circlepath")
+                            .font(BeansFont.appFont(16, .bold))
+                            .foregroundStyle(Color.beansLabel)
+                        Spacer(minLength: 0)
+                        Button("清空") {
+                            BeansHaptics.tap()
+                            historyStore.clear()
+                        }
+                        .font(BeansFont.appFont(13))
+                        .foregroundStyle(Color.beansComment)
+                        .buttonStyle(.plain)
+                    }
+
+                    LazyVGrid(columns: historySearchColumns, alignment: .leading, spacing: 10) {
+                        ForEach(historyStore.history, id: \.self) { word in
+                            HStack(spacing: 6) {
+                                Button {
+                                    performSearch(word)
+                                } label: {
+                                    Text(word)
+                                        .font(BeansFont.appFont(13, .medium))
+                                        .foregroundStyle(Color.beansLabel)
+                                        .lineLimit(1)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .buttonStyle(.plain)
+
+                                Button {
+                                    BeansHaptics.tap()
+                                    historyStore.remove(word)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(Color.beansComment)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("删除搜索记录")
+                            }
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 44)
+                            .background(Color.beansLabel.opacity(colorScheme == .dark ? 0.14 : 0.08), in: Capsule())
+                        }
+                    }
+                }
+            }
         }
         .padding(.horizontal, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var hotSearchColumns: [GridItem] {
-        Array(
-            repeating: GridItem(.flexible(minimum: 0), spacing: 10),
-            count: usesTabletHotSearchLayout ? 3 : 2
-        )
+        [GridItem(.adaptive(minimum: usesTabletHotSearchLayout ? 160 : 140), spacing: 10)]
     }
 
-    private var hotSearchHeader: some View {
-        HStack(spacing: 8) {
-            Text("热门搜索")
-                .font(BeansFont.appFont(18, .bold))
-                .foregroundStyle(Color.beansLabel)
-
-            if let imageName = provider.brandImageName {
-                Image(imageName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 14, height: 14)
-            } else {
-                Image(systemName: provider.icon)
-                    .font(.system(size: 12, weight: .semibold))
-            }
-
-            Text(LocalizedStringKey(provider.rawValue))
-                .font(BeansFont.appFont(12, .medium))
-                .foregroundStyle(Color.beansComment)
-
-            Spacer(minLength: 0)
-
-            Button {
-                BeansHaptics.tap()
-                Task {
-                    hotWords = []
-                    await loadHotWords()
-                }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.beansComment)
-                    .frame(width: 32, height: 32)
-                    .background { BeansGlass(shape: Circle()) }
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.9))
-            .accessibilityLabel("刷新热门搜索")
-        }
+    private var historySearchColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: usesTabletHotSearchLayout ? 150 : 120), spacing: 10)]
     }
 
-    /// 热搜前三名渐变配色（更亮眼：橙红 / 金黄 / 冰蓝）
-    private let hotRankColors: [[Color]] = [
-        [Color(red: 1.00, green: 0.62, blue: 0.18), Color(red: 0.95, green: 0.25, blue: 0.18)],
-        [Color(red: 1.00, green: 0.82, blue: 0.30), Color(red: 0.98, green: 0.56, blue: 0.12)],
-        [Color(red: 0.55, green: 0.85, blue: 1.00), Color(red: 0.30, green: 0.52, blue: 0.98)],
-    ]
-    private let hotRankIcons = ["crown.fill", "flame.fill", "sparkles"]
-
-    /// 固定高度的分栏条目，避免不同词条长度造成列表跳动。
-    private func hotTag(index: Int, word: String) -> some View {
-        let top3 = index < 3
-        return Button {
+    private func searchTag(_ word: String, icon: String) -> some View {
+        Button {
             BeansHaptics.tap()
-            keyword = word
-            searchController.dismissKeyboard()
-            debounceTask?.cancel()
-            Task { await startSearch(word) }
+            performSearch(word)
         } label: {
-            HStack(spacing: 10) {
-                if top3 {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: hotRankColors[index],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 30, height: 30)
-                            .shadow(color: hotRankColors[index][0].opacity(0.42), radius: 5, y: 2)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                    .strokeBorder(.white.opacity(0.5), lineWidth: 0.8)
-                            }
-                        Image(systemName: hotRankIcons[index])
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                } else {
-                    Text("\(index + 1)")
-                        .font(BeansFont.appFont(12, .bold, .rounded))
-                        .foregroundStyle(Color.beansComment)
-                        .frame(width: 30, height: 30)
-                        .background {
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(Color.primary.opacity(0.055))
-                        }
-                }
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
                 Text(word)
-                    .font(BeansFont.appFont(14, top3 ? .semibold : .medium))
+                    .font(BeansFont.appFont(13, .medium))
                     .foregroundStyle(Color.beansLabel)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.beansComment.opacity(0.62))
             }
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .overlay {
-                if top3 {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(hotRankColors[index][0].opacity(0.22), lineWidth: 0.8)
-                }
-            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 44)
+            .background(Color.beansLabel.opacity(colorScheme == .dark ? 0.14 : 0.08), in: Capsule())
         }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+        .buttonStyle(.plain)
     }
 
     private var hotSearchLoadingState: some View {
         LazyVGrid(columns: hotSearchColumns, alignment: .leading, spacing: 10) {
             ForEach(0..<10, id: \.self) { _ in
-                BeansShimmerSkeleton(cornerRadius: 16)
-                    .frame(maxWidth: .infinity, minHeight: 54)
+                BeansShimmerSkeleton(cornerRadius: 22)
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
         }
     }

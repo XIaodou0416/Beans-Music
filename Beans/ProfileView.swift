@@ -1711,8 +1711,7 @@ struct SettingsView: View {
     var body: some View {
         BeansNavigationStack {
             ZStack {
-                Color(uiColor: .systemGroupedBackground)
-                    .ignoresSafeArea()
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 20) {
                         coreSettingsGroup
