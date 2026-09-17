@@ -1343,6 +1343,9 @@ struct SettingsView: View {
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
     @AppStorage("beans.nowPlaying.enabled.v1") private var nowPlayingEnabled = true
     @AppStorage("beans.audioQuality") private var playbackAudioQualityRaw = BeansAudioQuality.hires.rawValue
+    @AppStorage(NetworkAudioQuality.connectionAwareKey) private var connectionAwareQuality = false
+    @AppStorage(NetworkAudioQuality.wifiOfficialKey) private var wifiPlaybackAudioQualityRaw = BeansAudioQuality.hires.rawValue
+    @AppStorage(NetworkAudioQuality.cellularOfficialKey) private var cellularPlaybackAudioQualityRaw = BeansAudioQuality.higher.rawValue
     @AppStorage("beans.favoriteDestination") private var favoriteDestinationRaw = FavoriteDestination.local.rawValue
     @AppStorage(BeansHaptics.enabledKey) private var hapticsEnabled = true
     @AppStorage("beans.playback.autoResumeLast") private var autoResumeLastPlayback = false
@@ -1382,6 +1385,8 @@ struct SettingsView: View {
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
     @ObservedObject private var equalizer = BeansEqualizer.shared
     @AppStorage(ThirdPartyAudioQuality.storageKey) private var thirdPartyAudioQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
+    @AppStorage(NetworkAudioQuality.wifiThirdPartyKey) private var wifiThirdPartyAudioQualityRaw = ThirdPartyAudioQuality.flac.rawValue
+    @AppStorage(NetworkAudioQuality.cellularThirdPartyKey) private var cellularThirdPartyAudioQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
@@ -1389,6 +1394,7 @@ struct SettingsView: View {
     @State private var appearanceExpanded = false
     @State private var platformExpanded = false
     @State private var playbackExpanded = false
+    @State private var audioQualityExpanded = false
     @State private var showWallpaperPicker = false
     @State private var wallpaperAppearanceTarget: BeansWallpaperAppearance = .light
     @State private var showFontImporter = false
@@ -1477,6 +1483,38 @@ struct SettingsView: View {
         Binding(
             get: { BeansAudioQuality(rawValue: playbackAudioQualityRaw) ?? .hires },
             set: { playbackAudioQualityRaw = $0.rawValue }
+        )
+    }
+
+    private var wifiPlaybackAudioQualitySelection: Binding<BeansAudioQuality> {
+        Binding(
+            get: { BeansAudioQuality(rawValue: wifiPlaybackAudioQualityRaw) ?? .hires },
+            set: { wifiPlaybackAudioQualityRaw = $0.rawValue }
+        )
+    }
+
+    private var cellularPlaybackAudioQualitySelection: Binding<BeansAudioQuality> {
+        Binding(
+            get: { BeansAudioQuality(rawValue: cellularPlaybackAudioQualityRaw) ?? .higher },
+            set: { cellularPlaybackAudioQualityRaw = $0.rawValue }
+        )
+    }
+
+    private var wifiThirdPartyAudioQualitySelection: Binding<ThirdPartyAudioQuality> {
+        thirdPartyAudioQualityBinding(rawValue: $wifiThirdPartyAudioQualityRaw)
+    }
+
+    private var cellularThirdPartyAudioQualitySelection: Binding<ThirdPartyAudioQuality> {
+        thirdPartyAudioQualityBinding(rawValue: $cellularThirdPartyAudioQualityRaw)
+    }
+
+    private func thirdPartyAudioQualityBinding(rawValue: Binding<String>) -> Binding<ThirdPartyAudioQuality> {
+        Binding(
+            get: {
+                let stored = ThirdPartyAudioQuality(sourceValue: rawValue.wrappedValue) ?? .kb320
+                return thirdPartyAudioQualityOptions.first(where: { $0 == stored }) ?? thirdPartyAudioQualityOptions.first ?? .kb320
+            },
+            set: { rawValue.wrappedValue = $0.rawValue }
         )
     }
 
@@ -1669,6 +1707,7 @@ struct SettingsView: View {
                     LazyVStack(alignment: .leading, spacing: 16) {
                         accountSection
                         themeSection
+                        audioQualitySection
                         playbackSection
                         equalizerSection
                         changelogSection
@@ -1797,6 +1836,167 @@ struct SettingsView: View {
             homeRenderingPaused = false
             if #unavailable(iOS 26) {
                 HighRefreshKeeper.shared.resumeAfterTemporaryPause()
+            }
+        }
+    }
+
+    private func officialQualityPills(_ selection: Binding<BeansAudioQuality>) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(BeansAudioQuality.allCases) { quality in
+                    let selected = selection.wrappedValue == quality
+                    Button {
+                        selection.wrappedValue = quality
+                        BeansHaptics.select()
+                    } label: {
+                        Text(quality.displayName)
+                            .font(BeansFont.appFont(12, selected ? .semibold : .medium))
+                            .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
+                            .padding(.horizontal, 12)
+                            .frame(height: 31)
+                            .background { liquidQualityOptionBackground(selected: selected) }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+    }
+
+    private func thirdPartyQualityPills(_ selection: Binding<ThirdPartyAudioQuality>) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(thirdPartyAudioQualityOptions) { quality in
+                    let selected = selection.wrappedValue == quality
+                    Button {
+                        selection.wrappedValue = quality
+                        BeansHaptics.select()
+                    } label: {
+                        Text(quality.displayName)
+                            .font(BeansFont.appFont(12, selected ? .semibold : .medium))
+                            .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
+                            .padding(.horizontal, 12)
+                            .frame(height: 31)
+                            .background { liquidQualityOptionBackground(selected: selected) }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+    }
+
+    private func networkQualityRow(
+        title: String,
+        icon: String,
+        officialSelection: Binding<BeansAudioQuality>,
+        thirdPartySelection: Binding<ThirdPartyAudioQuality>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Label(title, systemImage: icon)
+                .font(BeansFont.appFont(14, .semibold))
+                .foregroundStyle(Color.beansLabel)
+            Text("官方音质")
+                .font(BeansFont.appFont(11))
+                .foregroundStyle(Color.beansComment)
+            officialQualityPills(officialSelection)
+            Text("第三方音源")
+                .font(BeansFont.appFont(11))
+                .foregroundStyle(Color.beansComment)
+            thirdPartyQualityPills(thirdPartySelection)
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var audioQualitySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                BeansHaptics.select()
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    audioQualityExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "waveform.badge.magnifyingglass")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("音源与音质")
+                            .font(BeansFont.appFont(15))
+                            .foregroundStyle(Color.beansLabel)
+                        Text(connectionAwareQuality ? "已按 Wi-Fi / 蜂窝网络分别选择" : "统一音质")
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    Spacer()
+                    Image(systemName: audioQualityExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.beansComment.opacity(0.6))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+                .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+
+            if audioQualityExpanded {
+                VStack(alignment: .leading, spacing: 14) {
+                    Toggle("按网络类型选择音质", isOn: $connectionAwareQuality)
+                        .font(BeansFont.appFont(14))
+                        .tint(Color.beansAmber)
+
+                    if connectionAwareQuality {
+                        networkQualityRow(
+                            title: "Wi-Fi",
+                            icon: "wifi",
+                            officialSelection: wifiPlaybackAudioQualitySelection,
+                            thirdPartySelection: wifiThirdPartyAudioQualitySelection
+                        )
+                        networkQualityRow(
+                            title: "蜂窝数据",
+                            icon: "antenna.radiowaves.left.and.right",
+                            officialSelection: cellularPlaybackAudioQualitySelection,
+                            thirdPartySelection: cellularThirdPartyAudioQualitySelection
+                        )
+                    } else {
+                        playbackQualitySection
+                        Divider().overlay(Color.beansComment.opacity(0.15))
+                        Text(thirdPartyAudioQualityTitle)
+                            .font(BeansFont.appFont(14, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                        thirdPartyQualityPills(thirdPartyAudioQualitySelection)
+                    }
+
+                    Divider().overlay(Color.beansComment.opacity(0.15))
+                    Button {
+                        showSourceManager = true
+                        BeansHaptics.tap()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "shippingbox.fill")
+                            Text("管理 / 导入音源")
+                            Spacer()
+                            Text("\(customSourceCount) 个")
+                                .foregroundStyle(Color.beansComment)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .font(BeansFont.appFont(13, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(16)
+                .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)) }
+                .beansCardShadow(radius: 9, y: 3)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .task(id: thirdPartyAudioQualityOptionsSignature) {
+                    normalizeThirdPartyAudioQualitySelection()
+                }
             }
         }
     }
@@ -2798,10 +2998,6 @@ struct SettingsView: View {
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
-                playbackQualitySection
-
-                Divider().overlay(Color.beansComment.opacity(0.15))
-
                 Toggle(isOn: $hapticsEnabled) {
                     HStack(spacing: 12) {
                         Image(systemName: "iphone.radiowaves.left.and.right")
@@ -2834,82 +3030,6 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 .tint(Color.beansAmber)
 
-                HStack(spacing: 10) {
-                    Image(systemName: "shippingbox.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.beansAmber)
-                    Text(beansLocalized("第三方音源", "Third-party Sources"))
-                        .font(BeansFont.appFont(13, .semibold))
-                        .foregroundStyle(Color.beansLabel)
-                    Spacer()
-                    Text(beansLocalized("\(customSourceCount) 个", "\(customSourceCount) sources"))
-                        .font(BeansFont.appFont(12))
-                        .foregroundStyle(Color.beansComment)
-                }
-
-                Button {
-                    showSourceManager = true
-                    BeansHaptics.tap()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "square.and.pencil")
-                        Text(beansLocalized("管理 / 导入音源", "Manage / Import Sources"))
-                    }
-                    .font(BeansFont.appFont(13, .semibold))
-                    .foregroundStyle(Color.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color.black, in: Capsule())
-                }
-                .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "speaker.wave.2.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(width: 28)
-                        Text(thirdPartyAudioQualityTitle)
-                            .font(BeansFont.appFont(13, .semibold))
-                            .foregroundStyle(Color.beansLabel)
-                        Spacer()
-                        Text(thirdPartyAudioQualitySelection.wrappedValue.displayName)
-                            .font(BeansFont.appFont(12))
-                            .foregroundStyle(Color.beansComment)
-                    }
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(thirdPartyAudioQualityOptions) { quality in
-                                let selected = thirdPartyAudioQualitySelection.wrappedValue == quality
-                                Button {
-                                    thirdPartyAudioQualitySelection.wrappedValue = quality
-                                    BeansHaptics.select()
-                                } label: {
-                                    HStack(spacing: 5) {
-                                        Text(quality.displayName)
-                                        if selected {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 9, weight: .bold))
-                                        }
-                                    }
-                                    .font(BeansFont.appFont(12, selected ? .semibold : .medium))
-                                    .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
-                                    .padding(.horizontal, 12)
-                                    .frame(height: 31)
-                                    .background {
-                                        liquidQualityOptionBackground(selected: selected)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 1)
-                    }
-                    Text(thirdPartyAudioQualityHint)
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
-                }
-
             }
             .padding(16)
             .background {
@@ -2917,9 +3037,6 @@ struct SettingsView: View {
             }
             .beansCardShadow(radius: 9, y: 3)
             .transition(.opacity.combined(with: .move(edge: .top)))
-            .task(id: thirdPartyAudioQualityOptionsSignature) {
-                normalizeThirdPartyAudioQualitySelection()
-            }
             }
         }
     }

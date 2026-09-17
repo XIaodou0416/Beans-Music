@@ -686,8 +686,8 @@ final class PlayerManager: NSObject, ObservableObject {
             // 官方地址失败后，使用已启用的自定义音源兜底。
             let enableUnblock = externalSourcesEnabled
             let strictUnlock = shouldLockOfficialOnly(song)
-            let quality = (forceKugouStandard && song.source == .kugou) ? .standard : BeansAudioQuality.current
-            let thirdPartyQuality = ThirdPartyAudioQuality.current
+            let quality = (forceKugouStandard && song.source == .kugou) ? .standard : NetworkAudioQuality.officialPreferred
+            let thirdPartyQuality = NetworkAudioQuality.thirdPartyPreferred
             for attempt in 0..<3 {
                 if attempt > 0 {
                     try? await Task.sleep(nanoseconds: 800_000_000)
@@ -790,7 +790,7 @@ final class PlayerManager: NSObject, ObservableObject {
               let nextSong = nextSongForPrefetch else { return }
 
         thirdPartyPrefetchTask?.cancel()
-        let quality = ThirdPartyAudioQuality.current
+        let quality = NetworkAudioQuality.thirdPartyPreferred
         thirdPartyPrefetchTask = Task { [weak self] in
             guard let self else { return }
             _ = await self.resolveThirdParty(song: nextSong, quality: quality, strict: false)
@@ -951,7 +951,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private func retryKugouAtStandardIfNeeded(error _: Error?) -> Bool {
         guard let song = currentSong,
               song.source == .kugou,
-              BeansAudioQuality.current != .standard,
+              NetworkAudioQuality.officialPreferred != .standard,
               kugouStandardFallbackSongKey != song.identityKey else { return false }
         kugouStandardFallbackSongKey = song.identityKey
         let resume = progress
@@ -970,7 +970,7 @@ final class PlayerManager: NSObject, ObservableObject {
         let generation = loadGeneration
         let resume = progress
         let strict = shouldLockOfficialOnly(song)
-        let currentQuality = activeThirdPartyQuality ?? ThirdPartyAudioQuality.current
+        let currentQuality = activeThirdPartyQuality ?? NetworkAudioQuality.thirdPartyPreferred
         let attempted = attemptedThirdPartyQualitiesBySong[song.identityKey] ?? []
         guard let thirdPartyQuality = currentQuality.fallbackChain.first(where: {
             !attempted.contains($0.rawValue)
@@ -1089,11 +1089,11 @@ final class PlayerManager: NSObject, ObservableObject {
         let generation = loadGeneration
         let resume = progress
         let strict = shouldLockOfficialOnly(song)
-        let thirdPartyQuality = ThirdPartyAudioQuality.current
+        let thirdPartyQuality = NetworkAudioQuality.thirdPartyPreferred
         Task {
             let (_, resolved) = await self.qqFallback(
                 song: song,
-                quality: BeansAudioQuality.current,
+                quality: NetworkAudioQuality.officialPreferred,
                 thirdPartyQuality: thirdPartyQuality,
                 enableUnblock: true,
                 strict: strict
@@ -1135,7 +1135,7 @@ final class PlayerManager: NSObject, ObservableObject {
     ) {
         guard ensurePlaybackAllowed(), let loadedSong = currentSong else { return }
         if isThirdParty {
-            let quality = thirdPartyQuality ?? ThirdPartyAudioQuality.current
+            let quality = thirdPartyQuality ?? NetworkAudioQuality.thirdPartyPreferred
             activeThirdPartyQuality = quality
             activeQQOfficialBR = nil
             if let songKey = currentSong?.identityKey {
@@ -1496,7 +1496,7 @@ final class PlayerManager: NSObject, ObservableObject {
         case .qq:
             return await qqFallback(
                 song: song,
-                quality: BeansAudioQuality.current,
+                quality: NetworkAudioQuality.officialPreferred,
                 thirdPartyQuality: quality,
                 enableUnblock: true,
                 strict: strict,

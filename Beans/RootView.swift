@@ -153,10 +153,9 @@ struct RootView: View {
     }
 
     private var usesSystemPlayerDismissal: Bool {
-        // Keep iOS 26's native interactive dismissal. Queue controls route
-        // their actions through PlayerManager and remain independent of this
-        // presentation gesture.
-        if #available(iOS 26.0, *) { return true }
+        // The system transition can occasionally complete without animating
+        // the player surface on iOS 26. The local transition is stable and
+        // only recognizes a downward drag that begins near the top edge.
         return false
     }
 
@@ -1052,17 +1051,12 @@ struct BeansNowPlayingPresentation<Content: View>: View {
         .contentShape(Rectangle())
         .accessibilityLabel("下拉关闭播放页")
 
-        if usesSystemInteractiveDismissal {
-            surface
-                .padding(.top, safeAreaTop)
-                // On iOS 26 the system owns interactive dismissal. This clear
-                // indicator must stay visual-only so it cannot mask controls
-                // that have been repositioned by the Apple Music layout.
-                .allowsHitTesting(false)
-        } else {
-            surface
-                .padding(.top, safeAreaTop)
-        }
+        surface
+            .padding(.top, safeAreaTop)
+            // The parent presentation owns the drag gesture. Keeping this
+            // clear decoration out of hit testing prevents it from masking
+            // controls that overlap its layout position.
+            .allowsHitTesting(false)
     }
 
     private var dismissGesture: some Gesture {

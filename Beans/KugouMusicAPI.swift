@@ -1377,7 +1377,7 @@ final class KugouMusicAPI {
 
     func songURL(song: Song, quality: BeansAudioQuality? = nil) async throws -> String? {
         await refreshMembershipStatusIfNeeded()
-        let requestedQuality = quality ?? BeansAudioQuality.current
+        let requestedQuality = quality ?? NetworkAudioQuality.officialPreferred
         var primary = song.kugouHash
         var qualityHashes = song.kugouQualityHashes
         var albumAudioId = song.kugouAlbumAudioId
@@ -1396,7 +1396,7 @@ final class KugouMusicAPI {
     }
 
     func songURL(hash: String, albumAudioId: String?, albumId: String?) async throws -> String? {
-        try await songURL(hashes: [hash], albumAudioId: albumAudioId, albumId: albumId, quality: BeansAudioQuality.current)
+        try await songURL(hashes: [hash], albumAudioId: albumAudioId, albumId: albumId, quality: NetworkAudioQuality.officialPreferred)
     }
 
     private func songURL(hashes: [String], albumAudioId: String?, albumId: String?, quality: BeansAudioQuality) async throws -> String? {
@@ -2421,7 +2421,7 @@ final class KugouMusicAPI {
     }
 
     private static func qualityHashCandidates(primary: String?, qualityHashes: [String: String]?, quality requestedQuality: BeansAudioQuality? = nil) -> [String] {
-        let requested = requestedQuality ?? BeansAudioQuality.current
+        let requested = requestedQuality ?? NetworkAudioQuality.officialPreferred
         let order: [String]
         switch requested {
         case .hires, .master:

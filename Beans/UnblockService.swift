@@ -53,7 +53,7 @@ enum UnblockService {
         qqMid: String? = nil,
         qqMediaMid: String? = nil,
         kugouID: String? = nil,
-        quality: ThirdPartyAudioQuality = .current,
+        quality: ThirdPartyAudioQuality = NetworkAudioQuality.thirdPartyPreferred,
         strict: Bool = false,
         excludedHosts: Set<String> = []
     ) async -> Resolved? {
