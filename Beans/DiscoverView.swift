@@ -1203,7 +1203,7 @@ struct DiscoverView: View {
                             player.play(songs: dailySongs, startAt: index)
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
-                                CoverImage(url: song.coverURL, size: isNativeClean ? 156 : 108, cornerRadius: isNativeClean ? 14 : 16)
+                                CoverImage(url: song.coverURL, song: song, size: isNativeClean ? 156 : 108, cornerRadius: isNativeClean ? 14 : 16)
                                     .overlay(alignment: .topLeading) {
                                     if showSongVIPBadge, song.isVIP {
                                             Text("VIP")

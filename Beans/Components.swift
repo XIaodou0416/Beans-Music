@@ -748,6 +748,7 @@ struct BeansShimmerSkeleton: View {
 
 struct CoverImage: View {
     let url: URL?
+    var song: Song? = nil
     var size: CGFloat
     var aspectRatio: CGFloat = 1
     var cornerRadius: CGFloat = 12
@@ -761,7 +762,7 @@ struct CoverImage: View {
     // 布局尺寸完全由外层固定容器决定；AsyncImage 只放在 overlay 中渲染，
     // 图片加载完成与否都不会改变任何布局尺寸（根治"封面加载后错乱"）。
     var body: some View {
-        let resolvedURL = customCovers.resolvedURL(for: url)
+        let resolvedURL = customCovers.url(for: song) ?? customCovers.resolvedURL(for: url)
         let usesCustomMediaRenderer = customCovers.isStoredCover(resolvedURL)
         let cachedImage = imageLoader.image ?? BeansCoverImageStore.cachedImage(for: resolvedURL)
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -793,7 +794,13 @@ struct CoverImage: View {
                 if !usesCustomMediaRenderer { imageLoader.load(url: resolvedURL) }
             }
             .onChange(of: url) { nextURL in
-                let resolvedURL = customCovers.resolvedURL(for: nextURL)
+                let resolvedURL = customCovers.url(for: song) ?? customCovers.resolvedURL(for: nextURL)
+                if !customCovers.isStoredCover(resolvedURL) {
+                    imageLoader.load(url: resolvedURL)
+                }
+            }
+            .onChange(of: song?.identityKey) { _ in
+                let resolvedURL = customCovers.url(for: song) ?? customCovers.resolvedURL(for: url)
                 if !customCovers.isStoredCover(resolvedURL) {
                     imageLoader.load(url: resolvedURL)
                 }

@@ -34,7 +34,7 @@ struct SongCell: View {
     private var rowContent: some View {
         HStack(spacing: 12) {
             if showCover {
-                CoverImage(url: song.coverURL, size: 46, cornerRadius: 10)
+                CoverImage(url: song.coverURL, song: song, size: 46, cornerRadius: 10)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {

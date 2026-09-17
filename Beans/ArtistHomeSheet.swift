@@ -212,7 +212,7 @@ struct ArtistHomeSheet: View {
                                     .font(BeansFont.appFont(13, .semibold, .rounded))
                                     .foregroundStyle(index < 3 ? Color.beansAmber : Color.beansComment)
                                     .frame(width: 22)
-                                CoverImage(url: song.coverURL, size: 40, cornerRadius: 8)
+                                CoverImage(url: song.coverURL, song: song, size: 40, cornerRadius: 8)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(song.name)
                                         .font(BeansFont.appFont(14, .medium))

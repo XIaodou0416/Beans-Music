@@ -111,6 +111,7 @@ struct MiniPlayerView: View {
         HStack(alignment: .top, spacing: 8) {
             CoverImage(
                 url: player.currentSong?.coverURL,
+                song: player.currentSong,
                 size: presentation.isInline ? 28 : 32,
                 cornerRadius: 7
             )

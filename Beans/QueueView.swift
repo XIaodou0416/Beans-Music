@@ -55,7 +55,7 @@ struct QueueView: View {
 
     private var queueHeader: some View {
         HStack(spacing: 16) {
-            CoverImage(url: player.currentSong?.coverURL, size: 82, cornerRadius: 16)
+            CoverImage(url: player.currentSong?.coverURL, song: player.currentSong, size: 82, cornerRadius: 16)
                 .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
 
             VStack(alignment: .leading, spacing: 5) {
@@ -146,7 +146,7 @@ struct QueueView: View {
             player.playQueueIndex(index)
         } label: {
             HStack(spacing: 12) {
-                CoverImage(url: song.coverURL, size: 48, cornerRadius: 12)
+                CoverImage(url: song.coverURL, song: song, size: 48, cornerRadius: 12)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(song.name)
                         .font(BeansFont.appFont(15, isCurrent ? .semibold : .medium))

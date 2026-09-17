@@ -327,7 +327,7 @@ final class BeansCarPlayCoordinator: NSObject {
     private func makeTrackItem(_ song: Song, tracks: [Song], startIndex: Int) -> CPListItem {
         let item = CPListItem(text: song.name, detailText: song.artists)
         item.accessoryType = .none
-        setArtwork(for: item, url: song.coverURL)
+        setArtwork(for: item, url: CustomSongCoverStore.shared.url(for: song) ?? song.coverURL)
         item.handler = { [weak self] _, completion in
             self?.player?.play(songs: tracks, startAt: startIndex)
             self?.showNowPlaying()
@@ -426,6 +426,10 @@ final class BeansCarPlayCoordinator: NSObject {
 
     private func setArtwork(for item: CPListItem, url: URL?) {
         guard let url else { return }
+        if url.isFileURL {
+            item.setImage(CustomCoverMedia.previewImage(at: url))
+            return
+        }
         Task { @MainActor in
             guard let (data, _) = try? await URLSession.shared.data(from: url),
                   let image = UIImage(data: data) else { return }

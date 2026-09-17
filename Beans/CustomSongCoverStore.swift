@@ -141,7 +141,12 @@ final class CustomSongCoverStore: ObservableObject {
 
     func resolvedURL(for sourceURL: URL?) -> URL? {
         guard let sourceURL else { return nil }
-        guard let entry = entries.values.first(where: { $0.sourceCoverURL == sourceURL.absoluteString }) else {
+        let sourceKey = Self.sourceCoverKey(for: sourceURL)
+        guard let entry = entries.values.first(where: { entry in
+            guard let storedURL = entry.sourceCoverURL else { return false }
+            return storedURL == sourceURL.absoluteString
+                || Self.sourceCoverKey(for: storedURL) == sourceKey
+        }) else {
             return sourceURL
         }
         let customURL = directory.appendingPathComponent(entry.filename)
@@ -257,6 +262,27 @@ final class CustomSongCoverStore: ObservableObject {
         guard retained != entries else { return }
         entries = retained
         persist()
+    }
+
+    private static func sourceCoverKey(for url: URL) -> String {
+        sourceCoverKey(for: url.absoluteString)
+    }
+
+    private static func sourceCoverKey(for rawURL: String) -> String {
+        guard var components = URLComponents(string: rawURL),
+              let host = components.host?.lowercased() else {
+            return rawURL
+        }
+        components.query = nil
+        components.fragment = nil
+        var path = components.percentEncodedPath
+        // QQ's cover host encodes requested dimensions in the path, while the album id remains stable.
+        path = path.replacingOccurrences(
+            of: "R[0-9]+x[0-9]+M",
+            with: "RM",
+            options: .regularExpression
+        )
+        return host + path
     }
 
     private func preparedJPEG(from data: Data) -> Data? {
