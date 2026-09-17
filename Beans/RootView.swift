@@ -153,8 +153,10 @@ struct RootView: View {
     }
 
     private var usesSystemPlayerDismissal: Bool {
-        // iOS 26 的系统下拉呈现会抢占全屏播放器内的触摸，
-        // 尤其是 Apple Music 队列的播放模式控制。统一使用顶部起始的兼容下拉手势。
+        // Keep iOS 26's native interactive dismissal. Queue controls route
+        // their actions through PlayerManager and remain independent of this
+        // presentation gesture.
+        if #available(iOS 26.0, *) { return true }
         return false
     }
 
