@@ -2077,7 +2077,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 DispatchQueue.global(qos: .utility).async { [weak self] in
                     let image: UIImage?
                     if artworkURL.isFileURL {
-                        image = CustomCoverMedia.previewImage(at: artworkURL)
+                        image = CustomCoverMedia.systemArtworkImage(at: artworkURL)
                     } else if let data = try? Data(contentsOf: artworkURL) {
                         image = UIImage(data: data)
                     } else {

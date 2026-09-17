@@ -42,6 +42,40 @@ enum CustomCoverMedia {
         }
     }
 
+    /// System media surfaces expect square artwork. Normalize video frames before handing them
+    /// to Now Playing so portrait source dimensions do not leak into the compact artwork layout.
+    static func systemArtworkImage(at url: URL) -> UIImage? {
+        guard let source = previewImage(at: url) else { return nil }
+        let normalized = normalizedImage(source)
+        let sourceSize = normalized.size
+        guard sourceSize.width > 0, sourceSize.height > 0 else { return normalized }
+
+        let side = min(max(sourceSize.width, sourceSize.height), 1600)
+        let targetSize = CGSize(width: side, height: side)
+        let scale = max(targetSize.width / sourceSize.width, targetSize.height / sourceSize.height)
+        let drawSize = CGSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+        let origin = CGPoint(
+            x: (targetSize.width - drawSize.width) / 2,
+            y: (targetSize.height - drawSize.height) / 2
+        )
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = true
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
+            normalized.draw(in: CGRect(origin: origin, size: drawSize))
+        }
+    }
+
+    private static func normalizedImage(_ image: UIImage) -> UIImage {
+        guard image.imageOrientation != .up else { return image }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = false
+        format.scale = image.scale
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
+    }
+
     static func animatedGIF(at url: URL) -> UIImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         let count = CGImageSourceGetCount(source)
