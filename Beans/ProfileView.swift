@@ -1420,6 +1420,7 @@ struct SettingsView: View {
     @State private var showUpdateResult = false
     @State private var disclaimerExpanded = false
     @State private var showFloatingImagePicker = false
+    @State private var settingsSearchText = ""
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1427,6 +1428,12 @@ struct SettingsView: View {
 
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
+
+    private func settingsMatches(_ terms: String...) -> Bool {
+        let query = settingsSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        return terms.joined(separator: " ").localizedCaseInsensitiveContains(query)
     }
 
     private var customSourceCount: Int {
@@ -1703,29 +1710,24 @@ struct SettingsView: View {
     var body: some View {
         BeansNavigationStack {
             ZStack {
-                // Keep the settings page on the same wallpaper/background as
-                // the home page while its controls remain plain surfaces.
-                GlassBackdrop(
-                    customColor: theme.customBackground,
-                    homeMode: true,
-                    wallpaperBlur: CGFloat(homeWallpaperBlur)
-                )
-                // The backdrop is decorative only; it must never participate
-                // in hit testing above the settings controls.
-                .allowsHitTesting(false)
+                Color(uiColor: .systemGroupedBackground)
+                    .ignoresSafeArea()
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        accountSection
-                        themeSection
-                        audioQualitySection
-                        playbackSection
-                        equalizerSection
-                        backupSection
-                        changelogSection
-                        settingsSupportSection
+                    LazyVStack(alignment: .leading, spacing: 20) {
+                        settingsSearchField
+                        coreSettingsGroup
+                        playbackSettingsGroup
+                        utilitySettingsGroup
+                        if !hasSettingsSearchResults {
+                            Text("没有找到相关设置")
+                                .font(BeansFont.appFont(14))
+                                .foregroundStyle(Color.beansComment)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 32)
+                        }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.top, 14)
                     .padding(.bottom, 40)
                     .beansAdaptiveContentWidth()
                 }
@@ -1734,8 +1736,17 @@ struct SettingsView: View {
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 42, height: 42)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Circle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -1851,6 +1862,152 @@ struct SettingsView: View {
         }
     }
 
+    private var settingsSearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.secondary)
+            TextField("搜索设置", text: $settingsSearchText)
+                .font(BeansFont.appFont(16, .medium))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !settingsSearchText.isEmpty {
+                Button {
+                    settingsSearchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Color.secondary.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 48)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
+        .overlay {
+            Capsule()
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var showAccountSettings: Bool {
+        settingsMatches("账号 登录 网易云 QQ 酷狗")
+    }
+
+    private var showAppearanceSettings: Bool {
+        settingsMatches("主题 外观 背景 壁纸 字体 底栏 颜色")
+    }
+
+    private var showPlatformSettings: Bool {
+        settingsMatches("平台 显示 网易云 QQ 酷狗")
+    }
+
+    private var showAudioSettings: Bool {
+        settingsMatches("音源 音质 网络 Wi-Fi 蜂窝 导入")
+    }
+
+    private var showPlaybackSettings: Bool {
+        settingsMatches("播放 触感 锁屏 灵动岛 收藏")
+    }
+
+    private var showEqualizerSettings: Bool {
+        settingsMatches("均衡器 音效")
+    }
+
+    private var showBackupSettings: Bool {
+        settingsMatches("备份 恢复 导出 导入")
+    }
+
+    private var showChangelogSettings: Bool {
+        settingsMatches("更新 日志 版本")
+    }
+
+    private var showSupportSettings: Bool {
+        settingsMatches("帮助 反馈 声明 检查更新")
+    }
+
+    private var hasSettingsSearchResults: Bool {
+        showAccountSettings || showAppearanceSettings || showPlatformSettings
+            || showAudioSettings || showPlaybackSettings || showEqualizerSettings
+            || showBackupSettings || showChangelogSettings || showSupportSettings
+    }
+
+    @ViewBuilder
+    private var coreSettingsGroup: some View {
+        if showAccountSettings || showAppearanceSettings || showPlatformSettings {
+            SettingsCatalogGroup {
+                if showAccountSettings {
+                    accountSection
+                }
+                if showAccountSettings && (showAppearanceSettings || showPlatformSettings) {
+                    catalogDivider
+                }
+                if showAppearanceSettings {
+                    appearanceSection
+                }
+                if showAppearanceSettings && showPlatformSettings {
+                    catalogDivider
+                }
+                if showPlatformSettings {
+                    platformSection
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var playbackSettingsGroup: some View {
+        if showAudioSettings || showPlaybackSettings || showEqualizerSettings {
+            SettingsCatalogGroup {
+                if showAudioSettings {
+                    audioQualitySection
+                }
+                if showAudioSettings && (showPlaybackSettings || showEqualizerSettings) {
+                    catalogDivider
+                }
+                if showPlaybackSettings {
+                    playbackSection
+                }
+                if showPlaybackSettings && showEqualizerSettings {
+                    catalogDivider
+                }
+                if showEqualizerSettings {
+                    equalizerSection
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var utilitySettingsGroup: some View {
+        if showBackupSettings || showChangelogSettings || showSupportSettings {
+            SettingsCatalogGroup {
+                if showBackupSettings {
+                    backupSection
+                }
+                if showBackupSettings && (showChangelogSettings || showSupportSettings) {
+                    catalogDivider
+                }
+                if showChangelogSettings {
+                    changelogSection
+                }
+                if showChangelogSettings && showSupportSettings {
+                    catalogDivider
+                }
+                if showSupportSettings {
+                    settingsSupportSection
+                }
+            }
+        }
+    }
+
+    private var catalogDivider: some View {
+        Divider()
+            .overlay(Color.primary.opacity(0.09))
+            .padding(.leading, 48)
+    }
+
     private func officialQualityPills(_ selection: Binding<BeansAudioQuality>) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -1929,9 +2086,9 @@ struct SettingsView: View {
                 }
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "waveform.badge.magnifyingglass")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.beansAmber)
+                Image(systemName: "waveform.badge.magnifyingglass")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("音源与音质")
@@ -1946,9 +2103,8 @@ struct SettingsView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Color.beansComment.opacity(0.6))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 13)
-                .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 14)
                 .contentShape(Rectangle())
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.98))
@@ -2001,9 +2157,8 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(16)
-                .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)) }
-                .beansCardShadow(radius: 9, y: 3)
+                .padding(.horizontal, 4)
+                .padding(.bottom, 14)
                 .transition(.opacity.combined(with: .move(edge: .top)))
                 .task(id: thirdPartyAudioQualityOptionsSignature) {
                     normalizeThirdPartyAudioQualitySelection()
@@ -2028,7 +2183,7 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: "person.crop.circle.badge.checkmark")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.beansAmber)
+                    .foregroundStyle(Color.accentColor)
                     .frame(width: 30)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(beansLocalized("账号登录", "Account sign-in"))
@@ -2040,10 +2195,8 @@ struct SettingsView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.beansComment.opacity(0.65))
             }
-            .padding(14)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.98))
@@ -2090,7 +2243,7 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "checklist")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.beansAmber)
+                        .foregroundStyle(Color.accentColor)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("平台显示")
@@ -2102,21 +2255,16 @@ struct SettingsView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Color.beansComment.opacity(0.6))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 13)
-                .background {
-                    BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 14)
                 .contentShape(Rectangle())
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.98))
 
             if platformExpanded {
                 PlatformPreferencePicker()
-                    .padding(14)
-                    .background {
-                        BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    }
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 14)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -2135,7 +2283,7 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "paintpalette.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.beansAmber)
+                        .foregroundStyle(Color.accentColor)
                         .frame(width: 28)
                     Text("主题模式")
                         .font(BeansFont.appFont(15))
@@ -2145,12 +2293,8 @@ struct SettingsView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Color.beansComment.opacity(0.6))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 13)
-                .background {
-                                        BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.horizontal, 4)
+                .padding(.vertical, 14)
                 .contentShape(Rectangle())
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.98))
@@ -2831,11 +2975,8 @@ struct SettingsView: View {
                 }
                 .tint(Color.beansAmber)
             }
-            .padding(16)
-            .background {
-                        BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        }
-            .beansCardShadow(radius: 9, y: 3)
+            .padding(.horizontal, 4)
+            .padding(.bottom, 14)
             }
         }
     }
@@ -2849,7 +2990,7 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.beansAmber)
+                    .foregroundStyle(Color.accentColor)
                     .frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(beansLocalized("均衡器", "Equalizer"))
@@ -2864,11 +3005,8 @@ struct SettingsView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.beansComment.opacity(0.6))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.98))
@@ -2885,7 +3023,7 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.beansAmber)
+                        .foregroundStyle(Color.accentColor)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("播放设置")
@@ -2897,11 +3035,8 @@ struct SettingsView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Color.beansComment.opacity(0.6))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 13)
-                .background {
-                    BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 14)
                 .contentShape(Rectangle())
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.98))
@@ -3051,11 +3186,8 @@ struct SettingsView: View {
                 .tint(Color.beansAmber)
 
             }
-            .padding(16)
-            .background {
-                                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            }
-            .beansCardShadow(radius: 9, y: 3)
+            .padding(.horizontal, 4)
+            .padding(.bottom, 14)
             .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -3069,9 +3201,9 @@ struct SettingsView: View {
                 showChangelog = true
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.beansAmber)
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.accentColor)
                         .frame(width: 28)
                     Text("更新日志")
                         .font(BeansFont.appFont(15))
@@ -3084,13 +3216,10 @@ struct SettingsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.beansComment.opacity(0.6))
                 }
-                .padding(16)
-                .background {
-                                    BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 14)
             }
             .buttonStyle(.plain)
-            .beansCardShadow(radius: 8, y: 3)
         }
     }
     private var backupSection: some View {
@@ -3103,7 +3232,7 @@ struct SettingsView: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "externaldrive.fill")
-                        .foregroundStyle(Color.beansAmber)
+                        .foregroundStyle(Color.accentColor)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("备份与恢复")
                             .font(BeansFont.appFont(15))
@@ -3113,10 +3242,8 @@ struct SettingsView: View {
                     Image(systemName: backupExpanded ? "chevron.up" : "chevron.down")
                         .foregroundStyle(Color.beansComment)
                 }
-                .padding(14)
-                .background {
-                    BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 14)
             }
             .buttonStyle(.plain)
 
@@ -3467,13 +3594,12 @@ struct SettingsView: View {
     }
 
     private var settingsSupportSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "帮助与说明")
+        VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: 0) {
                 settingsSupportButton(
                     icon: checkingUpdate ? "arrow.triangle.2.circlepath" : "checkmark.circle.fill",
                     title: checkingUpdate ? "正在检查更新…" : "检查更新",
-                    tint: Color.beansHighlight
+                    tint: Color.accentColor
                 ) {
                     guard !checkingUpdate else { return }
                     checkingUpdate = true
@@ -3490,15 +3616,12 @@ struct SettingsView: View {
                 settingsSupportButton(
                     icon: "bubble.left.and.exclamationmark.bubble.right.fill",
                     title: "问题反馈",
-                    tint: Color.beansHighlight
+                    tint: Color.accentColor
                 ) {
                     showFeedback = true
                 }
             }
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            }
-
+            catalogDivider
             VStack(alignment: .leading, spacing: 8) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { disclaimerExpanded.toggle() }
@@ -3524,12 +3647,11 @@ struct SettingsView: View {
                         disclaimerRow(5, "若有版权侵权问题，版权方可联系开发者，我方将第一时间下架相关内容。")
                         disclaimerRow(6, "使用者默认同意本免责条款，禁止用于商业、盈利、侵权传播场景。")
                     }
+                    .padding(.top, 8)
                 }
             }
-            .padding(14)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 14)
         }
     }
 
@@ -3662,6 +3784,27 @@ struct SettingsView: View {
 }
 
 // MARK: - 均衡器
+
+private struct SettingsCatalogGroup<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content
+        }
+            .padding(.horizontal, 16)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+    }
+}
 
 struct EqualizerSettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
