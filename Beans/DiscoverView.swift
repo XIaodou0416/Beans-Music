@@ -2055,7 +2055,6 @@ struct DiscoverView: View {
         personalized = snapshot.personalized
         qqTopLists = snapshot.qqTopLists
         kugouTopLists = snapshot.kugouTopLists
-        CoverImagePrefetcher.shared.prefetch(snapshot: snapshot)
     }
 
     private var hasAnyData: Bool {
