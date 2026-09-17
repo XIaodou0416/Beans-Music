@@ -987,7 +987,7 @@ struct AlbumDetailView: View {
                 isLoading = false
                 errorMessage = nil
             }
-            if cache.isFresh(cached) {
+            if cache.isFresh(cached), !BeansNetworkStatus.shared.isReachable {
                 return
             }
         }

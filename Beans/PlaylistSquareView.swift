@@ -469,7 +469,7 @@ struct PlaylistSquareView: View {
             expanded = false
             errorMessage = nil
             isLoading = false
-            if cache.isFresh(entry) { return }
+            if cache.isFresh(entry), !BeansNetworkStatus.shared.isReachable { return }
         }
 
         isLoading = true

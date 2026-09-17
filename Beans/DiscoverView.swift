@@ -1857,7 +1857,7 @@ struct DiscoverView: View {
             errorMessage = nil
             lastLoadedKey = loadKey
             lastLoadedAt = Date()
-            if cache.isFresh(cached, source: requestedSource) { return }
+            if cache.isFresh(cached, source: requestedSource), !BeansNetworkStatus.shared.isReachable { return }
             // 缓存过期：先用缓存展示，后台静默刷新
         } else {
             loading = true
@@ -2150,7 +2150,7 @@ struct QQTopListDetailView: View {
             tracks = cached.songs
             loading = false
             errorMessage = nil
-            if cache.isFresh(cached) {
+            if cache.isFresh(cached), !BeansNetworkStatus.shared.isReachable {
                 return
             }
         } else {
@@ -2515,7 +2515,7 @@ struct TopListDetailView: View {
             tracks = cached.songs
             loading = false
             errorMessage = nil
-            if cache.isFresh(cached) {
+            if cache.isFresh(cached), !BeansNetworkStatus.shared.isReachable {
                 return
             }
         } else {
@@ -2660,7 +2660,7 @@ struct KugouTopListDetailView: View {
             tracks = cached.songs
             loading = false
             errorMessage = nil
-            if cache.isFresh(cached) {
+            if cache.isFresh(cached), !BeansNetworkStatus.shared.isReachable {
                 return
             }
         } else {

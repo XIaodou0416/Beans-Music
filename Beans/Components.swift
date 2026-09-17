@@ -942,6 +942,10 @@ private final class BeansCoverImageLoader: ObservableObject {
                     self.didFail = true
                     return
                 }
+                BeansCoverImageStore.session.configuration.urlCache?.storeCachedResponse(
+                    CachedURLResponse(response: response, data: data),
+                    for: request
+                )
                 BeansCoverImageStore.memoryCache.setObject(image, forKey: url as NSURL)
                 self.image = image
             } catch {

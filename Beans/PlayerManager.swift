@@ -140,6 +140,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastNowPlayingArtworkKey: String?
     private var nowPlayingSongKey: String?
     private var nowPlayingInfo: [String: Any] = [:]
+    private var cachedAudioAttemptedSongKey: String?
     /// 酷狗高音质地址在部分账号/系统上会返回但无法由 AVPlayer 打开；每首歌只自动降级一次。
     private var kugouStandardFallbackSongKey: String?
     /// 第三方地址偶发过期或节点不可用时，按失败域名重试，避免同一节点反复进入播放器。
@@ -631,6 +632,7 @@ final class PlayerManager: NSObject, ObservableObject {
         thirdPartyPrefetchTask?.cancel()
         thirdPartyPrefetchTask = nil
         qqThirdPartyFallbackSongKey = nil
+        cachedAudioAttemptedSongKey = nil
         let initialProgress = max(0, min(resumeAt ?? 0, max(song.duration, 0)))
         // 切歌时同时解除旧 item，避免旧音频在新播放器建立期间残留输出。
         player?.pause()
@@ -644,6 +646,10 @@ final class PlayerManager: NSObject, ObservableObject {
         loadFailed = false
         pushHistory(song)
         savePersistedPlaybackState()
+        if !BeansNetworkStatus.shared.isReachable,
+           playCachedAudioIfAvailable(song: song, resumeAt: initialProgress) {
+            return
+        }
         Task {
             var urlString: String?
             var resolvedThirdParty: UnblockService.Resolved?
@@ -720,6 +726,9 @@ final class PlayerManager: NSObject, ObservableObject {
             guard let urlString, let url = URL(string: urlString) else {
                 await MainActor.run {
                     guard generation == self.loadGeneration else { return }
+                    if self.playCachedAudioIfAvailable(song: song, resumeAt: initialProgress) {
+                        return
+                    }
                     self.isBuffering = false
                     self.loadFailed = true
                     let failureMessage = beansLocalized(
@@ -1236,6 +1245,7 @@ final class PlayerManager: NSObject, ObservableObject {
                           !self.playbackConfirmed else { return }
                     self.playbackConfirmed = true
                     self.showPendingThirdPartyVIPNoticeIfNeeded()
+                    self.cachePlayedAudio(song: loadedSong, sourceURL: url, headers: playbackHeaders)
                 }
                 self.playbackConfirmationWorkItem = confirmation
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: confirmation)
@@ -1317,6 +1327,24 @@ final class PlayerManager: NSObject, ObservableObject {
         updateNowPlaying()
     }
 
+    private func cachePlayedAudio(song: Song, sourceURL: URL, headers: [String: String]) {
+        guard !sourceURL.isFileURL else { return }
+        Task {
+            await PlaybackAudioCache.shared.cache(song: song, sourceURL: sourceURL, headers: headers)
+        }
+    }
+
+    @discardableResult
+    private func playCachedAudioIfAvailable(song: Song, resumeAt: Double) -> Bool {
+        guard cachedAudioAttemptedSongKey != song.identityKey,
+              let cachedURL = PlaybackAudioCache.shared.cachedURL(for: song) else {
+            return false
+        }
+        cachedAudioAttemptedSongKey = song.identityKey
+        setupPlayer(url: cachedURL, resumeAt: resumeAt)
+        return true
+    }
+
     /// AVFoundation KVO callbacks are not guaranteed to arrive on the main
     /// thread. Serialize callbacks that touch ObservableObject state before
     /// reading or mutating the player model.
@@ -1333,6 +1361,11 @@ final class PlayerManager: NSObject, ObservableObject {
         reason: String,
         message: String? = nil
     ) {
+        if let failedSong = song,
+           currentSong?.identityKey == failedSong.identityKey,
+           playCachedAudioIfAvailable(song: failedSong, resumeAt: progress) {
+            return
+        }
         loadFailed = true
         isBuffering = false
         isPlaying = false

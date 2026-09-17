@@ -197,7 +197,7 @@ struct PlaylistView: View {
         if let cached = cache.cachedSongs(playlist: playlist, accountID: cacheAccountID) {
             tracks = cached.songs
             loading = false
-            if !force, cache.isFresh(cached) {
+            if !force, cache.isFresh(cached), !BeansNetworkStatus.shared.isReachable {
                 return
             }
         } else {

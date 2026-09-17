@@ -72,7 +72,7 @@ final class AuthStore: ObservableObject {
         let accountID = "\(user.uid)"
         if let cached = SyncedPlaylistCache.shared.cachedPlaylists(source: .netease, accountID: accountID) {
             playlists = cached.playlists.filter { $0.name != "我喜欢的音乐" }
-            if !force, SyncedPlaylistCache.shared.isFresh(cached) {
+            if !force, SyncedPlaylistCache.shared.isFresh(cached), !BeansNetworkStatus.shared.isReachable {
                 return
             }
         }

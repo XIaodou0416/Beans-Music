@@ -328,7 +328,7 @@ struct ArtistHomeSheet: View {
             loading = false
             errorMessage = nil
             hasCachedContent = true
-            if cache.isFresh(cached) {
+            if cache.isFresh(cached), !BeansNetworkStatus.shared.isReachable {
                 return
             }
         } else {

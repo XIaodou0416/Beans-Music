@@ -834,7 +834,7 @@ struct RootView: View {
             let accountID = qqAuth.rawUin.isEmpty ? qqAuth.playlistUin : qqAuth.rawUin
             if let cached = SyncedPlaylistCache.shared.cachedPlaylists(source: .qq, accountID: accountID) {
                 loaded.append(contentsOf: cached.playlists)
-                if !SyncedPlaylistCache.shared.isFresh(cached),
+                if BeansNetworkStatus.shared.isReachable,
                    let list = try? await QQMusicAPI.shared.userPlaylists(uin: qqAuth.uin), !list.isEmpty {
                     loaded = loaded.filter { $0.source != .qq }
                     loaded.append(contentsOf: list)
@@ -850,7 +850,7 @@ struct RootView: View {
             let accountID = kugouAuth.userId
             if let cached = SyncedPlaylistCache.shared.cachedPlaylists(source: .kugou, accountID: accountID) {
                 loaded.append(contentsOf: cached.playlists)
-                if !SyncedPlaylistCache.shared.isFresh(cached),
+                if BeansNetworkStatus.shared.isReachable,
                    let list = try? await KugouMusicAPI.shared.userPlaylists(), !list.isEmpty {
                     loaded = loaded.filter { $0.source != .kugou }
                     loaded.append(contentsOf: list)
