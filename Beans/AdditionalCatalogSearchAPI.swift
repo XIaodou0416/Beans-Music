@@ -54,7 +54,7 @@ enum AdditionalCatalogSearchAPI {
     }
 
     static func searchMigu(keyword: String, limit: Int = 40) async throws -> [Song] {
-        let root = try await miguSearch(keyword: keyword, limit: limit, switchValue: "{\"song\":1,\"album\":0,\"singer\":0,\"tagSong\":0,\"mvSong\":0,\"songlist\":0,\"bestShow\":0}")
+        let root = try await miguSongSearch(keyword: keyword, limit: limit)
         return dictionaries(in: (root["songResultData"] as? [String: Any])?["resultList"]).compactMap(miguSong)
     }
 
@@ -114,7 +114,7 @@ enum AdditionalCatalogSearchAPI {
         let idText = rawID?.replacingOccurrences(of: "MUSIC_", with: "") ?? ""
         guard let id = Int(idText), id > 0 else { return nil }
         let duration = seconds(item["DURATION"] ?? item["duration"])
-        let image = kuwoImageURL(text(item["web_albumpic_short"]) ?? text(item["albumpic"]) ?? text(item["PICPATH"]))
+        let image = kuwoImageURL(text(item["web_albumpic_short"]) ?? text(item["albumpic"]) ?? text(item["PICPATH"]) ?? text(item["hts_MVPIC"]))
         return Song(
             id: id,
             name: text(item["SONGNAME"]) ?? text(item["name"]) ?? "",
@@ -189,6 +189,39 @@ enum AdditionalCatalogSearchAPI {
         return root
     }
 
+    private static func miguSongSearch(keyword: String, limit: Int) async throws -> [String: Any] {
+        let timestamp = String(Int(Date().timeIntervalSince1970 * 1000))
+        let deviceID = "963B7AA0D21511ED807EE5846EC87D20"
+        let signatureSeed = "\(keyword)6cdc72a439cef99a3418d2a78aa28c73yyapp2d16148780a1dcc7408e06336b98cfd50\(deviceID)\(timestamp)"
+        var components = URLComponents(string: "https://jadeite.migu.cn/music_search/v3/search/searchAll")!
+        components.queryItems = [
+            URLQueryItem(name: "isCorrect", value: "0"),
+            URLQueryItem(name: "isCopyright", value: "1"),
+            URLQueryItem(name: "searchSwitch", value: "{\"song\":1,\"album\":0,\"singer\":0,\"tagSong\":1,\"mvSong\":0,\"bestShow\":1,\"songlist\":0,\"lyricSong\":0}"),
+            URLQueryItem(name: "pageSize", value: String(min(max(limit, 1), 50))),
+            URLQueryItem(name: "text", value: keyword),
+            URLQueryItem(name: "pageNo", value: "1"),
+            URLQueryItem(name: "sort", value: "0"),
+            URLQueryItem(name: "sid", value: "USS"),
+        ]
+        do {
+            let root = try await fetchObject(
+                components.url!,
+                headers: [
+                    "uiVersion": "A_music_3.6.1",
+                    "deviceId": deviceID,
+                    "timestamp": timestamp,
+                    "sign": md5(signatureSeed),
+                    "channel": "0146921",
+                    "User-Agent": browserUserAgent,
+                ]
+            )
+            guard text(root["code"]) == "000000" else { throw AdditionalCatalogSearchError.invalidResponse }
+            return root
+        } catch {
+            return try await miguSearch(keyword: keyword, limit: limit, switchValue: "{\"song\":1,\"album\":0,\"singer\":0,\"tagSong\":0,\"mvSong\":0,\"songlist\":0,\"bestShow\":0}")
+        }
+
     private static func dictionaries(in value: Any?) -> [[String: Any]] {
         if let dictionary = value as? [String: Any] {
             return [dictionary] + dictionary.values.flatMap { dictionaries(in: $0) }
@@ -257,12 +290,13 @@ enum AdditionalCatalogSearchAPI {
     private static func kuwoImageURL(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return nil }
         if value.hasPrefix("http") { return value.replacingOccurrences(of: "http://", with: "https://") }
-        return "https://img1.kuwo.cn/star/albumcover/500/\(value.trimmingCharacters(in: CharacterSet(charactersIn: "/")))"
+        return "https://img1.kuwo.cn/star/albumcover/\(value.trimmingCharacters(in: CharacterSet(charactersIn: "/")))"
     }
 
     private static func miguImageURL(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return nil }
-        return value.hasPrefix("/") ? "https://d.musicapp.migu.cn\(value)" : value
+        if value.hasPrefix("/") { return "https://d.musicapp.migu.cn\(value)" }
+        return value.replacingOccurrences(of: "http://", with: "https://")
     }
 
     private static let browserUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"

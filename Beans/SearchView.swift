@@ -335,20 +335,15 @@ struct SearchView: View {
             TabBarAppearanceConfigurator()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    searchField
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
                     contentArea
-                    Color.clear.frame(height: 74)
                 }
-                .padding(.top, 8)
                 .frame(maxWidth: .infinity, alignment: .top)
             }
             .beansScrollIndicatorsHidden()
             .beansScrollDismissesKeyboard()
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            searchField
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .zIndex(20)
         }
     }
 
@@ -473,9 +468,6 @@ struct SearchView: View {
                     providerButton(candidate)
                 }
             }
-            .padding(4)
-            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
-            .clipShape(Capsule())
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
