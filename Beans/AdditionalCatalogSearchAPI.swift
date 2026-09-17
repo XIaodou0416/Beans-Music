@@ -60,6 +60,101 @@ enum AdditionalCatalogSearchAPI {
         return dictionaries(in: (root["songResultData"] as? [String: Any])?["resultList"]).compactMap(miguSong)
     }
 
+    static func searchKuwoPlaylists(keyword: String, limit: Int = 40) async throws -> [Playlist] {
+        let root = try await kuwoSearch(keyword: keyword, limit: limit, type: "playlist")
+        let items = dictionaries(in: root["abslist"] ?? root["playlist"] ?? root["list"] ?? root["data"])
+        return items.compactMap { item in
+            guard let id = int(item["playlistid"] ?? item["playlistId"] ?? item["id"]), id > 0 else { return nil }
+            return Playlist(
+                id: id,
+                name: text(item["name"] ?? item["title"] ?? item["playlistname"]) ?? "未命名歌单",
+                coverURL: kuwoImageURL(text(item["pic"] ?? item["img"] ?? item["cover"])).flatMap(URL.init(string:)),
+                trackCount: int(item["songnum"] ?? item["songcount"]) ?? 0,
+                playCount: int(item["playcnt"] ?? item["playCount"]) ?? 0,
+                creatorName: text(item["nickname"] ?? item["uname"] ?? item["creator"]) ?? "",
+                playlistDescription: text(item["intro"] ?? item["desc"] ?? item["description"]) ?? "",
+                source: .kuwo
+            )
+        }
+    }
+
+    static func searchKugouPlaylists(keyword: String, limit: Int = 40) async throws -> [Playlist] {
+        var components = URLComponents(string: "https://msearchretry.kugou.com/api/v3/search/special")!
+        components.queryItems = [
+            URLQueryItem(name: "keyword", value: keyword),
+            URLQueryItem(name: "page", value: "1"),
+            URLQueryItem(name: "pagesize", value: String(min(max(limit, 1), 60))),
+            URLQueryItem(name: "showtype", value: "10"),
+            URLQueryItem(name: "filter", value: "0"),
+            URLQueryItem(name: "version", value: "7910"),
+            URLQueryItem(name: "sver", value: "2"),
+        ]
+        let root = try await fetchObject(components.url!, headers: ["User-Agent": browserUserAgent])
+        let items = dictionaries(in: root["info"] ?? root["special_list"] ?? root["list"] ?? root["data"])
+        return items.compactMap { item in
+            guard let id = int(item["specialid"] ?? item["specialId"]), id > 0 else { return nil }
+            return Playlist(
+                id: id,
+                name: text(item["specialname"] ?? item["name"] ?? item["title"]) ?? "未命名歌单",
+                coverURL: kugouImageURL(text(item["imgurl"] ?? item["img"] ?? item["cover"])).flatMap(URL.init(string:)),
+                trackCount: int(item["songcount"] ?? item["songCount"]) ?? 0,
+                playCount: int(item["playcount"] ?? item["playCount"]) ?? 0,
+                creatorName: text(item["nickname"] ?? item["creator"]) ?? "",
+                playlistDescription: text(item["intro"] ?? item["desc"] ?? item["description"]) ?? "",
+                source: .kugou
+            )
+        }
+    }
+
+    static func searchMiguPlaylists(keyword: String, limit: Int = 40) async throws -> [Playlist] {
+        let root = try await miguSearch(
+            keyword: keyword,
+            limit: limit,
+            switchValue: "{\"song\":0,\"album\":0,\"singer\":0,\"tagSong\":0,\"mvSong\":0,\"bestShow\":0,\"songlist\":1,\"lyricSong\":0}"
+        )
+        let values = dictionaries(in: root["songListResultData"] ?? root["songlistResultData"] ?? root["result"] ?? root["data"])
+        return values.compactMap { item in
+            guard let id = int(item["id"] ?? item["playlistId"] ?? item["contentId"]), id > 0 else { return nil }
+            return Playlist(
+                id: id,
+                name: text(item["name"] ?? item["title"] ?? item["listName"]) ?? "未命名歌单",
+                coverURL: miguImageURL(text(item["musicListPicUrl"] ?? item["img"] ?? item["cover"])).flatMap(URL.init(string:)),
+                trackCount: int(item["musicNum"] ?? item["songCount"]) ?? 0,
+                playCount: int(item["playNum"] ?? item["playCount"]) ?? 0,
+                creatorName: text(item["userName"] ?? item["nickname"]) ?? "",
+                playlistDescription: text(item["description"] ?? item["summary"]) ?? "",
+                source: .migu
+            )
+        }
+    }
+
+    static func playlistSongs(source: SongSource, id: Int) async throws -> [Song] {
+        switch source {
+        case .kuwo:
+            var components = URLComponents(string: "https://nplserver.kuwo.cn/pl.svc")!
+            components.queryItems = [
+                URLQueryItem(name: "op", value: "getlistinfo"),
+                URLQueryItem(name: "pid", value: String(id)),
+                URLQueryItem(name: "pn", value: "0"),
+                URLQueryItem(name: "rn", value: "1000"),
+                URLQueryItem(name: "encode", value: "utf8"),
+                URLQueryItem(name: "keyset", value: "pl2012"),
+                URLQueryItem(name: "identity", value: "kuwo"),
+                URLQueryItem(name: "pcmp4", value: "1"),
+                URLQueryItem(name: "vipver", value: "MUSIC_9.0.5.0_W1"),
+                URLQueryItem(name: "newver", value: "1"),
+            ]
+            let root = try await fetchObject(components.url!, headers: ["Referer": "https://www.kuwo.cn/", "User-Agent": browserUserAgent])
+            return dictionaries(in: root["musiclist"] ?? root["songlist"] ?? root["tracks"] ?? root["list"] ?? root["data"]).compactMap(kuwoSong)
+        case .migu:
+            let url = URL(string: "https://app.c.nf.migu.cn/MIGUM3.0/resource/playlist/song/v2.0?pageNo=1&pageSize=1000&playlistId=\(id)")!
+            let root = try await fetchObject(url, headers: ["Referer": "https://m.music.migu.cn/", "User-Agent": browserUserAgent])
+            return dictionaries(in: root["songList"] ?? root["songlist"] ?? root["tracks"] ?? root["list"] ?? root["data"]).compactMap(miguSong)
+        default:
+            throw AdditionalCatalogSearchError.invalidResponse
+        }
+    }
+
     static func searchKuwoArtists(keyword: String, limit: Int = 40) async throws -> [Artist] {
         let root = try await kuwoSearch(keyword: keyword, limit: limit, type: "artist")
         return dictionaries(in: root["abslist"]).compactMap { item in
@@ -426,6 +521,14 @@ enum AdditionalCatalogSearchAPI {
         if value.hasPrefix("//") { value = "https:\(value)" }
         if value.hasPrefix("/") { value = "https://d.musicapp.migu.cn\(value)" }
         return value.replacingOccurrences(of: "http://", with: "https://")
+    }
+
+    private static func kugouImageURL(_ value: String?) -> String? {
+        guard var value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        value = value.replacingOccurrences(of: "{size}", with: "400")
+        if value.hasPrefix("//") { value = "https:\(value)" }
+        if value.hasPrefix("http://") { value = value.replacingOccurrences(of: "http://", with: "https://") }
+        return value
     }
 
     private static let browserUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"

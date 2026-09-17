@@ -254,6 +254,8 @@ struct PlaylistView: View {
                     tracks = favorites.qqFavoriteSongs
                     BeansLogger.shared.log("QQ 我的喜欢页面网络结果为空，使用本地收藏回退 count=\(tracks.count)", level: tracks.isEmpty ? .warn : .info)
                 }
+            } else if playlist.source == .kuwo || playlist.source == .migu {
+                tracks = try await AdditionalCatalogSearchAPI.playlistSongs(source: playlist.source, id: playlist.id)
             } else {
                 tracks = try await NetEaseAPI.shared.playlistTracks(id: playlist.id)
             }

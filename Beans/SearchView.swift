@@ -77,10 +77,12 @@ enum SearchProvider: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-enum SearchResultType: String, CaseIterable, Identifiable {
-    case song = "歌曲"
+enum SearchResultType: String, CaseIterable, Identifiable, Hashable {
+    case all = "综合"
+    case song = "单曲"
     case artist = "歌手"
     case album = "专辑"
+    case playlist = "歌单"
 
     var id: String { rawValue }
 }
@@ -241,20 +243,23 @@ struct SearchView: View {
     private var searchProviders: [SearchCatalogProvider] { SearchCatalogProvider.allCases }
     /// 已加载热门搜索的 provider（避免切 tab 反复加载）
     @State private var hotLoadedProvider: SearchCatalogProvider?
-    @State private var resultType: SearchResultType = .song
+    @State private var resultType: SearchResultType = .all
     @State private var songResults: [Song] = []
     @State private var artistResults: [Artist] = []
     @State private var albumResults: [Album] = []
+    @State private var playlistResults: [Playlist] = []
     @State private var hotWords: [String] = []
     @State private var searching = false
     @State private var errorMessage: String?
     @State private var showAddToPlaylist: Song?
     @State private var selectedArtist: Artist?
     @State private var selectedAlbum: Album?
+    @State private var selectedPlaylist: Playlist?
     @ObservedObject private var historyStore = SearchHistoryStore.shared
     @State private var debounceTask: Task<Void, Never>?
     @State private var searchTask: Task<Void, Never>?
     @State private var showBatchDownload = false
+    @State private var artistCoverCache: [String: URL] = [:]
     /// UIKit 输入框控制器（提交拼音、收起键盘等由它统一处理）
     @State private var searchController = SearchFieldController()
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
@@ -286,6 +291,7 @@ struct SearchView: View {
                 songResults = []
                 artistResults = []
                 albumResults = []
+                playlistResults = []
                 errorMessage = nil
                 return
             }
@@ -296,9 +302,15 @@ struct SearchView: View {
             }
         }
         .onChange(of: provider) { _ in
-            if !provider.supportsDetailedResults { resultType = .song }
             let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
+            debounceTask?.cancel()
+            Task { await startSearch(trimmed) }
+        }
+        .onChange(of: resultType) { _ in
+            let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            BeansHaptics.tap()
             debounceTask?.cancel()
             Task { await startSearch(trimmed) }
         }
@@ -314,6 +326,14 @@ struct SearchView: View {
             AlbumDetailView(album: album)
                 .environmentObject(player)
                 .environmentObject(theme)
+        }
+        .sheet(item: $selectedPlaylist) { playlist in
+            BeansNavigationStack {
+                PlaylistView(playlist: playlist)
+                    .environmentObject(player)
+                    .environmentObject(auth)
+                    .environmentObject(theme)
+            }
         }
         .sheet(isPresented: $showBatchDownload) {
             BatchDownloadSheet(songs: songResults, title: "下载搜索结果")
@@ -367,9 +387,6 @@ struct SearchView: View {
                     searchField
                         .padding(.horizontal, 16)
                         .padding(.bottom, 10)
-                    legacyProviderPicker
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
                     legacyContentArea
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
@@ -388,25 +405,13 @@ struct SearchView: View {
         }
     }
 
-    private var legacyProviderPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(searchProviders) { candidate in
-                    providerButton(candidate)
-                }
-            }
-            .padding(4)
-            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
-            .clipShape(Capsule())
-        }
-    }
-
     @ViewBuilder
     private var legacyContentArea: some View {
         if keyword.isEmpty {
             hotSection
         } else {
             VStack(spacing: 0) {
+                resultProviderPicker
                 typeTabs
                 resultsArea
             }
@@ -442,6 +447,7 @@ struct SearchView: View {
                 songResults = []
                 artistResults = []
                 albumResults = []
+                playlistResults = []
                 errorMessage = nil
                 debounceTask?.cancel()
             },
@@ -466,11 +472,23 @@ struct SearchView: View {
     // MARK: - 搜索结果平台选择
 
     private var resultProviderPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(searchProviders) { candidate in
-                    providerButton(candidate)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("搜索平台")
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(Color.beansComment)
+                Spacer(minLength: 0)
+                Text(provider.rawValue)
+                    .font(BeansFont.appFont(12, .semibold))
+                    .foregroundStyle(Color.beansAmber)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(searchProviders) { candidate in
+                        providerButton(candidate)
+                    }
                 }
+                .padding(.vertical, 1)
             }
         }
         .padding(.horizontal, 20)
@@ -483,7 +501,13 @@ struct SearchView: View {
             guard provider != candidate else { return }
             provider = candidate
         } label: {
-            Text(LocalizedStringKey(candidate.rawValue))
+            HStack(spacing: 5) {
+                if provider == candidate {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                Text(LocalizedStringKey(candidate.rawValue))
+            }
                 .font(BeansFont.appFont(13, .semibold))
                 .foregroundStyle(provider == candidate ? Color.white : Color.beansLabel)
                 .padding(.horizontal, 14)
@@ -503,51 +527,15 @@ struct SearchView: View {
     // MARK: - 分类选择（歌曲 / 歌手 / 专辑）
 
     private var typeTabs: some View {
-        HStack(spacing: 4) {
-            ForEach(availableResultTypes) { type in
-                Button {
-                    selectResultType(type)
-                } label: {
-                    Text(LocalizedStringKey(type.rawValue))
-                        .font(BeansFont.appFont(13, .semibold))
-                        .foregroundStyle(resultType == type ? Color.white : Color.beansLabel)
-                        .frame(maxWidth: .infinity, minHeight: 34)
-                        .background {
-                            if resultType == type {
-                                Capsule().fill(Color.beansAmber)
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
+        Picker("搜索类型", selection: $resultType) {
+            ForEach(SearchResultType.allCases) { type in
+                Text(LocalizedStringKey(type.rawValue)).tag(type)
             }
         }
-        .padding(4)
-        .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
-        .clipShape(Capsule())
+        .pickerStyle(.segmented)
+        .tint(Color.beansAmber)
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
-    }
-
-    private var availableResultTypes: [SearchResultType] {
-        provider.supportsDetailedResults ? SearchResultType.allCases : [.song]
-    }
-
-    private func selectResultType(_ type: SearchResultType) {
-        BeansHaptics.tap()
-        guard resultType != type else { return }
-        resultType = type
-        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        debounceTask?.cancel()
-        searchTask?.cancel()
-        switch type {
-        case .song: songResults = []
-        case .artist: artistResults = []
-        case .album: albumResults = []
-        }
-        errorMessage = nil
-        searching = true
-        Task { await startSearch(trimmed) }
     }
 
     // MARK: - 热门搜索
@@ -559,10 +547,10 @@ struct SearchView: View {
                     .font(.system(size: 48, weight: .light))
                     .foregroundStyle(Color.beansComment.opacity(0.72))
                     .padding(.top, 44)
-                Text("搜索歌曲、歌手或专辑")
+                Text("搜索歌曲、歌手、专辑或歌单")
                     .font(BeansFont.appFont(18, .semibold))
                     .foregroundStyle(Color.beansLabel)
-                Text("使用底部搜索框开始搜索")
+                Text("使用搜索框开始，聚合搜索也可以切换到单个平台。")
                     .font(BeansFont.appFont(13))
                     .foregroundStyle(Color.beansComment)
                     .multilineTextAlignment(.center)
@@ -575,6 +563,9 @@ struct SearchView: View {
                         .font(BeansFont.appFont(16, .bold))
                         .foregroundStyle(Color.beansLabel)
                     Spacer(minLength: 0)
+                    Text(provider.rawValue)
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
                 }
 
                 if hotWords.isEmpty {
@@ -685,9 +676,11 @@ struct SearchView: View {
     @ViewBuilder
     private var resultsArea: some View {
         switch resultType {
+        case .all: allResultsArea
         case .song: songResultsArea
         case .artist: artistResultsArea
         case .album: albumResultsArea
+        case .playlist: playlistResultsArea
         }
     }
 
@@ -697,16 +690,195 @@ struct SearchView: View {
                 .frame(width: resultType == .song ? 160 : 132, height: 12)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
-            BeansSongRowsLoadingState(
-                rowCount: 8,
-                coverSize: resultType == .artist ? 46 : 46,
-                showsRank: false,
-                horizontalPadding: 20
-            )
+            if resultType == .all {
+                BeansSongRowsLoadingState(rowCount: 5, coverSize: 46, showsRank: false, horizontalPadding: 20)
+                HStack(spacing: 12) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        BeansShimmerSkeleton(cornerRadius: 14)
+                            .frame(width: 128, height: 156)
+                    }
+                }
+                .padding(.horizontal, 20)
+            } else {
+                BeansSongRowsLoadingState(
+                    rowCount: 8,
+                    coverSize: 46,
+                    showsRank: false,
+                    horizontalPadding: 20
+                )
+            }
         }
         .padding(.top, 4)
         .padding(.bottom, 180)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var isCurrentResultEmpty: Bool {
+        switch resultType {
+        case .all:
+            return songResults.isEmpty && artistResults.isEmpty && albumResults.isEmpty && playlistResults.isEmpty
+        case .song: return songResults.isEmpty
+        case .artist: return artistResults.isEmpty
+        case .album: return albumResults.isEmpty
+        case .playlist: return playlistResults.isEmpty
+        }
+    }
+
+    private var allResultsArea: some View {
+        Group {
+            if let errorMessage, isCurrentResultEmpty {
+                ErrorStateView(message: errorMessage) { submitSearch() }
+            } else if searching && isCurrentResultEmpty {
+                searchResultsLoadingState
+            } else if isCurrentResultEmpty {
+                EmptyStateView(icon: "magnifyingglass", text: "未找到相关结果")
+            } else {
+                VStack(alignment: .leading, spacing: 22) {
+                    if !songResults.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            searchSectionHeader("单曲") { resultType = .song }
+                            ForEach(Array(songResults.prefix(6).enumerated()), id: \.element.identityKey) { index, song in
+                                SongCell(song: song, suppressNativeCleanRowGlass: isNativeClean) {
+                                    BeansHaptics.tap()
+                                    player.play(songs: songResults, startAt: index)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+                            }
+                        }
+                    }
+                    if !artistResults.isEmpty {
+                        searchCardShelf(title: "歌手", seeAll: { resultType = .artist }) {
+                            ForEach(Array(artistResults.prefix(8))) { artist in
+                                artistCard(artist)
+                            }
+                        }
+                    }
+                    if !albumResults.isEmpty {
+                        searchCardShelf(title: "专辑", seeAll: { resultType = .album }) {
+                            ForEach(Array(albumResults.prefix(8))) { album in
+                                albumCard(album)
+                            }
+                        }
+                    }
+                    if !playlistResults.isEmpty {
+                        searchCardShelf(title: "歌单", seeAll: { resultType = .playlist }) {
+                            ForEach(Array(playlistResults.prefix(8))) { playlist in
+                                playlistCard(playlist)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 180)
+                .overlay(alignment: .top) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color.beansAmber)
+                        .padding(.top, 6)
+                        .opacity(searching ? 1 : 0)
+                }
+            }
+        }
+    }
+
+    private func searchSectionHeader(_ title: String, action: @escaping () -> Void) -> some View {
+        HStack {
+            Text(title)
+                .font(BeansFont.appFont(17, .bold))
+                .foregroundStyle(Color.beansLabel)
+            Spacer(minLength: 8)
+            Button(action: action) {
+                Label("查看全部", systemImage: "chevron.right")
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(Color.beansComment)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func searchCardShelf<Content: View>(
+        title: String,
+        seeAll: @escaping () -> Void,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            searchSectionHeader(title, action: seeAll)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 14, content: content)
+                    .padding(.horizontal, 1)
+            }
+        }
+    }
+
+    private func artistCard(_ artist: Artist) -> some View {
+        Button {
+            BeansHaptics.tap()
+            searchController.dismissKeyboard()
+            selectedArtist = artist
+        } label: {
+            VStack(spacing: 10) {
+                CoverImage(url: artist.coverURL ?? artistCoverCache[artist.id], size: 124, cornerRadius: 62)
+                    .overlay(Circle().stroke(Color.white.opacity(0.16), lineWidth: 1))
+                Text(artist.name)
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(1)
+            }
+            .frame(width: 132)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+    }
+
+    private func albumCard(_ album: Album) -> some View {
+        Button {
+            BeansHaptics.tap()
+            searchController.dismissKeyboard()
+            selectedAlbum = album
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                CoverImage(url: album.coverURL, size: 132, cornerRadius: 12)
+                Text(album.name)
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(1)
+                Text(album.artistName.isEmpty ? "未知歌手" : album.artistName)
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+                    .lineLimit(1)
+            }
+            .frame(width: 132, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+    }
+
+    private func playlistCard(_ playlist: Playlist) -> some View {
+        Button {
+            BeansHaptics.tap()
+            searchController.dismissKeyboard()
+            selectedPlaylist = playlist
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                CoverImage(url: playlist.coverURL, size: 132, cornerRadius: 12)
+                Text(playlist.name)
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(1)
+                Text([sourceDisplayName(playlist.source), playlist.creatorName]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " · "))
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+                    .lineLimit(1)
+            }
+            .frame(width: 132, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
     }
 
     private var songResultsArea: some View {
@@ -952,7 +1124,33 @@ struct SearchView: View {
 
     private func loadHotWords() async {
         if provider == .aggregate {
-            hotWords = (try? await NetEaseAPI.shared.hotSearch()) ?? []
+            let values = await withTaskGroup(of: [String].self, returning: [[String]].self) { group in
+                for candidate in searchProviders where candidate != .aggregate {
+                    group.addTask {
+                        switch candidate {
+                        case .netease:
+                            return (try? await NetEaseAPI.shared.hotSearch()) ?? []
+                        case .qq:
+                            return (try? await QQMusicAPI.shared.hotKeys()) ?? []
+                        case .kugou:
+                            return await KugouMusicAPI.shared.hotWords()
+                        case .kuwo, .migu:
+                            guard let source = candidate.songSource else { return [] }
+                            return (try? await AdditionalCatalogSearchAPI.hotKeywords(for: source)) ?? []
+                        case .aggregate:
+                            return []
+                        }
+                    }
+                }
+                var collected: [[String]] = []
+                for await result in group { collected.append(result) }
+                return collected
+            }
+            var seen = Set<String>()
+            hotWords = values.flatMap { $0 }.filter {
+                let normalized = $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                return !normalized.isEmpty && seen.insert(normalized.localizedLowercase).inserted
+            }
         } else if provider == .qq {
             if let words = try? await QQMusicAPI.shared.hotKeys() {
                 hotWords = words
@@ -976,103 +1174,129 @@ struct SearchView: View {
             await MainActor.run {
                 searching = true
                 errorMessage = nil
+                switch selectedType {
+                case .all:
+                    songResults = []
+                    artistResults = []
+                    albumResults = []
+                    playlistResults = []
+                case .song: songResults = []
+                case .artist: artistResults = []
+                case .album: albumResults = []
+                case .playlist: playlistResults = []
+                }
             }
-            BeansLogger.shared.log("搜索：\(selectedProvider.rawValue) [\(selectedType.rawValue)] \(trimmed)", level: .info)
             defer {
                 if !Task.isCancelled {
                     Task { @MainActor in searching = false }
                 }
             }
             do {
-                switch (selectedProvider, selectedType) {
-                case (.aggregate, .song):
-                    let songs = await catalogSongs(keyword: trimmed, provider: .aggregate, limit: 30)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run {
-                        songResults = songs
-                        if !songResults.isEmpty { BeansHaptics.success() }
-                    }
-                case (.aggregate, .artist), (.aggregate, .album),
-                     (.kuwo, .artist), (.kuwo, .album),
-                     (.migu, .artist), (.migu, .album):
-                    // 聚合、酷我和咪咕的目录接口以歌曲为主体；和目录适配层一致，
-                    // 从真实歌曲结果重建歌手与专辑，保留同一条目自带的封面。
-                    let songs = await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 80)
+                switch selectedType {
+                case .all:
+                    async let songsTask = catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 12)
+                    async let playlistsTask = catalogPlaylists(keyword: trimmed, provider: selectedProvider, limit: 12)
+                    let songs = await songsTask
+                    let playlists = await playlistsTask
                     let metadata = catalogMetadata(from: songs)
                     guard !Task.isCancelled else { return }
                     await MainActor.run {
-                        if selectedType == .artist {
-                            artistResults = metadata.artists
-                        } else {
-                            albumResults = metadata.albums
-                        }
+                        songResults = songs
+                        artistResults = metadata.artists
+                        albumResults = metadata.albums
+                        playlistResults = playlists
+                        if !songs.isEmpty || !playlists.isEmpty { BeansHaptics.success() }
                     }
-                case (.netease, .song):
-                    let songs = try await NetEaseAPI.shared.search(keyword: trimmed, limit: 40)
+                case .song:
+                    let songs = await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)
                     guard !Task.isCancelled else { return }
                     await MainActor.run {
                         songResults = songs
                         if !songs.isEmpty { BeansHaptics.success() }
                     }
-                case (.netease, .artist):
-                    let artists = try await NetEaseAPI.shared.searchArtists(keyword: trimmed)
+                case .artist:
+                    let artists: [Artist]
+                    switch selectedProvider {
+                    case .netease:
+                        artists = try await NetEaseAPI.shared.searchArtists(keyword: trimmed)
+                    case .qq:
+                        artists = try await QQMusicAPI.shared.searchArtists(keyword: trimmed)
+                    case .kugou:
+                        artists = try await KugouMusicAPI.shared.searchArtists(keyword: trimmed)
+                    default:
+                        artists = catalogMetadata(from: await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)).artists
+                    }
                     guard !Task.isCancelled else { return }
                     await MainActor.run { artistResults = artists }
-                case (.netease, .album):
-                    let albums = try await NetEaseAPI.shared.searchAlbums(keyword: trimmed)
+                case .album:
+                    let albums: [Album]
+                    switch selectedProvider {
+                    case .netease:
+                        albums = try await NetEaseAPI.shared.searchAlbums(keyword: trimmed)
+                    case .qq:
+                        albums = try await QQMusicAPI.shared.searchAlbums(keyword: trimmed)
+                    case .kugou:
+                        albums = try await KugouMusicAPI.shared.searchAlbums(keyword: trimmed)
+                    case .kuwo:
+                        albums = try await AdditionalCatalogSearchAPI.searchKuwoAlbums(keyword: trimmed, limit: 100)
+                    case .migu:
+                        albums = try await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: trimmed, limit: 100)
+                    case .aggregate:
+                        albums = catalogMetadata(from: await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)).albums
+                    }
                     guard !Task.isCancelled else { return }
                     await MainActor.run { albumResults = albums }
-                case (.qq, .song):
-                    let songs = try await QQMusicAPI.shared.searchSongs(keyword: trimmed)
+                case .playlist:
+                    let playlists = try await catalogPlaylistsThrowing(keyword: trimmed, provider: selectedProvider, limit: 100)
                     guard !Task.isCancelled else { return }
-                    await MainActor.run {
-                        songResults = songs
-                        if !songs.isEmpty { BeansHaptics.success() }
-                    }
-                case (.qq, .artist):
-                    let artists = try await QQMusicAPI.shared.searchArtists(keyword: trimmed)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { artistResults = artists }
-                case (.qq, .album):
-                    let albums = try await QQMusicAPI.shared.searchAlbums(keyword: trimmed)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { albumResults = albums }
-                case (.kugou, .song):
-                    let songs = try await KugouMusicAPI.shared.searchSongs(keyword: trimmed, limit: 40)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run {
-                        songResults = songs
-                        if !songs.isEmpty { BeansHaptics.success() }
-                    }
-                case (.kugou, .artist):
-                    let artists = try await KugouMusicAPI.shared.searchArtists(keyword: trimmed)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { artistResults = artists }
-                case (.kugou, .album):
-                    let albums = try await KugouMusicAPI.shared.searchAlbums(keyword: trimmed)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { albumResults = albums }
-                case (.kuwo, .song), (.migu, .song):
-                    let songs = await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 40)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run {
-                        songResults = songs
-                        if !songs.isEmpty { BeansHaptics.success() }
-                    }
+                    await MainActor.run { playlistResults = playlists }
                 }
                 let count = await MainActor.run {
-                    selectedType == .song ? songResults.count : (selectedType == .artist ? artistResults.count : albumResults.count)
+                    switch selectedType {
+                    case .all: return songResults.count + artistResults.count + albumResults.count + playlistResults.count
+                    case .song: return songResults.count
+                    case .artist: return artistResults.count
+                    case .album: return albumResults.count
+                    case .playlist: return playlistResults.count
+                    }
                 }
-                BeansLogger.shared.log("搜索完成：\(selectedProvider.rawValue) [\(selectedType.rawValue)] \(trimmed) 结果=\(count)", level: .info)
+                _ = count
             } catch {
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                 }
-                BeansLogger.shared.log("搜索失败：\(selectedProvider.rawValue) \(trimmed) - \(error.localizedDescription)", level: .error)
             }
         }
         await searchTask?.value
+    }
+
+    private var playlistResultsArea: some View {
+        Group {
+            if let errorMessage, playlistResults.isEmpty {
+                ErrorStateView(message: errorMessage) { submitSearch() }
+            } else if searching && playlistResults.isEmpty {
+                searchResultsLoadingState
+            } else if playlistResults.isEmpty {
+                EmptyStateView(icon: "music.note.list", text: "\(provider.rawValue)未找到相关歌单")
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 14)], alignment: .leading, spacing: 18) {
+                    ForEach(playlistResults) { playlist in
+                        playlistCard(playlist)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .padding(.bottom, 180)
+                .overlay(alignment: .top) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color.beansAmber)
+                        .padding(.top, 4)
+                        .opacity(searching ? 1 : 0)
+                }
+            }
+        }
     }
 
     private func deduplicatedSongs(_ songs: [Song]) -> [Song] {
@@ -1111,6 +1335,52 @@ struct SearchView: View {
             return (try? await QQMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
         case .kugou:
             return (try? await KugouMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
+        }
+    }
+
+    private func catalogPlaylists(keyword: String, provider: SearchCatalogProvider, limit: Int) async -> [Playlist] {
+        (try? await catalogPlaylistsThrowing(keyword: keyword, provider: provider, limit: limit)) ?? []
+    }
+
+    private func catalogPlaylistsThrowing(keyword: String, provider: SearchCatalogProvider, limit: Int) async throws -> [Playlist] {
+        switch provider {
+        case .aggregate:
+            async let netease = NetEaseAPI.shared.searchPlaylists(keyword: keyword, limit: limit)
+            async let qq = QQMusicAPI.shared.searchPlaylists(keyword: keyword, limit: limit)
+            async let kugou = AdditionalCatalogSearchAPI.searchKugouPlaylists(keyword: keyword, limit: limit)
+            async let kuwo = AdditionalCatalogSearchAPI.searchKuwoPlaylists(keyword: keyword, limit: limit)
+            async let migu = AdditionalCatalogSearchAPI.searchMiguPlaylists(keyword: keyword, limit: limit)
+            let neteaseItems = (try? await netease) ?? []
+            let qqItems = (try? await qq) ?? []
+            let kugouItems = (try? await kugou) ?? []
+            let kuwoItems = (try? await kuwo) ?? []
+            let miguItems = (try? await migu) ?? []
+            let all = neteaseItems + qqItems + kugouItems + kuwoItems + miguItems
+            var seen = Set<String>()
+            return all.filter {
+                let key = "\($0.name.localizedLowercase)|\($0.creatorName.localizedLowercase)"
+                return seen.insert(key).inserted
+            }
+        case .netease:
+            return try await NetEaseAPI.shared.searchPlaylists(keyword: keyword, limit: limit)
+        case .qq:
+            return try await QQMusicAPI.shared.searchPlaylists(keyword: keyword, limit: limit)
+        case .kugou:
+            return try await AdditionalCatalogSearchAPI.searchKugouPlaylists(keyword: keyword, limit: limit)
+        case .kuwo:
+            return try await AdditionalCatalogSearchAPI.searchKuwoPlaylists(keyword: keyword, limit: limit)
+        case .migu:
+            return try await AdditionalCatalogSearchAPI.searchMiguPlaylists(keyword: keyword, limit: limit)
+        }
+    }
+
+    private func sourceDisplayName(_ source: SongSource) -> String {
+        switch source {
+        case .netease: return "网易云音乐"
+        case .qq: return "QQ音乐"
+        case .kugou: return "酷狗音乐"
+        case .kuwo: return "酷我音乐"
+        case .migu: return "咪咕音乐"
         }
     }
 
