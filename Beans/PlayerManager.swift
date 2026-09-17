@@ -725,13 +725,19 @@ final class PlayerManager: NSObject, ObservableObject {
                         strict: strictUnlock
                     )
                 }
+                } else if song.source == .netease {
+                    (urlString, resolvedThirdParty) = await neteaseResolve(
+                        song: song,
+                        quality: quality,
+                        thirdPartyQuality: thirdPartyQuality,
+                        enableUnblock: enableUnblock,
+                        strict: strictUnlock
+                    )
                 } else {
-                (urlString, resolvedThirdParty) = await neteaseResolve(
-                    song: song,
-                    quality: quality,
-                    thirdPartyQuality: thirdPartyQuality,
-                    enableUnblock: enableUnblock,
-                    strict: strictUnlock
+                    resolvedThirdParty = await resolveThirdParty(
+                        song: song,
+                        quality: thirdPartyQuality,
+                        strict: strictUnlock
                     )
                 }
                 if urlString != nil || resolvedThirdParty != nil { break }
@@ -1514,6 +1520,16 @@ final class PlayerManager: NSObject, ObservableObject {
                 quality: quality,
                 excludedHosts: excludedHosts
             )
+        case .kuwo, .migu:
+            return await UnblockService.resolve(
+                name: song.name,
+                artists: song.artists,
+                neteaseID: song.id,
+                songSource: song.source,
+                quality: quality,
+                strict: strict,
+                excludedHosts: excludedHosts
+            )
         }
     }
 
@@ -1692,6 +1708,8 @@ final class PlayerManager: NSObject, ObservableObject {
                 return false
             }
             return user.vipBadge != nil
+        case .kuwo, .migu:
+            return false
         }
     }
 

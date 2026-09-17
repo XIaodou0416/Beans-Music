@@ -300,6 +300,8 @@ struct RecordPlayerView: View {
         case .netease: return "网易云"
         case .qq: return "QQ音乐"
         case .kugou: return "酷狗"
+        case .kuwo: return "酷我"
+        case .migu: return "咪咕"
         case nil: return "未知"
         }
     }

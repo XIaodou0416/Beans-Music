@@ -121,6 +121,8 @@ enum ThirdPartyAudioQuality: String, CaseIterable, Identifiable, Sendable {
         case .netease: return supported(providerCode: "wy")
         case .qq: return supported(providerCode: "tx")
         case .kugou: return supported(providerCode: "kg")
+        case .kuwo: return supported(providerCode: "kw")
+        case .migu: return supported(providerCode: "mg")
         }
     }
 
@@ -147,11 +149,13 @@ enum ThirdPartyAudioQuality: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// 歌曲来源（网易云 / QQ音乐 / 酷狗音乐）
+/// 歌曲来源
 enum SongSource: String, Codable, Sendable {
     case netease
     case qq
     case kugou
+    case kuwo
+    case migu
 
     /// 兼容旧版本地收藏：未知或已下线来源统一回退为网易云
     init(from decoder: Decoder) throws {
@@ -223,6 +227,10 @@ struct Song: Identifiable, Hashable, Codable {
                 return nil
             }
             return URL(string: "https://www.kugou.com/song/#hash=\(hash)")
+        case .kuwo:
+            return URL(string: "https://www.kuwo.cn/play_detail/\(id)")
+        case .migu:
+            return URL(string: "https://music.migu.cn/v3/music/song/\(id)")
         }
     }
 
@@ -231,6 +239,8 @@ struct Song: Identifiable, Hashable, Codable {
         switch source {
         case .qq: return "qq-\(id)"
         case .kugou: return "kugou-\(id)"
+        case .kuwo: return "kuwo-\(id)"
+        case .migu: return "migu-\(id)"
         case .netease: return "netease-\(id)"
         }
     }
@@ -245,6 +255,8 @@ struct Song: Identifiable, Hashable, Codable {
         case .qq:
             return fee != 0
         case .kugou:
+            return fee != 0
+        case .kuwo, .migu:
             return fee != 0
         }
     }

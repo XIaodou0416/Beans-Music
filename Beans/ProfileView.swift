@@ -1431,6 +1431,10 @@ struct SettingsView: View {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
 
+    private var usesCustomWallpaper: Bool {
+        theme.backgroundSyncAll && theme.customBackgroundImage(for: colorScheme) != nil
+    }
+
     private func settingsMatches(_ terms: String...) -> Bool {
         let query = settingsSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return true }
@@ -1748,7 +1752,9 @@ struct SettingsView: View {
                 }
             }
         }
-        .environment(\.beansSettingsPerformanceMode, true)
+        // Keep the regular settings surface lightweight, but allow the wallpaper
+        // to show through the controls when the user has enabled one globally.
+        .environment(\.beansSettingsPerformanceMode, !usesCustomWallpaper)
         .preferredColorScheme(themeMode.colorScheme)
         .searchable(
             text: $settingsSearchText,
@@ -3773,7 +3779,13 @@ struct SettingsView: View {
 // MARK: - 均衡器
 
 private struct SettingsCatalogGroup<Content: View>: View {
+    @EnvironmentObject private var theme: ThemeStore
+    @Environment(\.colorScheme) private var colorScheme
     private let content: Content
+
+    private var usesCustomWallpaper: Bool {
+        theme.backgroundSyncAll && theme.customBackgroundImage(for: colorScheme) != nil
+    }
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -3784,7 +3796,14 @@ private struct SettingsCatalogGroup<Content: View>: View {
             content
         }
             .padding(.horizontal, 16)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+                if usesCustomWallpaper {
+                    BeansGlass(shape: shape, forceLiquid: true)
+                } else {
+                    shape.fill(Color(uiColor: .secondarySystemGroupedBackground))
+                }
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1)

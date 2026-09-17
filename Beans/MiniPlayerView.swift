@@ -121,6 +121,7 @@ struct MiniPlayerView: View {
                 size: presentation.isInline ? 28 : 32,
                 cornerRadius: 7
             )
+            .id(player.currentSong?.identityKey ?? "beans-mini-player-empty")
             .shadow(color: .black.opacity(0.15), radius: 4, y: 1)
 
             VStack(alignment: .leading, spacing: presentation.isInline ? 2 : 3) {
@@ -174,7 +175,7 @@ struct MiniPlayerView: View {
             raw = await KugouMusicAPI.shared.lyric(hash: hash, duration: song.duration)
         } else if song.source == .qq, let mid = song.qqMid {
             raw = try? await QQMusicAPI.shared.lyric(songmid: mid)
-        } else {
+        } else if song.source == .netease {
             raw = try? await NetEaseAPI.shared.lyric(id: song.id)
         }
         guard !Task.isCancelled, let raw else { return }

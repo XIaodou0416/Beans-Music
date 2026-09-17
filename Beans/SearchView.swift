@@ -85,7 +85,46 @@ enum SearchResultType: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-/// 低系统使用的内嵌搜索控件。iOS 26 及以上统一交给系统 searchable 呈现。
+/// 搜索页可用的平台不等同于首页或账号体系的平台。附加目录只在搜索页出现，
+/// 不会改变现有首页、歌单和登录流程。
+private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable {
+    case netease = "网易云音乐"
+    case qq = "QQ音乐"
+    case kugou = "酷狗音乐"
+    case kuwo = "酷我音乐"
+    case migu = "咪咕音乐"
+
+    var id: String { rawValue }
+
+    var englishName: String {
+        switch self {
+        case .netease: return "NetEase Cloud Music"
+        case .qq: return "QQ Music"
+        case .kugou: return "Kugou Music"
+        case .kuwo: return "Kuwo Music"
+        case .migu: return "Migu Music"
+        }
+    }
+
+    var songSource: SongSource {
+        switch self {
+        case .netease: return .netease
+        case .qq: return .qq
+        case .kugou: return .kugou
+        case .kuwo: return .kuwo
+        case .migu: return .migu
+        }
+    }
+
+    var supportsDetailedResults: Bool {
+        switch self {
+        case .netease, .qq, .kugou: return true
+        case .kuwo, .migu: return false
+        }
+    }
+}
+
+/// 底部搜索控件在新系统使用可交互的原生液态玻璃，旧系统保留材质回退。
 struct BeansUnifiedSearchField: View {
     @Binding var text: String
     var controller: SearchFieldController? = nil
@@ -95,11 +134,31 @@ struct BeansUnifiedSearchField: View {
     let onClear: () -> Void
     let onSubmit: (String) -> Void
 
+    @ViewBuilder
     var body: some View {
-        legacyField
+        if #available(iOS 26, *) {
+            GlassEffectContainer {
+                fieldContent
+                    .frame(minHeight: 56)
+                    .glassEffect(.regular.interactive(), in: Capsule())
+            }
+        } else {
+            legacyField
+        }
     }
 
+    /// 保留旧系统原有的圆角、尺寸与材质，避免 iOS 26 的液态搜索栏影响低系统布局。
     private var legacyField: some View {
+        fieldContent
+            .padding(.vertical, 6)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .beansCardShadow(radius: 4, y: 2)
+    }
+
+    private var fieldContent: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .medium))
@@ -150,12 +209,6 @@ struct BeansUnifiedSearchField: View {
             .frame(width: 54, height: 30)
         }
         .padding(.horizontal, 15)
-        .padding(.vertical, 6)
-        .background {
-            BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .beansCardShadow(radius: 4, y: 2)
         .frame(maxWidth: .infinity)
     }
 }
@@ -194,12 +247,11 @@ struct SearchView: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
 
     @State private var keyword = ""
-    @AppStorage("beans.search.provider") private var providerRaw = SearchProvider.netease.rawValue
-    @State private var provider: SearchProvider = .netease
-    @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
-    private var searchProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
+    @AppStorage("beans.search.provider") private var providerRaw = SearchCatalogProvider.netease.rawValue
+    @State private var provider: SearchCatalogProvider = .netease
+    private var searchProviders: [SearchCatalogProvider] { SearchCatalogProvider.allCases }
     /// 已加载热门搜索的 provider（避免切 tab 反复加载）
-    @State private var hotLoadedProvider: SearchProvider?
+    @State private var hotLoadedProvider: SearchCatalogProvider?
     @State private var resultType: SearchResultType = .song
     @State private var songResults: [Song] = []
     @State private var artistResults: [Artist] = []
@@ -254,20 +306,14 @@ struct SearchView: View {
         }
         .onChange(of: provider) { _ in
             providerRaw = provider.rawValue
+            if !provider.supportsDetailedResults { resultType = .song }
             let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
             debounceTask?.cancel()
             Task { await startSearch(trimmed) }
         }
         .onAppear {
-            provider = platformPrefs.ensureVisible(SearchProvider(rawValue: providerRaw) ?? .netease)
-        }
-        .onReceive(platformPrefs.changes) { _ in
-            let next = platformPrefs.ensureVisible(provider)
-            if next != provider {
-                provider = next
-                hotLoadedProvider = nil
-            }
+            provider = SearchCatalogProvider(rawValue: providerRaw) ?? .netease
         }
         .sheet(item: $showAddToPlaylist) { song in
             AddToLocalPlaylistSheet(song: song)
@@ -418,7 +464,7 @@ struct SearchView: View {
             get: { resultType },
             set: { selectResultType($0) }
         )) {
-            ForEach(SearchResultType.allCases) { type in
+            ForEach(availableResultTypes) { type in
                 Text(LocalizedStringKey(type.rawValue)).tag(type)
             }
         }
@@ -426,6 +472,10 @@ struct SearchView: View {
         .labelsHidden()
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
+    }
+
+    private var availableResultTypes: [SearchResultType] {
+        provider.supportsDetailedResults ? SearchResultType.allCases : [.song]
     }
 
     private func selectResultType(_ type: SearchResultType) {
@@ -620,7 +670,7 @@ struct SearchView: View {
                 VStack {
                     LazyVStack(spacing: 8) {
                         HStack(spacing: 8) {
-                            Text(beansLocalized("找到 \(songResults.count) 首 · \(provider.rawValue)", "Found \(songResults.count) songs · \(beansPlatformName(provider))"))
+                            Text(beansLocalized("找到 \(songResults.count) 首 · \(provider.rawValue)", "Found \(songResults.count) songs · \(provider.englishName)"))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
                                 .lineLimit(1)
@@ -683,7 +733,7 @@ struct SearchView: View {
                 VStack {
                     LazyVStack(spacing: 8) {
                         HStack {
-                            Text(beansLocalized("找到 \(artistResults.count) 位 · \(provider.rawValue)", "Found \(artistResults.count) artists · \(beansPlatformName(provider))"))
+                            Text(beansLocalized("找到 \(artistResults.count) 位 · \(provider.rawValue)", "Found \(artistResults.count) artists · \(provider.englishName)"))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
                                 .lineLimit(1)
@@ -753,7 +803,7 @@ struct SearchView: View {
                 VStack {
                     LazyVStack(spacing: 8) {
                         HStack {
-                            Text(beansLocalized("找到 \(albumResults.count) 张 · \(provider.rawValue)", "Found \(albumResults.count) albums · \(beansPlatformName(provider))"))
+                            Text(beansLocalized("找到 \(albumResults.count) 张 · \(provider.rawValue)", "Found \(albumResults.count) albums · \(provider.englishName)"))
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
                                 .lineLimit(1)
@@ -841,6 +891,8 @@ struct SearchView: View {
             }
         } else if provider == .kugou {
             hotWords = await KugouMusicAPI.shared.hotWords()
+        } else if provider == .kuwo || provider == .migu {
+            hotWords = (try? await AdditionalCatalogSearchAPI.hotKeywords(for: provider.songSource)) ?? []
         } else if let words = try? await NetEaseAPI.shared.hotSearch() {
             hotWords = words
         }
@@ -910,6 +962,25 @@ struct SearchView: View {
                     let albums = try await KugouMusicAPI.shared.searchAlbums(keyword: trimmed)
                     guard !Task.isCancelled else { return }
                     await MainActor.run { albumResults = albums }
+                case (.kuwo, .song):
+                    let songs = try await AdditionalCatalogSearchAPI.searchKuwo(keyword: trimmed, limit: 40)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        songResults = songs
+                        if !songs.isEmpty { BeansHaptics.success() }
+                    }
+                case (.migu, .song):
+                    let songs = try await AdditionalCatalogSearchAPI.searchMigu(keyword: trimmed, limit: 40)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        songResults = songs
+                        if !songs.isEmpty { BeansHaptics.success() }
+                    }
+                case (.kuwo, .artist), (.kuwo, .album), (.migu, .artist), (.migu, .album):
+                    await MainActor.run {
+                        artistResults = []
+                        albumResults = []
+                    }
                 }
                 let count = await MainActor.run {
                     selectedType == .song ? songResults.count : (selectedType == .artist ? artistResults.count : albumResults.count)
@@ -1064,6 +1135,12 @@ struct AlbumDetailView: View {
                         }
                     )
                     : direct
+            case .kuwo, .migu:
+                throw NSError(
+                    domain: "BeansAlbum",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "当前平台暂不支持专辑详情"]
+                )
             }
             if !result.isEmpty {
                 cache.save(result, for: cacheKey)

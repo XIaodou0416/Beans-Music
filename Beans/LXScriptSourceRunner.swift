@@ -975,6 +975,8 @@ final class LXScriptSourceRunner {
         case .netease: return "wy"
         case .qq: return "tx"
         case .kugou: return "kg"
+        case .kuwo: return "kw"
+        case .migu: return "mg"
         }
     }
 

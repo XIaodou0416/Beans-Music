@@ -814,7 +814,7 @@ struct CoverImage: View {
         // Do not synchronously decode disk cache entries from body. A scroll can
         // create many CoverImage values in one frame, so body only reads the
         // loader's in-memory result while disk rehydration runs off the main thread.
-        let cachedImage = imageLoader.image
+        let cachedImage = imageLoader.image(for: resolvedURL)
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(Color.beansGlassFill)
             .frame(width: size * max(aspectRatio, 0.1), height: size)
@@ -1073,6 +1073,12 @@ private final class BeansCoverImageLoader: ObservableObject {
     @Published private(set) var didFail = false
     private var task: Task<Void, Never>?
     private var loadedURL: URL?
+
+    /// SwiftUI may keep this StateObject alive while a row changes songs. Never
+    /// render the previous request's bitmap during that handoff.
+    func image(for url: URL?) -> UIImage? {
+        loadedURL == url ? image : nil
+    }
 
     func load(url: URL?) {
         task?.cancel()

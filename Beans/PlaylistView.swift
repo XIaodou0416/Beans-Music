@@ -36,6 +36,8 @@ struct PlaylistView: View {
             return qqAuth.rawUin.isEmpty ? qqAuth.playlistUin : qqAuth.rawUin
         case .kugou:
             return KugouMusicAuth.shared.userId
+        case .kuwo, .migu:
+            return ""
         }
     }
 

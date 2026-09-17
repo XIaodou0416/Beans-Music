@@ -663,6 +663,8 @@ struct LocalPlaylistDetailSheet: View {
         case .netease: return "网易云音乐"
         case .qq: return "QQ音乐"
         case .kugou: return "酷狗音乐"
+        case .kuwo: return "酷我音乐"
+        case .migu: return "咪咕音乐"
         }
     }
 }

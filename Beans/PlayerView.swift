@@ -362,6 +362,8 @@ struct PlayerView: View {
             return try await KugouMusicAPI.shared.userPlaylists()
         case .qq:
             return []
+        case .kuwo, .migu:
+            return []
         }
     }
 
@@ -407,6 +409,8 @@ struct PlayerView: View {
             }
         case .qq:
             ToastCenter.shared.show("当前仅支持网易云音乐和酷狗音乐官方收藏")
+        case .kuwo, .migu:
+            ToastCenter.shared.show("当前平台仅支持本地收藏")
         }
     }
 
@@ -434,6 +438,8 @@ struct PlayerView: View {
             }
         case .qq:
             ToastCenter.shared.show("当前不支持 QQ 官方歌单收藏")
+        case .kuwo, .migu:
+            ToastCenter.shared.show("当前平台仅支持本地收藏")
         }
         favoriteCandidate = nil
     }
@@ -453,6 +459,8 @@ struct PlayerView: View {
                     ToastCenter.shared.show("已创建酷狗歌单")
                 case .qq:
                     ToastCenter.shared.show("当前不支持 QQ 官方歌单")
+                case .kuwo, .migu:
+                    ToastCenter.shared.show("当前平台不支持官方歌单")
                 }
             } catch {
                 ToastCenter.shared.show("创建官方歌单失败：\(error.localizedDescription)")
@@ -471,6 +479,8 @@ struct PlayerView: View {
                 case .kugou:
                     success = try await KugouMusicAPI.shared.deletePlaylist(playlistID: playlist.id)
                 case .qq:
+                    success = false
+                case .kuwo, .migu:
                     success = false
                 }
                 if success {
@@ -1435,6 +1445,24 @@ struct PlayerView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(GlassPressButtonStyle())
+
+                if layoutRenderingStyle == .classic {
+                    Button {
+                        guard song != nil else { return }
+                        BeansHaptics.tap()
+                        showCustomCoverPicker = true
+                    } label: {
+                        Image(systemName: customCovers.hasCover(for: song) ? "photo.badge.checkmark" : "photo.badge.plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(albumTitleForeground.opacity(0.78))
+                            .frame(width: 38, height: 38)
+                            .background { BeansGlass(shape: Circle(), forceLiquid: true) }
+                            .clipShape(Circle())
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(GlassPressButtonStyle())
+                    .accessibilityLabel(customCovers.hasCover(for: song) ? "更换自定义封面" : "添加自定义封面")
+                }
 
                 Menu {
                     Button("定时关闭") { showSleepTimer = true }
@@ -5019,6 +5047,10 @@ struct PlayerView: View {
         case .kugou:
             let encoded = song.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? song.name
             return URL(string: "https://www.kugou.com/yy/html/search.html#searchType=song&searchKeyWord=\(encoded)")
+        case .kuwo:
+            return URL(string: "https://www.kuwo.cn/play_detail/\(song.id)")
+        case .migu:
+            return URL(string: "https://music.migu.cn/v3/music/song/\(song.id)")
         }
     }
 

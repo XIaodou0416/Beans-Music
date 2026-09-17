@@ -45,6 +45,7 @@ enum UnblockService {
     private static var persistentCacheLoaded = false
 
     /// 入口：并发尝试用户导入且可用于当前平台的音源，返回第一个可用地址。
+    /// 用户导入的脚本音源在当前平台没有可用地址时，可继续尝试其它已声明的平台。
     static func resolve(
         name: String,
         artists: String,
@@ -55,53 +56,69 @@ enum UnblockService {
         kugouID: String? = nil,
         quality: ThirdPartyAudioQuality = NetworkAudioQuality.thirdPartyPreferred,
         strict: Bool = false,
-        excludedHosts: Set<String> = []
+        excludedHosts: Set<String> = [],
+        allowPlatformFallback: Bool? = nil
     ) async -> Resolved? {
         let hasSongIdentity = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !artists.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasSongIdentity else { return nil }
-        let sources = UnblockSourceStore.shared.sources
-            .filter { source in
-                guard source.enabled else { return false }
-                return isScriptSource(source)
-                    || canUse(source: source, songSource: songSource, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
+        let fallbackEnabled = allowPlatformFallback
+            ?? (UserDefaults.standard.object(forKey: "beans.enableSourcePlatformFallback") as? Bool ?? true)
+        let candidatePlatforms = sourceCandidates(for: songSource, includeFallbacks: fallbackEnabled)
+
+        for candidate in candidatePlatforms {
+            let sources = UnblockSourceStore.shared.sources
+                .filter { source in
+                    guard source.enabled else { return false }
+                    // Preset sources generally require a provider-specific id, so only
+                    // user scripts participate when this is a name-based fallback.
+                    if candidate != songSource { return isScriptSource(source) }
+                    return isScriptSource(source)
+                        || canUse(source: source, songSource: candidate, neteaseID: neteaseID, qqMid: qqMid, kugouID: kugouID)
+                }
+            guard !sources.isEmpty else { continue }
+
+            let cacheKey = resolutionCacheKey(
+                name: name,
+                artists: artists,
+                neteaseID: neteaseID,
+                songSource: candidate,
+                qqMid: qqMid,
+                qqMediaMid: qqMediaMid,
+                kugouID: kugouID,
+                quality: quality,
+                strict: strict,
+                sources: sources
+            )
+            if let cached = cachedResolution(for: cacheKey, excludedHosts: excludedHosts) {
+                return cached
             }
-        guard !sources.isEmpty else {
-            return nil
-        }
 
-        let cacheKey = resolutionCacheKey(
-            name: name,
-            artists: artists,
-            neteaseID: neteaseID,
-            songSource: songSource,
-            qqMid: qqMid,
-            qqMediaMid: qqMediaMid,
-            kugouID: kugouID,
-            quality: quality,
-            strict: strict,
-            sources: sources
-        )
-        if let cached = cachedResolution(for: cacheKey, excludedHosts: excludedHosts) {
-            return cached
+            let resolved = await resolveSources(
+                sources,
+                name: name,
+                artists: artists,
+                neteaseID: neteaseID,
+                songSource: candidate,
+                qqMid: qqMid,
+                qqMediaMid: qqMediaMid,
+                kugouID: kugouID,
+                quality: quality,
+                excludedHosts: excludedHosts
+            )
+            if let resolved {
+                storeResolution(resolved, for: cacheKey)
+                return resolved
+            }
         }
+        return nil
+    }
 
-        let resolved = await resolveSources(
-            sources,
-            name: name,
-            artists: artists,
-            neteaseID: neteaseID,
-            songSource: songSource,
-            qqMid: qqMid,
-            qqMediaMid: qqMediaMid,
-            kugouID: kugouID,
-            quality: quality,
-            excludedHosts: excludedHosts
-        )
-        if let resolved {
-            storeResolution(resolved, for: cacheKey)
+    private static func sourceCandidates(for primary: SongSource, includeFallbacks: Bool) -> [SongSource] {
+        guard includeFallbacks else { return [primary] }
+        return [primary, .netease, .qq, .kugou, .kuwo, .migu].reduce(into: []) { result, item in
+            if !result.contains(item) { result.append(item) }
         }
-        return resolved
     }
 
     private static func resolutionCacheKey(
@@ -328,6 +345,8 @@ enum UnblockService {
         case .kugou:
             guard let kugouID, !kugouID.isEmpty else { return nil }
             songIDs = [kugouID]
+        case .kuwo, .migu where neteaseID > 0:
+            songIDs = [String(neteaseID)]
         default:
             return nil
         }
@@ -424,6 +443,8 @@ enum UnblockService {
         case .kugou:
             guard let kugouID, !kugouID.isEmpty else { return nil }
             songIDs = [kugouID]
+        case .kuwo, .migu where neteaseID > 0:
+            songIDs = [String(neteaseID)]
         default:
             return nil
         }
@@ -562,7 +583,7 @@ enum UnblockService {
         let sourceDefault = ThirdPartyAudioQuality(sourceValue: source.quality)
         let platformDefault: ThirdPartyAudioQuality = {
             switch songSource {
-            case .netease, .qq, .kugou:
+            case .netease, .qq, .kugou, .kuwo, .migu:
                 return .kb320
             }
         }()
@@ -678,6 +699,8 @@ enum UnblockService {
         case .netease: return "wy"
         case .qq: return "tx"
         case .kugou: return "kg"
+        case .kuwo: return "kw"
+        case .migu: return "mg"
         }
     }
 

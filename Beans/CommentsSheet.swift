@@ -161,6 +161,8 @@ struct CommentsSheet: View {
             kugouCommentList
         } else if song.source == .qq {
             qqCommentList
+        } else if song.source == .kuwo || song.source == .migu {
+            EmptyStateView(icon: "bubble.left", text: "当前平台暂未提供评论")
         } else if let page {
             if page.hot.isEmpty && page.comments.isEmpty {
                 EmptyStateView(icon: "bubble.left", text: "暂无评论")
@@ -179,6 +181,8 @@ struct CommentsSheet: View {
             return selectedSection == .hot ? qqHotComments : qqLatestComments
         case .kugou:
             return selectedSection == .hot ? kugouHotComments : kugouLatestComments
+        case .kuwo, .migu:
+            return []
         }
     }
 
@@ -190,6 +194,8 @@ struct CommentsSheet: View {
             return qqTotal <= 0 || qqLatestComments.count < qqTotal
         case .kugou:
             return kugouTotal <= 0 || kugouLatestComments.count < kugouTotal
+        case .kuwo, .migu:
+            return false
         }
     }
 
@@ -202,6 +208,8 @@ struct CommentsSheet: View {
         case .kugou:
             kugouPageNum += 1
             await load(reset: false)
+        case .kuwo, .migu:
+            return
         }
     }
 
@@ -301,6 +309,10 @@ struct CommentsSheet: View {
             kugouTotal = 0
             kugouPageNum = 1
             loading = true
+        }
+        guard song.source != .kuwo, song.source != .migu else {
+            loading = false
+            return
         }
         errorMessage = nil
         do {
