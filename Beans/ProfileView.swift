@@ -1752,9 +1752,8 @@ struct SettingsView: View {
                 }
             }
         }
-        // Keep the regular settings surface lightweight, but allow the wallpaper
-        // to show through the controls when the user has enabled one globally.
-        .environment(\.beansSettingsPerformanceMode, !usesCustomWallpaper)
+        // 只有壁纸模式需要强制液态叠层；默认设置页继续沿用原本更明亮的系统材质。
+        .environment(\.beansSettingsPerformanceMode, false)
         .preferredColorScheme(themeMode.colorScheme)
         .searchable(
             text: $settingsSearchText,
@@ -3798,11 +3797,7 @@ private struct SettingsCatalogGroup<Content: View>: View {
             .padding(.horizontal, 16)
             .background {
                 let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
-                if usesCustomWallpaper {
-                    BeansGlass(shape: shape, forceLiquid: true)
-                } else {
-                    shape.fill(Color(uiColor: .secondarySystemGroupedBackground))
-                }
+                BeansGlass(shape: shape, forceLiquid: usesCustomWallpaper)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)

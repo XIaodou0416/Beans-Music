@@ -25,14 +25,23 @@ enum AdditionalCatalogSearchAPI {
     static func searchKuwo(keyword: String, limit: Int = 40) async throws -> [Song] {
         var components = URLComponents(string: "https://search.kuwo.cn/r.s")!
         components.queryItems = [
+            URLQueryItem(name: "client", value: "kt"),
             URLQueryItem(name: "all", value: keyword),
             URLQueryItem(name: "pn", value: "0"),
             URLQueryItem(name: "rn", value: String(min(max(limit, 1), 60))),
+            URLQueryItem(name: "uid", value: "794762570"),
+            URLQueryItem(name: "ver", value: "kwplayer_ar_9.2.2.1"),
+            URLQueryItem(name: "vipver", value: "1"),
+            URLQueryItem(name: "show_copyright_off", value: "1"),
+            URLQueryItem(name: "newver", value: "1"),
             URLQueryItem(name: "ft", value: "music"),
-            URLQueryItem(name: "itemset", value: "web_2013"),
-            URLQueryItem(name: "client", value: "kt"),
+            URLQueryItem(name: "cluster", value: "0"),
+            URLQueryItem(name: "strategy", value: "2012"),
             URLQueryItem(name: "rformat", value: "json"),
             URLQueryItem(name: "encoding", value: "utf8"),
+            URLQueryItem(name: "vermerge", value: "1"),
+            URLQueryItem(name: "mobi", value: "1"),
+            URLQueryItem(name: "issubtitle", value: "1"),
         ]
         let root = try await fetchObject(
             components.url!,
@@ -45,34 +54,41 @@ enum AdditionalCatalogSearchAPI {
     }
 
     static func searchMigu(keyword: String, limit: Int = 40) async throws -> [Song] {
-        let timestamp = String(Int(Date().timeIntervalSince1970 * 1000))
-        let deviceID = "963B7AA0D21511ED807EE5846EC87D20"
-        let signatureSeed = "\(keyword)6cdc72a439cef99a3418d2a78aa28c73yyapp2d16148780a1dcc7408e06336b98cfd50\(deviceID)\(timestamp)"
-        var components = URLComponents(string: "https://jadeite.migu.cn/music_search/v3/search/searchAll")!
-        components.queryItems = [
-            URLQueryItem(name: "isCorrect", value: "1"),
-            URLQueryItem(name: "isCopyright", value: "1"),
-            URLQueryItem(name: "searchSwitch", value: "{\"song\":0,\"album\":1,\"singer\":1,\"tagSong\":1,\"mvSong\":1,\"bestShow\":1,\"songlist\":1,\"lyricSong\":1}"),
-            URLQueryItem(name: "pageSize", value: String(min(max(limit, 1), 50))),
-            URLQueryItem(name: "text", value: keyword),
-            URLQueryItem(name: "pageNo", value: "1"),
-            URLQueryItem(name: "sort", value: "0"),
-            URLQueryItem(name: "sid", value: "USS"),
-        ]
-        let root = try await fetchObject(
-            components.url!,
-            headers: [
-                "uiVersion": "A_music_3.6.1",
-                "deviceId": deviceID,
-                "timestamp": timestamp,
-                "sign": md5(signatureSeed),
-                "channel": "0146921",
-                "Referer": "https://m.music.migu.cn/",
-                "User-Agent": browserUserAgent,
-            ]
-        )
-        let pages = ((root["songResultData"] as? [String: Any])?["resultList"] as? [[Any]]) ?? []
-        return pages.flatMap { $0 }.compactMap { $0 as? [String: Any] }.compactMap(miguSong)
+        let root = try await miguSearch(keyword: keyword, limit: limit, switchValue: "{\"song\":1,\"album\":0,\"singer\":0,\"tagSong\":0,\"mvSong\":0,\"songlist\":0,\"bestShow\":0}")
+        return dictionaries(in: (root["songResultData"] as? [String: Any])?["resultList"]).compactMap(miguSong)
+    }
+
+    static func searchKuwoArtists(keyword: String, limit: Int = 40) async throws -> [Artist] {
+        let root = try await kuwoSearch(keyword: keyword, limit: limit, type: "artist")
+        return dictionaries(in: root["abslist"]).compactMap { item in
+            guard let id = text(item["ARTISTID"] ?? item["id"]), let name = text(item["ARTIST"] ?? item["name"]), !name.isEmpty else { return nil }
+            return Artist(id: id, name: name, coverURL: kuwoImageURL(text(item["PICPATH"])).flatMap(URL.init(string:)), source: .kuwo)
+        }
+    }
+
+    static func searchKuwoAlbums(keyword: String, limit: Int = 40) async throws -> [Album] {
+        let root = try await kuwoSearch(keyword: keyword, limit: limit, type: "album")
+        return dictionaries(in: root["searchgroup"] ?? root["abslist"]).compactMap { item in
+            guard let id = text(item["ALBUMID"] ?? item["id"] ?? item["albumid"]),
+                  let name = text(item["ALBUM"] ?? item["album"] ?? item["name"]), !name.isEmpty else { return nil }
+            return Album(id: id, name: name, artistName: text(item["ARTIST"] ?? item["artist"]) ?? "", coverURL: kuwoImageURL(text(item["PICPATH"] ?? item["albumpic"])).flatMap(URL.init(string:)), source: .kuwo)
+        }
+    }
+
+    static func searchMiguArtists(keyword: String, limit: Int = 40) async throws -> [Artist] {
+        let root = try await miguSearch(keyword: keyword, limit: limit, switchValue: "{\"song\":0,\"album\":0,\"singer\":1,\"tagSong\":0,\"mvSong\":0,\"songlist\":0,\"bestShow\":0}")
+        return dictionaries(in: (root["singerResultData"] as? [String: Any])?["result"]).compactMap { item in
+            guard let id = text(item["id"]), let name = text(item["name"]), !name.isEmpty else { return nil }
+            return Artist(id: id, name: name, coverURL: miguImageURL(text(item["img"] ?? item["imgUrl"])).flatMap(URL.init(string:)), source: .migu)
+        }
+    }
+
+    static func searchMiguAlbums(keyword: String, limit: Int = 40) async throws -> [Album] {
+        let root = try await miguSearch(keyword: keyword, limit: limit, switchValue: "{\"song\":0,\"album\":1,\"singer\":0,\"tagSong\":0,\"mvSong\":0,\"songlist\":0,\"bestShow\":0}")
+        return dictionaries(in: (root["albumResultData"] as? [String: Any])?["result"]).compactMap { item in
+            guard let id = text(item["id"]), let name = text(item["name"]), !name.isEmpty else { return nil }
+            return Album(id: id, name: name, artistName: text(item["singer"] ?? item["singerName"]) ?? "", coverURL: miguImageURL(text(item["img"] ?? item["imgUrl"])).flatMap(URL.init(string:)), source: .migu)
+        }
     }
 
     static func hotKeywords(for source: SongSource) async throws -> [String] {
@@ -113,17 +129,74 @@ enum AdditionalCatalogSearchAPI {
 
     private static func miguSong(_ item: [String: Any]) -> Song? {
         guard let id = int(item["songId"] ?? item["copyrightId"] ?? item["contentId"]), id > 0 else { return nil }
-        let image = miguImageURL(text(item["img3"]) ?? text(item["img2"]) ?? text(item["img1"]) ?? text(item["albumPicUrl"]))
+        let singers = dictionaries(in: item["singers"] ?? item["singerList"])
+            .compactMap { text($0["name"] ?? $0["singerName"]) }
+            .joined(separator: " / ")
+        let album = dictionaries(in: item["albums"])
+            .compactMap { text($0["name"]) }
+            .first
+        let imageItems = dictionaries(in: item["imgItems"])
+        let image = miguImageURL(text(item["img3"]) ?? text(item["img2"]) ?? text(item["img1"]) ?? text(item["albumPicUrl"]) ?? text(imageItems.first?["img"]))
         return Song(
             id: id,
             name: text(item["name"]) ?? text(item["songName"]) ?? "",
-            artists: text(item["singerList"]) ?? text(item["singerName"]) ?? "",
-            album: text(item["album"]) ?? text(item["albumName"]) ?? "",
+            artists: singers.isEmpty ? (text(item["singerList"]) ?? text(item["singerName"]) ?? "") : singers,
+            album: text(item["album"]) ?? text(item["albumName"]) ?? album ?? "",
             coverURL: image.flatMap(URL.init(string:)),
             duration: seconds(item["duration"] ?? item["length"]),
             source: .migu,
             fee: int(item["needPay"]) ?? int(item["payFlag"]) ?? 0
         )
+    }
+
+    private static func kuwoSearch(keyword: String, limit: Int, type: String) async throws -> [String: Any] {
+        var components = URLComponents(string: "https://search.kuwo.cn/r.s")!
+        components.queryItems = [
+            URLQueryItem(name: "client", value: "kt"),
+            URLQueryItem(name: "all", value: keyword),
+            URLQueryItem(name: "pn", value: "0"),
+            URLQueryItem(name: "rn", value: String(min(max(limit, 1), 60))),
+            URLQueryItem(name: "uid", value: "794762570"),
+            URLQueryItem(name: "ver", value: "kwplayer_ar_9.2.2.1"),
+            URLQueryItem(name: "vipver", value: "1"),
+            URLQueryItem(name: "show_copyright_off", value: "1"),
+            URLQueryItem(name: "newver", value: "1"),
+            URLQueryItem(name: "ft", value: type),
+            URLQueryItem(name: "cluster", value: "0"),
+            URLQueryItem(name: "strategy", value: "2012"),
+            URLQueryItem(name: "encoding", value: "utf8"),
+            URLQueryItem(name: "rformat", value: "json"),
+            URLQueryItem(name: "vermerge", value: "1"),
+            URLQueryItem(name: "mobi", value: "1"),
+            URLQueryItem(name: "issubtitle", value: "1"),
+        ]
+        return try await fetchObject(components.url!, headers: ["Referer": "https://www.kuwo.cn/", "User-Agent": browserUserAgent])
+    }
+
+    private static func miguSearch(keyword: String, limit: Int, switchValue: String) async throws -> [String: Any] {
+        var components = URLComponents(string: "https://app.c.nf.migu.cn/MIGUM2.0/v1.0/content/search_all.do")!
+        components.queryItems = [
+            URLQueryItem(name: "isCopyright", value: "1"),
+            URLQueryItem(name: "isCorrect", value: "1"),
+            URLQueryItem(name: "pageNo", value: "1"),
+            URLQueryItem(name: "pageSize", value: String(min(max(limit, 1), 50))),
+            URLQueryItem(name: "searchSwitch", value: switchValue),
+            URLQueryItem(name: "sort", value: "0"),
+            URLQueryItem(name: "text", value: keyword),
+        ]
+        let root = try await fetchObject(components.url!, headers: ["Referer": "https://m.music.migu.cn/", "User-Agent": browserUserAgent])
+        guard text(root["code"]) == "000000" else { throw AdditionalCatalogSearchError.invalidResponse }
+        return root
+    }
+
+    private static func dictionaries(in value: Any?) -> [[String: Any]] {
+        if let dictionary = value as? [String: Any] {
+            return [dictionary] + dictionary.values.flatMap { dictionaries(in: $0) }
+        }
+        if let values = value as? [Any] {
+            return values.flatMap { dictionaries(in: $0) }
+        }
+        return []
     }
 
     private static func fetchObject(_ url: URL, headers: [String: String]) async throws -> [String: Any] {

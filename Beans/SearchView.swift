@@ -117,10 +117,7 @@ private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable
     }
 
     var supportsDetailedResults: Bool {
-        switch self {
-        case .netease, .qq, .kugou: return true
-        case .kuwo, .migu: return false
-        }
+        true
     }
 }
 
@@ -194,22 +191,12 @@ struct BeansUnifiedSearchField: View {
                 .disabled(text.isEmpty)
             }
             .frame(width: 20, height: 22)
-            Button {
-                let submittedText = controller?.commit() ?? text
-                onSubmit(submittedText)
-            } label: {
-                Text("搜索")
-                    .font(BeansFont.appFont(13, .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 6)
-                    .background { BeansGlass(shape: Capsule()) }
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.9))
-            .frame(width: 54, height: 30)
         }
         .padding(.horizontal, 15)
         .frame(maxWidth: .infinity)
+        .contentShape(Capsule())
+        .allowsHitTesting(true)
+        .zIndex(20)
     }
 }
 
@@ -247,7 +234,7 @@ struct SearchView: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
 
     @State private var keyword = ""
-    @AppStorage("beans.search.provider") private var providerRaw = SearchCatalogProvider.netease.rawValue
+    @AppStorage("beans.search.catalogProvider.v2") private var providerRaw = SearchCatalogProvider.netease.rawValue
     @State private var provider: SearchCatalogProvider = .netease
     private var searchProviders: [SearchCatalogProvider] { SearchCatalogProvider.allCases }
     /// 已加载热门搜索的 provider（避免切 tab 反复加载）
@@ -332,6 +319,14 @@ struct SearchView: View {
 
     @ViewBuilder
     private var pageContent: some View {
+        if #available(iOS 26, *) {
+            modernPageContent
+        } else {
+            legacyPageContent
+        }
+    }
+
+    private var modernPageContent: some View {
         let _ = theme.accent
         ZStack {
             if !usesSharedRootBackdrop {
@@ -353,6 +348,70 @@ struct SearchView: View {
             searchField
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+                .zIndex(20)
+        }
+    }
+
+    private var legacyPageContent: some View {
+        let _ = theme.accent
+        return ZStack {
+            if !usesSharedRootBackdrop {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            }
+            TabBarAppearanceConfigurator()
+            ScrollView {
+                VStack(spacing: 0) {
+                    legacyHeaderTitle
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 10)
+                    searchField
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
+                    legacyProviderPicker
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 8)
+                    legacyContentArea
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .beansScrollIndicatorsHidden()
+            .beansScrollDismissesKeyboard()
+        }
+    }
+
+    private var legacyHeaderTitle: some View {
+        HStack {
+            Text("搜索")
+                .font(BeansFont.appFont(32, .bold))
+                .foregroundStyle(Color.beansLabel)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var legacyProviderPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(searchProviders) { candidate in
+                    providerButton(candidate)
+                }
+            }
+            .padding(4)
+            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
+            .clipShape(Capsule())
+        }
+    }
+
+    @ViewBuilder
+    private var legacyContentArea: some View {
+        if keyword.isEmpty {
+            hotSection
+        } else {
+            VStack(spacing: 0) {
+                typeTabs
+                resultsArea
+            }
+            .frame(maxWidth: .infinity, alignment: .top)
         }
     }
 
@@ -408,68 +467,67 @@ struct SearchView: View {
     // MARK: - 搜索结果平台选择
 
     private var resultProviderPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("搜索平台")
-                    .font(BeansFont.appFont(14, .medium))
-                    .foregroundStyle(Color.beansComment)
-                Spacer(minLength: 0)
-                Text(LocalizedStringKey(provider.rawValue))
-                    .font(BeansFont.appFont(12, .semibold))
-                    .foregroundStyle(Color.beansAmber)
-            }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(searchProviders) { candidate in
-                        Button {
-                            BeansHaptics.tap()
-                            guard provider != candidate else { return }
-                            provider = candidate
-                        } label: {
-                            HStack(spacing: 5) {
-                                if provider == candidate {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 10, weight: .bold))
-                                }
-                                Text(LocalizedStringKey(candidate.rawValue))
-                            }
-                            .font(BeansFont.appFont(13, .semibold))
-                            .foregroundStyle(provider == candidate ? Color.white : Color.beansLabel)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background {
-                                if provider == candidate {
-                                    Capsule().fill(Color.beansAmber)
-                                } else {
-                                    Capsule().fill(Color.beansLabel.opacity(colorScheme == .dark ? 0.14 : 0.10))
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .frame(minHeight: 44)
-                    }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(searchProviders) { candidate in
+                    providerButton(candidate)
                 }
-                .padding(.horizontal, 20)
             }
+            .padding(4)
+            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
+            .clipShape(Capsule())
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
     }
 
+    private func providerButton(_ candidate: SearchCatalogProvider) -> some View {
+        Button {
+            BeansHaptics.tap()
+            guard provider != candidate else { return }
+            provider = candidate
+        } label: {
+            Text(LocalizedStringKey(candidate.rawValue))
+                .font(BeansFont.appFont(13, .semibold))
+                .foregroundStyle(provider == candidate ? Color.white : Color.beansLabel)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background {
+                    if provider == candidate {
+                        Capsule().fill(Color.beansAmber)
+                    } else {
+                        BeansGlass(shape: Capsule(), forceLiquid: true)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: 40)
+    }
+
     // MARK: - 分类选择（歌曲 / 歌手 / 专辑）
 
     private var typeTabs: some View {
-        Picker("搜索类型", selection: Binding(
-            get: { resultType },
-            set: { selectResultType($0) }
-        )) {
+        HStack(spacing: 4) {
             ForEach(availableResultTypes) { type in
-                Text(LocalizedStringKey(type.rawValue)).tag(type)
+                Button {
+                    selectResultType(type)
+                } label: {
+                    Text(LocalizedStringKey(type.rawValue))
+                        .font(BeansFont.appFont(13, .semibold))
+                        .foregroundStyle(resultType == type ? Color.white : Color.beansLabel)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background {
+                            if resultType == type {
+                                Capsule().fill(Color.beansAmber)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
             }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        .padding(4)
+        .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
+        .clipShape(Capsule())
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
     }
@@ -580,7 +638,7 @@ struct SearchView: View {
                             }
                             .padding(.horizontal, 12)
                             .frame(minHeight: 44)
-                            .background(Color.beansLabel.opacity(colorScheme == .dark ? 0.14 : 0.08), in: Capsule())
+                            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
                         }
                     }
                 }
@@ -615,7 +673,7 @@ struct SearchView: View {
             }
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
-            .background(Color.beansLabel.opacity(colorScheme == .dark ? 0.14 : 0.08), in: Capsule())
+            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
         }
         .buttonStyle(.plain)
     }
@@ -976,11 +1034,22 @@ struct SearchView: View {
                         songResults = songs
                         if !songs.isEmpty { BeansHaptics.success() }
                     }
-                case (.kuwo, .artist), (.kuwo, .album), (.migu, .artist), (.migu, .album):
-                    await MainActor.run {
-                        artistResults = []
-                        albumResults = []
-                    }
+                case (.kuwo, .artist):
+                    let artists = try await AdditionalCatalogSearchAPI.searchKuwoArtists(keyword: trimmed)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { artistResults = artists }
+                case (.kuwo, .album):
+                    let albums = try await AdditionalCatalogSearchAPI.searchKuwoAlbums(keyword: trimmed)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { albumResults = albums }
+                case (.migu, .artist):
+                    let artists = try await AdditionalCatalogSearchAPI.searchMiguArtists(keyword: trimmed)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { artistResults = artists }
+                case (.migu, .album):
+                    let albums = try await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: trimmed)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { albumResults = albums }
                 }
                 let count = await MainActor.run {
                     selectedType == .song ? songResults.count : (selectedType == .artist ? artistResults.count : albumResults.count)
