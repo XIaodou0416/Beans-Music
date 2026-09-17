@@ -77,15 +77,15 @@ struct PlaylistView: View {
             .navigationTitle(playlist.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if downloadFeatureUnlocked, !displayedTracks.isEmpty {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            showBatchDownload = true
-                        } label: {
-                            Image(systemName: "arrow.down.to.line.compact")
-                        }
-                        .accessibilityLabel("批量下载歌单")
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showBatchDownload = true
+                    } label: {
+                        Image(systemName: "arrow.down.to.line.compact")
                     }
+                    .opacity(downloadFeatureUnlocked && !displayedTracks.isEmpty ? 1 : 0)
+                    .disabled(!downloadFeatureUnlocked || displayedTracks.isEmpty)
+                    .accessibilityLabel("批量下载歌单")
                 }
             }
         .task { await load() }
