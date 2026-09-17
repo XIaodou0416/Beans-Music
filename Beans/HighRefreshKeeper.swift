@@ -7,6 +7,7 @@ final class HighRefreshKeeper {
     static let shared = HighRefreshKeeper()
     static let defaultsKey = "beans.enableHighRefresh"
 
+    private weak var attachedScene: UIWindowScene?
     private var displayLink: CADisplayLink?
     private var wasRunningBeforeTemporaryPause = false
 
@@ -31,15 +32,24 @@ final class HighRefreshKeeper {
     }
 
     func attach(to view: UIView) {
-        _ = view
-        start()
+        if let scene = view.window?.windowScene {
+            attachedScene = scene
+            applyPreferredFrameRate(to: scene)
+        } else {
+            // The representable can be updated before UIKit attaches its view.
+            // The host view calls us again from didMoveToWindow.
+            startLegacyDisplayLinkIfNeeded()
+        }
     }
 
     /// 设置页展开大量控件时暂停空转的显示链接，避免低系统滚动时额外占用主线程。
     func suspendTemporarily() {
-        guard displayLink != nil else { return }
+        guard attachedScene != nil || displayLink != nil else { return }
         wasRunningBeforeTemporaryPause = true
-        stop()
+        if #available(iOS 15.0, *), let attachedScene {
+            attachedScene.preferredFrameRateRange = .default
+        }
+        stopLegacyDisplayLink()
     }
 
     func resumeAfterTemporaryPause() {
@@ -50,35 +60,69 @@ final class HighRefreshKeeper {
     }
 
     private func start() {
-        guard displayLink == nil else { return }
-        let link = CADisplayLink(target: self, selector: #selector(tick))
+        if #available(iOS 15.0, *), let attachedScene {
+            applyPreferredFrameRate(to: attachedScene)
+        } else {
+            startLegacyDisplayLinkIfNeeded()
+        }
+    }
+
+    private func applyPreferredFrameRate(to scene: UIWindowScene) {
+        guard UserDefaults.standard.bool(forKey: Self.defaultsKey) else {
+            scene.preferredFrameRateRange = .default
+            return
+        }
         if #available(iOS 15.0, *) {
             let maximum = Float(min(120, max(60, UIScreen.main.maximumFramesPerSecond)))
-            link.preferredFrameRateRange = CAFrameRateRange(
+            scene.preferredFrameRateRange = CAFrameRateRange(
                 minimum: maximum >= 120 ? 120 : maximum,
                 maximum: maximum,
                 preferred: maximum
             )
+            stopLegacyDisplayLink()
         } else {
-            link.preferredFramesPerSecond = 120
+            startLegacyDisplayLinkIfNeeded()
         }
+    }
+
+    private func startLegacyDisplayLinkIfNeeded() {
+        guard displayLink == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(tick))
+        link.preferredFramesPerSecond = 60
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
 
     private func stop() {
+        if #available(iOS 15.0, *), let attachedScene {
+            attachedScene.preferredFrameRateRange = .default
+        }
+        stopLegacyDisplayLink()
+    }
+
+    private func stopLegacyDisplayLink() {
         displayLink?.invalidate()
         displayLink = nil
     }
 
-    @objc private func tick() {}
+    @objc private func tick() {
+        // Pre-iOS 15 has no scene frame-rate preference API. Keeping this
+        // lightweight display link preserves the legacy high-refresh request.
+    }
+}
+
+private final class HighRefreshHostView: UIView {
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        HighRefreshKeeper.shared.attach(to: self)
+    }
 }
 
 struct HighRefreshConfigurator: UIViewRepresentable {
     @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
 
     func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
+        let view = HighRefreshHostView(frame: .zero)
         view.isUserInteractionEnabled = false
         return view
     }

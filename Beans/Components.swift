@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private struct BeansSharedRootBackdropKey: EnvironmentKey {
     static let defaultValue = false
@@ -234,61 +235,78 @@ struct GlobalFloatingEffectView: View {
     }
 
     private var floatingImage: UIImage? {
-        guard !floatingImageData.isEmpty,
-              let data = Data(base64Encoded: floatingImageData) else { return nil }
-        return UIImage(data: data)
+        GlobalFloatingImageCache.shared.image(for: floatingImageData)
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: effect == .off)) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate * max(0.25, min(speed, 2.0))
-            let accent = theme.customAccent ?? (colorScheme == .dark ? Color.beansAmber : Color.beansHighlight)
-            let count = max(8, min(64, Int((18 * density).rounded())))
-            ZStack {
-                Canvas { context, canvasSize in
-                    guard effect != .off, canvasSize.width > 1, canvasSize.height > 1 else { return }
-                    if effect == .snow {
-                        for index in 0..<count {
-                            let seed = Double(index)
-                            let x = ((seed * 0.173).truncatingRemainder(dividingBy: 1.0)) * canvasSize.width
-                            let fall = ((time * (0.035 + seed.truncatingRemainder(dividingBy: 7) * 0.006) + seed * 0.071).truncatingRemainder(dividingBy: 1.15))
-                            let y = fall * canvasSize.height - canvasSize.height * 0.08
-                            let drift = sin(time * 0.32 + seed * 1.7) * canvasSize.width * 0.012
-                            let radius = max(1.2, min(4.2, size * (1.2 + seed.truncatingRemainder(dividingBy: 3) * 0.45)))
-                            let rect = CGRect(x: x + drift, y: y, width: radius * 2, height: radius * 2)
-                            context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.08 + 0.04 * sin(seed))) )
+        if effect != .off {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                let time = timeline.date.timeIntervalSinceReferenceDate * max(0.25, min(speed, 2.0))
+                let accent = theme.customAccent ?? (colorScheme == .dark ? Color.beansAmber : Color.beansHighlight)
+                let count = max(8, min(64, Int((18 * density).rounded())))
+                ZStack {
+                    Canvas { context, canvasSize in
+                        guard canvasSize.width > 1, canvasSize.height > 1 else { return }
+                        if effect == .snow {
+                            for index in 0..<count {
+                                let seed = Double(index)
+                                let x = ((seed * 0.173).truncatingRemainder(dividingBy: 1.0)) * canvasSize.width
+                                let fall = ((time * (0.035 + seed.truncatingRemainder(dividingBy: 7) * 0.006) + seed * 0.071).truncatingRemainder(dividingBy: 1.15))
+                                let y = fall * canvasSize.height - canvasSize.height * 0.08
+                                let drift = sin(time * 0.32 + seed * 1.7) * canvasSize.width * 0.012
+                                let radius = max(1.2, min(4.2, size * (1.2 + seed.truncatingRemainder(dividingBy: 3) * 0.45)))
+                                let rect = CGRect(x: x + drift, y: y, width: radius * 2, height: radius * 2)
+                                context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.08 + 0.04 * sin(seed))) )
+                            }
                         }
                     }
-                }
-                if effect == .customText {
-                    GeometryReader { geometry in
-                        ForEach(0..<count, id: \.self) { index in
-                            let seed = Double(index)
-                            let x = ((seed * 0.173).truncatingRemainder(dividingBy: 1.0)) * geometry.size.width
-                            let y = ((time * (0.035 + seed.truncatingRemainder(dividingBy: 7) * 0.006) + seed * 0.071).truncatingRemainder(dividingBy: 1.15)) * geometry.size.height
-                            Group {
-                                if let floatingImage {
-                                    Image(uiImage: floatingImage)
-                                        .resizable()
-                                        .scaledToFit()
-                                } else {
-                                    Text(floatingText.isEmpty ? "✦" : floatingText)
-                                        .font(.system(size: max(10, min(30, size * 14)), weight: .medium))
-                                        .foregroundStyle(accent.opacity(0.24))
+                    if effect == .customText {
+                        GeometryReader { geometry in
+                            ForEach(0..<count, id: \.self) { index in
+                                let seed = Double(index)
+                                let x = ((seed * 0.173).truncatingRemainder(dividingBy: 1.0)) * geometry.size.width
+                                let y = ((time * (0.035 + seed.truncatingRemainder(dividingBy: 7) * 0.006) + seed * 0.071).truncatingRemainder(dividingBy: 1.15)) * geometry.size.height
+                                Group {
+                                    if let floatingImage {
+                                        Image(uiImage: floatingImage)
+                                            .resizable()
+                                            .scaledToFit()
+                                    } else {
+                                        Text(floatingText.isEmpty ? "✦" : floatingText)
+                                            .font(.system(size: max(10, min(30, size * 14)), weight: .medium))
+                                            .foregroundStyle(accent.opacity(0.24))
+                                    }
                                 }
+                                .frame(width: max(14, min(42, size * 20)), height: max(14, min(42, size * 20)))
+                                .opacity(floatingImage == nil ? 1 : 0.72)
+                                .rotationEffect(.degrees(rotation + sin(time * 0.4 + seed) * 8))
+                                .transformEffect(CGAffineTransform(a: 1, b: 0, c: CGFloat(tan(skew * .pi / 180)), d: 1, tx: 0, ty: 0))
+                                .position(x: x, y: y)
                             }
-                            .frame(width: max(14, min(42, size * 20)), height: max(14, min(42, size * 20)))
-                            .opacity(floatingImage == nil ? 1 : 0.72)
-                            .rotationEffect(.degrees(rotation + sin(time * 0.4 + seed) * 8))
-                            .transformEffect(CGAffineTransform(a: 1, b: 0, c: CGFloat(tan(skew * .pi / 180)), d: 1, tx: 0, ty: 0))
-                            .position(x: x, y: y)
                         }
                     }
                 }
             }
         }
-        .opacity(effect == .off ? 0 : 1)
         .allowsHitTesting(false)
+    }
+}
+
+private final class GlobalFloatingImageCache {
+    static let shared = GlobalFloatingImageCache()
+
+    private var encodedValue = ""
+    private var cachedImage: UIImage?
+
+    func image(for encodedValue: String) -> UIImage? {
+        guard encodedValue != self.encodedValue else { return cachedImage }
+        self.encodedValue = encodedValue
+        guard !encodedValue.isEmpty, let data = Data(base64Encoded: encodedValue) else {
+            cachedImage = nil
+            return nil
+        }
+        cachedImage = UIImage(data: data)
+        return cachedImage
     }
 }
 
