@@ -1055,10 +1055,13 @@ struct BeansNowPlayingPresentation<Content: View>: View {
         if usesSystemInteractiveDismissal {
             surface
                 .padding(.top, safeAreaTop)
+                // On iOS 26 the system owns interactive dismissal. This clear
+                // indicator must stay visual-only so it cannot mask controls
+                // that have been repositioned by the Apple Music layout.
+                .allowsHitTesting(false)
         } else {
             surface
                 .padding(.top, safeAreaTop)
-                .allowsHitTesting(false)
         }
     }
 
