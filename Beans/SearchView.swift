@@ -508,10 +508,10 @@ struct SearchView: View {
         .padding(.bottom, 4)
     }
 
-    // MARK: - 热搜（排名卡片）
+    // MARK: - 热门搜索
 
     private var hotSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             SearchHistorySection { word in
                 keyword = word
                 searchController.dismissKeyboard()
@@ -519,32 +519,15 @@ struct SearchView: View {
                 historyStore.record(word)
                 Task { await startSearch(word) }
             }
+
+            hotSearchHeader
+
             if hotWords.isEmpty {
                 hotSearchLoadingState
             } else {
-                if usesTabletHotSearchLayout {
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
-                        alignment: .leading,
-                        spacing: 12
-                    ) {
-                        ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
-                            hotTag(index: index, word: word)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                } else if #available(iOS 16, *) {
-                    FlowLayout(spacing: 10) {
-                        ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
-                            hotTag(index: index, word: word)
-                        }
-                    }
-                } else {
-                    // iOS 15 降级：自适应网格实现流式标签
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], alignment: .leading, spacing: 10) {
-                        ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
-                            hotTag(index: index, word: word)
-                        }
+                LazyVGrid(columns: hotSearchColumns, alignment: .leading, spacing: 10) {
+                    ForEach(Array(hotWords.enumerated()), id: \.offset) { index, word in
+                        hotTag(index: index, word: word)
                     }
                 }
             }
@@ -552,6 +535,53 @@ struct SearchView: View {
         }
         .padding(.horizontal, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var hotSearchColumns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(minimum: 0), spacing: 10),
+            count: usesTabletHotSearchLayout ? 3 : 2
+        )
+    }
+
+    private var hotSearchHeader: some View {
+        HStack(spacing: 8) {
+            Text("热门搜索")
+                .font(BeansFont.appFont(18, .bold))
+                .foregroundStyle(Color.beansLabel)
+
+            if let imageName = provider.brandImageName {
+                Image(imageName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
+            } else {
+                Image(systemName: provider.icon)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+
+            Text(LocalizedStringKey(provider.rawValue))
+                .font(BeansFont.appFont(12, .medium))
+                .foregroundStyle(Color.beansComment)
+
+            Spacer(minLength: 0)
+
+            Button {
+                BeansHaptics.tap()
+                Task {
+                    hotWords = []
+                    await loadHotWords()
+                }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.beansComment)
+                    .frame(width: 32, height: 32)
+                    .background { BeansGlass(shape: Circle()) }
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+            .accessibilityLabel("刷新热门搜索")
+        }
     }
 
     /// 热搜前三名渐变配色（更亮眼：橙红 / 金黄 / 冰蓝）
@@ -562,7 +592,7 @@ struct SearchView: View {
     ]
     private let hotRankIcons = ["crown.fill", "flame.fill", "sparkles"]
 
-    /// 热搜标签：前三名渐变发光圆标（更亮眼），其余为普通序号
+    /// 固定高度的分栏条目，避免不同词条长度造成列表跳动。
     private func hotTag(index: Int, word: String) -> some View {
         let top3 = index < 3
         return Button {
@@ -572,43 +602,55 @@ struct SearchView: View {
             debounceTask?.cancel()
             Task { await startSearch(word) }
         } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: 10) {
                 if top3 {
                     ZStack {
-                        Circle()
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .fill(
                                 LinearGradient(
                                     colors: hotRankColors[index],
                                     startPoint: .topLeading, endPoint: .bottomTrailing
                                 )
                             )
-                            .frame(width: 24, height: 24)
-                            .shadow(color: hotRankColors[index][0].opacity(0.6), radius: 6, y: 2)
+                            .frame(width: 30, height: 30)
+                            .shadow(color: hotRankColors[index][0].opacity(0.42), radius: 5, y: 2)
                             .overlay {
-                                Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .strokeBorder(.white.opacity(0.5), lineWidth: 0.8)
                             }
                         Image(systemName: hotRankIcons[index])
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(.white)
                     }
                 } else {
                     Text("\(index + 1)")
-                        .font(BeansFont.appFont(11, .bold, .rounded))
+                        .font(BeansFont.appFont(12, .bold, .rounded))
                         .foregroundStyle(Color.beansComment)
-                        .frame(width: 18, height: 18)
+                        .frame(width: 30, height: 30)
+                        .background {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(Color.primary.opacity(0.055))
+                        }
                 }
                 Text(word)
-                    .font(BeansFont.appFont(top3 ? 15 : 14, top3 ? .bold : .medium))
-                    .foregroundStyle(top3 ? Color.beansLabel : Color.beansComment)
+                    .font(BeansFont.appFont(14, top3 ? .semibold : .medium))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.beansComment.opacity(0.62))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
             .background {
-                BeansGlass(shape: Capsule())
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .overlay {
                 if top3 {
-                    Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.8)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(hotRankColors[index][0].opacity(0.22), lineWidth: 0.8)
                 }
             }
         }
@@ -616,13 +658,12 @@ struct SearchView: View {
     }
 
     private var hotSearchLoadingState: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(0..<10, id: \.self) { index in
+        LazyVGrid(columns: hotSearchColumns, alignment: .leading, spacing: 10) {
+            ForEach(0..<10, id: \.self) { _ in
                 BeansShimmerSkeleton(cornerRadius: 16)
-                    .frame(width: index < 3 ? 132 : (index.isMultiple(of: 2) ? 112 : 92), height: 38)
+                    .frame(maxWidth: .infinity, minHeight: 54)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - 结果区

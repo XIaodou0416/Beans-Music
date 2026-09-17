@@ -801,7 +801,10 @@ struct CoverImage: View {
     var body: some View {
         let resolvedURL = customCovers.url(for: song) ?? customCovers.resolvedURL(for: url)
         let usesCustomMediaRenderer = customCovers.isStoredCover(resolvedURL)
-        let cachedImage = imageLoader.image ?? BeansCoverImageStore.cachedImage(for: resolvedURL)
+        // Do not synchronously decode disk cache entries from body. A scroll can
+        // create many CoverImage values in one frame, so body only reads the
+        // loader's in-memory result while disk rehydration runs off the main thread.
+        let cachedImage = imageLoader.image
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(Color.beansGlassFill)
             .frame(width: size * max(aspectRatio, 0.1), height: size)
@@ -915,6 +918,44 @@ final class BeansCoverImageStore {
         persist(data: response.data, for: url)
         memoryCache.setObject(image, forKey: url as NSURL)
         return image
+    }
+
+    /// Rehydrate persisted covers away from SwiftUI's rendering path. The
+    /// completion always returns on the main queue so callers can update view state.
+    static func loadCachedImage(for url: URL, completion: @escaping (UIImage?) -> Void) {
+        if url.isFileURL {
+            DispatchQueue.main.async {
+                completion(CustomCoverMedia.previewImage(at: url))
+            }
+            return
+        }
+        if let image = memoryCache.object(forKey: url as NSURL) {
+            DispatchQueue.main.async { completion(image) }
+            return
+        }
+
+        let fileURL = diskFileURL(for: url)
+        diskQueue.async {
+            let image: UIImage?
+            if let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
+               let cachedImage = UIImage(data: data) {
+                memoryCache.setObject(cachedImage, forKey: url as NSURL)
+                try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: fileURL.path)
+                image = cachedImage
+            } else {
+                var request = URLRequest(url: url)
+                request.cachePolicy = .returnCacheDataElseLoad
+                if let response = session.configuration.urlCache?.cachedResponse(for: request),
+                   let cachedImage = UIImage(data: response.data) {
+                    memoryCache.setObject(cachedImage, forKey: url as NSURL)
+                    persist(data: response.data, for: url)
+                    image = cachedImage
+                } else {
+                    image = nil
+                }
+            }
+            DispatchQueue.main.async { completion(image) }
+        }
     }
 
     static func clearCache(completion: @escaping (Bool) -> Void) {
@@ -1031,38 +1072,40 @@ private final class BeansCoverImageLoader: ObservableObject {
             image = nil
             return
         }
-        if url.isFileURL {
-            image = CustomCoverMedia.previewImage(at: url)
-            didFail = image == nil
-            return
-        }
-        if let cached = BeansCoverImageStore.cachedImage(for: url) {
-            image = cached
-            return
-        }
         image = nil
-        task = Task { [weak self] in
-            do {
-                var request = URLRequest(url: url)
-                request.cachePolicy = .returnCacheDataElseLoad
-                let (data, response) = try await BeansCoverImageStore.session.data(for: request)
-                guard !Task.isCancelled, let self, self.loadedURL == url else { return }
-                guard let http = response as? HTTPURLResponse,
-                      200..<300 ~= http.statusCode,
-                      let image = UIImage(data: data) else {
-                    self.didFail = true
-                    return
-                }
-                BeansCoverImageStore.session.configuration.urlCache?.storeCachedResponse(
-                    CachedURLResponse(response: response, data: data),
-                    for: request
-                )
-                BeansCoverImageStore.persist(data: data, for: url)
-                BeansCoverImageStore.memoryCache.setObject(image, forKey: url as NSURL)
-                self.image = image
-            } catch {
-                guard !Task.isCancelled, let self, self.loadedURL == url else { return }
+        BeansCoverImageStore.loadCachedImage(for: url) { [weak self] cachedImage in
+            guard let self, self.loadedURL == url else { return }
+            if let cachedImage {
+                self.image = cachedImage
+                return
+            }
+            if url.isFileURL {
                 self.didFail = true
+                return
+            }
+            self.task = Task { [weak self] in
+                do {
+                    var request = URLRequest(url: url)
+                    request.cachePolicy = .returnCacheDataElseLoad
+                    let (data, response) = try await BeansCoverImageStore.session.data(for: request)
+                    guard !Task.isCancelled, let self, self.loadedURL == url else { return }
+                    guard let http = response as? HTTPURLResponse,
+                          200..<300 ~= http.statusCode,
+                          let image = UIImage(data: data) else {
+                        self.didFail = true
+                        return
+                    }
+                    BeansCoverImageStore.session.configuration.urlCache?.storeCachedResponse(
+                        CachedURLResponse(response: response, data: data),
+                        for: request
+                    )
+                    BeansCoverImageStore.persist(data: data, for: url)
+                    BeansCoverImageStore.memoryCache.setObject(image, forKey: url as NSURL)
+                    self.image = image
+                } catch {
+                    guard !Task.isCancelled, let self, self.loadedURL == url else { return }
+                    self.didFail = true
+                }
             }
         }
     }
