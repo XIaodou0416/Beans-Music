@@ -296,6 +296,7 @@ struct SearchView: View {
         }
     }
 
+    @ViewBuilder
     private var pageContent: some View {
         let _ = theme.accent
         ZStack(alignment: .top) {
