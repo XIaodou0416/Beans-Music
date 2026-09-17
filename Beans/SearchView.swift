@@ -1233,31 +1233,15 @@ struct SearchView: View {
                     switch selectedProvider {
                     case .netease:
                         artists = try await NetEaseAPI.shared.searchArtists(keyword: trimmed)
-                    case .qq:
-                        artists = try await QQMusicAPI.shared.searchArtists(keyword: trimmed)
-                    case .kugou:
-                        artists = try await KugouMusicAPI.shared.searchArtists(keyword: trimmed)
                     default:
                         artists = catalogMetadata(from: await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)).artists
                     }
                     guard !Task.isCancelled else { return }
                     await MainActor.run { artistResults = artists }
                 case .album:
-                    let albums: [Album]
-                    switch selectedProvider {
-                    case .netease:
-                        albums = try await NetEaseAPI.shared.searchAlbums(keyword: trimmed)
-                    case .qq:
-                        albums = try await QQMusicAPI.shared.searchAlbums(keyword: trimmed)
-                    case .kugou:
-                        albums = try await KugouMusicAPI.shared.searchAlbums(keyword: trimmed)
-                    case .kuwo:
-                        albums = try await AdditionalCatalogSearchAPI.searchKuwoAlbums(keyword: trimmed, limit: 100)
-                    case .migu:
-                        albums = try await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: trimmed, limit: 100)
-                    case .aggregate:
-                        albums = catalogMetadata(from: await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)).albums
-                    }
+                    let albums = catalogMetadata(
+                        from: await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)
+                    ).albums
                     guard !Task.isCancelled else { return }
                     await MainActor.run { albumResults = albums }
                 case .playlist:
@@ -1352,8 +1336,14 @@ struct SearchView: View {
         case .netease:
             return (try? await NetEaseAPI.shared.search(keyword: keyword, limit: limit)) ?? []
         case .qq:
+            if let songs = try? await AdditionalCatalogSearchAPI.searchCatalogQQ(keyword: keyword, limit: limit), !songs.isEmpty {
+                return songs
+            }
             return (try? await QQMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
         case .kugou:
+            if let songs = try? await AdditionalCatalogSearchAPI.searchCatalogKugou(keyword: keyword, limit: limit), !songs.isEmpty {
+                return songs
+            }
             return (try? await KugouMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
         }
     }

@@ -57,7 +57,87 @@ enum AdditionalCatalogSearchAPI {
 
     static func searchMigu(keyword: String, limit: Int = 40) async throws -> [Song] {
         let root = try await miguSongSearch(keyword: keyword, limit: limit)
-        return dictionaries(in: (root["songResultData"] as? [String: Any])?["resultList"]).compactMap(miguSong)
+        let pages = ((root["songResultData"] as? [String: Any])?["resultList"] as? [[Any]]) ?? []
+        return pages.flatMap { $0 }.compactMap { $0 as? [String: Any] }.compactMap(miguSong)
+    }
+
+    /// The catalogue search uses the same mobile request family as the
+    /// reference implementation. Playback continues to use Beans' existing
+    /// source resolver after the result is selected.
+    static func searchCatalogQQ(keyword: String, limit: Int = 40) async throws -> [Song] {
+        for attempt in 0..<3 {
+            let searchID = (0..<16).map { _ in String(Int.random(in: 0...9)) }.joined()
+            let request: [String: Any] = [
+                "comm": ["ct": "11", "cv": "14090508", "v": "14090508", "tmeAppID": "qqmusic",
+                         "phonetype": "EBG-AN10", "deviceScore": "553.47", "devicelevel": "50",
+                         "newdevicelevel": "20", "rom": "HuaWei/EMOTION/EmotionUI_14.2.0", "os_ver": "12",
+                         "OpenUDID": "0", "OpenUDID2": "0", "QIMEI36": "0", "udid": "0", "chid": "0",
+                         "aid": "0", "oaid": "0", "taid": "0", "tid": "0", "wid": "0", "uid": "0",
+                         "sid": "0", "modeSwitch": "6", "teenMode": "0", "ui_mode": "2", "nettype": "1020",
+                         "v4ip": ""],
+                "req": ["module": "music.search.SearchCgiService", "method": "DoSearchForQQMusicMobile",
+                        "param": ["search_type": 0, "searchid": searchID, "query": keyword, "page_num": 1,
+                                  "num_per_page": min(max(limit, 1), 50), "highlight": 0, "nqc_flag": 0,
+                                  "multi_zhida": 0, "cat": 2, "grp": 1, "sin": 0, "sem": 0]],
+            ]
+            do {
+                let body = try JSONSerialization.data(withJSONObject: request)
+                guard let sign = zzcSign(body) else { throw AdditionalCatalogSearchError.invalidResponse }
+                var components = URLComponents(string: "https://u.y.qq.com/cgi-bin/musics.fcg")!
+                components.queryItems = [URLQueryItem(name: "sign", value: sign)]
+                var requestObject = URLRequest(url: components.url!)
+                requestObject.httpMethod = "POST"
+                requestObject.httpBody = body
+                requestObject.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                requestObject.setValue("https://y.qq.com", forHTTPHeaderField: "Origin")
+                requestObject.setValue("https://y.qq.com/", forHTTPHeaderField: "Referer")
+                requestObject.setValue("QQMusic 14090508(android 12)", forHTTPHeaderField: "User-Agent")
+                let (data, response) = try await session.data(for: requestObject)
+                guard (response as? HTTPURLResponse)?.statusCode == 200,
+                      let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw AdditionalCatalogSearchError.invalidResponse
+                }
+                let songs = dictionaries(in: root["body"] ?? root["data"] ?? root)
+                    .compactMap(qqCatalogSong)
+                if !songs.isEmpty || attempt == 2 { return songs }
+            } catch {
+                if attempt == 2 { throw error }
+            }
+            try? await Task.sleep(nanoseconds: UInt64(220 * (attempt + 1)) * 1_000_000)
+        }
+        return []
+    }
+
+    static func searchCatalogKugou(keyword: String, limit: Int = 40) async throws -> [Song] {
+        let variants: [(String, String, String)] = [
+            ("https", "", "WebFilter"),
+            ("http", "11089", "WebFilter"),
+            ("http", "11409", "AndroidFilter"),
+            ("https", "11089", "WebFilter"),
+        ]
+        for (scheme, clientVersion, platform) in variants {
+            var components = URLComponents(string: "\(scheme)://songsearch.kugou.com/song_search_v2")!
+            components.queryItems = [
+                URLQueryItem(name: "keyword", value: keyword),
+                URLQueryItem(name: "page", value: "1"),
+                URLQueryItem(name: "pagesize", value: String(min(max(limit, 1), 50))),
+                URLQueryItem(name: "userid", value: "0"),
+                URLQueryItem(name: "clientver", value: clientVersion),
+                URLQueryItem(name: "platform", value: platform),
+                URLQueryItem(name: "filter", value: "2"),
+                URLQueryItem(name: "iscorrection", value: "1"),
+                URLQueryItem(name: "privilege_filter", value: "0"),
+                URLQueryItem(name: "area_code", value: "1"),
+            ]
+            guard let root = try? await fetchObject(components.url!),
+                  int(root["error_code"]) == 0,
+                  let data = root["data"] as? [String: Any] else { continue }
+            let rows = dictionaries(in: data["lists"] ?? data["list"] ?? data["data"])
+            let grouped = rows.flatMap { dictionaries(in: $0["Grp"]) }
+            let songs = (rows + grouped).compactMap(kugouCatalogSong)
+            if !songs.isEmpty { return songs }
+        }
+        throw AdditionalCatalogSearchError.invalidResponse
     }
 
     static func searchKuwoPlaylists(keyword: String, limit: Int = 40) async throws -> [Playlist] {
@@ -234,6 +314,51 @@ enum AdditionalCatalogSearchAPI {
             duration: duration,
             source: .kuwo,
             fee: int(item["PAY"]) ?? int(item["pay"]) ?? 0
+        )
+    }
+
+    private static func qqCatalogSong(_ item: [String: Any]) -> Song? {
+        guard let id = int(item["id"] ?? item["songid"] ?? item["songId"] ?? item["song_id"]), id > 0 else { return nil }
+        let album = (item["album"] as? [String: Any]) ?? (item["album_info"] as? [String: Any])
+        let file = (item["file"] as? [String: Any]) ?? (item["file_info"] as? [String: Any])
+        let mid = text(item["mid"] ?? item["songmid"] ?? file?["media_mid"]) ?? ""
+        let albumMid = text(album?["mid"] ?? album?["album_mid"] ?? item["albummid"]) ?? ""
+        let cover = albumMid.isEmpty ? nil : URL(string: "https://y.gtimg.cn/music/photo_new/T002R500x500M000\(albumMid).jpg")
+        let singers = dictionaries(in: item["singer"] ?? item["singers"] ?? item["artist"])
+            .compactMap { text($0["name"] ?? $0["title"] ?? $0["singername"]) }
+            .joined(separator: " / ")
+        let fee = int(item["fee"]) ?? int((item["pay"] as? [String: Any])?["pay_play"]) ?? 0
+        return Song(
+            id: id,
+            name: text(item["title"] ?? item["songname"] ?? item["songName"] ?? item["name"]) ?? "",
+            artists: singers.isEmpty ? (text(item["singername"]) ?? "") : singers,
+            album: text(album?["name"] ?? album?["title"] ?? item["albumname"]) ?? "",
+            coverURL: cover,
+            duration: seconds(item["interval"] ?? item["duration"]),
+            source: .qq,
+            qqMid: mid.isEmpty ? nil : mid,
+            qqMediaMid: text(file?["media_mid"] ?? item["media_mid"]),
+            fee: fee
+        )
+    }
+
+    private static func kugouCatalogSong(_ item: [String: Any]) -> Song? {
+        guard let id = int(item["Audioid"] ?? item["audio_id"] ?? item["audioid"] ?? item["songid"]), id > 0 else { return nil }
+        let hash = text(item["FileHash"] ?? item["filehash"] ?? item["hash"]) ?? ""
+        let albumID = text(item["AlbumID"] ?? item["album_id"] ?? item["albumid"]) ?? ""
+        let cover = kugouImageURL(text(item["Image"] ?? item["image"] ?? item["AlbumImage"] ?? item["img"] ?? item["imgurl"])).flatMap(URL.init(string:))
+        return Song(
+            id: id,
+            name: text(item["SongName"] ?? item["songname"] ?? item["filename"]) ?? "",
+            artists: text(item["Singers"] ?? item["singername"] ?? item["artist"]) ?? "",
+            album: text(item["AlbumName"] ?? item["album_name"] ?? item["albumname"]) ?? "",
+            coverURL: cover,
+            duration: seconds(item["Duration"] ?? item["duration"] ?? item["timelength"]),
+            source: .kugou,
+            kugouHash: hash.isEmpty ? nil : hash,
+            kugouAlbumAudioId: text(item["audio_id"] ?? item["Audioid"]),
+            kugouAlbumId: albumID.isEmpty ? nil : albumID,
+            fee: int(item["Privilege"] ?? item["privilege"]) ?? 0
         )
     }
 
@@ -474,6 +599,49 @@ enum AdditionalCatalogSearchAPI {
             _ = CC_MD5(pointer, CC_LONG(string.lengthOfBytes(using: .utf8)), &digest)
         }
         return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func zzcSign(_ data: Data) -> String? {
+        var digest = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
+        data.withUnsafeBytes { buffer in
+            _ = CC_SHA1(buffer.baseAddress, CC_LONG(data.count), &digest)
+        }
+        let hexDigits = Array("0123456789abcdef".utf8)
+        let hash = digest.flatMap { byte in
+            [hexDigits[Int(byte >> 4)], hexDigits[Int(byte & 0x0f)]]
+        }
+        guard hash.count == 40 else { return nil }
+        let part1Indexes = [23, 14, 6, 36, 16, 40, 7, 19]
+        let part2Indexes = [16, 1, 32, 12, 19, 27, 8, 5]
+        let part1 = part1Indexes
+            .filter { hash.indices.contains($0) }
+            .map { String(decoding: [hash[$0]], as: UTF8.self) }
+            .joined()
+        let part2 = part2Indexes
+            .filter { hash.indices.contains($0) }
+            .map { String(decoding: [hash[$0]], as: UTF8.self) }
+            .joined()
+        let scramble = [89, 39, 179, 150, 218, 82, 58, 252, 177, 52, 186, 123, 120, 64, 242, 133, 143, 161, 121, 179]
+        var bytes: [UInt8] = []
+        for (index, value) in scramble.enumerated() {
+            guard let high = hexNibble(hash[index * 2]), let low = hexNibble(hash[index * 2 + 1]) else { return nil }
+            bytes.append(UInt8(value) ^ ((high << 4) | low))
+        }
+        let base64 = Data(bytes).base64EncodedString()
+            .replacingOccurrences(of: "/", with: "")
+            .replacingOccurrences(of: "\\", with: "")
+            .replacingOccurrences(of: "+", with: "")
+            .replacingOccurrences(of: "=", with: "")
+        return "zzc\(part1)\(base64)\(part2)".lowercased()
+    }
+
+    private static func hexNibble(_ byte: UInt8) -> UInt8? {
+        switch byte {
+        case 48...57: return byte - 48
+        case 65...70: return byte - 55
+        case 97...102: return byte - 87
+        default: return nil
+        }
     }
 
     private static func text(_ value: Any?) -> String? {
