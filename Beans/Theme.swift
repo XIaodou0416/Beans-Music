@@ -225,14 +225,17 @@ enum BeansUIStyle: String, CaseIterable {
 
 enum BeansTabIconStyle: String, CaseIterable, Identifiable {
     case appleMusic
-    case other
+    /// 保留已选“其他样式”用户的偏好值，展示名称改为 SF Symbols。
+    case sfSymbols = "other"
+    case rounded
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .appleMusic: return "Apple Music"
-        case .other: return "其他样式"
+        case .sfSymbols: return "SF Symbols"
+        case .rounded: return "圆润样式"
         }
     }
 }

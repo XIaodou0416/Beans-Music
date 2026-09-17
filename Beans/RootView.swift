@@ -28,7 +28,16 @@ enum RootTab: String, CaseIterable, Identifiable {
             case .playlists: return "dot.radiowaves.left.and.right"
             case .library: return "music.note.list"
             case .profile: return "person.crop.circle"
-            case .search: return "magnifyingglass"
+                case .search: return "magnifyingglass"
+            }
+        }
+        if style == .rounded {
+            switch self {
+            case .discover: return "house.circle"
+            case .playlists: return "rectangle.grid.2x2"
+            case .library: return "music.note.list"
+            case .profile: return "person.circle"
+            case .search: return "magnifyingglass.circle"
             }
         }
         switch self {
