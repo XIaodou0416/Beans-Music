@@ -983,9 +983,9 @@ struct PlayerView: View {
         }
         .sheet(isPresented: $showCustomCoverPicker) {
             CustomSongCoverPicker(
-                onPick: { url in
+                onPick: { selection in
                     showCustomCoverPicker = false
-                    saveCustomCover(from: url)
+                    saveCustomCover(selection)
                 },
                 onCancel: { showCustomCoverPicker = false }
             )
@@ -5105,10 +5105,11 @@ struct PlayerView: View {
         }
     }
 
-    private func saveCustomCover(from url: URL) {
+    private func saveCustomCover(_ selection: CustomSongCoverSelection) {
         guard let song else { return }
         do {
-            try customCovers.saveCover(from: url, for: song)
+            try customCovers.saveCover(from: selection.sourceURL, crop: selection.crop, for: song)
+            try? FileManager.default.removeItem(at: selection.sourceURL)
             Task { await extractCoverPalette() }
             ToastCenter.shared.show("自定义封面已保存")
         } catch {
@@ -5233,14 +5234,14 @@ struct PlayerView: View {
     private func extractCoverPalette() async {
         guard let url = displayCoverURL else { return }
         do {
-            let data: Data
+            let image: UIImage?
             if url.isFileURL {
-                data = try Data(contentsOf: url)
+                image = CustomCoverMedia.previewImage(at: url)
             } else {
                 let response = try await URLSession.shared.data(from: url)
-                data = response.0
+                image = UIImage(data: response.0)
             }
-            guard let image = UIImage(data: data),
+            guard let image,
                   let dominant = PaletteExtractor.dominantColor(in: image) else { return }
             withAnimation(.easeInOut(duration: 0.45)) {
                 dominantColor = dominant

@@ -759,13 +759,19 @@ struct CoverImage: View {
     // 布局尺寸完全由外层固定容器决定；AsyncImage 只放在 overlay 中渲染，
     // 图片加载完成与否都不会改变任何布局尺寸（根治"封面加载后错乱"）。
     var body: some View {
+        let usesCustomMediaRenderer = CustomSongCoverStore.shared.isStoredCover(url)
         let cachedImage = imageLoader.image ?? BeansCoverImageStore.cachedImage(for: url)
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(Color.beansGlassFill)
             .frame(width: size * max(aspectRatio, 0.1), height: size)
             .overlay {
                 Group {
-                    if let image = cachedImage {
+                    if let url, usesCustomMediaRenderer {
+                        CustomCoverMediaView(
+                            url: url,
+                            crop: CustomSongCoverStore.shared.crop(for: url)
+                        )
+                    } else if let image = cachedImage {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
@@ -780,8 +786,14 @@ struct CoverImage: View {
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .onAppear { imageLoader.load(url: url) }
-            .onChange(of: url) { nextURL in imageLoader.load(url: nextURL) }
+            .onAppear {
+                if !usesCustomMediaRenderer { imageLoader.load(url: url) }
+            }
+            .onChange(of: url) { nextURL in
+                if !CustomSongCoverStore.shared.isStoredCover(nextURL) {
+                    imageLoader.load(url: nextURL)
+                }
+            }
     }
 
     private var placeholderIcon: some View {
@@ -828,7 +840,7 @@ final class BeansCoverImageStore {
     static func cachedImage(for url: URL?) -> UIImage? {
         guard let url else { return nil }
         if url.isFileURL {
-            return BeansImageFileCache.image(at: url.path)
+            return CustomCoverMedia.previewImage(at: url)
         }
         if let image = memoryCache.object(forKey: url as NSURL) {
             return image
@@ -898,7 +910,7 @@ private final class BeansCoverImageLoader: ObservableObject {
             return
         }
         if url.isFileURL {
-            image = BeansImageFileCache.image(at: url.path)
+            image = CustomCoverMedia.previewImage(at: url)
             didFail = image == nil
             return
         }

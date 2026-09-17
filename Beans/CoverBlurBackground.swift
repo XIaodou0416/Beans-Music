@@ -146,7 +146,7 @@ final class CoverBlurView: UIView {
         if currentURL == url { return }
         currentURL = url
 
-        if url.isFileURL, let source = UIImage(contentsOfFile: url.path) {
+        if url.isFileURL, let source = CustomCoverMedia.previewImage(at: url) {
             Self.blurQueue.async { [weak self] in
                 let blurred = Self.makeBlurredImage(source)
                 let colors = Self.extractGradientColors(from: source)

@@ -97,9 +97,9 @@ struct RecordPlayerView: View {
         }
         .sheet(isPresented: $showCustomCoverPicker) {
             CustomSongCoverPicker(
-                onPick: { url in
+                onPick: { selection in
                     showCustomCoverPicker = false
-                    saveCustomCover(from: url)
+                    saveCustomCover(selection)
                 },
                 onCancel: { showCustomCoverPicker = false }
             )
@@ -526,10 +526,11 @@ struct RecordPlayerView: View {
         ToastCenter.shared.show("歌名已复制")
     }
 
-    private func saveCustomCover(from url: URL) {
+    private func saveCustomCover(_ selection: CustomSongCoverSelection) {
         guard let song else { return }
         do {
-            try customCovers.saveCover(from: url, for: song)
+            try customCovers.saveCover(from: selection.sourceURL, crop: selection.crop, for: song)
+            try? FileManager.default.removeItem(at: selection.sourceURL)
             ToastCenter.shared.show("自定义封面已保存")
         } catch {
             ToastCenter.shared.show(error.localizedDescription)
