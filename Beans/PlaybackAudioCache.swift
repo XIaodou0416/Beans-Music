@@ -13,7 +13,7 @@ final class PlaybackAudioCache {
     }
 
     private let defaultsKey = "beans.playbackAudioCache.v1"
-    private let maximumBytes: Int64 = 750 * 1024 * 1024
+    private let maximumBytes: Int64 = 10 * 1024 * 1024 * 1024
     private let directory: URL
     private let lock = NSLock()
     private var entries: [String: Entry]
@@ -49,7 +49,7 @@ final class PlaybackAudioCache {
         defer { finishCaching(song.identityKey) }
 
         var request = URLRequest(url: sourceURL)
-        request.timeoutInterval = 90
+        request.timeoutInterval = 300
         request.allHTTPHeaderFields = headers
         request.cachePolicy = .reloadIgnoringLocalCacheData
 

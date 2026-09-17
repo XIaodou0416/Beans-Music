@@ -1167,6 +1167,7 @@ final class PlayerManager: NSObject, ObservableObject {
         player.automaticallyWaitsToMinimizeStalling = false
         player.rate = Float(rate)
         self.player = player
+        cachePlayedAudio(song: loadedSong, sourceURL: url, headers: playbackHeaders)
         configureEqualizer(for: item)
         playbackConfirmed = false
         itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
@@ -1245,7 +1246,6 @@ final class PlayerManager: NSObject, ObservableObject {
                           !self.playbackConfirmed else { return }
                     self.playbackConfirmed = true
                     self.showPendingThirdPartyVIPNoticeIfNeeded()
-                    self.cachePlayedAudio(song: loadedSong, sourceURL: url, headers: playbackHeaders)
                 }
                 self.playbackConfirmationWorkItem = confirmation
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: confirmation)
