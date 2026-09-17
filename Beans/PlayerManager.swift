@@ -108,6 +108,8 @@ final class PlayerManager: NSObject, ObservableObject {
 
     private var player: AVPlayer?
     private var timeObserver: Any?
+    /// AVPlayer 在 seek 完成前仍可能回调上一个位置；暂存目标位置以免旧回调把歌词拉回去。
+    private var pendingSeek: (songKey: String, revision: Int, target: Double)?
     private var endObserver: NSObjectProtocol?
     private var failureObserver: NSObjectProtocol?
     private var itemStatusObserver: NSKeyValueObservation?
@@ -413,17 +415,41 @@ final class PlayerManager: NSObject, ObservableObject {
 
     func seek(to seconds: Double) {
         // 与播放器的歌词游标保持同一套逻辑：以用户指定的时间立即更新，
-        // 不等待 AVPlayer 回调，也不使用回调中的旧 currentTime 覆盖目标位置。
+        // 同时忽略 seek 落点前来自 AVPlayer 的旧 currentTime 回调。
         let clamped = max(0, min(seconds, max(duration, currentSong?.duration ?? seconds)))
         progress = clamped
         lyricProgress = clamped
         resetListeningProgress()
         seekRevision &+= 1
-        player?.seek(
+        let revision = seekRevision
+        let songKey = currentSong?.identityKey
+        if let songKey {
+            pendingSeek = (songKey, revision, clamped)
+        }
+        guard let player else {
+            pendingSeek = nil
+            updateNowPlaying()
+            savePersistedPlaybackState()
+            return
+        }
+        player.seek(
             to: CMTime(seconds: clamped, preferredTimescale: 600),
             toleranceBefore: .zero,
             toleranceAfter: .zero
-        )
+        ) { [weak self] finished in
+            DispatchQueue.main.async {
+                guard let self,
+                      self.currentSong?.identityKey == songKey,
+                      self.seekRevision == revision else { return }
+                self.pendingSeek = nil
+                guard finished else { return }
+                self.progress = clamped
+                self.lyricProgress = clamped
+                self.lastPublishedProgress = clamped
+                self.updateNowPlaying()
+                self.savePersistedPlaybackState()
+            }
+        }
         updateNowPlaying()
         savePersistedPlaybackState()
     }
@@ -441,8 +467,17 @@ final class PlayerManager: NSObject, ObservableObject {
         let revision = seekRevision
         progress = target
         lyricProgress = target
+        if let seekSongKey {
+            pendingSeek = (seekSongKey, revision, target)
+        }
         resetListeningProgress()
-        player?.seek(
+        guard let player else {
+            pendingSeek = nil
+            updateNowPlaying()
+            savePersistedPlaybackState()
+            return
+        }
+        player.seek(
             to: CMTime(seconds: target, preferredTimescale: 600),
             toleranceBefore: .zero,
             toleranceAfter: .zero
@@ -452,6 +487,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 guard let self,
                       self.currentSong?.identityKey == seekSongKey,
                       self.seekRevision == revision else { return }
+                self.pendingSeek = nil
                 self.progress = target
                 self.lyricProgress = target
                 self.lastPublishedProgress = target
@@ -649,6 +685,7 @@ final class PlayerManager: NSObject, ObservableObject {
         clearAudioRecoveryIntent()
         loadGeneration += 1
         let generation = loadGeneration
+        pendingSeek = nil
         thirdPartyRetryExcludedHostsBySong.removeValue(forKey: song.identityKey)
         attemptedThirdPartyQualitiesBySong.removeValue(forKey: song.identityKey)
         attemptedQQOfficialBRsBySong.removeValue(forKey: song.identityKey)
@@ -1283,8 +1320,24 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         if resumeAt > 0.5 {
             let seekTime = CMTime(seconds: resumeAt, preferredTimescale: 600)
-            player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
+            seekRevision &+= 1
+            let revision = seekRevision
+            pendingSeek = (loadedSong.identityKey, revision, resumeAt)
+            player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+                DispatchQueue.main.async {
+                    guard let self,
+                          self.currentSong?.identityKey == loadedSong.identityKey,
+                          self.seekRevision == revision else { return }
+                    self.pendingSeek = nil
+                    guard finished else { return }
+                    self.progress = resumeAt
+                    self.lyricProgress = resumeAt
+                    self.lastPublishedProgress = resumeAt
+                }
+            }
             progress = resumeAt
+            lyricProgress = resumeAt
+            lastPublishedProgress = resumeAt
         }
         player.playImmediately(atRate: Float(rate))
         isPlaying = true
@@ -1300,6 +1353,15 @@ final class PlayerManager: NSObject, ObservableObject {
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.2, preferredTimescale: 600), queue: .main) { [weak self] time in
             guard let self, let player = self.player else { return }
             if time.seconds.isFinite {
+                if let pendingSeek = self.pendingSeek {
+                    guard self.currentSong?.identityKey == pendingSeek.songKey else {
+                        self.pendingSeek = nil
+                        return
+                    }
+                    // seek 尚未到达目标时，AVPlayer 会短暂报告旧位置；不能用它覆盖歌词时钟。
+                    guard abs(time.seconds - pendingSeek.target) <= 0.35 else { return }
+                    self.pendingSeek = nil
+                }
                 self.recordListeningProgress(at: time.seconds, player: player)
                 self.lyricProgress = time.seconds
                 if abs(time.seconds - self.lastPublishedProgress) >= 0.18 {
@@ -2130,6 +2192,8 @@ final class PlayerManager: NSObject, ObservableObject {
         currentIndex = min(max(saved.currentIndex, 0), saved.queue.count - 1)
         duration = max(saved.duration, currentSong?.duration ?? 0)
         progress = max(0, min(saved.progress, max(duration, currentSong?.duration ?? 0)))
+        lyricProgress = progress
+        lastPublishedProgress = progress
         isPlaying = false
         isBuffering = false
         loadFailed = false
