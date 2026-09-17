@@ -146,6 +146,22 @@ final class CoverBlurView: UIView {
         if currentURL == url { return }
         currentURL = url
 
+        if url.isFileURL, let source = UIImage(contentsOfFile: url.path) {
+            Self.blurQueue.async { [weak self] in
+                let blurred = Self.makeBlurredImage(source)
+                let colors = Self.extractGradientColors(from: source)
+                if let blurred {
+                    Self.imageCache.setObject(blurred, forKey: url as NSURL)
+                }
+                DispatchQueue.main.async {
+                    guard let self, self.currentURL == url else { return }
+                    if let blurred { self.setImage(blurred, animated: true) }
+                    self.applyGradient(colors)
+                }
+            }
+            return
+        }
+
         if let cached = Self.imageCache.object(forKey: url as NSURL) {
             setImage(cached, animated: false)
             applyGradientIfNeeded(for: url)

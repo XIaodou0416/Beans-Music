@@ -7,6 +7,7 @@ struct RecordPlayerView: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var clock: PlaybackClock
     @Environment(\.colorScheme) private var colorScheme
+    @ObservedObject private var customCovers = CustomSongCoverStore.shared
 
     let song: Song?
     let lyrics: [LyricLine]
@@ -29,6 +30,7 @@ struct RecordPlayerView: View {
     @State private var showLyrics = false
     @State private var showQueue = false
     @State private var showQualityPicker = false
+    @State private var showCustomCoverPicker = false
     @AppStorage("beans.audioQuality") private var playbackQualityRaw = BeansAudioQuality.hires.rawValue
 
     init(
@@ -68,6 +70,10 @@ struct RecordPlayerView: View {
         self._showLyrics = State(initialValue: initialShowsLyrics)
     }
 
+    private var displayCoverURL: URL? {
+        customCovers.url(for: song) ?? song?.coverURL
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -89,6 +95,15 @@ struct RecordPlayerView: View {
             RecordModeQualityPickerSheet(song: song)
                 .environmentObject(player)
         }
+        .sheet(isPresented: $showCustomCoverPicker) {
+            CustomSongCoverPicker(
+                onPick: { url in
+                    showCustomCoverPicker = false
+                    saveCustomCover(from: url)
+                },
+                onCancel: { showCustomCoverPicker = false }
+            )
+        }
         .overlay(alignment: .top) {
             recordHeader
                 .padding(.horizontal, 20)
@@ -99,7 +114,7 @@ struct RecordPlayerView: View {
 
     private var backdrop: some View {
         ZStack {
-            CoverBlurBackground(url: song?.coverURL, scheme: colorScheme, animationsEnabled: visualsActive)
+            CoverBlurBackground(url: displayCoverURL, scheme: colorScheme, animationsEnabled: visualsActive)
             RadialGradient(
                 colors: [.white.opacity(0.12), .clear],
                 center: .topLeading,
@@ -228,7 +243,7 @@ struct RecordPlayerView: View {
 
     private func turntable(size: CGFloat) -> some View {
         RecordModeTurntableView(
-            coverURL: song?.coverURL,
+            coverURL: displayCoverURL,
             isPlaying: visualsActive && player.isPlaying,
             trackId: song?.id,
             size: size,
@@ -380,7 +395,7 @@ struct RecordPlayerView: View {
     private var recordQueuePage: some View {
         VStack(spacing: 12) {
             HStack(spacing: 11) {
-                CoverImage(url: song?.coverURL, size: 46, cornerRadius: 10)
+                CoverImage(url: displayCoverURL, size: 46, cornerRadius: 10)
                     .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(song?.name ?? "未在播放")
@@ -439,6 +454,15 @@ struct RecordPlayerView: View {
                 }
                 Button("定时关闭", action: onSleepTimer)
                 Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                Button("更换自定义封面") {
+                    showCustomCoverPicker = true
+                }
+                if customCovers.hasCover(for: song) {
+                    Button("恢复默认封面", role: .destructive) {
+                        customCovers.removeCover(for: song)
+                        ToastCenter.shared.show("已恢复默认封面")
+                    }
+                }
                 if canDownload {
                     Button("下载歌曲", action: onDownload)
                 }
@@ -500,6 +524,16 @@ struct RecordPlayerView: View {
         UIPasteboard.general.string = title
         BeansHaptics.success()
         ToastCenter.shared.show("歌名已复制")
+    }
+
+    private func saveCustomCover(from url: URL) {
+        guard let song else { return }
+        do {
+            try customCovers.saveCover(from: url, for: song)
+            ToastCenter.shared.show("自定义封面已保存")
+        } catch {
+            ToastCenter.shared.show(error.localizedDescription)
+        }
     }
 }
 

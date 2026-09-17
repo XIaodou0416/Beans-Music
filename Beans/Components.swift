@@ -827,6 +827,9 @@ final class BeansCoverImageStore {
     /// skeleton flash when the cover was already cached.
     static func cachedImage(for url: URL?) -> UIImage? {
         guard let url else { return nil }
+        if url.isFileURL {
+            return BeansImageFileCache.image(at: url.path)
+        }
         if let image = memoryCache.object(forKey: url as NSURL) {
             return image
         }
@@ -892,6 +895,11 @@ private final class BeansCoverImageLoader: ObservableObject {
         loadedURL = url
         guard let url else {
             image = nil
+            return
+        }
+        if url.isFileURL {
+            image = BeansImageFileCache.image(at: url.path)
+            didFail = image == nil
             return
         }
         if let cached = BeansCoverImageStore.cachedImage(for: url) {

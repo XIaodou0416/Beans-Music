@@ -22,6 +22,7 @@ struct ReferencePlaybackView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
+    @ObservedObject private var customCovers = CustomSongCoverStore.shared
 
     let song: Song?
     let lyrics: [LyricLine]
@@ -53,6 +54,7 @@ struct ReferencePlaybackView: View {
     @State private var isDraggingLyrics = false
     @State private var resumeTask: Task<Void, Never>?
     @State private var lyricTapTask: Task<Void, Never>?
+    @State private var showCustomCoverPicker = false
 
     init(
         song: Song?,
@@ -82,6 +84,14 @@ struct ReferencePlaybackView: View {
 
     private func layoutEntry(_ part: AppleMusicLayoutPart) -> PlayerLayoutEntry {
         appleLayout.entry(for: part)
+    }
+
+    private var displayCoverURL: URL? {
+        customCovers.url(for: song) ?? song?.coverURL
+    }
+
+    private func displayCoverURL(for song: Song?) -> URL? {
+        customCovers.url(for: song) ?? song?.coverURL
     }
 
     var body: some View {
@@ -128,6 +138,15 @@ struct ReferencePlaybackView: View {
             resumeTask?.cancel()
             lyricTapTask?.cancel()
         }
+        .sheet(isPresented: $showCustomCoverPicker) {
+            CustomSongCoverPicker(
+                onPick: { url in
+                    showCustomCoverPicker = false
+                    saveCustomCover(from: url)
+                },
+                onCancel: { showCustomCoverPicker = false }
+            )
+        }
     }
 
     @ViewBuilder
@@ -153,7 +172,7 @@ struct ReferencePlaybackView: View {
                 .blur(radius: CGFloat(wallpaperBlur * 0.35))
                 .ignoresSafeArea()
             } else {
-                CoverBlurBackground(url: song?.coverURL, scheme: colorScheme)
+                CoverBlurBackground(url: displayCoverURL, scheme: colorScheme)
                     .overlay(Color.black.opacity(colorScheme == .dark ? 0.48 : 0.14))
                     .ignoresSafeArea()
             }
@@ -168,7 +187,7 @@ struct ReferencePlaybackView: View {
             Spacer(minLength: 8)
 
             CoverImage(
-                url: song?.coverURL,
+                url: displayCoverURL,
                 size: artworkSize,
                 cornerRadius: 18,
                 emptyHint: player.isBuffering ? "等待开始播放…" : nil
@@ -254,6 +273,7 @@ struct ReferencePlaybackView: View {
             Menu {
                 Button("定时关闭", action: onSleepTimer)
                 Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                customCoverActions
                 if downloadFeatureUnlocked {
                     Button("下载歌曲", action: onDownload)
                 }
@@ -342,7 +362,7 @@ struct ReferencePlaybackView: View {
                 BeansHaptics.tap()
                 showLyrics = false
             } label: {
-                CoverImage(url: song?.coverURL, size: 48, cornerRadius: 10)
+                CoverImage(url: displayCoverURL, size: 48, cornerRadius: 10)
                     .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.94))
@@ -374,6 +394,7 @@ struct ReferencePlaybackView: View {
                 Menu {
                     Button("定时关闭", action: onSleepTimer)
                     Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                    customCoverActions
                     if downloadFeatureUnlocked {
                         Button("下载歌曲", action: onDownload)
                     }
@@ -438,7 +459,7 @@ struct ReferencePlaybackView: View {
 
     private var compactQueueHeader: some View {
         HStack(spacing: 11) {
-            CoverImage(url: song?.coverURL, size: 46, cornerRadius: 10)
+            CoverImage(url: displayCoverURL, size: 46, cornerRadius: 10)
                 .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
 
             VStack(alignment: .leading, spacing: 3) {
@@ -469,6 +490,7 @@ struct ReferencePlaybackView: View {
                 Divider()
                 Button("定时关闭", action: onSleepTimer)
                 Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                customCoverActions
                 if downloadFeatureUnlocked {
                     Button("下载歌曲", action: onDownload)
                 }
@@ -480,6 +502,31 @@ struct ReferencePlaybackView: View {
                     .frame(width: 38, height: 38)
                     .contentShape(Rectangle())
             }
+        }
+    }
+
+    @ViewBuilder
+    private var customCoverActions: some View {
+        if song != nil {
+            Button("更换自定义封面") {
+                showCustomCoverPicker = true
+            }
+            if customCovers.hasCover(for: song) {
+                Button("恢复默认封面", role: .destructive) {
+                    customCovers.removeCover(for: song)
+                    ToastCenter.shared.show("已恢复默认封面")
+                }
+            }
+        }
+    }
+
+    private func saveCustomCover(from url: URL) {
+        guard let song else { return }
+        do {
+            try customCovers.saveCover(from: url, for: song)
+            ToastCenter.shared.show("自定义封面已保存")
+        } catch {
+            ToastCenter.shared.show(error.localizedDescription)
         }
     }
 
@@ -979,7 +1026,7 @@ private struct AppleMusicCompactQueueRow: View {
             player.playQueueIndex(index)
         } label: {
             HStack(spacing: 11) {
-                CoverImage(url: song.coverURL, size: 46, cornerRadius: 8)
+                CoverImage(url: displayCoverURL(for: song), size: 46, cornerRadius: 8)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(song.name)

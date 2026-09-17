@@ -9,6 +9,7 @@ struct PlayerView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
+    @ObservedObject private var customCovers = CustomSongCoverStore.shared
     @Environment(\.colorScheme) private var colorScheme
     @Binding var isPresented: Bool
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
@@ -31,6 +32,7 @@ struct PlayerView: View {
     @State private var showDownloadPicker = false
     @State private var showMoreActions = false
     @State private var showNativeMoreActions = false
+    @State private var showCustomCoverPicker = false
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
     /// 下载完成后直接弹原生分享（用户自行选择保存或转发）
     @State private var shareFile: ShareFileItem?
@@ -59,6 +61,10 @@ struct PlayerView: View {
 
     private var favoriteDestination: FavoriteDestination {
         FavoriteDestination(rawValue: favoriteDestinationRaw) ?? .local
+    }
+
+    private var displayCoverURL: URL? {
+        customCovers.url(for: song) ?? song?.coverURL
     }
     @AppStorage("beans.djVisual") private var djVisualEnabled = false
     @AppStorage("beans.djVisualIntensity") private var djVisualIntensity = 0.8
@@ -975,6 +981,15 @@ struct PlayerView: View {
                 .environmentObject(theme)
                 .environmentObject(player)
         }
+        .sheet(isPresented: $showCustomCoverPicker) {
+            CustomSongCoverPicker(
+                onPick: { url in
+                    showCustomCoverPicker = false
+                    saveCustomCover(from: url)
+                },
+                onCancel: { showCustomCoverPicker = false }
+            )
+        }
         .sheet(item: $shareFile, onDismiss: cleanupSharedFile) { item in
             ShareSheet(items: [item.url])
         }
@@ -1014,6 +1029,7 @@ struct PlayerView: View {
             Button("添加到本地歌单") {
                 showAddToLocalPlaylist = true
             }
+            customCoverActions
             if downloadFeatureUnlocked {
                 Button("下载歌曲") {
                     showDownloadPicker = true
@@ -1055,7 +1071,7 @@ struct PlayerView: View {
                     endPoint: .bottom
                 )
             } else {
-                CoverBlurBackground(url: song?.coverURL, scheme: colorScheme)
+                CoverBlurBackground(url: displayCoverURL, scheme: colorScheme)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             if classicPlayerFeaturesAvailable {
@@ -1297,7 +1313,7 @@ struct PlayerView: View {
                 BeansHaptics.tap()
                 toggleLyrics()
             } label: {
-                CoverImage(url: song?.coverURL, size: 48, cornerRadius: 10)
+                CoverImage(url: displayCoverURL, size: 48, cornerRadius: 10)
                     .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.94))
@@ -1368,7 +1384,7 @@ struct PlayerView: View {
                     BeansHaptics.tap()
                     toggleLyrics()
                 } label: {
-                    CoverImage(url: song?.coverURL, size: 48, cornerRadius: 10)
+                    CoverImage(url: displayCoverURL, size: 48, cornerRadius: 10)
                         .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.94))
@@ -1423,6 +1439,7 @@ struct PlayerView: View {
                 Menu {
                     Button("定时关闭") { showSleepTimer = true }
                     Button("添加到本地歌单") { showAddToLocalPlaylist = true }
+                    customCoverActions
                     if downloadFeatureUnlocked {
                         Button("下载歌曲") { showDownloadPicker = true }
                     }
@@ -1664,7 +1681,7 @@ struct PlayerView: View {
         VStack(spacing: 14) {
             if layoutRenderingStyle == .vinyl || layoutRenderingStyle == .record {
                 VinylTurntableView(
-                    coverURL: song?.coverURL,
+                    coverURL: displayCoverURL,
                     isPlaying: playerVisualsActive,
                     trackId: song?.id,
                     size: size,
@@ -1686,7 +1703,7 @@ struct PlayerView: View {
                             .frame(width: size * 1.10, height: size * 1.10)
                             .shadow(color: .black.opacity(0.28), radius: 22, y: 10)
 
-                        CoverImage(url: song?.coverURL, size: size, cornerRadius: cornerRadius)
+                        CoverImage(url: displayCoverURL, size: size, cornerRadius: cornerRadius)
                             .frame(width: size, height: size)
                             .clipShape(Circle())
                             .modifier(CoverSpin(enabled: circularCoverSpin, isPlaying: playerVisualsActive))
@@ -1694,7 +1711,7 @@ struct PlayerView: View {
                     }
                     .frame(width: size * 1.10, height: size * 1.10)
                 } else {
-                    CoverImage(url: song?.coverURL, size: size, cornerRadius: cornerRadius)
+                    CoverImage(url: displayCoverURL, size: size, cornerRadius: cornerRadius)
                         .frame(width: size, height: size)
                         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                         .shadow(color: .black.opacity(0.38), radius: 24, y: 12)
@@ -1742,7 +1759,7 @@ struct PlayerView: View {
             }
             .ignoresSafeArea()
         } else {
-            CoverBlurBackground(url: song?.coverURL, scheme: colorScheme)
+            CoverBlurBackground(url: displayCoverURL, scheme: colorScheme)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -1866,6 +1883,18 @@ struct PlayerView: View {
                 showMoreActions = false
                 showAddToLocalPlaylist = true
             }
+            moreActionRow("更换自定义封面", systemName: "photo.badge.plus") {
+                showMoreActions = false
+                showCustomCoverPicker = true
+            }
+            if customCovers.hasCover(for: song) {
+                moreActionRow("恢复默认封面", systemName: "arrow.uturn.backward") {
+                    showMoreActions = false
+                    customCovers.removeCover(for: song)
+                    Task { await extractCoverPalette() }
+                    ToastCenter.shared.show("已恢复默认封面")
+                }
+            }
             if downloadFeatureUnlocked {
                 moreActionRow("下载歌曲", systemName: "arrow.down.circle") {
                     showMoreActions = false
@@ -1984,7 +2013,7 @@ struct PlayerView: View {
             Spacer(minLength: 0)
 
             VinylTurntableView(
-                coverURL: song?.coverURL,
+                coverURL: displayCoverURL,
                 isPlaying: playerVisualsActive,
                 trackId: song?.id,
                 size: size,
@@ -2019,7 +2048,7 @@ struct PlayerView: View {
             Button {
                 toggleLyrics()
             } label: {
-                CoverImage(url: song?.coverURL, size: 48, cornerRadius: 12)
+                CoverImage(url: displayCoverURL, size: 48, cornerRadius: 12)
                     .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.94))
@@ -2074,6 +2103,7 @@ struct PlayerView: View {
             Menu {
                 Button("定时关闭") { showSleepTimer = true }
                 Button("添加到本地歌单") { showAddToLocalPlaylist = true }
+                customCoverActions
                 if downloadFeatureUnlocked {
                     Button("下载歌曲") { showDownloadPicker = true }
                 }
@@ -2199,7 +2229,7 @@ struct PlayerView: View {
                 BeansHaptics.tap()
                 toggleLyrics()
             } label: {
-                CoverImage(url: song?.coverURL, size: 48, cornerRadius: 10)
+                CoverImage(url: displayCoverURL, size: 48, cornerRadius: 10)
                     .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
             }
             .buttonStyle(GlassPressButtonStyle(scale: 0.94))
@@ -2248,6 +2278,7 @@ struct PlayerView: View {
             Menu {
                 Button("定时关闭") { showSleepTimer = true }
                 Button("添加到本地歌单") { showAddToLocalPlaylist = true }
+                customCoverActions
                 if downloadFeatureUnlocked {
                     Button("下载歌曲") { showDownloadPicker = true }
                 }
@@ -2501,7 +2532,7 @@ struct PlayerView: View {
                     .allowsHitTesting(false)
 
                     // 封面（静态）
-                    CoverImage(url: song?.coverURL, size: size, cornerRadius: coverRadius, emptyHint: player.isBuffering ? "等待开始播放…" : nil)
+                    CoverImage(url: displayCoverURL, size: size, cornerRadius: coverRadius, emptyHint: player.isBuffering ? "等待开始播放…" : nil)
                         .matchedGeometryEffect(id: "playerCover", in: coverNS)
                         .id(song?.identityKey ?? "empty-cover")
                         .modifier(CoverSpin(enabled: circularCover && circularCoverSpin, isPlaying: playerVisualsActive))
@@ -2630,7 +2661,7 @@ struct PlayerView: View {
                 } label: {
                     ZStack(alignment: .bottomLeading) {
                         CoverImage(
-                            url: song?.coverURL,
+                            url: displayCoverURL,
                             size: panelWidth - 28,
                             cornerRadius: 24,
                             emptyHint: player.isBuffering ? "等待开始播放…" : nil
@@ -2931,7 +2962,7 @@ struct PlayerView: View {
                 Button {
                     toggleLyrics()
                 } label: {
-                    CoverImage(url: song?.coverURL, size: 48, cornerRadius: circularCover ? 24 : 12)
+                    CoverImage(url: displayCoverURL, size: 48, cornerRadius: circularCover ? 24 : 12)
                         .matchedGeometryEffect(id: "playerCover", in: coverNS)
                         .modifier(CoverSpin(enabled: circularCover && circularCoverSpin, isPlaying: playerVisualsActive))
                         .overlay {
@@ -5058,6 +5089,33 @@ struct PlayerView: View {
         ToastCenter.shared.show("歌名已复制")
     }
 
+    @ViewBuilder
+    private var customCoverActions: some View {
+        if song != nil {
+            Button("更换自定义封面") {
+                showCustomCoverPicker = true
+            }
+            if customCovers.hasCover(for: song) {
+                Button("恢复默认封面", role: .destructive) {
+                    customCovers.removeCover(for: song)
+                    Task { await extractCoverPalette() }
+                    ToastCenter.shared.show("已恢复默认封面")
+                }
+            }
+        }
+    }
+
+    private func saveCustomCover(from url: URL) {
+        guard let song else { return }
+        do {
+            try customCovers.saveCover(from: url, for: song)
+            Task { await extractCoverPalette() }
+            ToastCenter.shared.show("自定义封面已保存")
+        } catch {
+            ToastCenter.shared.show(error.localizedDescription)
+        }
+    }
+
     private func prepareLayoutEditor() {
         layoutEditorStyleRaw = coverPlayerStyle.rawValue
         selectInitialLayoutPart(for: coverPlayerStyle)
@@ -5173,9 +5231,15 @@ struct PlayerView: View {
 
     /// 一次性提取当前封面主色，带动整个播放器配色动态变化（失败时保持主题回退色，不影响任何功能）
     private func extractCoverPalette() async {
-        guard let url = song?.coverURL else { return }
+        guard let url = displayCoverURL else { return }
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let data: Data
+            if url.isFileURL {
+                data = try Data(contentsOf: url)
+            } else {
+                let response = try await URLSession.shared.data(from: url)
+                data = response.0
+            }
             guard let image = UIImage(data: data),
                   let dominant = PaletteExtractor.dominantColor(in: image) else { return }
             withAnimation(.easeInOut(duration: 0.45)) {
