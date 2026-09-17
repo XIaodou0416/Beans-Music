@@ -328,7 +328,7 @@ struct SearchView: View {
 
     private var modernPageContent: some View {
         let _ = theme.accent
-        ZStack {
+        return ZStack {
             if !usesSharedRootBackdrop {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
             }
