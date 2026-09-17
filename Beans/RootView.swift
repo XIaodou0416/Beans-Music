@@ -153,9 +153,10 @@ struct RootView: View {
     }
 
     private var usesSystemPlayerDismissal: Bool {
-        // The system transition can occasionally complete without animating
-        // the player surface on iOS 26. The local transition is stable and
-        // only recognizes a downward drag that begins near the top edge.
+        // Preserve the native interactive dismissal on iOS 26. The local
+        // offset fallback exposes the root surface during a drag, which can
+        // flash white when a custom wallpaper has not drawn underneath yet.
+        if #available(iOS 26.0, *) { return true }
         return false
     }
 
@@ -1018,7 +1019,8 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             .offset(y: usesSystemInteractiveDismissal ? 0 : dragOffset)
             .contentShape(Rectangle())
 
-            // iOS 26 及以上完全交给系统处理交互式下拉；更低系统才使用兼容手势。
+            // iOS 26 uses the system's interactive transition; older systems
+            // keep the compatible local drag gesture.
             if usesSystemInteractiveDismissal {
                 playerSurface
             } else {
