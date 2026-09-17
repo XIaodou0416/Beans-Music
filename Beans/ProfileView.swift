@@ -1343,6 +1343,7 @@ struct SettingsView: View {
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
     @AppStorage("beans.nowPlaying.enabled.v1") private var nowPlayingEnabled = true
     @AppStorage("beans.audioQuality") private var playbackAudioQualityRaw = BeansAudioQuality.hires.rawValue
+    @AppStorage(PlayerManager.autoCrossPlatformFallbackKey) private var autoCrossPlatformFallback = true
     @AppStorage(NetworkAudioQuality.connectionAwareKey) private var connectionAwareQuality = false
     @AppStorage(NetworkAudioQuality.wifiOfficialKey) private var wifiPlaybackAudioQualityRaw = BeansAudioQuality.hires.rawValue
     @AppStorage(NetworkAudioQuality.cellularOfficialKey) private var cellularPlaybackAudioQualityRaw = BeansAudioQuality.higher.rawValue
@@ -2115,6 +2116,18 @@ struct SettingsView: View {
                             .foregroundStyle(Color.beansLabel)
                         thirdPartyQualityPills(thirdPartyAudioQualitySelection)
                     }
+
+                    Divider().overlay(Color.beansComment.opacity(0.15))
+                    Toggle(isOn: $autoCrossPlatformFallback) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("播放失败时切换平台")
+                                .font(BeansFont.appFont(14, .semibold))
+                            Text("当前平台无法播放时，只在已登录会员的平台中查找同一歌曲。")
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                    .tint(Color.beansAmber)
 
                     Divider().overlay(Color.beansComment.opacity(0.15))
                     Button {

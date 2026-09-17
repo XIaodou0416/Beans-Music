@@ -177,11 +177,16 @@ final class PlayerManager: NSObject, ObservableObject {
     private let nowPlayingEnabledKey = "beans.nowPlaying.enabled.v1"
     private let playModeKey = "beans.player.playMode"
     private let autoSkipOnFailureKey = "beans.playback.autoSkipOnFailure"
+    static let autoCrossPlatformFallbackKey = "beans.playback.autoCrossPlatformFallback"
     static let listeningDurationKey = "beans.playback.listeningDuration.v1"
     private let autoResumeLastPlaybackKey = "beans.playback.autoResumeLast"
     private let thirdPartyVIPNoticeKey = "beans.showThirdPartyVIPNotice"
     private let defaults = UserDefaults.standard
     private var didAttemptAutoResume = false
+    /// 当前故障恢复链已尝试的平台，避免不同平台间反复切换同一首歌曲。
+    private var crossPlatformFallbackOriginKey: String?
+    private var crossPlatformFallbackTriedSources = Set<String>()
+    private var crossPlatformFallbackInFlightSongKey: String?
 
     static var storedListeningDuration: TimeInterval {
         max(0, UserDefaults.standard.double(forKey: listeningDurationKey))
@@ -408,6 +413,7 @@ final class PlayerManager: NSObject, ObservableObject {
         } else {
             currentIndex = (currentIndex - 1 + queue.count) % queue.count
         }
+        resetCrossPlatformFallbackState()
         loadCurrent()
     }
 
@@ -517,6 +523,7 @@ final class PlayerManager: NSObject, ObservableObject {
     func retryCurrent() {
         guard ensurePlaybackAllowed() else { return }
         loadFailed = false
+        resetCrossPlatformFallbackState()
         loadCurrent()
     }
 
@@ -606,6 +613,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func advance() {
+        resetCrossPlatformFallbackState()
         switch playMode {
         case .shuffle:
             guard !playOrder.isEmpty else { return }
@@ -618,6 +626,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func jumpToOrderPosition(_ index: Int) {
+        resetCrossPlatformFallbackState()
         currentIndex = index
         if playMode == .shuffle {
             orderPosition = 0
@@ -1374,15 +1383,26 @@ final class PlayerManager: NSObject, ObservableObject {
         reason: String,
         message: String? = nil
     ) {
+        guard let failedSong = song,
+              currentSong?.identityKey == failedSong.identityKey,
+              finalizedFailureSongKey != failedSong.identityKey else {
+            loadFailed = true
+            isBuffering = false
+            isPlaying = false
+            stopAudioSessionWatchdog()
+            return
+        }
+        if attemptCrossPlatformFallbackIfNeeded(for: failedSong, reason: reason) {
+            loadFailed = false
+            isBuffering = true
+            isPlaying = false
+            stopAudioSessionWatchdog()
+            return
+        }
         loadFailed = true
         isBuffering = false
         isPlaying = false
         stopAudioSessionWatchdog()
-        guard let failedSong = song,
-              currentSong?.identityKey == failedSong.identityKey,
-              finalizedFailureSongKey != failedSong.identityKey else {
-            return
-        }
         finalizedFailureSongKey = failedSong.identityKey
         let shouldAutoSkip = defaults.object(forKey: autoSkipOnFailureKey) as? Bool ?? true
         let failureMessage: String
@@ -1416,6 +1436,138 @@ final class PlayerManager: NSObject, ObservableObject {
         failureAutoSkipWorkItem?.cancel()
         failureAutoSkipWorkItem = workItem
         DispatchQueue.main.async(execute: workItem)
+    }
+
+    /// 官方播放链路和已启用的自定义源都失败时，查找已登录会员平台中的同一录音。
+    /// 只接受标题、歌手和时长均匹配的结果，避免播放到翻唱或不同版本。
+    @discardableResult
+    private func attemptCrossPlatformFallbackIfNeeded(for song: Song, reason: String) -> Bool {
+        let enabled = defaults.object(forKey: Self.autoCrossPlatformFallbackKey) as? Bool ?? true
+        guard enabled,
+              crossPlatformFallbackInFlightSongKey != song.identityKey else { return false }
+
+        if crossPlatformFallbackOriginKey == nil {
+            crossPlatformFallbackOriginKey = song.identityKey
+            crossPlatformFallbackTriedSources = [song.source.rawValue]
+        } else {
+            crossPlatformFallbackTriedSources.insert(song.source.rawValue)
+        }
+
+        let sources = [SongSource.netease, .qq, .kugou].filter {
+            $0 != song.source
+                && hasMembership(for: $0)
+                && !crossPlatformFallbackTriedSources.contains($0.rawValue)
+        }
+        guard !sources.isEmpty else { return false }
+
+        let generation = loadGeneration
+        let resume = progress
+        let songKey = song.identityKey
+        crossPlatformFallbackInFlightSongKey = songKey
+        Task { [weak self] in
+            guard let self else { return }
+            var replacement: Song?
+            for source in sources {
+                guard !Task.isCancelled else { return }
+                self.crossPlatformFallbackTriedSources.insert(source.rawValue)
+                if let candidate = await self.matchingSong(song, on: source) {
+                    replacement = candidate
+                    break
+                }
+            }
+
+            await MainActor.run {
+                guard generation == self.loadGeneration,
+                      self.currentSong?.identityKey == songKey else { return }
+                self.crossPlatformFallbackInFlightSongKey = nil
+                guard let replacement,
+                      self.queue.indices.contains(self.currentIndex) else {
+                    self.finishUnrecoverablePlaybackFailure(song: song, reason: reason)
+                    return
+                }
+                self.queue[self.currentIndex] = replacement
+                self.crossPlatformFallbackTriedSources.insert(replacement.source.rawValue)
+                ToastCenter.shared.show("当前平台无法播放，已切换到\(self.platformName(for: replacement.source))", duration: 3)
+                self.loadCurrent(resumeAt: resume)
+            }
+        }
+        return true
+    }
+
+    private func matchingSong(_ sourceSong: Song, on source: SongSource) async -> Song? {
+        let keyword = [sourceSong.name, sourceSong.artists]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        guard !keyword.isEmpty else { return nil }
+
+        let candidates: [Song]
+        switch source {
+        case .netease:
+            candidates = (try? await NetEaseAPI.shared.search(keyword: keyword, limit: 12)) ?? []
+        case .qq:
+            candidates = (try? await QQMusicAPI.shared.searchSongs(keyword: keyword, limit: 12)) ?? []
+        case .kugou:
+            candidates = (try? await KugouMusicAPI.shared.searchSongs(keyword: keyword, limit: 12)) ?? []
+        case .kuwo, .migu:
+            candidates = []
+        }
+        return bestMatchingSong(for: sourceSong, in: candidates)
+    }
+
+    private func bestMatchingSong(for source: Song, in candidates: [Song]) -> Song? {
+        let title = normalizedTrackText(source.name)
+        guard !title.isEmpty else { return nil }
+        let sourceArtists = artistTokens(source.artists)
+        return candidates.compactMap { candidate -> (Song, Int)? in
+            guard normalizedTrackText(candidate.name) == title else { return nil }
+            let candidateArtists = artistTokens(candidate.artists)
+            guard sourceArtists.isEmpty || candidateArtists.isEmpty || !sourceArtists.isDisjoint(with: candidateArtists) else {
+                return nil
+            }
+            let durationDifference = abs(source.duration - candidate.duration)
+            guard source.duration <= 0 || candidate.duration <= 0 || durationDifference <= 12 else {
+                return nil
+            }
+            let artistScore = sourceArtists.intersection(candidateArtists).count * 60
+            return (candidate, 100 + artistScore - Int(durationDifference.rounded()))
+        }
+        .max { $0.1 < $1.1 }?
+        .0
+    }
+
+    private func normalizedTrackText(_ value: String) -> String {
+        var result = value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        for marker in ["(live)", "（live）", "live", "(remix)", "（remix）", "remix", "(dj)", "（dj）", "dj"] {
+            result = result.replacingOccurrences(of: marker, with: "", options: .caseInsensitive)
+        }
+        return result
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .joined()
+    }
+
+    private func artistTokens(_ value: String) -> Set<String> {
+        Set(value
+            .components(separatedBy: ["/", "&", "、", ",", "，", ";", "；", "\\"])
+            .map(normalizedTrackText)
+            .filter { !$0.isEmpty })
+    }
+
+    private func platformName(for source: SongSource) -> String {
+        switch source {
+        case .netease: return "网易云音乐"
+        case .qq: return "QQ音乐"
+        case .kugou: return "酷狗音乐"
+        case .kuwo: return "酷我音乐"
+        case .migu: return "咪咕音乐"
+        }
+    }
+
+    private func resetCrossPlatformFallbackState() {
+        crossPlatformFallbackOriginKey = nil
+        crossPlatformFallbackTriedSources.removeAll()
+        crossPlatformFallbackInFlightSongKey = nil
     }
 
     private func playbackFailureMessage(for song: Song, reason: String, english: Bool = false) -> String {

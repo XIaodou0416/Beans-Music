@@ -2724,6 +2724,8 @@ private struct HomeUnifiedSearchSheet: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var debounceTask: Task<Void, Never>?
     @State private var searchController = SearchFieldController()
+    @State private var showBatchDownload = false
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     private var providers: [SearchProvider] {
         platformPrefs.enabledSearchProviders
@@ -2767,6 +2769,10 @@ private struct HomeUnifiedSearchSheet: View {
         .onDisappear {
             debounceTask?.cancel()
             searchTask?.cancel()
+        }
+        .sheet(isPresented: $showBatchDownload) {
+            BatchDownloadSheet(songs: results, title: "下载搜索结果")
+                .environmentObject(theme)
         }
     }
 
@@ -2897,6 +2903,19 @@ private struct HomeUnifiedSearchSheet: View {
                         }
                         .buttonStyle(.plain)
                         .fixedSize(horizontal: true, vertical: false)
+                        if downloadFeatureUnlocked {
+                            Button {
+                                showBatchDownload = true
+                            } label: {
+                                Image(systemName: "arrow.down.to.line.compact")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Color.beansAmber)
+                                    .frame(width: 30, height: 30)
+                                    .background { BeansGlass(shape: Circle()) }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("批量下载搜索结果")
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 8)

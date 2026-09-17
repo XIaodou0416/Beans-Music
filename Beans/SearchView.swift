@@ -88,6 +88,7 @@ enum SearchResultType: String, CaseIterable, Identifiable {
 /// 搜索页可用的平台不等同于首页或账号体系的平台。附加目录只在搜索页出现，
 /// 不会改变现有首页、歌单和登录流程。
 private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable {
+    case aggregate = "聚合"
     case netease = "网易云音乐"
     case qq = "QQ音乐"
     case kugou = "酷狗音乐"
@@ -98,6 +99,7 @@ private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable
 
     var englishName: String {
         switch self {
+        case .aggregate: return "Aggregate"
         case .netease: return "NetEase Cloud Music"
         case .qq: return "QQ Music"
         case .kugou: return "Kugou Music"
@@ -106,8 +108,9 @@ private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable
         }
     }
 
-    var songSource: SongSource {
+    var songSource: SongSource? {
         switch self {
+        case .aggregate: return nil
         case .netease: return .netease
         case .qq: return .qq
         case .kugou: return .kugou
@@ -117,7 +120,7 @@ private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable
     }
 
     var supportsDetailedResults: Bool {
-        true
+        self != .aggregate
     }
 }
 
@@ -234,8 +237,7 @@ struct SearchView: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
 
     @State private var keyword = ""
-    @AppStorage("beans.search.catalogProvider.v2") private var providerRaw = SearchCatalogProvider.netease.rawValue
-    @State private var provider: SearchCatalogProvider = .netease
+    @State private var provider: SearchCatalogProvider = .aggregate
     private var searchProviders: [SearchCatalogProvider] { SearchCatalogProvider.allCases }
     /// 已加载热门搜索的 provider（避免切 tab 反复加载）
     @State private var hotLoadedProvider: SearchCatalogProvider?
@@ -292,15 +294,11 @@ struct SearchView: View {
             }
         }
         .onChange(of: provider) { _ in
-            providerRaw = provider.rawValue
             if !provider.supportsDetailedResults { resultType = .song }
             let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
             debounceTask?.cancel()
             Task { await startSearch(trimmed) }
-        }
-        .onAppear {
-            provider = SearchCatalogProvider(rawValue: providerRaw) ?? .netease
         }
         .sheet(item: $showAddToPlaylist) { song in
             AddToLocalPlaylistSheet(song: song)
@@ -935,14 +933,16 @@ struct SearchView: View {
     }
 
     private func loadHotWords() async {
-        if provider == .qq {
+        if provider == .aggregate {
+            hotWords = (try? await NetEaseAPI.shared.hotSearch()) ?? []
+        } else if provider == .qq {
             if let words = try? await QQMusicAPI.shared.hotKeys() {
                 hotWords = words
             }
         } else if provider == .kugou {
             hotWords = await KugouMusicAPI.shared.hotWords()
-        } else if provider == .kuwo || provider == .migu {
-            hotWords = (try? await AdditionalCatalogSearchAPI.hotKeywords(for: provider.songSource)) ?? []
+        } else if (provider == .kuwo || provider == .migu), let source = provider.songSource {
+            hotWords = (try? await AdditionalCatalogSearchAPI.hotKeywords(for: source)) ?? []
         } else if let words = try? await NetEaseAPI.shared.hotSearch() {
             hotWords = words
         }
@@ -967,6 +967,20 @@ struct SearchView: View {
             }
             do {
                 switch (selectedProvider, selectedType) {
+                case (.aggregate, .song):
+                    async let netease: [Song] = (try? await NetEaseAPI.shared.search(keyword: trimmed, limit: 30)) ?? []
+                    async let qq: [Song] = (try? await QQMusicAPI.shared.searchSongs(keyword: trimmed, limit: 30)) ?? []
+                    async let kugou: [Song] = (try? await KugouMusicAPI.shared.searchSongs(keyword: trimmed, limit: 30)) ?? []
+                    async let kuwo: [Song] = (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: trimmed, limit: 30)) ?? []
+                    async let migu: [Song] = (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: trimmed, limit: 30)) ?? []
+                    let merged = await (netease + qq + kugou + kuwo + migu)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        songResults = deduplicatedSongs(merged)
+                        if !songResults.isEmpty { BeansHaptics.success() }
+                    }
+                case (.aggregate, .artist), (.aggregate, .album):
+                    break
                 case (.netease, .song):
                     let songs = try await NetEaseAPI.shared.search(keyword: trimmed, limit: 40)
                     guard !Task.isCancelled else { return }
@@ -1056,6 +1070,19 @@ struct SearchView: View {
             }
         }
         await searchTask?.value
+    }
+
+    private func deduplicatedSongs(_ songs: [Song]) -> [Song] {
+        var seen = Set<String>()
+        return songs.filter { song in
+            let title = song.name
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .lowercased()
+            let artists = song.artists
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .lowercased()
+            return seen.insert("\(title)|\(artists)").inserted
+        }
     }
 }
 

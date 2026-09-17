@@ -393,6 +393,9 @@ struct LocalPlaylistDetailSheet: View {
     @State private var selectedSongKeys: Set<String> = []
     @State private var showAddSelectedDestination = false
     @State private var exportFile: ShareFileItem?
+    @State private var showBatchDownload = false
+    @State private var batchDownloadSongs: [Song] = []
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     private var playlist: LocalPlaylist? {
         store.playlists.first { $0.id == playlistID }
@@ -498,6 +501,15 @@ struct LocalPlaylistDetailSheet: View {
                             Label(multiSelectMode ? "退出多选" : "多选编辑", systemImage: multiSelectMode ? "xmark.circle" : "checklist")
                         }
                         if multiSelectMode {
+                            if downloadFeatureUnlocked {
+                                Button {
+                                    batchDownloadSongs = selectedSongs
+                                    showBatchDownload = true
+                                } label: {
+                                    Label("下载选中歌曲", systemImage: "arrow.down.to.line.compact")
+                                }
+                                .disabled(selectedSongKeys.isEmpty)
+                            }
                             Button {
                                 copyAllSongTitles()
                             } label: {
@@ -520,6 +532,15 @@ struct LocalPlaylistDetailSheet: View {
                                 Label("添加到其他本地歌单", systemImage: "folder.badge.plus")
                             }
                             .disabled(selectedSongKeys.isEmpty || !hasOtherPlaylist)
+                        }
+                        if !multiSelectMode, downloadFeatureUnlocked {
+                            Button {
+                                batchDownloadSongs = visibleSongs.map(\.element)
+                                showBatchDownload = true
+                            } label: {
+                                Label("批量下载歌单", systemImage: "arrow.down.to.line.compact")
+                            }
+                            .disabled(visibleSongs.isEmpty)
                         }
                         Button {
                             if let song = player.currentSong {
@@ -558,6 +579,10 @@ struct LocalPlaylistDetailSheet: View {
         .sheet(item: $exportFile) { item in
             ShareSheet(items: [item.url])
         }
+        .sheet(isPresented: $showBatchDownload) {
+            BatchDownloadSheet(songs: batchDownloadSongs, title: "下载本地歌单")
+                .environmentObject(theme)
+        }
         .alert("重命名歌单", isPresented: $showRename) {
             TextField("歌单名称", text: $renameText)
             Button("保存") {
@@ -586,6 +611,10 @@ struct LocalPlaylistDetailSheet: View {
 
     private var hasOtherPlaylist: Bool {
         store.playlists.contains { $0.id != playlistID }
+    }
+
+    private var selectedSongs: [Song] {
+        playlist?.songs.filter { selectedSongKeys.contains($0.identityKey) } ?? []
     }
 
     private func toggleSelection(_ song: Song) {

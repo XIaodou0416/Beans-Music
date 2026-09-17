@@ -20,8 +20,10 @@ struct PlaylistView: View {
     @State private var errorMessage: String?
     @State private var searchText = ""
     @State private var sortMode: PlaylistSortMode = .original
+    @State private var showBatchDownload = false
     @AppStorage("beans.homeHeaderHideSort") private var hideSortButton = false
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
@@ -74,7 +76,23 @@ struct PlaylistView: View {
             }
             .navigationTitle(playlist.name)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if downloadFeatureUnlocked, !displayedTracks.isEmpty {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            showBatchDownload = true
+                        } label: {
+                            Image(systemName: "arrow.down.to.line.compact")
+                        }
+                        .accessibilityLabel("批量下载歌单")
+                    }
+                }
+            }
         .task { await load() }
+        .sheet(isPresented: $showBatchDownload) {
+            BatchDownloadSheet(songs: displayedTracks, title: "下载歌单")
+                .environmentObject(theme)
+        }
     }
 
     private var header: some View {

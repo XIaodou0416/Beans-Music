@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 // MARK: - 下载音质
 
@@ -75,7 +76,11 @@ final class DownloadManager {
     private init() {}
 
     @discardableResult
-    func download(song: Song, quality: DownloadQuality) async -> Result<DownloadResult, Error> {
+    func download(
+        song: Song,
+        quality: DownloadQuality,
+        destinationDirectory: URL? = nil
+    ) async -> Result<DownloadResult, Error> {
         let chain = quality.fallbackChain
         var lastError: Error = NetEaseError.unknown("下载失败")
         BeansLogger.shared.log(
@@ -117,7 +122,7 @@ final class DownloadManager {
             }
 
             // 3) 保存到临时目录（不占用户存储；分享面板自带「存储到文件 / 转发」选项）
-            let dir = FileManager.default.temporaryDirectory
+            let dir = destinationDirectory ?? FileManager.default.temporaryDirectory
                 .appendingPathComponent("BeansShare", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let safeName = "\(song.name) - \(song.artists)"
@@ -125,8 +130,11 @@ final class DownloadManager {
                 .replacingOccurrences(of: ":", with: "-")
             let actualQuality = resolved.actualQuality
             let ext = fileExtension(for: resolved.url, response: response, quality: actualQuality, fileURL: tempURL)
-            let dest = dir.appendingPathComponent("\(safeName).\(ext)")
-            try? FileManager.default.removeItem(at: dest)
+            let dest = availableDestination(
+                named: safeName,
+                fileExtension: ext,
+                in: dir
+            )
             do {
                 try FileManager.default.moveItem(at: tempURL, to: dest)
             } catch {
@@ -321,5 +329,124 @@ final class DownloadManager {
         let path = url.path.isEmpty ? "/" : url.path
         let shortPath = path.count > 64 ? String(path.prefix(64)) + "..." : path
         return "\(host)\(shortPath)"
+    }
+
+    private func availableDestination(named name: String, fileExtension: String, in directory: URL) -> URL {
+        let fileManager = FileManager.default
+        var candidate = directory.appendingPathComponent("\(name).\(fileExtension)")
+        var suffix = 2
+        while fileManager.fileExists(atPath: candidate.path) {
+            candidate = directory.appendingPathComponent("\(name) (\(suffix)).\(fileExtension)")
+            suffix += 1
+        }
+        return candidate
+    }
+}
+
+// MARK: - 批量下载
+
+/// 批量下载在同一个临时目录中顺序执行，避免多个音源请求同时抢占网络和内存。
+@MainActor
+final class BatchDownloadManager: ObservableObject {
+    static let shared = BatchDownloadManager()
+
+    @Published private(set) var totalCount = 0
+    @Published private(set) var completedCount = 0
+    @Published private(set) var succeededCount = 0
+    @Published private(set) var failedSongs: [String] = []
+    @Published private(set) var currentSongName = ""
+    @Published private(set) var downloadedFiles: [URL] = []
+    @Published private(set) var isDownloading = false
+    @Published private(set) var wasCancelled = false
+
+    private var downloadTask: Task<Void, Never>?
+
+    private init() {}
+
+    var progress: Double {
+        guard totalCount > 0 else { return 0 }
+        return Double(completedCount) / Double(totalCount)
+    }
+
+    var statusText: String {
+        if isDownloading {
+            return "正在下载 \(completedCount + 1)/\(totalCount)"
+        }
+        if wasCancelled {
+            return "已取消：成功 \(succeededCount) 首，失败 \(failedSongs.count) 首"
+        }
+        guard totalCount > 0 else { return "尚未开始" }
+        return "已完成：成功 \(succeededCount) 首，失败 \(failedSongs.count) 首"
+    }
+
+    func start(songs: [Song], quality: DownloadQuality) {
+        guard !isDownloading else { return }
+        let uniqueSongs = unique(songs)
+        guard !uniqueSongs.isEmpty else { return }
+
+        totalCount = uniqueSongs.count
+        completedCount = 0
+        succeededCount = 0
+        failedSongs = []
+        currentSongName = ""
+        downloadedFiles = []
+        wasCancelled = false
+        isDownloading = true
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("BeansBatchShare", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            isDownloading = false
+            failedSongs = uniqueSongs.map(\.name)
+            ToastCenter.shared.show("无法创建批量下载目录", duration: 3)
+            return
+        }
+
+        downloadTask = Task { [weak self] in
+            guard let self else { return }
+            for song in uniqueSongs {
+                guard !Task.isCancelled else { break }
+                self.currentSongName = song.name
+
+                let result = await DownloadManager.shared.download(
+                    song: song,
+                    quality: quality,
+                    destinationDirectory: directory
+                )
+
+                guard !Task.isCancelled else { break }
+                switch result {
+                case .success(let downloaded):
+                    self.succeededCount += 1
+                    self.downloadedFiles.append(downloaded.url)
+                case .failure:
+                    self.failedSongs.append(song.name)
+                }
+                self.completedCount += 1
+            }
+
+            self.wasCancelled = Task.isCancelled
+            self.currentSongName = ""
+            self.isDownloading = false
+            self.downloadTask = nil
+            if self.wasCancelled {
+                ToastCenter.shared.show("批量下载已取消", duration: 2)
+            } else {
+                ToastCenter.shared.show("批量下载完成：成功 \(self.succeededCount) 首", duration: 3)
+            }
+        }
+    }
+
+    func cancel() {
+        guard isDownloading else { return }
+        downloadTask?.cancel()
+    }
+
+    private func unique(_ songs: [Song]) -> [Song] {
+        var identities = Set<String>()
+        return songs.filter { identities.insert($0.identityKey).inserted }
     }
 }

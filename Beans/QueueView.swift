@@ -7,6 +7,8 @@ struct QueueView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @AppStorage("beans.queueOverlayPresented") private var queueOverlayPresented = false
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
+    @State private var showBatchDownload = false
 
     var body: some View {
         let _ = theme.accent
@@ -36,6 +38,13 @@ struct QueueView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        if downloadFeatureUnlocked, !player.queue.isEmpty {
+                            Button {
+                                showBatchDownload = true
+                            } label: {
+                                Label("批量下载", systemImage: "arrow.down.to.line.compact")
+                            }
+                        }
                         Button {
                             player.clearQueue()
                         } label: {
@@ -54,6 +63,10 @@ struct QueueView: View {
         .modifier(QueueSheetPresentation())
         .onAppear { queueOverlayPresented = true }
         .onDisappear { queueOverlayPresented = false }
+        .sheet(isPresented: $showBatchDownload) {
+            BatchDownloadSheet(songs: player.queue, title: "下载播放列表")
+                .environmentObject(theme)
+        }
     }
 
     private var queueHeader: some View {
