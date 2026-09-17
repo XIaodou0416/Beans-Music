@@ -1016,6 +1016,7 @@ struct AppleMusicCompactQueueContent: View {
 
 private struct AppleMusicCompactQueueRow: View {
     @EnvironmentObject private var player: PlayerManager
+    @ObservedObject private var customCovers = CustomSongCoverStore.shared
 
     let index: Int
     let song: Song
@@ -1026,7 +1027,7 @@ private struct AppleMusicCompactQueueRow: View {
             player.playQueueIndex(index)
         } label: {
             HStack(spacing: 11) {
-                CoverImage(url: displayCoverURL(for: song), size: 46, cornerRadius: 8)
+                CoverImage(url: customCovers.url(for: song) ?? song.coverURL, size: 46, cornerRadius: 8)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(song.name)
