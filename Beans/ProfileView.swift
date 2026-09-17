@@ -1714,7 +1714,6 @@ struct SettingsView: View {
                     .ignoresSafeArea()
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 20) {
-                        settingsSearchField
                         coreSettingsGroup
                         playbackSettingsGroup
                         utilitySettingsGroup
@@ -1752,6 +1751,7 @@ struct SettingsView: View {
         }
         .environment(\.beansSettingsPerformanceMode, true)
         .preferredColorScheme(themeMode.colorScheme)
+        .searchable(text: $settingsSearchText, placement: .automatic, prompt: "搜索设置")
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
             if #unavailable(iOS 26) {
@@ -1859,35 +1859,6 @@ struct SettingsView: View {
             if #unavailable(iOS 26) {
                 HighRefreshKeeper.shared.resumeAfterTemporaryPause()
             }
-        }
-    }
-
-    private var settingsSearchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.secondary)
-            TextField("搜索设置", text: $settingsSearchText)
-                .font(BeansFont.appFont(16, .medium))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            if !settingsSearchText.isEmpty {
-                Button {
-                    settingsSearchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Color.secondary.opacity(0.7))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 16)
-        .frame(height: 48)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
-        .overlay {
-            Capsule()
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                .allowsHitTesting(false)
         }
     }
 
