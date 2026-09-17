@@ -32,8 +32,6 @@ struct DiscoverView: View {
     @State private var showHomePlatformMenu = false
     @State private var showProfile = false
     @State private var showSectionSort = false
-    @State private var homeSearchText = ""
-    @State private var showHomeUnifiedSearch = false
     /// 主页板块顺序（每日推荐 / 排行榜，可自定义）
     @State private var homeOrder = SectionOrderStore.load(SectionOrderStore.homeKey, defaults: SectionOrderStore.homeDefaults)
 
@@ -288,20 +286,6 @@ struct DiscoverView: View {
         }
             .beansNavigationDestination(for: DiscoverRoute.self) { route in
                 discoverDestination(route)
-            }
-            .searchable(
-                text: $homeSearchText,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: beansLocalized("搜索音乐", "Search music")
-            )
-            .onSubmit(of: .search) {
-                guard !homeSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                showHomeUnifiedSearch = true
-            }
-            .sheet(isPresented: $showHomeUnifiedSearch) {
-                HomeUnifiedSearchSheet(initialKeyword: homeSearchText)
-                    .environmentObject(theme)
-                    .environmentObject(player)
             }
         }
     }
@@ -2729,10 +2713,6 @@ private struct HomeUnifiedSearchSheet: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var debounceTask: Task<Void, Never>?
     @State private var searchController = SearchFieldController()
-
-    init(initialKeyword: String = "") {
-        _keyword = State(initialValue: initialKeyword)
-    }
 
     private var providers: [SearchProvider] {
         platformPrefs.enabledSearchProviders

@@ -75,8 +75,6 @@ struct PlaylistSquareView: View {
 
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
-                            playlistSearchField
-
                             if categories.count > 1 {
                                 categoryChips
                             }
@@ -122,6 +120,19 @@ struct PlaylistSquareView: View {
                 if !providers.contains(source) {
                     playlistSourceRaw = (providers.first ?? .netease).rawValue
                     playlists = []
+                }
+            }
+            .searchable(
+                text: $searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: beansLocalized("搜索歌单", "Search playlists")
+            )
+            .onSubmit(of: .search) {
+                submitSearch()
+            }
+            .onChange(of: searchText) { value in
+                if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, isSearching {
+                    clearSearch()
                 }
             }
         }
@@ -342,56 +353,6 @@ struct PlaylistSquareView: View {
                         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
                     }
                 }
-            }
-        }
-    }
-
-    private var playlistSearchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.beansComment)
-            TextField(beansLocalized("搜索歌单", "Search playlists"), text: $searchText)
-                .font(BeansFont.appFont(14))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-                .onSubmit { submitSearch() }
-
-            if !searchText.isEmpty {
-                Button { clearSearch() } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.beansComment.opacity(0.85))
-                }
-                .buttonStyle(.plain)
-            }
-
-            Button { submitSearch() } label: {
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 19))
-                    .foregroundStyle(Color.beansAmber)
-            }
-            .buttonStyle(.plain)
-            .disabled(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
-        }
-        .padding(.horizontal, 13)
-        .frame(height: 42)
-        .background {
-            if usesSolidSurface {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.primary.opacity(0.04))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.7)
-                    }
-            } else if #available(iOS 26, *) {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.clear)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 16))
-            } else {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }
     }

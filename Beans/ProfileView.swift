@@ -1751,7 +1751,11 @@ struct SettingsView: View {
         }
         .environment(\.beansSettingsPerformanceMode, true)
         .preferredColorScheme(themeMode.colorScheme)
-        .searchable(text: $settingsSearchText, placement: .automatic, prompt: "搜索设置")
+        .searchable(
+            text: $settingsSearchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "搜索设置"
+        )
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
             if #unavailable(iOS 26) {
