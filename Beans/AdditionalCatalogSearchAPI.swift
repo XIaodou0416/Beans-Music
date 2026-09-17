@@ -221,6 +221,7 @@ enum AdditionalCatalogSearchAPI {
         } catch {
             return try await miguSearch(keyword: keyword, limit: limit, switchValue: "{\"song\":1,\"album\":0,\"singer\":0,\"tagSong\":0,\"mvSong\":0,\"songlist\":0,\"bestShow\":0}")
         }
+    }
 
     private static func dictionaries(in value: Any?) -> [[String: Any]] {
         if let dictionary = value as? [String: Any] {
