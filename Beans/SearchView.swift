@@ -192,7 +192,6 @@ struct SearchView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
-    @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
 
     @State private var keyword = ""
     @AppStorage("beans.search.provider") private var providerRaw = SearchProvider.netease.rawValue
@@ -321,12 +320,6 @@ struct SearchView: View {
                             .padding(.bottom, 10)
                     }
 
-                    if !hidePlatformPicker {
-                        providerPicker
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 8)
-                    }
-
                     contentArea
                         .frame(maxWidth: .infinity, alignment: .top)
                 }
@@ -345,37 +338,6 @@ struct SearchView: View {
                 .font(BeansFont.appFont(32, .bold))
                 .foregroundStyle(Color.beansLabel)
             Spacer(minLength: 0)
-            Menu {
-                ForEach(searchProviders) { candidate in
-                    Button {
-                        BeansHaptics.tap()
-                        provider = candidate
-                    } label: {
-                        Label(LocalizedStringKey(candidate.rawValue), systemImage: candidate == provider ? "checkmark" : candidate.icon)
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    if let imageName = provider.brandImageName {
-                        Image(imageName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 15, height: 15)
-                    } else {
-                        Image(systemName: provider.icon)
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    Text(LocalizedStringKey(provider.rawValue))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                }
-                .font(BeansFont.appFont(12, .semibold))
-                .foregroundStyle(Color.beansComment)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 6)
-                .background { BeansGlass(shape: Capsule()) }
-            }
-            .disabled(searchProviders.count < 2)
         }
     }
 
@@ -387,6 +349,7 @@ struct SearchView: View {
             hotSection
         } else {
             VStack(spacing: 0) {
+                resultProviderPicker
                 typeTabs
                 resultsArea
             }
@@ -421,45 +384,64 @@ struct SearchView: View {
         Task { await startSearch(trimmed) }
     }
 
-    // MARK: - 平台选择（等宽分段控件）
+    // MARK: - 搜索结果平台选择
 
-    private var providerPicker: some View {
-        HStack(spacing: 4) {
-            ForEach(searchProviders) { p in
-                Button {
-                    BeansHaptics.tap()
-                    if provider != p { provider = p }
-                } label: {
-                    HStack(spacing: 6) {
-                        if let imageName = p.brandImageName {
-                            Image(imageName)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 14, height: 14)
-                        } else {
-                            Image(systemName: p.icon)
-                                .font(.system(size: 11, weight: .semibold))
-                        }
-                        Text(LocalizedStringKey(p.rawValue))
+    private var resultProviderPicker: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 7) {
+                Text("搜索平台")
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(Color.beansComment)
+                Spacer(minLength: 0)
+                Text(LocalizedStringKey(provider.rawValue))
+                    .font(BeansFont.appFont(12, .semibold))
+                    .foregroundStyle(Color.beansAmber)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(searchProviders) { candidate in
+                        Button {
+                            BeansHaptics.tap()
+                            guard provider != candidate else { return }
+                            provider = candidate
+                        } label: {
+                            HStack(spacing: 6) {
+                                if provider == candidate {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                }
+                                if let imageName = candidate.brandImageName {
+                                    Image(imageName)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 14, height: 14)
+                                } else {
+                                    Image(systemName: candidate.icon)
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                Text(LocalizedStringKey(candidate.rawValue))
+                            }
                             .font(BeansFont.appFont(13, .semibold))
-                    }
-                    .foregroundStyle(provider == p ? Color.white : Color.beansComment)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background {
-                        if provider == p {
-                            Capsule().fill(p.tint)
-                        } else {
-                            Capsule().fill(.clear)
+                            .foregroundStyle(provider == candidate ? Color.white : Color.beansLabel)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background {
+                                if provider == candidate {
+                                    Capsule().fill(candidate.tint)
+                                } else {
+                                    Capsule().fill(Color.beansLabel.opacity(colorScheme == .dark ? 0.12 : 0.08))
+                                }
+                            }
                         }
+                        .buttonStyle(GlassPressButtonStyle(scale: 0.94))
                     }
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
             }
         }
-        .padding(4)
-        .background { BeansSurface(shape: Capsule()) }
-        .clipShape(Capsule())
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
     }
 
     // MARK: - 分类选择（歌曲 / 歌手 / 专辑）
