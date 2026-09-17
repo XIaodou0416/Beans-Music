@@ -85,6 +85,96 @@ enum SearchResultType: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// 搜索页和歌单广场共享同一个输入控件，确保不同入口的尺寸与交互一致。
+struct BeansUnifiedSearchField: View {
+    @Binding var text: String
+    var controller: SearchFieldController? = nil
+    @State private var fallbackController = SearchFieldController()
+    let placeholder: String
+    let isSearching: Bool
+    let onClear: () -> Void
+    let onSubmit: (String) -> Void
+
+    var body: some View {
+        if #available(iOS 26, *) {
+            NativeSearchBar(
+                text: $text,
+                controller: controller,
+                placeholder: placeholder,
+                onTextChange: { value in
+                    if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        onClear()
+                    }
+                },
+                onSubmit: onSubmit
+            )
+            .frame(height: 44)
+        } else {
+            legacyField
+        }
+    }
+
+    private var legacyField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.beansComment)
+            SearchTextField(
+                text: $text,
+                controller: controller ?? fallbackController,
+                placeholder: placeholder,
+                textColor: UIColor.beansLabel,
+                onSubmit: onSubmit
+            )
+            .frame(height: 32)
+            .frame(maxWidth: .infinity)
+            ZStack {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Color.beansAmber)
+                    .opacity(isSearching ? 1 : 0)
+            }
+            .frame(width: 20, height: 22)
+            .animation(nil, value: isSearching)
+            ZStack {
+                Button {
+                    text = ""
+                    onClear()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.beansComment.opacity(0.85))
+                }
+                .buttonStyle(.plain)
+                .opacity(text.isEmpty ? 0 : 1)
+                .disabled(text.isEmpty)
+            }
+            .frame(width: 20, height: 22)
+            Button {
+                let submittedText = controller?.commit() ?? text
+                onSubmit(submittedText)
+            } label: {
+                Text("搜索")
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 6)
+                    .background { BeansGlass(shape: Capsule()) }
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+            .frame(width: 54, height: 30)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 6)
+        .background {
+            BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .beansCardShadow(radius: 4, y: 2)
+        .frame(maxWidth: .infinity)
+    }
+}
+
 struct SearchView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
@@ -295,101 +385,6 @@ struct SearchView: View {
             }
         )
     }
-
-}
-
-/// 搜索页和歌单广场共享同一个输入控件，确保不同入口的尺寸与交互一致。
-struct BeansUnifiedSearchField: View {
-    @Binding var text: String
-    var controller: SearchFieldController? = nil
-    @State private var fallbackController = SearchFieldController()
-    let placeholder: String
-    let isSearching: Bool
-    let onClear: () -> Void
-    let onSubmit: (String) -> Void
-
-    var body: some View {
-        if #available(iOS 26, *) {
-            NativeSearchBar(
-                text: $text,
-                controller: controller,
-                placeholder: placeholder,
-                onTextChange: { value in
-                    if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        onClear()
-                    }
-                },
-                onSubmit: onSubmit
-            )
-            .frame(height: 44)
-        } else {
-            legacyField
-        }
-    }
-
-    private var legacyField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.beansComment)
-            SearchTextField(
-                text: $text,
-                controller: controller ?? fallbackController,
-                placeholder: placeholder,
-                textColor: UIColor.beansLabel,
-                onSubmit: onSubmit
-            )
-            .frame(height: 32)
-            .frame(maxWidth: .infinity)
-            ZStack {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(Color.beansAmber)
-                    .opacity(isSearching ? 1 : 0)
-            }
-            .frame(width: 20, height: 22)
-            .animation(nil, value: isSearching)
-            ZStack {
-                Button {
-                    text = ""
-                    onClear()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.beansComment.opacity(0.85))
-                }
-                .buttonStyle(.plain)
-                .opacity(text.isEmpty ? 0 : 1)
-                .disabled(text.isEmpty)
-            }
-            .frame(width: 20, height: 22)
-            Button {
-                let submittedText = controller?.commit() ?? text
-                onSubmit(submittedText)
-            } label: {
-                Text("搜索")
-                    .font(BeansFont.appFont(13, .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 6)
-                    .background { BeansGlass(shape: Capsule()) }
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.9))
-            .frame(width: 54, height: 30)
-        }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 6)
-        .background {
-            BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .beansCardShadow(radius: 4, y: 2)
-        .frame(maxWidth: .infinity)
-    }
-
-}
-
-extension SearchView {
 
     // MARK: - 平台选择（等宽分段控件）
 
