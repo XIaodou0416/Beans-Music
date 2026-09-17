@@ -983,9 +983,9 @@ struct PlayerView: View {
         }
         .sheet(isPresented: $showCustomCoverPicker) {
             CustomSongCoverPicker(
-                onPick: { selection in
+                onPick: { url in
                     showCustomCoverPicker = false
-                    saveCustomCover(selection)
+                    saveCustomCover(from: url)
                 },
                 onCancel: { showCustomCoverPicker = false }
             )
@@ -5105,11 +5105,11 @@ struct PlayerView: View {
         }
     }
 
-    private func saveCustomCover(_ selection: CustomSongCoverSelection) {
+    private func saveCustomCover(from url: URL) {
         guard let song else { return }
         do {
-            try customCovers.saveCover(from: selection.sourceURL, crop: selection.crop, for: song)
-            try? FileManager.default.removeItem(at: selection.sourceURL)
+            try customCovers.saveCover(from: url, for: song)
+            try? FileManager.default.removeItem(at: url)
             Task { await extractCoverPalette() }
             ToastCenter.shared.show("自定义封面已保存")
         } catch {

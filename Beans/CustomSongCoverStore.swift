@@ -5,19 +5,6 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-struct CustomSongCoverCrop: Codable, Equatable {
-    var zoom: CGFloat = 1
-    var offsetX: CGFloat = 0
-    var offsetY: CGFloat = 0
-
-    static let `default` = CustomSongCoverCrop()
-}
-
-struct CustomSongCoverSelection {
-    let sourceURL: URL
-    let crop: CustomSongCoverCrop
-}
-
 enum CustomCoverMediaKind: Equatable {
     case image
     case gif
@@ -86,7 +73,6 @@ final class CustomSongCoverStore: ObservableObject {
 
     private struct Entry: Codable, Equatable {
         let filename: String
-        let crop: CustomSongCoverCrop
     }
 
     private let legacyDefaultsKey = "beans.player.customSongCovers.v1"
@@ -108,11 +94,6 @@ final class CustomSongCoverStore: ObservableObject {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
-    func crop(for url: URL?) -> CustomSongCoverCrop {
-        guard let url else { return .default }
-        return entries.values.first(where: { $0.filename == url.lastPathComponent })?.crop ?? .default
-    }
-
     func isStoredCover(_ url: URL?) -> Bool {
         guard let url, url.isFileURL else { return false }
         return entries.values.contains { $0.filename == url.lastPathComponent }
@@ -122,7 +103,7 @@ final class CustomSongCoverStore: ObservableObject {
         url(for: song) != nil
     }
 
-    func saveCover(from sourceURL: URL, crop: CustomSongCoverCrop = .default, for song: Song) throws {
+    func saveCover(from sourceURL: URL, for song: Song) throws {
         let accessing = sourceURL.startAccessingSecurityScopedResource()
         defer {
             if accessing { sourceURL.stopAccessingSecurityScopedResource() }
@@ -142,9 +123,6 @@ final class CustomSongCoverStore: ObservableObject {
             filename = UUID().uuidString.lowercased() + ".jpg"
             dataToWrite = jpeg
         case .gif, .video:
-            guard sourceData.count <= 50 * 1024 * 1024 else {
-                throw CustomSongCoverError.fileTooLarge
-            }
             let ext = sourceURL.pathExtension.isEmpty
                 ? (mediaKind == .gif ? "gif" : "mp4")
                 : sourceURL.pathExtension.lowercased()
@@ -156,7 +134,7 @@ final class CustomSongCoverStore: ObservableObject {
         let destination = directory.appendingPathComponent(filename)
         try dataToWrite.write(to: destination, options: .atomic)
 
-        if let previous = entries.updateValue(Entry(filename: filename, crop: crop), forKey: song.identityKey), previous.filename != filename {
+        if let previous = entries.updateValue(Entry(filename: filename), forKey: song.identityKey), previous.filename != filename {
             let previousURL = directory.appendingPathComponent(previous.filename)
             try? FileManager.default.removeItem(at: previousURL)
             BeansImageFileCache.remove(previousURL.path)
@@ -181,7 +159,7 @@ final class CustomSongCoverStore: ObservableObject {
             return decoded
         }
         let legacy = UserDefaults.standard.dictionary(forKey: legacyDefaultsKey) as? [String: String] ?? [:]
-        return legacy.mapValues { Entry(filename: $0, crop: .default) }
+        return legacy.mapValues { Entry(filename: $0) }
     }
 
     private func persist() {
@@ -222,42 +200,20 @@ final class CustomSongCoverStore: ObservableObject {
 
 enum CustomSongCoverError: LocalizedError {
     case invalidMedia
-    case fileTooLarge
 
     var errorDescription: String? {
         switch self {
         case .invalidMedia: return "请选择有效的图片、GIF 或视频"
-        case .fileTooLarge: return "视频或 GIF 不能超过 50 MB"
         }
     }
 }
 
 struct CustomSongCoverPicker: View {
-    let onPick: (CustomSongCoverSelection) -> Void
+    let onPick: (URL) -> Void
     let onCancel: () -> Void
 
-    @State private var sourceURL: URL?
-
     var body: some View {
-        Group {
-            if let sourceURL {
-                CustomSongCoverCropEditor(
-                    sourceURL: sourceURL,
-                    onSave: { crop in onPick(CustomSongCoverSelection(sourceURL: sourceURL, crop: crop)) },
-                    onCancel: cancel
-                )
-            } else {
-                CustomSongCoverPhotoPicker(
-                    onPick: { sourceURL = $0 },
-                    onCancel: onCancel
-                )
-            }
-        }
-    }
-
-    private func cancel() {
-        if let sourceURL { try? FileManager.default.removeItem(at: sourceURL) }
-        onCancel()
+        CustomSongCoverPhotoPicker(onPick: onPick, onCancel: onCancel)
     }
 }
 
@@ -332,128 +288,17 @@ private struct CustomSongCoverPhotoPicker: UIViewControllerRepresentable {
     }
 }
 
-private struct CustomSongCoverCropEditor: View {
-    let sourceURL: URL
-    let onSave: (CustomSongCoverCrop) -> Void
-    let onCancel: () -> Void
-
-    @State private var previewImage: UIImage?
-    @State private var zoom: CGFloat = 1
-    @State private var committedZoom: CGFloat = 1
-    @State private var offset = CGSize.zero
-    @State private var committedOffset = CGSize.zero
-    @State private var cropReferenceSize: CGFloat = 300
-
-    var body: some View {
-        BeansNavigationStack {
-            VStack(spacing: 20) {
-                GeometryReader { proxy in
-                    let side = min(proxy.size.width, proxy.size.height)
-                    ZStack {
-                        Color.black.opacity(0.9)
-                        if let previewImage {
-                            Image(uiImage: previewImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: side, height: side)
-                                .scaleEffect(zoom)
-                                .offset(offset)
-                        } else {
-                            ProgressView()
-                                .tint(.white)
-                        }
-                        Rectangle()
-                            .strokeBorder(.white.opacity(0.9), lineWidth: 1)
-                            .allowsHitTesting(false)
-                    }
-                    .frame(width: side, height: side)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onAppear { cropReferenceSize = max(side, 1) }
-                    .gesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                zoom = min(max(committedZoom * value, 1), 4)
-                            }
-                            .onEnded { _ in committedZoom = zoom }
-                    )
-                    .simultaneousGesture(
-                        DragGesture()
-                            .onChanged { value in
-                                let limit = side * max(zoom - 1, 0) * 0.5
-                                offset = CGSize(
-                                    width: min(max(committedOffset.width + value.translation.width, -limit), limit),
-                                    height: min(max(committedOffset.height + value.translation.height, -limit), limit)
-                                )
-                            }
-                            .onEnded { _ in committedOffset = offset }
-                    )
-                }
-                .aspectRatio(1, contentMode: .fit)
-                .padding(.horizontal, 24)
-
-                VStack(spacing: 8) {
-                    Slider(value: $zoom, in: 1...4, step: 0.01)
-                        .tint(Color.beansAmber)
-                        .onChange(of: zoom) { _ in committedZoom = zoom }
-                    Text("拖动调整位置，双指缩放裁剪区域")
-                        .font(BeansFont.appFont(13, .medium))
-                        .foregroundStyle(Color.beansComment)
-                }
-                .padding(.horizontal, 28)
-
-                Button("重置裁剪") {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        zoom = 1
-                        committedZoom = 1
-                        offset = .zero
-                        committedOffset = .zero
-                    }
-                }
-                .font(BeansFont.appFont(14, .semibold))
-                .foregroundStyle(Color.beansAmber)
-                Spacer(minLength: 4)
-            }
-            .padding(.top, 18)
-            .navigationTitle("裁剪封面")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消", action: onCancel)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("使用") {
-                        let crop = CustomSongCoverCrop(
-                            zoom: zoom,
-                            offsetX: offset.width / cropReferenceSize,
-                            offsetY: offset.height / cropReferenceSize
-                        )
-                        onSave(crop)
-                    }
-                    .disabled(previewImage == nil)
-                }
-            }
-        }
-        .task {
-            previewImage = await Task.detached(priority: .userInitiated) {
-                CustomCoverMedia.previewImage(at: sourceURL)
-            }.value
-        }
-    }
-}
-
 struct CustomCoverMediaView: UIViewRepresentable {
     let url: URL
-    let crop: CustomSongCoverCrop
 
     func makeUIView(context: Context) -> CustomCoverMediaUIView {
         let view = CustomCoverMediaUIView()
-        view.configure(url: url, crop: crop)
+        view.configure(url: url)
         return view
     }
 
     func updateUIView(_ uiView: CustomCoverMediaUIView, context: Context) {
-        uiView.configure(url: url, crop: crop)
+        uiView.configure(url: url)
     }
 }
 
@@ -462,9 +307,9 @@ final class CustomCoverMediaUIView: UIView {
     private let videoHost = UIView()
     private var player: AVQueuePlayer?
     private var looper: AVPlayerLooper?
+    private var videoLayer: AVPlayerLayer?
     private var currentURL: URL?
     private var currentKind: CustomCoverMediaKind?
-    private var crop = CustomSongCoverCrop.default
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -484,17 +329,12 @@ final class CustomCoverMediaUIView: UIView {
         videoHost.transform = .identity
         imageView.frame = bounds
         videoHost.frame = bounds
-        videoHost.layer.sublayers?.forEach { $0.frame = videoHost.bounds }
-        applyCrop()
+        videoLayer?.frame = videoHost.bounds
     }
 
-    func configure(url: URL, crop: CustomSongCoverCrop) {
+    func configure(url: URL) {
         let kind = CustomCoverMedia.kind(for: url)
-        self.crop = crop
-        guard currentURL != url || currentKind != kind else {
-            applyCrop()
-            return
-        }
+        guard currentURL != url || currentKind != kind else { return }
         currentURL = url
         currentKind = kind
         imageView.stopAnimating()
@@ -502,6 +342,7 @@ final class CustomCoverMediaUIView: UIView {
         player?.pause()
         player = nil
         looper = nil
+        videoLayer = nil
         videoHost.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
 
         switch kind {
@@ -525,17 +366,9 @@ final class CustomCoverMediaUIView: UIView {
             let layer = AVPlayerLayer(player: player)
             layer.videoGravity = .resizeAspectFill
             videoHost.layer.addSublayer(layer)
+            videoLayer = layer
             player.play()
         }
         setNeedsLayout()
-    }
-
-    private func applyCrop() {
-        let scale = max(crop.zoom, 1)
-        let offset = CGPoint(x: crop.offsetX * bounds.width, y: crop.offsetY * bounds.height)
-        imageView.transform = CGAffineTransform(scaleX: scale, y: scale)
-        imageView.center = CGPoint(x: bounds.midX + offset.x, y: bounds.midY + offset.y)
-        videoHost.transform = CGAffineTransform(scaleX: scale, y: scale)
-        videoHost.center = CGPoint(x: bounds.midX + offset.x, y: bounds.midY + offset.y)
     }
 }

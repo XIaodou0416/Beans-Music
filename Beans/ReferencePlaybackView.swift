@@ -90,10 +90,6 @@ struct ReferencePlaybackView: View {
         customCovers.url(for: song) ?? song?.coverURL
     }
 
-    private func displayCoverURL(for song: Song?) -> URL? {
-        customCovers.url(for: song) ?? song?.coverURL
-    }
-
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -140,9 +136,9 @@ struct ReferencePlaybackView: View {
         }
         .sheet(isPresented: $showCustomCoverPicker) {
             CustomSongCoverPicker(
-                onPick: { selection in
+                onPick: { url in
                     showCustomCoverPicker = false
-                    saveCustomCover(selection)
+                    saveCustomCover(from: url)
                 },
                 onCancel: { showCustomCoverPicker = false }
             )
@@ -459,7 +455,7 @@ struct ReferencePlaybackView: View {
 
     private var compactQueueHeader: some View {
         HStack(spacing: 11) {
-            CoverImage(url: displayCoverURL, size: 46, cornerRadius: 10)
+            CoverImage(url: song?.coverURL, size: 46, cornerRadius: 10)
                 .shadow(color: .black.opacity(0.26), radius: 9, y: 4)
 
             VStack(alignment: .leading, spacing: 3) {
@@ -520,11 +516,11 @@ struct ReferencePlaybackView: View {
         }
     }
 
-    private func saveCustomCover(_ selection: CustomSongCoverSelection) {
+    private func saveCustomCover(from url: URL) {
         guard let song else { return }
         do {
-            try customCovers.saveCover(from: selection.sourceURL, crop: selection.crop, for: song)
-            try? FileManager.default.removeItem(at: selection.sourceURL)
+            try customCovers.saveCover(from: url, for: song)
+            try? FileManager.default.removeItem(at: url)
             ToastCenter.shared.show("自定义封面已保存")
         } catch {
             ToastCenter.shared.show(error.localizedDescription)
@@ -1017,7 +1013,6 @@ struct AppleMusicCompactQueueContent: View {
 
 private struct AppleMusicCompactQueueRow: View {
     @EnvironmentObject private var player: PlayerManager
-    @ObservedObject private var customCovers = CustomSongCoverStore.shared
 
     let index: Int
     let song: Song
@@ -1028,7 +1023,7 @@ private struct AppleMusicCompactQueueRow: View {
             player.playQueueIndex(index)
         } label: {
             HStack(spacing: 11) {
-                CoverImage(url: customCovers.url(for: song) ?? song.coverURL, size: 46, cornerRadius: 8)
+                CoverImage(url: song.coverURL, size: 46, cornerRadius: 8)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(song.name)

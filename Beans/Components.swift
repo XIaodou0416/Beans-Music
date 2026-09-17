@@ -768,8 +768,7 @@ struct CoverImage: View {
                 Group {
                     if let url, usesCustomMediaRenderer {
                         CustomCoverMediaView(
-                            url: url,
-                            crop: CustomSongCoverStore.shared.crop(for: url)
+                            url: url
                         )
                     } else if let image = cachedImage {
                         Image(uiImage: image)
