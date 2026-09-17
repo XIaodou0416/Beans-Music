@@ -985,21 +985,19 @@ struct AppleMusicCompactQueueContent: View {
         label: String,
         isActive: Bool
     ) -> some View {
-        Image(systemName: icon)
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(isActive ? Color.black.opacity(0.76) : .white.opacity(0.76))
-            .frame(maxWidth: .infinity, minHeight: 42)
-            .background(
-                isActive ? AnyShapeStyle(.white.opacity(0.66)) : AnyShapeStyle(.white.opacity(0.1)),
-                in: Capsule()
-            )
-        .contentShape(Capsule())
-        .overlay {
-            QueueModeTapTarget(label: label) {
-                activate(mode)
-            }
+        Button {
+            activate(mode)
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(isActive ? Color.black.opacity(0.76) : .white.opacity(0.76))
+                .frame(maxWidth: .infinity, minHeight: 42)
+                .background(
+                    isActive ? AnyShapeStyle(.white.opacity(0.66)) : AnyShapeStyle(.white.opacity(0.1)),
+                    in: Capsule()
+                )
         }
-        .accessibilityElement(children: .ignore)
+        .buttonStyle(RecordModePressButtonStyle())
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
@@ -1007,42 +1005,6 @@ struct AppleMusicCompactQueueContent: View {
     private func activate(_ mode: PlayMode) {
         BeansHaptics.tap()
         player.setPlayMode(mode)
-    }
-}
-
-private struct QueueModeTapTarget: UIViewRepresentable {
-    let label: String
-    let action: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(action: action)
-    }
-
-    func makeUIView(context: Context) -> UIButton {
-        let button = UIButton(type: .custom)
-        button.backgroundColor = .clear
-        button.isAccessibilityElement = true
-        button.accessibilityTraits = .button
-        button.accessibilityLabel = label
-        button.addTarget(context.coordinator, action: #selector(Coordinator.activate), for: .touchUpInside)
-        return button
-    }
-
-    func updateUIView(_ button: UIButton, context: Context) {
-        context.coordinator.action = action
-        button.accessibilityLabel = label
-    }
-
-    final class Coordinator: NSObject {
-        var action: () -> Void
-
-        init(action: @escaping () -> Void) {
-            self.action = action
-        }
-
-        @objc func activate() {
-            action()
-        }
     }
 }
 

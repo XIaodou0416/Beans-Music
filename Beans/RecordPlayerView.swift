@@ -617,7 +617,7 @@ private struct RecordModeLayoutTransform: ViewModifier {
     }
 }
 
-private struct RecordModePressButtonStyle: ButtonStyle {
+struct RecordModePressButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
