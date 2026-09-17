@@ -271,7 +271,7 @@ struct SearchView: View {
         }
     }
 
-    // MARK: - 搜索框（液态玻璃胶囊）
+    // MARK: - 搜索框（系统原生样式）
 
     private var searchField: some View {
         NativeSearchBar(
@@ -1142,6 +1142,7 @@ struct NativeSearchBar: UIViewRepresentable {
     @Binding var text: String
     var controller: SearchFieldController? = nil
     var placeholder: String = ""
+    var onTextChange: ((String) -> Void)? = nil
     let onSubmit: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -1182,6 +1183,7 @@ struct NativeSearchBar: UIViewRepresentable {
 
         func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
             parent.text = searchText
+            parent.onTextChange?(searchText)
         }
 
         func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {

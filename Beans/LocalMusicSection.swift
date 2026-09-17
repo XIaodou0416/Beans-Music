@@ -686,24 +686,12 @@ struct LocalSearchAddSheet: View {
     var body: some View {
         BeansNavigationStack {
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    TextField(beansLocalized("输入歌名搜索", "Search by song title"), text: $keyword)
-                        .textFieldStyle(.plain)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.beansGlassFill))
-                        .submitLabel(.search)
-                        .onSubmit { runSearch() }
-                    Button {
-                        runSearch()
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 38, height: 38)
-                            .background(Circle().fill(Color.beansAmber))
-                    }
-                }
+                NativeSearchBar(
+                    text: $keyword,
+                    placeholder: beansLocalized("输入歌名搜索", "Search by song title"),
+                    onSubmit: { _ in runSearch() }
+                )
+                .frame(height: 46)
                 .padding(12)
                 Picker("平台", selection: $provider) {
                     ForEach(searchProviders) { p in
