@@ -250,73 +250,14 @@ struct PlaylistSquareView: View {
         }
     }
 
-    @ViewBuilder
     private var playlistSearchField: some View {
-        if #available(iOS 26, *) {
-            NativeSearchBar(
-                text: $searchText,
-                placeholder: beansLocalized("搜索歌单", "Search playlists"),
-                onTextChange: { value in
-                    if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, isSearching {
-                        clearSearch()
-                    }
-                },
-                onSubmit: { _ in submitSearch() }
-            )
-            .frame(height: 44)
-        } else {
-            legacyPlaylistSearchField
-        }
-    }
-
-    private var legacyPlaylistSearchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.beansComment)
-            TextField(beansLocalized("搜索歌单", "Search playlists"), text: $searchText)
-                .font(BeansFont.appFont(14))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-                .onSubmit { submitSearch() }
-
-            if !searchText.isEmpty {
-                Button { clearSearch() } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.beansComment.opacity(0.85))
-                }
-                .buttonStyle(.plain)
-            }
-
-            Button { submitSearch() } label: {
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 19))
-                    .foregroundStyle(Color.beansAmber)
-            }
-            .buttonStyle(.plain)
-            .disabled(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
-        }
-        .padding(.horizontal, 13)
-        .frame(height: 44)
-        .background {
-            if usesSolidSurface {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.primary.opacity(0.04))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.7)
-                    }
-            } else if #available(iOS 26, *) {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.clear)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 16))
-            } else {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-        }
+        BeansUnifiedSearchField(
+            text: $searchText,
+            placeholder: beansLocalized("搜索歌单", "Search playlists"),
+            isSearching: isSearchLoading,
+            onClear: { clearSearch() },
+            onSubmit: { _ in submitSearch() }
+        )
     }
 
     private var playlistLoadingGrid: some View {

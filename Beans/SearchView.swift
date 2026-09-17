@@ -273,44 +273,71 @@ struct SearchView: View {
 
     // MARK: - 搜索框
 
-    @ViewBuilder
     private var searchField: some View {
+        BeansUnifiedSearchField(
+            text: $keyword,
+            controller: searchController,
+            placeholder: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
+            isSearching: searching,
+            onClear: {
+                songResults = []
+                artistResults = []
+                albumResults = []
+                errorMessage = nil
+                debounceTask?.cancel()
+            },
+            onSubmit: { text in
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                debounceTask?.cancel()
+                historyStore.record(trimmed)
+                Task { await startSearch(trimmed) }
+            }
+        )
+    }
+
+}
+
+/// 搜索页和歌单广场共享同一个输入控件，确保不同入口的尺寸与交互一致。
+struct BeansUnifiedSearchField: View {
+    @Binding var text: String
+    var controller: SearchFieldController? = nil
+    @State private var fallbackController = SearchFieldController()
+    let placeholder: String
+    let isSearching: Bool
+    let onClear: () -> Void
+    let onSubmit: (String) -> Void
+
+    var body: some View {
         if #available(iOS 26, *) {
             NativeSearchBar(
-                text: $keyword,
-                controller: searchController,
-                placeholder: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
-                onSubmit: { text in
-                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    debounceTask?.cancel()
-                    historyStore.record(trimmed)
-                    Task { await startSearch(trimmed) }
-                }
+                text: $text,
+                controller: controller,
+                placeholder: placeholder,
+                onTextChange: { value in
+                    if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        onClear()
+                    }
+                },
+                onSubmit: onSubmit
             )
             .frame(height: 44)
         } else {
-            legacySearchField
+            legacyField
         }
     }
 
-    private var legacySearchField: some View {
+    private var legacyField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Color.beansComment)
             SearchTextField(
-                text: $keyword,
-                controller: searchController,
-                placeholder: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
+                text: $text,
+                controller: controller ?? fallbackController,
+                placeholder: placeholder,
                 textColor: UIColor.beansLabel,
-                onSubmit: { text in
-                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    debounceTask?.cancel()
-                    historyStore.record(trimmed)
-                    Task { await startSearch(trimmed) }
-                }
+                onSubmit: onSubmit
             )
             .frame(height: 32)
             .frame(maxWidth: .infinity)
@@ -318,35 +345,27 @@ struct SearchView: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(Color.beansAmber)
-                    .opacity(searching ? 1 : 0)
+                    .opacity(isSearching ? 1 : 0)
             }
             .frame(width: 20, height: 22)
-            .animation(nil, value: searching)
+            .animation(nil, value: isSearching)
             ZStack {
                 Button {
-                    keyword = ""
-                    songResults = []
-                    artistResults = []
-                    albumResults = []
-                    errorMessage = nil
-                    debounceTask?.cancel()
+                    text = ""
+                    onClear()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 15))
                         .foregroundStyle(Color.beansComment.opacity(0.85))
                 }
                 .buttonStyle(.plain)
-                .opacity(keyword.isEmpty ? 0 : 1)
-                .disabled(keyword.isEmpty)
+                .opacity(text.isEmpty ? 0 : 1)
+                .disabled(text.isEmpty)
             }
             .frame(width: 20, height: 22)
             Button {
-                let text = searchController.commit()
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return }
-                debounceTask?.cancel()
-                historyStore.record(trimmed)
-                Task { await startSearch(trimmed) }
+                let submittedText = controller?.commit() ?? text
+                onSubmit(submittedText)
             } label: {
                 Text("搜索")
                     .font(BeansFont.appFont(13, .semibold))
@@ -367,6 +386,10 @@ struct SearchView: View {
         .beansCardShadow(radius: 4, y: 2)
         .frame(maxWidth: .infinity)
     }
+
+}
+
+extension SearchView {
 
     // MARK: - 平台选择（等宽分段控件）
 
