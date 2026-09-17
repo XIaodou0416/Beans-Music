@@ -304,7 +304,7 @@ final class NetEaseAPI {
     // MARK: - 歌词
 
     func lyric(id: Int) async throws -> String? {
-        let json = try await request("/api/song/lyric", payload: ["id": id, "lv": -1, "kv": -1, "tv": -1], crypto: "weapi")
+        let json = try await lyricResponse(id: id)
         guard let lrc = json["lrc"] as? [String: Any], let text = lrc["lyric"] as? String, !text.isEmpty else {
             return nil
         }
@@ -313,11 +313,40 @@ final class NetEaseAPI {
 
     /// 歌词 + 翻译（tlyric），用于歌词翻译显示
     func lyricWithTranslation(id: Int) async throws -> (lrc: String?, tlyric: String?, yrc: String?) {
-        let json = try await request("/api/song/lyric", payload: ["id": id, "lv": -1, "kv": -1, "tv": -1], crypto: "weapi")
+        let json = try await lyricResponse(id: id)
         let lrc = (json["lrc"] as? [String: Any])?["lyric"] as? String
         let tlyric = (json["tlyric"] as? [String: Any])?["lyric"] as? String
         let yrc = (json["yrc"] as? [String: Any])?["lyric"] as? String
         return (lrc, tlyric, yrc)
+    }
+
+    private func lyricResponse(id: Int) async throws -> [String: Any] {
+        let verbatimPayload: [String: Any] = [
+            "id": id,
+            "cp": false,
+            "lv": 0,
+            "kv": 0,
+            "tv": 0,
+            "rv": 0,
+            "yv": 0,
+            "ytv": 0,
+            "yrv": 0
+        ]
+        if let response = try? await request("/api/song/lyric/v1", payload: verbatimPayload, crypto: "weapi"),
+           hasUsableLyric(in: response) {
+            return response
+        }
+        return try await request(
+            "/api/song/lyric",
+            payload: ["id": id, "lv": -1, "kv": -1, "tv": -1, "rv": -1],
+            crypto: "weapi"
+        )
+    }
+
+    private func hasUsableLyric(in response: [String: Any]) -> Bool {
+        let lrc = (response["lrc"] as? [String: Any])?["lyric"] as? String
+        let yrc = (response["yrc"] as? [String: Any])?["lyric"] as? String
+        return !(lrc?.isEmpty ?? true) || !(yrc?.isEmpty ?? true)
     }
 
     // MARK: - 评论

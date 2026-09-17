@@ -90,7 +90,6 @@ struct PlayerView: View {
     @AppStorage("beans.appleMusic.secondaryHex") private var appleMusicSecondaryHex = ""
     @AppStorage("beans.appleMusic.accentHex") private var appleMusicAccentHex = ""
     @AppStorage("beans.lyricTranslation") private var lyricTranslation = true
-    @AppStorage("beans.lyricKaraokeEnabled") private var lyricKaraokeEnabled = true
     /// 进度条样式：0 流光 / 1 辉光 / 2 极光 / 3 波浪
     @AppStorage("beans.progressBarStyle") private var progressBarStyle = 0
     /// 进度条单独强调色；空值时跟随播放控件颜色
@@ -1179,7 +1178,6 @@ struct PlayerView: View {
                     lineSpacing: CGFloat(lyricLineSpacing),
                     glowRadius: lyricGlowRadius,
                     showTranslation: lyricTranslation,
-                    karaokeEnabled: lyricKaraokeEnabled,
                     alignment: lyricAlign,
                     offsetX: CGFloat(lyricOffsetX),
                     anchor: lyricAnchor,
@@ -2293,16 +2291,10 @@ struct PlayerView: View {
         let isActive = vinylCurrentLyricIndex == index
         return VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                KaraokeLyricText(
-                    line: line,
-                    currentTime: LyricTiming.effectiveProgress(clock.progress, userOffset: lyricOffset),
-                    isPlaying: player.isPlaying,
-                    isActive: isActive,
-                    enabled: lyricKaraokeEnabled,
-                    font: BeansFont.appFont(visualFocus ? 27 : 23, visualFocus ? .bold : .semibold),
-                    style: AnyShapeStyle(albumTitleForeground),
-                    fallbackOpacity: visualFocus ? 1 : 0.36
-                )
+                Text(line.text.isEmpty ? " " : line.text)
+                    .font(BeansFont.appFont(visualFocus ? 27 : 23, visualFocus ? .bold : .semibold))
+                    .foregroundStyle(albumTitleForeground)
+                    .opacity(visualFocus ? 1 : 0.36)
                     .fixedSize(horizontal: false, vertical: true)
                 if isSelected {
                     Spacer(minLength: 8)
@@ -3001,7 +2993,6 @@ struct PlayerView: View {
                         lineSpacing: CGFloat(lyricLineSpacing),
                         glowRadius: lyricGlowRadius,
                         showTranslation: lyricTranslation,
-                        karaokeEnabled: lyricKaraokeEnabled,
                         alignment: lyricAlign,
                         offsetX: CGFloat(lyricOffsetX),
                         anchor: lyricAnchor,
@@ -5552,8 +5543,6 @@ struct LyricsSection: View {
     var glowRadius: CGFloat = 9
     /// 显示歌词翻译（当前行下方小字）
     var showTranslation: Bool = false
-    /// 逐字卡拉 OK 开关；关闭时回到原有整行高亮。
-    var karaokeEnabled: Bool = true
     /// 歌词对齐样式（居中 / 居左）
     var alignment: HorizontalAlignment = .center
     /// 歌词水平偏移
@@ -5791,16 +5780,10 @@ struct LyricsSection: View {
         let translationText = (isCurrent && showTranslation) ? line.translation : nil
 
         return VStack(alignment: alignment == .leading ? .leading : .center, spacing: 3) {
-            KaraokeLyricText(
-                line: line,
-                currentTime: LyricTiming.effectiveProgress(clock.progress, userOffset: Double(lyricOffset)),
-                isPlaying: player.isPlaying,
-                isActive: isCurrent,
-                enabled: karaokeEnabled,
-                font: lineFont,
-                style: lineStyle,
-                fallbackOpacity: max(opacity, 0.15)
-            )
+            Text(line.text.isEmpty ? " " : line.text)
+                .font(lineFont)
+                .foregroundStyle(lineStyle)
+                .opacity(max(opacity, 0.15))
                 // 双层光晕：内层亮、外层宽，发光更明显
                 .shadow(
                     color: isCurrent ? glowColor.opacity(glowRadius > 0 ? 0.9 : 0) : .clear,
@@ -5989,16 +5972,12 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.progressBarStyle") private var progressBarStyle = 0
     @AppStorage("beans.progressAccentHex") private var progressAccentHex = ""
     @AppStorage("beans.playback.autoSkipOnFailure") private var autoSkipOnFailure = true
-    @AppStorage("beans.lyricFontSize") private var fontSize = 17
-    @AppStorage("beans.lyricSpacing") private var lineSpacing = 24
     @AppStorage("beans.lyricGlow") private var glowLevel = 1
     @AppStorage("beans.lyricColor") private var currentColorRaw = "accent"
     @AppStorage("beans.lyricDimColor") private var dimColorRaw = "dim"
     @AppStorage("beans.lyricGradStart") private var gradStartRaw = ""
     @AppStorage("beans.lyricGradEnd") private var gradEndRaw = ""
     @AppStorage("beans.lyricGradMode") private var gradMode = 0
-    @AppStorage("beans.lyricTranslation") private var lyricTranslation = true
-    @AppStorage("beans.lyricKaraokeEnabled") private var lyricKaraokeEnabled = true
     @Binding private var layoutMode: Bool
     @AppStorage("beans.playerLayoutSelectedPart") private var layoutPartRaw = PlayerLayoutPart.progress.rawValue
     @AppStorage("beans.lyricAlignRaw") private var lyricAlignRaw = "center"
@@ -6032,7 +6011,6 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.appleMusic.showLyricPreview") private var appleShowLyricPreview = true
     @Environment(\.dismiss) private var dismiss
     @AppStorage("beans.playerSettings.playbackExpanded") private var playbackExpanded = false
-    @AppStorage("beans.playerSettings.lyricDisplayExpanded") private var lyricDisplayExpanded = false
     @AppStorage("beans.playerSettings.lyricEffectExpanded") private var lyricEffectExpanded = false
     @AppStorage("beans.playerSettings.coverExpanded") private var coverExpanded = false
     @AppStorage("beans.playerSettings.appleMusicExpanded") private var appleMusicExpanded = false
@@ -6295,7 +6273,6 @@ struct PlayerSettingsSheet: View {
                 LazyVStack(spacing: 12) {
                     layoutCard
                     coverCard
-                    lyricDisplayCard
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
@@ -6530,57 +6507,6 @@ struct PlayerSettingsSheet: View {
                 }
                 .buttonStyle(.plain)
             }
-        }
-    }
-
-    /// 歌词设置卡片：字号 / 行距 / 翻译 / 逐字歌词
-    private var lyricOffsetText: String {
-        if lyricOffset == 0 { return "同步" }
-        return lyricOffset > 0
-            ? "提前 " + String(format: "%.1f", lyricOffset) + "s"
-            : "延后 " + String(format: "%.1f", -lyricOffset) + "s"
-    }
-
-    private var lyricDisplayCard: some View {
-        settingCard("歌词设置") {
-            settingSlider("歌词字号", valueText: "\(fontSize) pt") {
-                Slider(
-                    value: Binding(get: { Double(fontSize) }, set: { fontSize = Int($0) }),
-                    in: 12...28,
-                    step: 1
-                )
-                .tint(Color.beansAmber)
-            }
-            Divider().opacity(0.5)
-            settingSlider("歌词行距", valueText: "\(lineSpacing) pt") {
-                Slider(
-                    value: Binding(get: { Double(lineSpacing) }, set: { lineSpacing = Int($0) }),
-                    in: 14...40,
-                    step: 1
-                )
-                .tint(Color.beansAmber)
-            }
-            Divider().opacity(0.5)
-            settingSlider("歌词进度偏移", valueText: lyricOffsetText) {
-                Slider(value: Binding(get: { lyricOffset }, set: { lyricOffset = Double($0) }), in: -10...10, step: 0.1)
-                    .tint(Color.beansAmber)
-            }
-            HStack {
-                Text("歌词与音频不同步时手动校正（正数提前、负数延后）")
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(Color.beansComment)
-                Spacer()
-                Button("重置") { lyricOffset = 0 }
-                    .font(BeansFont.appFont(12, .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .buttonStyle(.plain)
-            }
-            Divider().opacity(0.5)
-            settingToggle("显示歌词翻译", isOn: $lyricTranslation,
-                          caption: "当前播放歌词下方显示译文（网易云 tlyric）")
-            Divider().opacity(0.5)
-            settingToggle("逐字歌词（卡拉 OK）", isOn: $lyricKaraokeEnabled,
-                          caption: "有真实逐字时间轴时按字渐亮，没有时保留整行同步高亮")
         }
     }
 
