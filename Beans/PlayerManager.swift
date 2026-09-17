@@ -98,6 +98,8 @@ final class PlayerManager: NSObject, ObservableObject {
     @Published var sleepTimerRemaining: Int = 0
     @Published var history: [Song] = []
     @Published var playCounts: [String: Int] = [:]
+    /// 仅在 AVPlayer 实际输出音频时累积，不包含暂停、缓冲和拖动进度的跳变。
+    @Published private(set) var listeningDuration: TimeInterval = 0
     /// 每次用户主动拖动进度或点击歌词都会递增，歌词视图据此立即重新定位。
     @Published private(set) var seekRevision = 0
     /// 歌词统一使用的播放游标，和播放器时间观察器使用同一个时间源。
@@ -137,10 +139,12 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastNowPlayingRefreshUptime = 0.0
     private var lastPublishedProgress: Double = -1
     private var lastPersistedProgress: Double = -1
+    private var lastListeningProgress: Double?
+    private var lastListeningSongKey: String?
+    private var lastPersistedListeningDuration: TimeInterval = 0
     private var lastNowPlayingArtworkKey: String?
     private var nowPlayingSongKey: String?
     private var nowPlayingInfo: [String: Any] = [:]
-    private var cachedAudioAttemptedSongKey: String?
     /// 酷狗高音质地址在部分账号/系统上会返回但无法由 AVPlayer 打开；每首歌只自动降级一次。
     private var kugouStandardFallbackSongKey: String?
     /// 第三方地址偶发过期或节点不可用时，按失败域名重试，避免同一节点反复进入播放器。
@@ -172,10 +176,29 @@ final class PlayerManager: NSObject, ObservableObject {
     private let nowPlayingEnabledKey = "beans.nowPlaying.enabled.v1"
     private let playModeKey = "beans.player.playMode"
     private let autoSkipOnFailureKey = "beans.playback.autoSkipOnFailure"
+    static let listeningDurationKey = "beans.playback.listeningDuration.v1"
     private let autoResumeLastPlaybackKey = "beans.playback.autoResumeLast"
     private let thirdPartyVIPNoticeKey = "beans.showThirdPartyVIPNotice"
     private let defaults = UserDefaults.standard
     private var didAttemptAutoResume = false
+
+    static var storedListeningDuration: TimeInterval {
+        max(0, UserDefaults.standard.double(forKey: listeningDurationKey))
+    }
+
+    var formattedListeningDuration: String {
+        Self.formatListeningDuration(listeningDuration)
+    }
+
+    static func formatListeningDuration(_ duration: TimeInterval) -> String {
+        let totalMinutes = max(0, Int(duration / 60))
+        let days = totalMinutes / (24 * 60)
+        let hours = (totalMinutes % (24 * 60)) / 60
+        let minutes = totalMinutes % 60
+        if days > 0 { return "\(days) 天 \(hours) 小时 \(minutes) 分钟" }
+        if hours > 0 { return "\(hours) 小时 \(minutes) 分钟" }
+        return "\(minutes) 分钟"
+    }
 
     /// 只要存在启用的自定义音源，就允许官方地址失败后进行兜底解析。
     private var externalSourcesEnabled: Bool {
@@ -233,6 +256,8 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         loadHistory()
         loadPlayCounts()
+        listeningDuration = Self.storedListeningDuration
+        lastPersistedListeningDuration = listeningDuration
         restorePersistedPlaybackState()
         equalizerSettingsObserver = NotificationCenter.default.addObserver(
             forName: BeansEqualizer.settingsDidChange,
@@ -258,6 +283,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     deinit {
+        persistListeningDuration()
         interruptionResumeWorkItem?.cancel()
         audioRecoveryWorkItem?.cancel()
         audioSessionWatchdogTimer?.invalidate()
@@ -350,6 +376,8 @@ final class PlayerManager: NSObject, ObservableObject {
             clearAudioRecoveryIntent()
             isPlaying = false
             player.pause()
+            persistListeningDuration()
+            resetListeningProgress()
             stopAudioSessionWatchdog()
         } else {
             clearAudioRecoveryIntent()
@@ -388,6 +416,7 @@ final class PlayerManager: NSObject, ObservableObject {
         let clamped = max(0, min(seconds, max(duration, currentSong?.duration ?? seconds)))
         progress = clamped
         lyricProgress = clamped
+        resetListeningProgress()
         seekRevision &+= 1
         player?.seek(
             to: CMTime(seconds: clamped, preferredTimescale: 600),
@@ -411,6 +440,7 @@ final class PlayerManager: NSObject, ObservableObject {
         let revision = seekRevision
         progress = target
         lyricProgress = target
+        resetListeningProgress()
         player?.seek(
             to: CMTime(seconds: target, preferredTimescale: 600),
             toleranceBefore: .zero,
@@ -632,7 +662,8 @@ final class PlayerManager: NSObject, ObservableObject {
         thirdPartyPrefetchTask?.cancel()
         thirdPartyPrefetchTask = nil
         qqThirdPartyFallbackSongKey = nil
-        cachedAudioAttemptedSongKey = nil
+        persistListeningDuration()
+        resetListeningProgress()
         let initialProgress = max(0, min(resumeAt ?? 0, max(song.duration, 0)))
         // 切歌时同时解除旧 item，避免旧音频在新播放器建立期间残留输出。
         player?.pause()
@@ -646,10 +677,6 @@ final class PlayerManager: NSObject, ObservableObject {
         loadFailed = false
         pushHistory(song)
         savePersistedPlaybackState()
-        if !BeansNetworkStatus.shared.isReachable,
-           playCachedAudioIfAvailable(song: song, resumeAt: initialProgress) {
-            return
-        }
         Task {
             var urlString: String?
             var resolvedThirdParty: UnblockService.Resolved?
@@ -726,9 +753,6 @@ final class PlayerManager: NSObject, ObservableObject {
             guard let urlString, let url = URL(string: urlString) else {
                 await MainActor.run {
                     guard generation == self.loadGeneration else { return }
-                    if self.playCachedAudioIfAvailable(song: song, resumeAt: initialProgress) {
-                        return
-                    }
                     self.isBuffering = false
                     self.loadFailed = true
                     let failureMessage = beansLocalized(
@@ -1167,7 +1191,6 @@ final class PlayerManager: NSObject, ObservableObject {
         player.automaticallyWaitsToMinimizeStalling = false
         player.rate = Float(rate)
         self.player = player
-        cachePlayedAudio(song: loadedSong, sourceURL: url, headers: playbackHeaders)
         configureEqualizer(for: item)
         playbackConfirmed = false
         itemStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
@@ -1270,6 +1293,7 @@ final class PlayerManager: NSObject, ObservableObject {
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.2, preferredTimescale: 600), queue: .main) { [weak self] time in
             guard let self, let player = self.player else { return }
             if time.seconds.isFinite {
+                self.recordListeningProgress(at: time.seconds, player: player)
                 self.lyricProgress = time.seconds
                 if abs(time.seconds - self.lastPublishedProgress) >= 0.18 {
                     self.lastPublishedProgress = time.seconds
@@ -1327,24 +1351,6 @@ final class PlayerManager: NSObject, ObservableObject {
         updateNowPlaying()
     }
 
-    private func cachePlayedAudio(song: Song, sourceURL: URL, headers: [String: String]) {
-        guard !sourceURL.isFileURL else { return }
-        Task {
-            await PlaybackAudioCache.shared.cache(song: song, sourceURL: sourceURL, headers: headers)
-        }
-    }
-
-    @discardableResult
-    private func playCachedAudioIfAvailable(song: Song, resumeAt: Double) -> Bool {
-        guard cachedAudioAttemptedSongKey != song.identityKey,
-              let cachedURL = PlaybackAudioCache.shared.cachedURL(for: song) else {
-            return false
-        }
-        cachedAudioAttemptedSongKey = song.identityKey
-        setupPlayer(url: cachedURL, resumeAt: resumeAt)
-        return true
-    }
-
     /// AVFoundation KVO callbacks are not guaranteed to arrive on the main
     /// thread. Serialize callbacks that touch ObservableObject state before
     /// reading or mutating the player model.
@@ -1361,11 +1367,6 @@ final class PlayerManager: NSObject, ObservableObject {
         reason: String,
         message: String? = nil
     ) {
-        if let failedSong = song,
-           currentSong?.identityKey == failedSong.identityKey,
-           playCachedAudioIfAvailable(song: failedSong, resumeAt: progress) {
-            return
-        }
         loadFailed = true
         isBuffering = false
         isPlaying = false
@@ -1546,6 +1547,8 @@ final class PlayerManager: NSObject, ObservableObject {
 
     private func removeCurrentObservers() {
         stopAudioSessionWatchdog()
+        persistListeningDuration()
+        resetListeningProgress()
         if let timeObserver {
             player?.removeTimeObserver(timeObserver)
         }
@@ -1569,6 +1572,47 @@ final class PlayerManager: NSObject, ObservableObject {
         playbackConfirmed = false
         pendingThirdPartyVIPNotice = nil
         lastPublishedProgress = -1
+    }
+
+    private func resetListeningProgress() {
+        lastListeningProgress = nil
+        lastListeningSongKey = nil
+    }
+
+    private func recordListeningProgress(at playbackTime: TimeInterval, player: AVPlayer) {
+        guard let song = currentSong,
+              isPlaying,
+              player.timeControlStatus == .playing else {
+            resetListeningProgress()
+            return
+        }
+
+        guard lastListeningSongKey == song.identityKey else {
+            lastListeningSongKey = song.identityKey
+            lastListeningProgress = playbackTime
+            return
+        }
+
+        guard let previous = lastListeningProgress else {
+            lastListeningProgress = playbackTime
+            return
+        }
+        lastListeningProgress = playbackTime
+
+        // 时间观察器正常间隔为 0.2 秒。更大的跳变通常来自拖动、恢复或切歌，不能计入。
+        let delta = playbackTime - previous
+        guard delta > 0, delta <= 1.0 else { return }
+
+        listeningDuration += delta
+        if listeningDuration - lastPersistedListeningDuration >= 5 {
+            persistListeningDuration()
+        }
+    }
+
+    private func persistListeningDuration() {
+        let value = max(0, listeningDuration)
+        defaults.set(value, forKey: Self.listeningDurationKey)
+        lastPersistedListeningDuration = value
     }
 
     /// 均衡器通过 AVAudioMix 的音频处理 tap 工作，不改动 URL、队列或播放器状态。

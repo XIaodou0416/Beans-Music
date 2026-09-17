@@ -1223,40 +1223,88 @@ struct AccountHubSheet: View {
 // MARK: - 设置页（外观 + 歌词翻译，从「我的」右上角齿轮进入）
 
 private extension ProfileView {
+    var totalPlayCount: Int {
+        player.playCounts.values.reduce(0, +)
+    }
+
     var customAvatarCard: some View {
-        HStack(spacing: 12) {
-            Button {
-                BeansHaptics.tap()
-                showAvatarPicker = true
-            } label: {
-                BeansAvatarView(remoteURL: nil, size: 48, useCustom: true)
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.94))
-            VStack(alignment: .leading, spacing: 4) {
-                TextField(isEnglish ? "Nickname" : "自定义昵称", text: $customNickname)
-                    .font(BeansFont.appFont(16, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            if !avatarStore.path.isEmpty {
+        VStack(spacing: 15) {
+            HStack(spacing: 13) {
                 Button {
                     BeansHaptics.tap()
-                    avatarStore.clear()
+                    showAvatarPicker = true
                 } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.beansComment)
-                        .frame(width: 36, height: 36)
-                        .background { BeansSurface(shape: Circle()) }
+                    BeansAvatarView(remoteURL: nil, size: 58, useCustom: true)
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Color.white)
+                                .frame(width: 20, height: 20)
+                                .background(theme.accent, in: Circle())
+                                .overlay(Circle().stroke(Color.beansBackground, lineWidth: 2))
+                        }
                 }
-                .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+                .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    TextField(isEnglish ? "Nickname" : "自定义昵称", text: $customNickname)
+                        .font(BeansFont.appFont(17, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1)
+                    Text(isEnglish ? "Your Beans listening record" : "Beans 本机听歌记录")
+                        .font(BeansFont.appFont(12, .medium))
+                        .foregroundStyle(Color.beansSecondaryLabel)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "waveform")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(theme.accent)
+            }
+
+            Rectangle()
+                .fill(Color.beansLabel.opacity(0.10))
+                .frame(height: 1)
+
+            HStack(spacing: 0) {
+                profileStat(
+                    title: isEnglish ? "Listening time" : "听歌时长",
+                    value: player.formattedListeningDuration,
+                    icon: "clock"
+                )
+                Rectangle()
+                    .fill(Color.beansLabel.opacity(0.10))
+                    .frame(width: 1, height: 31)
+                profileStat(
+                    title: isEnglish ? "Play count" : "播放次数",
+                    value: "\(totalPlayCount) \(isEnglish ? "plays" : "次")",
+                    icon: "music.note"
+                )
             }
         }
-        .padding(14)
+        .padding(16)
         .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
         .beansCardShadow(radius: 8, y: 3)
+    }
+
+    func profileStat(title: String, value: String, icon: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(theme.accent)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(BeansFont.appFont(11, .medium))
+                    .foregroundStyle(Color.beansSecondaryLabel)
+                Text(value)
+                    .font(BeansFont.appFont(15, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
+            Spacer(minLength: 8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

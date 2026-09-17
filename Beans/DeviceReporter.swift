@@ -179,7 +179,8 @@ final class DeviceReporter {
             "system": "\(device.systemName) \(device.systemVersion)",
             "system_version": device.systemVersion,
             "app_version": UpdateChecker.currentVersion,
-            "app_build": build
+            "app_build": build,
+            "listening_seconds": String(Int(PlayerManager.storedListeningDuration.rounded(.down)))
         ]
     }
 

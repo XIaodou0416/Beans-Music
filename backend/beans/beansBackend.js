@@ -361,6 +361,7 @@ function createBeansRouter(options = {}) {
     mutateDatabase((database) => {
       const existing = database.users[userID];
       const timestamp = now();
+      const reportedListeningSeconds = listeningSeconds(payload?.listening_seconds);
       if (options.countAccess) {
         database.stats.access_count += 1;
         database.stats.last_access_at = timestamp;
@@ -373,6 +374,7 @@ function createBeansRouter(options = {}) {
         system_version: text(payload.system_version, 64),
         app_version: text(payload.app_version, 64) || existing?.app_version || '',
         app_build: text(payload.app_build, 64) || existing?.app_build || '',
+        listening_seconds: Math.max(listeningSeconds(existing?.listening_seconds), reportedListeningSeconds),
         first_seen_at: existing?.first_seen_at || timestamp,
         last_seen_at: timestamp,
         last_ip: text(ip, 64),
@@ -544,6 +546,23 @@ function text(value, maxLength) {
   return String(value || '').trim().slice(0, maxLength);
 }
 
+function listeningSeconds(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return 0;
+  // 客户端只会在真实播放时累积；这里限制上报值，避免异常数据污染统计。
+  return Math.max(0, Math.min(Math.floor(seconds), 100 * 365 * 24 * 60 * 60));
+}
+
+function formatListeningDuration(value) {
+  const totalMinutes = Math.floor(listeningSeconds(value) / 60);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days} 天 ${hours} 小时 ${minutes} 分钟`;
+  if (hours > 0) return `${hours} 小时 ${minutes} 分钟`;
+  return `${minutes} 分钟`;
+}
+
 function normalizeIPAddress(value) {
   let ip = String(value || '').trim();
   if (ip.startsWith('::ffff:')) ip = ip.slice(7);
@@ -666,6 +685,7 @@ function statsFor(database) {
     inactive_window_days: INACTIVE_USER_WINDOW_MS / (24 * 60 * 60 * 1000),
     inactive_users_10_days: users.filter((user) => isUserInactive(user, timestamp)).length,
     active_within_10_days: users.filter((user) => !isUserInactive(user, timestamp)).length,
+    total_listening_seconds: users.reduce((total, user) => total + listeningSeconds(user.listening_seconds), 0),
     version_usage: versionUsage(database, timestamp),
     last_access_at: database.stats.last_access_at || null,
   };
@@ -682,6 +702,7 @@ function renderAdminPage(database, section = 'overview') {
       <td>${escapeHtml(user.device_model || user.device_name)}<br><small>${escapeHtml(`${user.system_name} ${user.system_version}`)}</small></td>
       <td><span class="status ${isUserOnline(user) ? 'online' : 'offline'}">${isUserOnline(user) ? '在线' : '离线'}</span>${isUserInactive(user) ? '<br><small>超过 10 天未使用</small>' : ''}<br><small>${escapeHtml(user.last_seen_at)}</small></td>
       <td>${escapeHtml(`${user.app_version} (${user.app_build})`)}<br><small>首次：${escapeHtml(user.first_seen_at)}</small></td>
+      <td><strong>${formatListeningDuration(user.listening_seconds)}</strong><br><small>${listeningSeconds(user.listening_seconds).toLocaleString('zh-CN')} 秒</small></td>
       <td><form method="post" action="/beans/admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> 拉黑</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> 下载已解锁</label><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>
     </tr>
   `).join('');
@@ -725,15 +746,15 @@ function renderAdminPage(database, section = 'overview') {
   }).join('');
 
   const body = section === 'users'
-    ? `<section class="panel"><h2>用户列表 <small>在线状态按最近 ${ONLINE_WINDOW_MS / 60000} 分钟心跳计算</small></h2><table><thead><tr><th>设备 ID / 位置</th><th>设备 / 系统</th><th>在线状态</th><th>版本 / 时间</th><th>管理</th></tr></thead><tbody>${userRows || emptyRow('暂无用户')}</tbody></table></section>`
+    ? `<section class="panel"><h2>用户列表 <small>在线状态按最近 ${ONLINE_WINDOW_MS / 60000} 分钟心跳计算</small></h2><table><thead><tr><th>设备 ID / 位置</th><th>设备 / 系统</th><th>在线状态</th><th>版本 / 时间</th><th>Beans 听歌时长</th><th>管理</th></tr></thead><tbody>${userRows || emptyRow('暂无用户')}</tbody></table></section>`
     : section === 'feedback'
       ? `<section class="panel"><h2>反馈列表</h2><table><thead><tr><th>时间</th><th>用户</th><th>填写设备</th><th>反馈内容与附件</th><th>操作</th></tr></thead><tbody>${feedbackRows || emptyRow('暂无反馈')}</tbody></table></section>`
-      : `<section class="metrics"><article class="metric"><small>总用户</small><b>${stats.total_users}</b></article><article class="metric"><small>软件访问量</small><b>${stats.access_count}</b></article><article class="metric"><small>当前在线</small><b>${stats.online_users}</b><small>最近 ${ONLINE_WINDOW_MS / 60000} 分钟有心跳</small></article><article class="metric"><small>超过 ${stats.inactive_window_days} 天未使用</small><b>${stats.inactive_users_10_days}</b></article><article class="metric"><small>反馈数量</small><b>${stats.total_feedback}</b></article></section><section class="panel"><h2>版本使用统计</h2><table><thead><tr><th>版本 / Build</th><th>用户数</th><th>在线</th><th>${stats.inactive_window_days} 天内活跃</th><th>超过 ${stats.inactive_window_days} 天未使用</th><th>最近活跃</th></tr></thead><tbody>${versionRows || emptyRow('暂无版本数据')}</tbody></table></section><section class="panel overview"><h2>使用情况</h2><p>最近一次访问：${escapeHtml(stats.last_access_at || '暂无记录')}</p><p>在线用户通过应用每分钟心跳更新，离开超过 ${ONLINE_WINDOW_MS / 60000} 分钟后自动视为离线；超过 ${stats.inactive_window_days} 天没有心跳的用户会计入未使用统计。</p></section>`;
+      : `<section class="metrics"><article class="metric"><small>总用户</small><b>${stats.total_users}</b></article><article class="metric"><small>软件访问量</small><b>${stats.access_count}</b></article><article class="metric"><small>Beans 总听歌时长</small><b>${formatListeningDuration(stats.total_listening_seconds)}</b></article><article class="metric"><small>当前在线</small><b>${stats.online_users}</b><small>最近 ${ONLINE_WINDOW_MS / 60000} 分钟有心跳</small></article><article class="metric"><small>超过 ${stats.inactive_window_days} 天未使用</small><b>${stats.inactive_users_10_days}</b></article><article class="metric"><small>反馈数量</small><b>${stats.total_feedback}</b></article></section><section class="panel"><h2>版本使用统计</h2><table><thead><tr><th>版本 / Build</th><th>用户数</th><th>在线</th><th>${stats.inactive_window_days} 天内活跃</th><th>超过 ${stats.inactive_window_days} 天未使用</th><th>最近活跃</th></tr></thead><tbody>${versionRows || emptyRow('暂无版本数据')}</tbody></table></section><section class="panel overview"><h2>使用情况</h2><p>最近一次访问：${escapeHtml(stats.last_access_at || '暂无记录')}</p><p>在线用户通过应用每分钟心跳更新，离开超过 ${ONLINE_WINDOW_MS / 60000} 分钟后自动视为离线；超过 ${stats.inactive_window_days} 天没有心跳的用户会计入未使用统计。</p></section>`;
 
-  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beans 后台</title><style>:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#182230;background:#f8fafc}body{margin:0}.page{max-width:1500px;margin:0 auto;padding:28px}.bar{margin-bottom:24px}.bar h1{font-size:25px;margin:0}.bar p,small{color:#667085}.nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.nav a{color:#344054;text-decoration:none;background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:8px 12px}.nav a.active{color:#fff;background:#182230;border-color:#182230}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}.metric,.panel{background:#fff;border:1px solid #eaecf0;border-radius:12px}.metric{padding:18px}.metric b{display:block;font-size:30px;margin-top:8px}.panel{overflow:auto;margin-top:20px}.panel h2{font-size:17px;padding:18px 18px 0;margin:0}.overview{padding-bottom:18px}.overview p{padding:0 18px;color:#667085}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:12px 14px;border-bottom:1px solid #eaecf0;vertical-align:top;text-align:left}th{color:#667085;background:#fcfcfd}.id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}.problem{max-width:500px;white-space:pre-wrap;word-break:break-word}.media{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap}.media a{color:#175cd3;text-decoration:none}.feedback-media{display:inline-flex;flex-direction:column;gap:5px;margin:6px 8px 0 0;vertical-align:top}.feedback-media img,.feedback-media video,.reply-image{display:block;width:min(240px,40vw);max-height:220px;object-fit:cover;border-radius:8px;background:#101828}.reply{margin-top:12px;padding:10px;border-left:3px solid #f79009;background:#fffaeb}.reply strong{display:block;color:#b54708}.reply-form{display:grid;gap:7px;margin-top:12px}.reply-form textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid #d0d5dd;border-radius:6px;font:inherit}.status{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px}.status.online{color:#067647;background:#ecfdf3}.status.offline{color:#667085;background:#f2f4f7}input[name=action_note]{width:150px;box-sizing:border-box;padding:6px;border:1px solid #d0d5dd;border-radius:6px}button{border:0;border-radius:7px;padding:7px 10px;background:#182230;color:#fff;cursor:pointer}@media(max-width:1100px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.page{padding:16px}.metrics{grid-template-columns:1fr}.feedback-media img,.feedback-media video,.reply-image{width:min(260px,70vw)}}</style><body><main class="page"><header class="bar"><h1>Beans 后台</h1><p>用户、反馈与访问情况</p><nav class="nav"><a class="${section === 'overview' ? 'active' : ''}" href="/beans/admin">概览</a><a class="${section === 'users' ? 'active' : ''}" href="/beans/admin/users">用户</a><a class="${section === 'feedback' ? 'active' : ''}" href="/beans/admin/feedback">反馈</a></nav></header>${body}</main></body></html>`;
+  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beans 后台</title><style>:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#182230;background:#f8fafc}body{margin:0}.page{max-width:1600px;margin:0 auto;padding:28px}.bar{margin-bottom:24px}.bar h1{font-size:25px;margin:0}.bar p,small{color:#667085}.nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.nav a{color:#344054;text-decoration:none;background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:8px 12px}.nav a.active{color:#fff;background:#182230;border-color:#182230}.metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}.metric,.panel{background:#fff;border:1px solid #eaecf0;border-radius:12px}.metric{padding:18px}.metric b{display:block;font-size:30px;margin-top:8px}.panel{overflow:auto;margin-top:20px}.panel h2{font-size:17px;padding:18px 18px 0;margin:0}.overview{padding-bottom:18px}.overview p{padding:0 18px;color:#667085}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:12px 14px;border-bottom:1px solid #eaecf0;vertical-align:top;text-align:left}th{color:#667085;background:#fcfcfd}.id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}.problem{max-width:500px;white-space:pre-wrap;word-break:break-word}.media{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap}.media a{color:#175cd3;text-decoration:none}.feedback-media{display:inline-flex;flex-direction:column;gap:5px;margin:6px 8px 0 0;vertical-align:top}.feedback-media img,.feedback-media video,.reply-image{display:block;width:min(240px,40vw);max-height:220px;object-fit:cover;border-radius:8px;background:#101828}.reply{margin-top:12px;padding:10px;border-left:3px solid #f79009;background:#fffaeb}.reply strong{display:block;color:#b54708}.reply-form{display:grid;gap:7px;margin-top:12px}.reply-form textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid #d0d5dd;border-radius:6px;font:inherit}.status{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px}.status.online{color:#067647;background:#ecfdf3}.status.offline{color:#667085;background:#f2f4f7}input[name=action_note]{width:150px;box-sizing:border-box;padding:6px;border:1px solid #d0d5dd;border-radius:6px}button{border:0;border-radius:7px;padding:7px 10px;background:#182230;color:#fff;cursor:pointer}@media(max-width:1300px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.page{padding:16px}.metrics{grid-template-columns:1fr}.feedback-media img,.feedback-media video,.reply-image{width:min(260px,70vw)}}</style><body><main class="page"><header class="bar"><h1>Beans 后台</h1><p>用户、反馈与访问情况</p><nav class="nav"><a class="${section === 'overview' ? 'active' : ''}" href="/beans/admin">概览</a><a class="${section === 'users' ? 'active' : ''}" href="/beans/admin/users">用户</a><a class="${section === 'feedback' ? 'active' : ''}" href="/beans/admin/feedback">反馈</a></nav></header>${body}</main></body></html>`;
 
   function emptyRow(label) {
-    const columnCount = section === 'feedback' ? 5 : 5;
+    const columnCount = section === 'users' ? 6 : 5;
     return `<tr><td colspan="${columnCount}" style="color:#667085;text-align:center;padding:28px">${escapeHtml(label)}</td></tr>`;
   }
 }

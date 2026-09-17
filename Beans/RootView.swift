@@ -23,8 +23,8 @@ enum RootTab: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .discover: return "house.fill"
-        case .playlists: return "dot.radiowaves.left.and.right"
+        case .discover: return "house"
+        case .playlists: return "square.grid.2x2"
         case .library: return "music.note.list"
         case .profile: return "person.crop.circle"
         case .search: return "magnifyingglass"
@@ -32,12 +32,7 @@ enum RootTab: String, CaseIterable, Identifiable {
     }
 
     var assetName: String? {
-        switch self {
-        case .discover: return "BottomHome"
-        case .playlists: return "BottomBroadcast"
-        case .library: return "BottomLibrary"
-        case .profile, .search: return nil
-        }
+        nil
     }
 
     static let bottomTabs: [RootTab] = [.discover, .playlists, .library, .profile, .search]
@@ -1246,10 +1241,13 @@ private struct GlassTabBar: View {
                     .renderingMode(.template)
                     .scaledToFit()
                     .frame(width: iconSize, height: iconSize)
-            } else {
+            } else if isSelected {
                 Image(systemName: item.icon)
                     .font(.system(size: iconSize, weight: .semibold))
                     .symbolVariant(.fill)
+            } else {
+                Image(systemName: item.icon)
+                    .font(.system(size: iconSize, weight: .medium))
             }
             if labelsVisible {
                 Text(item.title)
