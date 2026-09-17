@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CryptoKit
 
 private struct BeansSharedRootBackdropKey: EnvironmentKey {
     static let defaultValue = false
@@ -860,6 +861,14 @@ struct CoverImage: View {
 /// 预加载器与 CoverImage 使用同一个 URLSession，避免启动时预加载的图片无法被页面复用。
 final class BeansCoverImageStore {
     static let memoryCache = NSCache<NSURL, UIImage>()
+    private static let diskCacheLimit = 300 * 1024 * 1024
+    private static let diskQueue = DispatchQueue(label: "com.beans.music.cover-image-cache", qos: .utility)
+    private static let diskCacheDirectory: URL = {
+        let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let directory = root.appendingPathComponent("BeansCoverImageFiles", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }()
     static let session: URLSession = {
         let configuration = URLSessionConfiguration.default
         configuration.requestCachePolicy = .returnCacheDataElseLoad
@@ -882,12 +891,37 @@ final class BeansCoverImageStore {
         if let image = memoryCache.object(forKey: url as NSURL) {
             return image
         }
+        let fileURL = diskFileURL(for: url)
+        if let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
+           let image = UIImage(data: data) {
+            memoryCache.setObject(image, forKey: url as NSURL)
+            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: fileURL.path)
+            return image
+        }
         var request = URLRequest(url: url)
         request.cachePolicy = .returnCacheDataElseLoad
         guard let response = session.configuration.urlCache?.cachedResponse(for: request),
               let image = UIImage(data: response.data) else { return nil }
+        persist(data: response.data, for: url)
         memoryCache.setObject(image, forKey: url as NSURL)
         return image
+    }
+
+    static func clearCache(completion: @escaping (Bool) -> Void) {
+        memoryCache.removeAllObjects()
+        session.configuration.urlCache?.removeAllCachedResponses()
+        let directory = diskCacheDirectory
+        diskQueue.async {
+            do {
+                if FileManager.default.fileExists(atPath: directory.path) {
+                    try FileManager.default.removeItem(at: directory)
+                }
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                DispatchQueue.main.async { completion(true) }
+            } catch {
+                DispatchQueue.main.async { completion(false) }
+            }
+        }
     }
 
     /// 分批下载封面，避免首次启动时同时创建大量网络任务。
@@ -924,8 +958,49 @@ final class BeansCoverImageStore {
                 CachedURLResponse(response: response, data: data),
                 for: request
             )
+            persist(data: data, for: url)
         } catch {
             // 预加载失败不影响页面显示，进入页面后 CoverImage 仍会按需重试。
+        }
+    }
+
+    static func persist(data: Data, for url: URL) {
+        guard !data.isEmpty else { return }
+        let destination = diskFileURL(for: url)
+        diskQueue.async {
+            do {
+                try FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
+                try data.write(to: destination, options: .atomic)
+                trimDiskCacheIfNeeded()
+            } catch {
+                // Disk caching is opportunistic; rendering falls back to URLCache or the network.
+            }
+        }
+    }
+
+    private static func diskFileURL(for url: URL) -> URL {
+        let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
+        let filename = digest.map { String(format: "%02x", $0) }.joined()
+        return diskCacheDirectory.appendingPathComponent(filename).appendingPathExtension("cover")
+    }
+
+    private static func trimDiskCacheIfNeeded() {
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: diskCacheDirectory,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles]
+        ) else { return }
+        var entries = files.compactMap { url -> (URL, Int, Date)? in
+            guard let values = try? url.resourceValues(forKeys: keys) else { return nil }
+            return (url, values.fileSize ?? 0, values.contentModificationDate ?? .distantPast)
+        }
+        var total = entries.reduce(0) { $0 + $1.1 }
+        guard total > diskCacheLimit else { return }
+        entries.sort { $0.2 < $1.2 }
+        for entry in entries where total > diskCacheLimit {
+            try? FileManager.default.removeItem(at: entry.0)
+            total -= entry.1
         }
     }
 }
@@ -972,6 +1047,7 @@ private final class BeansCoverImageLoader: ObservableObject {
                     CachedURLResponse(response: response, data: data),
                     for: request
                 )
+                BeansCoverImageStore.persist(data: data, for: url)
                 BeansCoverImageStore.memoryCache.setObject(image, forKey: url as NSURL)
                 self.image = image
             } catch {

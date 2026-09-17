@@ -1706,27 +1706,70 @@ struct DiscoverView: View {
         }
     }
 
+    @ViewBuilder
     private var playlistSearchFieldContent: some View {
-        ZStack(alignment: .trailing) {
-            NativeSearchBar(
-                text: $playlistSearchText,
-                placeholder: playlistSearchPrompt,
-                onTextChange: { value in
-                    if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, playlistSearchActive {
-                        clearPlaylistSearch()
+        if #available(iOS 26, *) {
+            ZStack(alignment: .trailing) {
+                NativeSearchBar(
+                    text: $playlistSearchText,
+                    placeholder: playlistSearchPrompt,
+                    onTextChange: { value in
+                        if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, playlistSearchActive {
+                            clearPlaylistSearch()
+                        }
+                    },
+                    onSubmit: { _ in submitPlaylistSearch() }
+                )
+                if playlistSearchLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color.beansAmber)
+                        .padding(.trailing, 14)
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(height: 46)
+        } else {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.beansComment)
+
+                TextField(playlistSearchPrompt, text: $playlistSearchText)
+                    .font(BeansFont.appFont(14))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+                    .onSubmit { submitPlaylistSearch() }
+
+                if playlistSearchLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color.beansAmber)
+                } else if !playlistSearchText.isEmpty {
+                    Button { clearPlaylistSearch() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color.beansComment.opacity(0.85))
                     }
-                },
-                onSubmit: { _ in submitPlaylistSearch() }
-            )
-            if playlistSearchLoading {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(Color.beansAmber)
-                    .padding(.trailing, 14)
-                    .allowsHitTesting(false)
+                    .buttonStyle(.plain)
+                }
+
+                Button { submitPlaylistSearch() } label: {
+                    Image(systemName: "arrow.right.circle.fill")
+                        .font(.system(size: 19))
+                        .foregroundStyle(Color.beansAmber)
+                }
+                .buttonStyle(.plain)
+                .disabled(playlistSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || playlistSearchLoading)
+                .opacity(playlistSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+            }
+            .padding(.horizontal, 13)
+            .frame(height: 42)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }
-        .frame(height: 46)
     }
 
     @MainActor
@@ -2726,19 +2769,90 @@ private struct HomeUnifiedSearchSheet: View {
         }
     }
 
+    @ViewBuilder
     private var searchField: some View {
-        NativeSearchBar(
-            text: $keyword,
-            controller: searchController,
-            placeholder: beansLocalized("搜索三平台歌曲", "Search across three platforms"),
-            onSubmit: { text in
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return }
-                debounceTask?.cancel()
-                Task { await startSearch(trimmed) }
+        if #available(iOS 26, *) {
+            NativeSearchBar(
+                text: $keyword,
+                controller: searchController,
+                placeholder: beansLocalized("搜索三平台歌曲", "Search across three platforms"),
+                onSubmit: { text in
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    debounceTask?.cancel()
+                    Task { await startSearch(trimmed) }
+                }
+            )
+            .frame(height: 46)
+        } else {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.beansComment)
+                SearchTextField(
+                    text: $keyword,
+                    controller: searchController,
+                    placeholder: beansLocalized("搜索三平台歌曲", "Search across three platforms"),
+                    textColor: UIColor.beansLabel,
+                    onSubmit: { text in
+                        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return }
+                        debounceTask?.cancel()
+                        Task { await startSearch(trimmed) }
+                    }
+                )
+                .frame(height: 34)
+                .frame(maxWidth: .infinity)
+                ZStack {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color.beansAmber)
+                        .opacity(searching ? 1 : 0)
+                }
+                .frame(width: 20, height: 22)
+                .animation(nil, value: searching)
+                ZStack {
+                    Button {
+                        keyword = ""
+                        results = []
+                        errorMessage = nil
+                        debounceTask?.cancel()
+                        searchTask?.cancel()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color.beansComment.opacity(0.85))
+                    }
+                    .buttonStyle(.plain)
+                    .opacity(keyword.isEmpty ? 0 : 1)
+                    .disabled(keyword.isEmpty)
+                }
+                .frame(width: 20, height: 22)
+                Button {
+                    let text = searchController.commit()
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    debounceTask?.cancel()
+                    Task { await startSearch(trimmed) }
+                } label: {
+                    Text("搜索")
+                        .font(BeansFont.appFont(13, .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background { BeansGlass(shape: Capsule()) }
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+                .frame(width: 54, height: 30)
             }
-        )
-        .frame(height: 46)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
+            .beansCardShadow(radius: 8, y: 3)
+            .frame(maxWidth: .infinity)
+        }
     }
 
     @ViewBuilder

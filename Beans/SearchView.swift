@@ -271,22 +271,101 @@ struct SearchView: View {
         }
     }
 
-    // MARK: - 搜索框（系统原生样式）
+    // MARK: - 搜索框
 
+    @ViewBuilder
     private var searchField: some View {
-        NativeSearchBar(
-            text: $keyword,
-            controller: searchController,
-            placeholder: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
-            onSubmit: { text in
+        if #available(iOS 26, *) {
+            NativeSearchBar(
+                text: $keyword,
+                controller: searchController,
+                placeholder: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
+                onSubmit: { text in
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    debounceTask?.cancel()
+                    historyStore.record(trimmed)
+                    Task { await startSearch(trimmed) }
+                }
+            )
+            .frame(height: 46)
+        } else {
+            legacySearchField
+        }
+    }
+
+    private var legacySearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.beansComment)
+            SearchTextField(
+                text: $keyword,
+                controller: searchController,
+                placeholder: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
+                textColor: UIColor.beansLabel,
+                onSubmit: { text in
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    debounceTask?.cancel()
+                    historyStore.record(trimmed)
+                    Task { await startSearch(trimmed) }
+                }
+            )
+            .frame(height: 32)
+            .frame(maxWidth: .infinity)
+            ZStack {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Color.beansAmber)
+                    .opacity(searching ? 1 : 0)
+            }
+            .frame(width: 20, height: 22)
+            .animation(nil, value: searching)
+            ZStack {
+                Button {
+                    keyword = ""
+                    songResults = []
+                    artistResults = []
+                    albumResults = []
+                    errorMessage = nil
+                    debounceTask?.cancel()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.beansComment.opacity(0.85))
+                }
+                .buttonStyle(.plain)
+                .opacity(keyword.isEmpty ? 0 : 1)
+                .disabled(keyword.isEmpty)
+            }
+            .frame(width: 20, height: 22)
+            Button {
+                let text = searchController.commit()
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
                 debounceTask?.cancel()
                 historyStore.record(trimmed)
                 Task { await startSearch(trimmed) }
+            } label: {
+                Text("搜索")
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 6)
+                    .background { BeansGlass(shape: Capsule()) }
             }
-        )
-        .frame(height: 46)
+            .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+            .frame(width: 54, height: 30)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 6)
+        .background {
+            BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .beansCardShadow(radius: 4, y: 2)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - 平台选择（等宽分段控件）

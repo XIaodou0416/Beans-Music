@@ -1413,6 +1413,7 @@ struct SettingsView: View {
     @State private var backupIncludeAccounts = false
     @State private var backupIncludeWallpapers = false
     @State private var backupMessage: String?
+    @State private var clearingImageCache = false
     @State private var showAccountHub = false
     @State private var showFeedback = false
     @State private var checkingUpdate = false
@@ -1890,7 +1891,7 @@ struct SettingsView: View {
     }
 
     private var showBackupSettings: Bool {
-        settingsMatches("备份 恢复 导出 导入")
+        settingsMatches("备份 恢复 导出 导入 缓存")
     }
 
     private var showChangelogSettings: Bool {
@@ -3250,6 +3251,18 @@ struct SettingsView: View {
                     showRestorePicker = true
                 }
             }
+            backupActionButton(
+                icon: clearingImageCache ? "arrow.triangle.2.circlepath" : "trash",
+                title: clearingImageCache ? "正在清除图片缓存…" : "清除图片缓存"
+            ) {
+                guard !clearingImageCache else { return }
+                clearingImageCache = true
+                BeansCoverImageStore.clearCache { success in
+                    clearingImageCache = false
+                    backupMessage = success ? "已清除封面图片缓存" : "清除图片缓存失败"
+                }
+            }
+            .disabled(clearingImageCache)
             if let backupMessage {
                 Text(backupMessage)
                     .font(BeansFont.appFont(11))

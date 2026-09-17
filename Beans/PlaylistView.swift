@@ -121,13 +121,37 @@ struct PlaylistView: View {
                 }
             }
             HStack(spacing: 10) {
-                NativeSearchBar(
-                    text: $searchText,
-                    placeholder: beansLocalized("搜索歌单内歌曲", "Search songs in playlist"),
-                    onSubmit: { _ in }
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
+                if #available(iOS 26, *) {
+                    NativeSearchBar(
+                        text: $searchText,
+                        placeholder: beansLocalized("搜索歌单内歌曲", "Search songs in playlist"),
+                        onSubmit: { _ in }
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.beansComment)
+                        TextField(beansLocalized("搜索歌单内歌曲", "Search songs in playlist"), text: $searchText)
+                            .font(BeansFont.appFont(14))
+                            .autocorrectionDisabled()
+                        if !searchText.isEmpty {
+                            Button {
+                                searchText = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Color.beansComment)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+                }
 
                 if !hideSortButton {
                     Menu {
