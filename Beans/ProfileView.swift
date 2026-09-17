@@ -1344,6 +1344,7 @@ struct SettingsView: View {
     @AppStorage("beans.nowPlaying.enabled.v1") private var nowPlayingEnabled = true
     @AppStorage("beans.audioQuality") private var playbackAudioQualityRaw = BeansAudioQuality.hires.rawValue
     @AppStorage(PlayerManager.autoCrossPlatformFallbackKey) private var autoCrossPlatformFallback = true
+    @AppStorage(PlayerManager.playbackSourcePreferenceKey) private var playbackSourcePreferenceRaw = PlaybackSourcePreference.automatic.rawValue
     @AppStorage(NetworkAudioQuality.connectionAwareKey) private var connectionAwareQuality = false
     @AppStorage(NetworkAudioQuality.wifiOfficialKey) private var wifiPlaybackAudioQualityRaw = BeansAudioQuality.hires.rawValue
     @AppStorage(NetworkAudioQuality.cellularOfficialKey) private var cellularPlaybackAudioQualityRaw = BeansAudioQuality.higher.rawValue
@@ -2091,6 +2092,22 @@ struct SettingsView: View {
 
             if audioQualityExpanded {
                 VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("播放来源")
+                            .font(BeansFont.appFont(14, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                        Picker("播放来源", selection: $playbackSourcePreferenceRaw) {
+                            ForEach(PlaybackSourcePreference.allCases) { preference in
+                                Text(preference.title).tag(preference.rawValue)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        Text((PlaybackSourcePreference(rawValue: playbackSourcePreferenceRaw) ?? .automatic).detail)
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
+                    }
+
+                    Divider().overlay(Color.beansComment.opacity(0.15))
                     Toggle("按网络类型选择音质", isOn: $connectionAwareQuality)
                         .font(BeansFont.appFont(14))
                         .tint(Color.beansAmber)
@@ -2122,7 +2139,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("播放失败时切换平台")
                                 .font(BeansFont.appFont(14, .semibold))
-                            Text("当前平台无法播放时，只在已登录会员的平台中查找同一歌曲。")
+                            Text("当前平台及其音源失败后，会匹配其它平台的同一歌曲并交给已启用音源解析。")
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }

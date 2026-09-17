@@ -120,7 +120,7 @@ private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable
     }
 
     var supportsDetailedResults: Bool {
-        self != .aggregate
+        true
     }
 }
 
@@ -254,8 +254,10 @@ struct SearchView: View {
     @ObservedObject private var historyStore = SearchHistoryStore.shared
     @State private var debounceTask: Task<Void, Never>?
     @State private var searchTask: Task<Void, Never>?
+    @State private var showBatchDownload = false
     /// UIKit 输入框控制器（提交拼音、收起键盘等由它统一处理）
     @State private var searchController = SearchFieldController()
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
@@ -311,6 +313,10 @@ struct SearchView: View {
         .sheet(item: $selectedAlbum) { album in
             AlbumDetailView(album: album)
                 .environmentObject(player)
+                .environmentObject(theme)
+        }
+        .sheet(isPresented: $showBatchDownload) {
+            BatchDownloadSheet(songs: songResults, title: "下载搜索结果")
                 .environmentObject(theme)
         }
     }
@@ -569,9 +575,6 @@ struct SearchView: View {
                         .font(BeansFont.appFont(16, .bold))
                         .foregroundStyle(Color.beansLabel)
                     Spacer(minLength: 0)
-                    Text(LocalizedStringKey(provider.rawValue))
-                        .font(BeansFont.appFont(12))
-                        .foregroundStyle(Color.beansComment)
                 }
 
                 if hotWords.isEmpty {
@@ -739,6 +742,21 @@ struct SearchView: View {
                             }
                             .buttonStyle(.plain)
                             .fixedSize(horizontal: true, vertical: false)
+                            if downloadFeatureUnlocked, songResults.count > 1 {
+                                Button {
+                                    BeansHaptics.tap()
+                                    showBatchDownload = true
+                                } label: {
+                                    Label("批量下载", systemImage: "arrow.down.circle")
+                                        .font(BeansFont.appFont(12, .semibold))
+                                        .foregroundStyle(Color.beansAmber)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background { BeansSurface(shape: Capsule()) }
+                                }
+                                .buttonStyle(.plain)
+                                .fixedSize(horizontal: true, vertical: false)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 8)
@@ -968,19 +986,27 @@ struct SearchView: View {
             do {
                 switch (selectedProvider, selectedType) {
                 case (.aggregate, .song):
-                    async let netease: [Song] = (try? await NetEaseAPI.shared.search(keyword: trimmed, limit: 30)) ?? []
-                    async let qq: [Song] = (try? await QQMusicAPI.shared.searchSongs(keyword: trimmed, limit: 30)) ?? []
-                    async let kugou: [Song] = (try? await KugouMusicAPI.shared.searchSongs(keyword: trimmed, limit: 30)) ?? []
-                    async let kuwo: [Song] = (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: trimmed, limit: 30)) ?? []
-                    async let migu: [Song] = (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: trimmed, limit: 30)) ?? []
-                    let merged = await (netease + qq + kugou + kuwo + migu)
+                    let songs = await catalogSongs(keyword: trimmed, provider: .aggregate, limit: 30)
                     guard !Task.isCancelled else { return }
                     await MainActor.run {
-                        songResults = deduplicatedSongs(merged)
+                        songResults = songs
                         if !songResults.isEmpty { BeansHaptics.success() }
                     }
-                case (.aggregate, .artist), (.aggregate, .album):
-                    break
+                case (.aggregate, .artist), (.aggregate, .album),
+                     (.kuwo, .artist), (.kuwo, .album),
+                     (.migu, .artist), (.migu, .album):
+                    // 聚合、酷我和咪咕的目录接口以歌曲为主体；和目录适配层一致，
+                    // 从真实歌曲结果重建歌手与专辑，保留同一条目自带的封面。
+                    let songs = await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 80)
+                    let metadata = catalogMetadata(from: songs)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        if selectedType == .artist {
+                            artistResults = metadata.artists
+                        } else {
+                            albumResults = metadata.albums
+                        }
+                    }
                 case (.netease, .song):
                     let songs = try await NetEaseAPI.shared.search(keyword: trimmed, limit: 40)
                     guard !Task.isCancelled else { return }
@@ -1026,36 +1052,13 @@ struct SearchView: View {
                     let albums = try await KugouMusicAPI.shared.searchAlbums(keyword: trimmed)
                     guard !Task.isCancelled else { return }
                     await MainActor.run { albumResults = albums }
-                case (.kuwo, .song):
-                    let songs = try await AdditionalCatalogSearchAPI.searchKuwo(keyword: trimmed, limit: 40)
+                case (.kuwo, .song), (.migu, .song):
+                    let songs = await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 40)
                     guard !Task.isCancelled else { return }
                     await MainActor.run {
                         songResults = songs
                         if !songs.isEmpty { BeansHaptics.success() }
                     }
-                case (.migu, .song):
-                    let songs = try await AdditionalCatalogSearchAPI.searchMigu(keyword: trimmed, limit: 40)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run {
-                        songResults = songs
-                        if !songs.isEmpty { BeansHaptics.success() }
-                    }
-                case (.kuwo, .artist):
-                    let artists = try await AdditionalCatalogSearchAPI.searchKuwoArtists(keyword: trimmed)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { artistResults = artists }
-                case (.kuwo, .album):
-                    let albums = try await AdditionalCatalogSearchAPI.searchKuwoAlbums(keyword: trimmed)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { albumResults = albums }
-                case (.migu, .artist):
-                    let artists = try await AdditionalCatalogSearchAPI.searchMiguArtists(keyword: trimmed)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { artistResults = artists }
-                case (.migu, .album):
-                    let albums = try await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: trimmed)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { albumResults = albums }
                 }
                 let count = await MainActor.run {
                     selectedType == .song ? songResults.count : (selectedType == .artist ? artistResults.count : albumResults.count)
@@ -1083,6 +1086,70 @@ struct SearchView: View {
                 .lowercased()
             return seen.insert("\(title)|\(artists)").inserted
         }
+    }
+
+    private func catalogSongs(
+        keyword: String,
+        provider: SearchCatalogProvider,
+        limit: Int
+    ) async -> [Song] {
+        switch provider {
+        case .aggregate:
+            async let netease: [Song] = (try? await NetEaseAPI.shared.search(keyword: keyword, limit: limit)) ?? []
+            async let qq: [Song] = (try? await QQMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
+            async let kugou: [Song] = (try? await KugouMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
+            async let kuwo: [Song] = (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: keyword, limit: limit)) ?? []
+            async let migu: [Song] = (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: keyword, limit: limit)) ?? []
+            return deduplicatedSongs(await (netease + qq + kugou + kuwo + migu))
+        case .kuwo:
+            return (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: keyword, limit: limit)) ?? []
+        case .migu:
+            return (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: keyword, limit: limit)) ?? []
+        case .netease:
+            return (try? await NetEaseAPI.shared.search(keyword: keyword, limit: limit)) ?? []
+        case .qq:
+            return (try? await QQMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
+        case .kugou:
+            return (try? await KugouMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
+        }
+    }
+
+    private func catalogMetadata(from songs: [Song]) -> (artists: [Artist], albums: [Album]) {
+        var artists: [Artist] = []
+        var albums: [Album] = []
+        var artistIndex: [String: Int] = [:]
+        var albumIndex: Set<String> = []
+
+        for song in songs {
+            let artistNames = song.artists
+                .components(separatedBy: CharacterSet(charactersIn: "/／,，、&＆+＋|｜;；"))
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            for name in artistNames {
+                let key = "\(song.source.rawValue)|\(name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).lowercased())"
+                if let index = artistIndex[key] {
+                    if artists[index].coverURL == nil, song.coverURL != nil {
+                        artists[index] = Artist(id: artists[index].id, name: artists[index].name, coverURL: song.coverURL, source: artists[index].source)
+                    }
+                } else {
+                    artistIndex[key] = artists.count
+                    artists.append(Artist(id: "\(song.source.rawValue)-\(name)", name: name, coverURL: song.coverURL, source: song.source))
+                }
+            }
+
+            let albumName = song.album.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !albumName.isEmpty else { continue }
+            let key = "\(song.source.rawValue)|\(albumName.localizedLowercase)|\(song.artists.localizedLowercase)"
+            guard albumIndex.insert(key).inserted else { continue }
+            albums.append(Album(
+                id: "\(song.source.rawValue)-\(albumName)-\(song.artists)",
+                name: albumName,
+                artistName: song.artists,
+                coverURL: song.coverURL,
+                source: song.source
+            ))
+        }
+        return (artists, albums)
     }
 }
 
@@ -1223,11 +1290,19 @@ struct AlbumDetailView: View {
                         }
                     )
                     : direct
-            case .kuwo, .migu:
-                throw NSError(
-                    domain: "BeansAlbum",
-                    code: 2,
-                    userInfo: [NSLocalizedDescriptionKey: "当前平台暂不支持专辑详情"]
+            case .kuwo:
+                result = await searchFallbackSongs(
+                    queries: [albumSearchQuery, album.name],
+                    search: { query in
+                        (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: query, limit: 100)) ?? []
+                    }
+                )
+            case .migu:
+                result = await searchFallbackSongs(
+                    queries: [albumSearchQuery, album.name],
+                    search: { query in
+                        (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: query, limit: 100)) ?? []
+                    }
                 )
             }
             if !result.isEmpty {

@@ -38,13 +38,6 @@ struct QueueView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        if downloadFeatureUnlocked, !player.queue.isEmpty {
-                            Button {
-                                showBatchDownload = true
-                            } label: {
-                                Label("批量下载", systemImage: "arrow.down.to.line.compact")
-                            }
-                        }
                         Button {
                             player.clearQueue()
                         } label: {
@@ -139,6 +132,18 @@ struct QueueView: View {
                 Text("\(player.queue.count) 首")
                     .font(BeansFont.appFont(13, .medium))
                     .foregroundStyle(Color.beansComment)
+                if downloadFeatureUnlocked, player.queue.count > 1 {
+                    Button {
+                        BeansHaptics.tap()
+                        showBatchDownload = true
+                    } label: {
+                        Label("批量下载", systemImage: "arrow.down.circle")
+                            .font(BeansFont.appFont(12, .semibold))
+                            .foregroundStyle(Color.beansAmber)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(Color.beansAmber)
+                }
             }
 
             if player.queue.isEmpty {

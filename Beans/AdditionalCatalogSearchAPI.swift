@@ -1,4 +1,6 @@
 import CommonCrypto
+import Compression
+import CoreFoundation
 import Foundation
 
 enum AdditionalCatalogSearchError: LocalizedError {
@@ -109,6 +111,19 @@ enum AdditionalCatalogSearchAPI {
         }
     }
 
+    /// 酷我和咪咕的目录搜索与歌词接口独立。播放地址仍由用户启用的音源解析，
+    /// 这里仅返回同步歌词，避免播放页因没有官方歌词分支而长期为空。
+    static func lyric(for song: Song) async throws -> String {
+        switch song.source {
+        case .kuwo:
+            return try await kuwoLyric(songID: song.id)
+        case .migu:
+            return try await miguLyric(songID: song.id)
+        default:
+            throw AdditionalCatalogSearchError.invalidResponse
+        }
+    }
+
     private static func kuwoSong(_ item: [String: Any]) -> Song? {
         let rawID = text(item["MUSICRID"]) ?? text(item["id"]) ?? text(item["musicrid"])
         let idText = rawID?.replacingOccurrences(of: "MUSIC_", with: "") ?? ""
@@ -136,7 +151,11 @@ enum AdditionalCatalogSearchAPI {
             .compactMap { text($0["name"]) }
             .first
         let imageItems = dictionaries(in: item["imgItems"])
-        let image = miguImageURL(text(item["img3"]) ?? text(item["img2"]) ?? text(item["img1"]) ?? text(item["albumPicUrl"]) ?? text(imageItems.first?["img"]))
+        let image = miguImageURL(
+            text(item["img3"]) ?? text(item["img2"]) ?? text(item["img1"])
+                ?? text(item["albumPicUrl"]) ?? text(item["cover"])
+                ?? text(imageItems.first?["img"] ?? imageItems.first?["imgUrl"])
+        )
         return Song(
             id: id,
             name: text(item["name"]) ?? text(item["songName"]) ?? "",
@@ -223,6 +242,54 @@ enum AdditionalCatalogSearchAPI {
         }
     }
 
+    private static func kuwoLyric(songID: Int) async throws -> String {
+        guard songID > 0 else { throw AdditionalCatalogSearchError.invalidResponse }
+        let params = "user=12345,web,web,web&requester=localhost&req=1&rid=MUSIC_\(songID)&lrcx=1"
+        let key = Array("yeelion".utf8)
+        let encoded = Data(params.utf8).enumerated().map { $0.element ^ key[$0.offset % key.count] }
+        let query = Data(encoded).base64EncodedString()
+        guard let url = URL(string: "https://newlyric.kuwo.cn/newlyric.lrc?\(query)") else {
+            throw AdditionalCatalogSearchError.invalidResponse
+        }
+        let data = try await fetchData(url, headers: ["Referer": "https://www.kuwo.cn/", "User-Agent": browserUserAgent])
+        guard let delimiter = data.range(of: Data("\r\n\r\n".utf8)),
+              let inflated = inflateZlib(Data(data[delimiter.upperBound...])),
+              let encodedLyric = String(data: inflated, encoding: .utf8),
+              let lyricData = Data(base64Encoded: encodedLyric, options: .ignoreUnknownCharacters) else {
+            throw AdditionalCatalogSearchError.invalidResponse
+        }
+        let decoded = lyricData.enumerated().map { $0.element ^ key[$0.offset % key.count] }
+        guard let lyric = decodeGB18030(Data(decoded)), !lyric.isEmpty else {
+            throw AdditionalCatalogSearchError.invalidResponse
+        }
+        return lyric
+    }
+
+    private static func miguLyric(songID: Int) async throws -> String {
+        guard songID > 0,
+              let url = URL(string: "https://c.musicapp.migu.cn/MIGUM2.0/v1.0/content/resourceinfo.do?resourceType=2") else {
+            throw AdditionalCatalogSearchError.invalidResponse
+        }
+        let root = try await fetchObject(
+            url,
+            method: "POST",
+            body: Data("resourceId=\(songID)".utf8),
+            headers: [
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Referer": "https://app.c.nf.migu.cn/",
+                "User-Agent": browserUserAgent,
+            ]
+        )
+        let resource = ((root["data"] as? [String: Any])?["resource"] as? [[String: Any]])?.first
+        guard let rawURL = text(resource?["lrcUrl"] ?? resource?["lrc_url"]),
+              let lyricURL = URL(string: rawURL) else {
+            throw AdditionalCatalogSearchError.invalidResponse
+        }
+        let lyric = try await fetchText(lyricURL, headers: ["Referer": "https://m.music.migu.cn/", "User-Agent": browserUserAgent])
+        guard !lyric.isEmpty else { throw AdditionalCatalogSearchError.invalidResponse }
+        return lyric
+    }
+
     private static func dictionaries(in value: Any?) -> [[String: Any]] {
         if let dictionary = value as? [String: Any] {
             return [dictionary] + dictionary.values.flatMap { dictionaries(in: $0) }
@@ -233,8 +300,15 @@ enum AdditionalCatalogSearchAPI {
         return []
     }
 
-    private static func fetchObject(_ url: URL, headers: [String: String]) async throws -> [String: Any] {
+    private static func fetchObject(
+        _ url: URL,
+        method: String = "GET",
+        body: Data? = nil,
+        headers: [String: String]
+    ) async throws -> [String: Any] {
         var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.httpBody = body
         headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -250,6 +324,53 @@ enum AdditionalCatalogSearchAPI {
             throw AdditionalCatalogSearchError.invalidResponse
         }
         return object
+    }
+
+    private static func fetchData(_ url: URL, headers: [String: String]) async throws -> Data {
+        var request = URLRequest(url: url)
+        headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw AdditionalCatalogSearchError.invalidResponse
+        }
+        return data
+    }
+
+    private static func fetchText(_ url: URL, headers: [String: String]) async throws -> String {
+        let data = try await fetchData(url, headers: headers)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw AdditionalCatalogSearchError.invalidResponse
+        }
+        return text
+    }
+
+    private static func inflateZlib(_ data: Data) -> Data? {
+        guard !data.isEmpty else { return nil }
+        var capacity = max(data.count * 8, 64 * 1024)
+        while capacity <= 8 * 1024 * 1024 {
+            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: capacity)
+            defer { buffer.deallocate() }
+            let count = data.withUnsafeBytes { source in
+                compression_decode_buffer(
+                    buffer,
+                    capacity,
+                    source.bindMemory(to: UInt8.self).baseAddress!,
+                    data.count,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+            }
+            if count > 0 { return Data(bytes: buffer, count: count) }
+            capacity *= 2
+        }
+        return nil
+    }
+
+    private static func decodeGB18030(_ data: Data) -> String? {
+        let encoding = CFStringConvertEncodingToNSStringEncoding(
+            CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
+        )
+        return String(data: data, encoding: String.Encoding(rawValue: encoding))
     }
 
     private static func md5(_ string: String) -> String {
@@ -289,14 +410,21 @@ enum AdditionalCatalogSearchAPI {
     }
 
     private static func kuwoImageURL(_ value: String?) -> String? {
-        guard let value, !value.isEmpty else { return nil }
+        guard var value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        if value.hasPrefix("//") { value = "https:\(value)" }
         if value.hasPrefix("http") { return value.replacingOccurrences(of: "http://", with: "https://") }
-        return "https://img1.kuwo.cn/star/albumcover/\(value.trimmingCharacters(in: CharacterSet(charactersIn: "/")))"
+        var path = value.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let parts = path.split(separator: "/", maxSplits: 1).map(String.init)
+        if parts.count == 2, Int(parts[0]) != nil {
+            path = "500/\(parts[1])"
+        }
+        return "https://img1.kuwo.cn/star/albumcover/\(path)"
     }
 
     private static func miguImageURL(_ value: String?) -> String? {
-        guard let value, !value.isEmpty else { return nil }
-        if value.hasPrefix("/") { return "https://d.musicapp.migu.cn\(value)" }
+        guard var value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        if value.hasPrefix("//") { value = "https:\(value)" }
+        if value.hasPrefix("/") { value = "https://d.musicapp.migu.cn\(value)" }
         return value.replacingOccurrences(of: "http://", with: "https://")
     }
 

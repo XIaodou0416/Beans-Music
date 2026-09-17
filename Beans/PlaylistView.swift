@@ -76,18 +76,6 @@ struct PlaylistView: View {
             }
             .navigationTitle(playlist.name)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showBatchDownload = true
-                    } label: {
-                        Image(systemName: "arrow.down.to.line.compact")
-                    }
-                    .opacity(downloadFeatureUnlocked && !displayedTracks.isEmpty ? 1 : 0)
-                    .disabled(!downloadFeatureUnlocked || displayedTracks.isEmpty)
-                    .accessibilityLabel("批量下载歌单")
-                }
-            }
         .task { await load() }
         .sheet(isPresented: $showBatchDownload) {
             BatchDownloadSheet(songs: displayedTracks, title: "下载歌单")
@@ -137,6 +125,26 @@ struct PlaylistView: View {
                 GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                     if !displayedTracks.isEmpty {
                         player.play(songs: displayedTracks, startAt: Int.random(in: 0..<displayedTracks.count))
+                    }
+                }
+            }
+            if tracks.count > 1 {
+                HStack {
+                    Text(beansSongCountText(displayedTracks.count))
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                    Spacer()
+                    if downloadFeatureUnlocked {
+                        Button {
+                            BeansHaptics.tap()
+                            showBatchDownload = true
+                        } label: {
+                            Label("批量下载", systemImage: "arrow.down.circle")
+                                .font(BeansFont.appFont(12, .semibold))
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(Color.beansAmber)
+                        .disabled(displayedTracks.isEmpty)
                     }
                 }
             }

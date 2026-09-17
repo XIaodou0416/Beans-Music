@@ -350,6 +350,8 @@ struct ArtistHomeSheet: View {
             await loadQQArtist()
         } else if artistSource == .kugou {
             await loadKugouArtist()
+        } else if artistSource == .kuwo || artistSource == .migu {
+            await loadAdditionalCatalogArtist()
         } else {
             await loadNetEaseArtist()
         }
@@ -504,5 +506,39 @@ struct ArtistHomeSheet: View {
         hotSongs = Array(hotSongs.prefix(1_000))
         BeansLogger.shared.log("酷狗歌手主页完成：artist=\(artistName) songs=\(hotSongs.count)", level: .debug)
         loading = false
+    }
+
+    /// 补充目录没有独立的歌手详情接口时，使用同源歌曲搜索构建歌手页，
+    /// 不回退到其它平台，避免来源和封面错位。
+    private func loadAdditionalCatalogArtist() async {
+        let songs: [Song]
+        switch artistSource {
+        case .kuwo:
+            songs = (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: artistName, limit: 100)) ?? []
+        case .migu:
+            songs = (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: artistName, limit: 100)) ?? []
+        default:
+            songs = []
+        }
+        let normalized = artistName
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+        let matched = songs.filter { song in
+            song.artists
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .lowercased()
+                .contains(normalized)
+        }
+        hotSongs = matched.isEmpty ? songs : matched
+        if artist == nil {
+            artist = Artist(
+                id: artistID ?? "\(artistSource.rawValue)-\(artistName)",
+                name: artistName,
+                coverURL: hotSongs.first?.coverURL,
+                source: artistSource
+            )
+        }
+        loading = false
+        if hotSongs.isEmpty { errorMessage = "未找到歌手「\(artistName)」" }
     }
 }

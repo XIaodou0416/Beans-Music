@@ -178,6 +178,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private let playModeKey = "beans.player.playMode"
     private let autoSkipOnFailureKey = "beans.playback.autoSkipOnFailure"
     static let autoCrossPlatformFallbackKey = "beans.playback.autoCrossPlatformFallback"
+    static let playbackSourcePreferenceKey = PlaybackSourcePreference.storageKey
     static let listeningDurationKey = "beans.playback.listeningDuration.v1"
     private let autoResumeLastPlaybackKey = "beans.playback.autoResumeLast"
     private let thirdPartyVIPNoticeKey = "beans.showThirdPartyVIPNotice"
@@ -692,8 +693,9 @@ final class PlayerManager: NSObject, ObservableObject {
             var resolvedThirdParty: UnblockService.Resolved?
             var qqOfficialBR: String?
             var attemptedQQOfficialBRs: [String] = []
-            // 官方地址失败后，使用已启用的自定义音源兜底。
-            let enableUnblock = externalSourcesEnabled
+            let sourcePreference = PlaybackSourcePreference.current
+            // 只用官方时不触发第三方解析；只用第三方时完全跳过官方地址请求。
+            let enableUnblock = externalSourcesEnabled && sourcePreference != .official
             let strictUnlock = shouldLockOfficialOnly(song)
             let quality = (forceKugouStandard && song.source == .kugou) ? .standard : NetworkAudioQuality.officialPreferred
             let thirdPartyQuality = NetworkAudioQuality.thirdPartyPreferred
@@ -706,34 +708,39 @@ final class PlayerManager: NSObject, ObservableObject {
                 resolvedThirdParty = nil
                 qqOfficialBR = nil
                 attemptedQQOfficialBRs = []
-                if song.source == .kugou {
-                urlString = try? await KugouMusicAPI.shared.songURL(song: song, quality: quality)
-                if urlString == nil {
-                    resolvedThirdParty = await kugouFallback(
+                if sourcePreference == .thirdParty {
+                    resolvedThirdParty = await resolveThirdParty(
                         song: song,
-                        thirdPartyQuality: thirdPartyQuality,
-                        enableUnblock: enableUnblock
-                    )
-                }
-            } else if song.source == .qq, let mid = song.qqMid {
-                // QQ 官方地址失败后只走 QQ 第三方音源，不跨平台匹配同名歌曲。
-                let officialResult = try? await QQMusicAPI.shared.songURLResult(
-                    songmid: mid,
-                    mediaMid: song.qqMediaMid,
-                    quality: quality
-                )
-                urlString = officialResult?.url
-                qqOfficialBR = officialResult?.br
-                attemptedQQOfficialBRs = officialResult?.attemptedBRs ?? []
-                if urlString == nil {
-                    (urlString, resolvedThirdParty) = await qqFallback(
-                        song: song,
-                        quality: quality,
-                        thirdPartyQuality: thirdPartyQuality,
-                        enableUnblock: enableUnblock,
+                        quality: thirdPartyQuality,
                         strict: strictUnlock
                     )
-                }
+                } else if song.source == .kugou {
+                    urlString = try? await KugouMusicAPI.shared.songURL(song: song, quality: quality)
+                    if urlString == nil {
+                        resolvedThirdParty = await kugouFallback(
+                            song: song,
+                            thirdPartyQuality: thirdPartyQuality,
+                            enableUnblock: enableUnblock
+                        )
+                    }
+                } else if song.source == .qq, let mid = song.qqMid {
+                    let officialResult = try? await QQMusicAPI.shared.songURLResult(
+                        songmid: mid,
+                        mediaMid: song.qqMediaMid,
+                        quality: quality
+                    )
+                    urlString = officialResult?.url
+                    qqOfficialBR = officialResult?.br
+                    attemptedQQOfficialBRs = officialResult?.attemptedBRs ?? []
+                    if urlString == nil {
+                        (urlString, resolvedThirdParty) = await qqFallback(
+                            song: song,
+                            quality: quality,
+                            thirdPartyQuality: thirdPartyQuality,
+                            enableUnblock: enableUnblock,
+                            strict: strictUnlock
+                        )
+                    }
                 } else if song.source == .netease {
                     (urlString, resolvedThirdParty) = await neteaseResolve(
                         song: song,
@@ -966,6 +973,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private func retryKugouAtStandardIfNeeded(error _: Error?) -> Bool {
         guard let song = currentSong,
               song.source == .kugou,
+              PlaybackSourcePreference.current != .thirdParty,
               NetworkAudioQuality.officialPreferred != .standard,
               kugouStandardFallbackSongKey != song.identityKey else { return false }
         kugouStandardFallbackSongKey = song.identityKey
@@ -1041,6 +1049,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private func retryQQOfficialIfNeeded() -> Bool {
         guard let song = currentSong,
               song.source == .qq,
+              PlaybackSourcePreference.current != .thirdParty,
               let qqMid = song.qqMid,
               !qqMid.isEmpty else { return false }
         if playbackRecoveryInFlightSongKey == song.identityKey {
@@ -1438,12 +1447,13 @@ final class PlayerManager: NSObject, ObservableObject {
         DispatchQueue.main.async(execute: workItem)
     }
 
-    /// 官方播放链路和已启用的自定义源都失败时，查找已登录会员平台中的同一录音。
+    /// 当前平台及其第三方解析均失败时，匹配其它目录平台的同一录音并仅通过第三方音源解析。
     /// 只接受标题、歌手和时长均匹配的结果，避免播放到翻唱或不同版本。
     @discardableResult
     private func attemptCrossPlatformFallbackIfNeeded(for song: Song, reason: String) -> Bool {
         let enabled = defaults.object(forKey: Self.autoCrossPlatformFallbackKey) as? Bool ?? true
         guard enabled,
+              externalSourcesEnabled,
               crossPlatformFallbackInFlightSongKey != song.identityKey else { return false }
 
         if crossPlatformFallbackOriginKey == nil {
@@ -1453,9 +1463,8 @@ final class PlayerManager: NSObject, ObservableObject {
             crossPlatformFallbackTriedSources.insert(song.source.rawValue)
         }
 
-        let sources = [SongSource.netease, .qq, .kugou].filter {
+        let sources = SongSource.allCases.filter {
             $0 != song.source
-                && hasMembership(for: $0)
                 && !crossPlatformFallbackTriedSources.contains($0.rawValue)
         }
         guard !sources.isEmpty else { return false }
@@ -1467,11 +1476,18 @@ final class PlayerManager: NSObject, ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             var replacement: Song?
+            var resolvedReplacement: UnblockService.Resolved?
             for source in sources {
                 guard !Task.isCancelled else { return }
                 self.crossPlatformFallbackTriedSources.insert(source.rawValue)
-                if let candidate = await self.matchingSong(song, on: source) {
+                if let candidate = await self.matchingSong(song, on: source),
+                   let resolved = await self.resolveThirdParty(
+                        song: candidate,
+                        quality: NetworkAudioQuality.thirdPartyPreferred,
+                        strict: self.shouldLockOfficialOnly(candidate)
+                   ) {
                     replacement = candidate
+                    resolvedReplacement = resolved
                     break
                 }
             }
@@ -1481,14 +1497,22 @@ final class PlayerManager: NSObject, ObservableObject {
                       self.currentSong?.identityKey == songKey else { return }
                 self.crossPlatformFallbackInFlightSongKey = nil
                 guard let replacement,
+                      let resolvedReplacement,
                       self.queue.indices.contains(self.currentIndex) else {
                     self.finishUnrecoverablePlaybackFailure(song: song, reason: reason)
                     return
                 }
                 self.queue[self.currentIndex] = replacement
                 self.crossPlatformFallbackTriedSources.insert(replacement.source.rawValue)
-                ToastCenter.shared.show("当前平台无法播放，已切换到\(self.platformName(for: replacement.source))", duration: 3)
-                self.loadCurrent(resumeAt: resume)
+                let notice = self.thirdPartyVIPNotice(for: replacement, sourceTitle: resolvedReplacement.sourceTitle)
+                ToastCenter.shared.show("当前平台无法播放，已通过\(self.platformName(for: replacement.source))音源继续播放", duration: 3)
+                self.setupPlayer(
+                    url: resolvedReplacement.url,
+                    thirdPartyVIPNotice: notice,
+                    resumeAt: resume,
+                    isThirdParty: true,
+                    thirdPartyQuality: resolvedReplacement.quality
+                )
             }
         }
         return true
@@ -1509,8 +1533,10 @@ final class PlayerManager: NSObject, ObservableObject {
             candidates = (try? await QQMusicAPI.shared.searchSongs(keyword: keyword, limit: 12)) ?? []
         case .kugou:
             candidates = (try? await KugouMusicAPI.shared.searchSongs(keyword: keyword, limit: 12)) ?? []
-        case .kuwo, .migu:
-            candidates = []
+        case .kuwo:
+            candidates = (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: keyword, limit: 12)) ?? []
+        case .migu:
+            candidates = (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: keyword, limit: 12)) ?? []
         }
         return bestMatchingSong(for: sourceSong, in: candidates)
     }

@@ -150,7 +150,7 @@ enum ThirdPartyAudioQuality: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// 歌曲来源
-enum SongSource: String, Codable, Sendable {
+enum SongSource: String, Codable, Sendable, CaseIterable {
     case netease
     case qq
     case kugou
@@ -186,6 +186,39 @@ enum FavoriteDestination: String, CaseIterable, Identifiable {
         case .local: return "本地收藏"
         case .official: return "官方歌单"
         }
+    }
+}
+
+/// 决定播放器优先使用官方地址还是用户已启用的第三方音源。
+/// 自动模式保留原有体验：官方地址可用时优先官方，失败后再解析第三方音源。
+enum PlaybackSourcePreference: String, CaseIterable, Identifiable {
+    case automatic
+    case official
+    case thirdParty
+
+    static let storageKey = "beans.playback.sourcePreference"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic: return "自动"
+        case .official: return "官方"
+        case .thirdParty: return "第三方"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .automatic: return "优先官方，失败后尝试已启用音源"
+        case .official: return "只使用当前平台官方播放地址"
+        case .thirdParty: return "只使用已启用的第三方音源"
+        }
+    }
+
+    static var current: PlaybackSourcePreference {
+        UserDefaults.standard.string(forKey: storageKey)
+            .flatMap(PlaybackSourcePreference.init(rawValue:)) ?? .automatic
     }
 }
 
