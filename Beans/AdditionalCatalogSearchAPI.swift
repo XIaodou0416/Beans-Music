@@ -610,7 +610,7 @@ enum AdditionalCatalogSearchAPI {
         guard let seconds = Double(value), seconds >= 0 else { return value }
         let minutes = Int(seconds) / 60
         let remainder = seconds - Double(minutes * 60)
-        return String(format: Locale(identifier: "en_US_POSIX"), "%02d:%05.2f", minutes, remainder)
+        return String(format: "%02d:%05.2f", minutes, remainder)
     }
 
     private static func dictionaries(in value: Any?) -> [[String: Any]] {
