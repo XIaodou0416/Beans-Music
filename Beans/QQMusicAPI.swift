@@ -328,7 +328,9 @@ final class QQMusicAPI {
 
     /// 搜索 QQ 音乐歌单（musicu search_type=3）。
     func searchPlaylists(keyword: String, limit: Int = 30) async throws -> [Playlist] {
-        let target = max(limit, 1)
+        // client_music_search_songlist 在 num_per_page 超过 30 时会返回
+        // -3002 / 空列表；搜索页和精选页统一使用它支持的页大小。
+        let target = min(max(limit, 1), 30)
         // This endpoint is the web search's dedicated songlist response. It
         // remains available when the generic musicu search omits songlists.
         var components = URLComponents(string: "https://c.y.qq.com/soso/fcgi-bin/client_music_search_songlist")!
