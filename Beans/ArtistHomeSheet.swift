@@ -406,11 +406,10 @@ struct ArtistHomeSheet: View {
                 artist = first
                 id = Int(first.id.replacingOccurrences(of: "netease-", with: "")) ?? 0
             }
-            async let songs = (try? NetEaseAPI.shared.artistHotSongs(artistID: id, limit: 300)) ?? []
-            async let albums = (try? NetEaseAPI.shared.artistAlbums(artistID: id)) ?? []
-            let (s, a) = await (songs, albums)
+            async let songsTask = (try? NetEaseAPI.shared.artistHotSongs(artistID: id, limit: 300)) ?? []
+            async let albumsTask = (try? NetEaseAPI.shared.artistAlbums(artistID: id)) ?? []
+            let s = await songsTask
             hotSongs = s
-            self.albums = a
             // 接口异常时兜底：分页搜索补全歌手歌曲（避免再次退回 30 首）。
             if hotSongs.isEmpty {
                 var fallback: [Song] = []
@@ -422,6 +421,8 @@ struct ArtistHomeSheet: View {
                 }
                 hotSongs = fallback
             }
+            persistLoadedContent()
+            self.albums = await albumsTask
             loading = false
         } catch {
             errorMessage = error.localizedDescription
@@ -452,6 +453,7 @@ struct ArtistHomeSheet: View {
             songs = fallback.filter { seen.insert($0.identityKey).inserted }
         }
         hotSongs = songs
+        persistLoadedContent()
         albums = await albumsTask
         loading = false
     }
@@ -535,6 +537,7 @@ struct ArtistHomeSheet: View {
             hotSongs = primarySongs
         }
         hotSongs = Array(hotSongs.prefix(1_000))
+        persistLoadedContent()
         albums = await albumsTask
         BeansLogger.shared.log("酷狗歌手主页完成：artist=\(artistName) songs=\(hotSongs.count)", level: .debug)
         loading = false
@@ -578,6 +581,7 @@ struct ArtistHomeSheet: View {
                 .contains(normalized)
         }
         hotSongs = matched.isEmpty ? songs : matched
+        persistLoadedContent()
         albums = await albumsTask
         if artist == nil {
             artist = Artist(
@@ -619,6 +623,13 @@ struct ArtistHomeSheet: View {
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
             .replacingOccurrences(of: " ", with: "")
+    }
+
+    /// 歌曲列表先到时立即落盘，不能因为专辑请求较慢或用户返回上一页而丢掉
+    /// 已经成功加载的歌手页内容。
+    private func persistLoadedContent() {
+        guard !hotSongs.isEmpty || !albums.isEmpty else { return }
+        ArtistHomeCache.shared.save(artist: artist, songs: hotSongs, albums: albums, for: cacheKey)
     }
 }
 
