@@ -5263,7 +5263,11 @@ struct PlayerView: View {
         }
 
         if song.source == .kugou, let hash = song.kugouHash {
-            let payload = await KugouMusicAPI.shared.lyricPayload(hash: hash, duration: song.duration)
+            let payload = await KugouMusicAPI.shared.lyricPayload(
+                hash: hash,
+                duration: song.duration,
+                keyword: "\(song.name) \(song.artists)"
+            )
             apply(LyricParser.parse(payload.lrc, wordRaw: payload.krc, wordFormat: .kugouKRC))
             LyricsCache.shared.save(lyric: payload.lrc, translation: nil, wordTiming: payload.krc, wordFormat: .kugouKRC, for: cacheKey)
         } else if song.source == .qq, let mid = song.qqMid {

@@ -1707,21 +1707,24 @@ final class KugouMusicAPI {
     }
 
     /// 酷狗歌词接口在可用时返回 KRC 逐字时间轴；失败时仍保留普通 LRC。
-    func lyricPayload(hash: String, duration: TimeInterval) async -> LyricPayload {
+    func lyricPayload(hash: String, duration: TimeInterval, keyword: String = "") async -> LyricPayload {
         guard !hash.isEmpty else { return LyricPayload(lrc: "", krc: nil) }
-        var search = URLComponents(string: "http://lyrics.kugou.com/search")!
+        var search = URLComponents(string: "https://lyrics.kugou.com/search")!
         search.queryItems = [
             URLQueryItem(name: "ver", value: "1"),
             URLQueryItem(name: "man", value: "yes"),
             URLQueryItem(name: "client", value: "pc"),
-            URLQueryItem(name: "hash", value: hash.uppercased()),
+            URLQueryItem(name: "keyword", value: keyword),
+            URLQueryItem(name: "hash", value: hash),
+            URLQueryItem(name: "timelength", value: "\(Int(duration * 1000))"),
             URLQueryItem(name: "duration", value: "\(Int(duration * 1000))"),
+            URLQueryItem(name: "lrctxt", value: "1"),
         ]
         guard let sjson = try? await getJSON(search.url!, ua: Self.browserUA),
               let first = (sjson["candidates"] as? [[String: Any]])?.first,
               let id = first["id"], let accessKey = first["accesskey"] else { return LyricPayload(lrc: "", krc: nil) }
         func download(_ format: String) async -> Data? {
-            var request = URLComponents(string: "http://lyrics.kugou.com/download")!
+            var request = URLComponents(string: "https://lyrics.kugou.com/download")!
             request.queryItems = [
                 URLQueryItem(name: "ver", value: "1"),
                 URLQueryItem(name: "client", value: "pc"),
@@ -1744,6 +1747,10 @@ final class KugouMusicAPI {
         let raw = await download(isKRC ? "krc" : "lrc")
         if isKRC, let raw, let decoded = Self.decodeKRC(raw) {
             return LyricPayload(lrc: decoded.lrc, krc: decoded.krc)
+        }
+        if isKRC, let lrcData = await download("lrc"),
+           let lrc = String(data: lrcData, encoding: .utf8), !lrc.isEmpty {
+            return LyricPayload(lrc: lrc, krc: nil)
         }
         let lrc = raw.flatMap { String(data: $0, encoding: .utf8) } ?? ""
         return LyricPayload(lrc: lrc, krc: nil)

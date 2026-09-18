@@ -323,7 +323,7 @@ enum AdditionalCatalogSearchAPI {
             }
             return try await kuwoFallbackLyric(songID: song.id)
         case .migu:
-            return try await miguLyric(songID: song.id, copyrightID: song.miguCopyrightId)
+            return try await miguLyric(songID: song.id, copyrightID: song.miguCopyrightId, directURL: song.miguLyricURL)
         default:
             throw AdditionalCatalogSearchError.invalidResponse
         }
@@ -335,6 +335,9 @@ enum AdditionalCatalogSearchAPI {
         guard let id = Int(idText), id > 0 else { return nil }
         let duration = seconds(item["DURATION"] ?? item["duration"])
         let image = kuwoImageURL(text(item["web_albumpic_short"]) ?? text(item["albumpic"]) ?? text(item["PICPATH"]) ?? text(item["hts_MVPIC"]))
+        let ext = item["ext"] as? [String: Any]
+        let lyricURL = text(item["lrcUrl"] ?? item["lyricUrl"] ?? item["lyricsUrl"] ?? ext?["lrcUrl"] ?? ext?["lyricUrl"])
+            .flatMap(URL.init(string:))
         return Song(
             id: id,
             name: text(item["SONGNAME"]) ?? text(item["name"]) ?? "",
@@ -414,6 +417,7 @@ enum AdditionalCatalogSearchAPI {
             duration: seconds(item["duration"] ?? item["length"]),
             source: .migu,
             miguCopyrightId: text(item["copyrightId"]),
+            miguLyricURL: lyricURL,
             fee: int(item["needPay"]) ?? int(item["payFlag"]) ?? 0
         )
     }
@@ -540,15 +544,19 @@ enum AdditionalCatalogSearchAPI {
             guard let time = text(row["time"] ?? row["timeTag"]),
                   let line = text(row["lineLyric"] ?? row["line"]),
                   !line.isEmpty else { return nil }
-            return "[\(time)]\(line)"
+            return "[\(kuwoTimestamp(time))]\(line)"
         }.joined(separator: "\n")
         guard !lyric.isEmpty else { throw AdditionalCatalogSearchError.invalidResponse }
         return lyric
     }
 
-    private static func miguLyric(songID: Int, copyrightID: String?) async throws -> String {
-        guard songID > 0,
-              let url = URL(string: "https://c.musicapp.migu.cn/MIGUM2.0/v1.0/content/resourceinfo.do?resourceType=2") else {
+    private static func miguLyric(songID: Int, copyrightID: String?, directURL: URL?) async throws -> String {
+        if let directURL,
+           let lyric = try? await fetchText(directURL, headers: ["Referer": "https://m.music.migu.cn/", "User-Agent": browserUserAgent]),
+           !lyric.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return lyric
+        }
+        guard let url = URL(string: "https://c.musicapp.migu.cn/MIGUM2.0/v1.0/content/resourceinfo.do?resourceType=2") else {
             throw AdditionalCatalogSearchError.invalidResponse
         }
         let identifiers = [copyrightID, String(songID)]
@@ -574,6 +582,15 @@ enum AdditionalCatalogSearchAPI {
             return lyric
         }
         throw AdditionalCatalogSearchError.invalidResponse
+    }
+
+    private static func kuwoTimestamp(_ raw: String) -> String {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.contains(":") { return value }
+        guard let seconds = Double(value), seconds >= 0 else { return value }
+        let minutes = Int(seconds) / 60
+        let remainder = seconds - Double(minutes * 60)
+        return String(format: "%02d:%05.2f", minutes, remainder)
     }
 
     private static func dictionaries(in value: Any?) -> [[String: Any]] {
