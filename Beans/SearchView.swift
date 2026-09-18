@@ -1276,20 +1276,33 @@ struct SearchView: View {
                 case .all:
                     async let songsTask = catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 12)
                     async let playlistsTask = catalogPlaylists(keyword: trimmed, provider: selectedProvider, limit: 12)
+                    // 网易云单曲结果只携带关联专辑封面，且没有可用于详情页的歌手、
+                    // 专辑标识。综合页改用对应目录接口，避免把歌曲封面或拼接名称误当作
+                    // 歌手头像、专辑 ID。
+                    async let artistsTask: [Artist] = selectedProvider == .netease
+                        ? catalogArtists(keyword: trimmed, provider: selectedProvider, limit: 12)
+                        : []
+                    async let albumsTask: [Album] = selectedProvider == .netease
+                        ? catalogAlbums(keyword: trimmed, provider: selectedProvider, limit: 12)
+                        : []
                     let songs = await songsTask
                     let playlists = await playlistsTask
+                    let neteaseArtists = await artistsTask
+                    let neteaseAlbums = await albumsTask
                     let metadata = catalogMetadata(from: songs)
+                    let artists = selectedProvider == .netease ? neteaseArtists : metadata.artists
+                    let albums = selectedProvider == .netease ? neteaseAlbums : metadata.albums
                     guard !Task.isCancelled, searchRequestID == requestID else { return }
                     await MainActor.run {
                         guard searchRequestID == requestID else { return }
                         songResults = songs
-                        artistResults = metadata.artists
-                        albumResults = metadata.albums
+                        artistResults = artists
+                        albumResults = albums
                         playlistResults = playlists
                         searchResultCache[cacheKey] = SearchResultCacheEntry(
                             songs: songs,
-                            artists: metadata.artists,
-                            albums: metadata.albums,
+                            artists: artists,
+                            albums: albums,
                             playlists: playlists
                         )
                         if !songs.isEmpty || !playlists.isEmpty { BeansHaptics.success() }

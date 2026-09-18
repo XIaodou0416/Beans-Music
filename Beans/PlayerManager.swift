@@ -1450,13 +1450,12 @@ final class PlayerManager: NSObject, ObservableObject {
         DispatchQueue.main.async(execute: workItem)
     }
 
-    /// 当前平台及其第三方解析均失败时，匹配其它目录平台的同一录音并仅通过第三方音源解析。
-    /// 只接受标题、歌手和时长均匹配的结果，避免播放到翻唱或不同版本。
+    /// 当前平台播放失败时，匹配其它目录平台的同一录音并重新走完整播放链。
+    /// 这样会优先遵循用户的官方/第三方播放来源设置；只接受标题、歌手和时长均匹配的结果，避免播放到翻唱或不同版本。
     @discardableResult
     private func attemptCrossPlatformFallbackIfNeeded(for song: Song, reason: String) -> Bool {
         let enabled = defaults.object(forKey: Self.autoCrossPlatformFallbackKey) as? Bool ?? true
         guard enabled,
-              externalSourcesEnabled,
               crossPlatformFallbackInFlightSongKey != song.identityKey else { return false }
 
         if crossPlatformFallbackOriginKey == nil {
@@ -1476,21 +1475,15 @@ final class PlayerManager: NSObject, ObservableObject {
         let resume = progress
         let songKey = song.identityKey
         crossPlatformFallbackInFlightSongKey = songKey
+        ToastCenter.shared.show("当前平台无法播放，正在查找其它平台的同一歌曲", duration: 2)
         Task { [weak self] in
             guard let self else { return }
             var replacement: Song?
-            var resolvedReplacement: UnblockService.Resolved?
             for source in sources {
                 guard !Task.isCancelled else { return }
                 self.crossPlatformFallbackTriedSources.insert(source.rawValue)
-                if let candidate = await self.matchingSong(song, on: source),
-                   let resolved = await self.resolveThirdParty(
-                        song: candidate,
-                        quality: NetworkAudioQuality.thirdPartyPreferred,
-                        strict: self.shouldLockOfficialOnly(candidate)
-                   ) {
+                if let candidate = await self.matchingSong(song, on: source) {
                     replacement = candidate
-                    resolvedReplacement = resolved
                     break
                 }
             }
@@ -1500,22 +1493,16 @@ final class PlayerManager: NSObject, ObservableObject {
                       self.currentSong?.identityKey == songKey else { return }
                 self.crossPlatformFallbackInFlightSongKey = nil
                 guard let replacement,
-                      let resolvedReplacement,
                       self.queue.indices.contains(self.currentIndex) else {
                     self.finishUnrecoverablePlaybackFailure(song: song, reason: reason)
                     return
                 }
                 self.queue[self.currentIndex] = replacement
                 self.crossPlatformFallbackTriedSources.insert(replacement.source.rawValue)
-                let notice = self.thirdPartyVIPNotice(for: replacement, sourceTitle: resolvedReplacement.sourceTitle)
-                ToastCenter.shared.show("当前平台无法播放，已通过\(self.platformName(for: replacement.source))音源继续播放", duration: 3)
-                self.setupPlayer(
-                    url: resolvedReplacement.url,
-                    thirdPartyVIPNotice: notice,
-                    resumeAt: resume,
-                    isThirdParty: true,
-                    thirdPartyQuality: resolvedReplacement.quality
-                )
+                ToastCenter.shared.show("当前平台无法播放，已切换到\(self.platformName(for: replacement.source))继续尝试", duration: 3)
+                // 不能只将候选曲目交给第三方解析：当用户选择官方播放，或其他平台
+                // 本身可正常返回地址时，也应能完成兜底播放。
+                self.loadCurrent(resumeAt: resume)
             }
         }
         return true
