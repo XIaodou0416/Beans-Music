@@ -1445,6 +1445,12 @@ struct SettingsView: View {
         theme.backgroundSyncAll && theme.customBackgroundImage(for: colorScheme) != nil
     }
 
+    /// 旧系统使用稳定的导航和实体表面，避免系统玻璃与全屏设置容器组合时崩溃。
+    private var usesLegacySettingsSurface: Bool {
+        if #available(iOS 27.0, *) { return false }
+        return true
+    }
+
     private var visibleTabCount: Int {
         [discoverTabVisible, playlistsTabVisible, libraryTabVisible, profileTabVisible, searchTabVisible]
             .filter { $0 }
@@ -1729,7 +1735,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        BeansNavigationStack {
+        BeansSettingsNavigationStack {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 ScrollView {
@@ -1769,7 +1775,7 @@ struct SettingsView: View {
             }
         }
         // 只有壁纸模式需要强制液态叠层；默认设置页继续沿用原本更明亮的系统材质。
-        .environment(\.beansSettingsPerformanceMode, false)
+        .environment(\.beansSettingsPerformanceMode, usesLegacySettingsSurface)
         .preferredColorScheme(themeMode.colorScheme)
         .modifier(SettingsSearchCompatibilityModifier(text: $settingsSearchText))
         .onAppear {
@@ -3904,6 +3910,24 @@ private struct SettingsSearchCompatibilityModifier: ViewModifier {
             )
         } else {
             content
+        }
+    }
+}
+
+/// 设置页在旧系统使用稳定的导航容器，避免全屏设置与新导航实现组合触发系统崩溃。
+private struct BeansSettingsNavigationStack<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        if #available(iOS 27.0, *) {
+            BeansNavigationStack {
+                content()
+            }
+        } else {
+            NavigationView {
+                content()
+            }
+            .navigationViewStyle(.stack)
         }
     }
 }
