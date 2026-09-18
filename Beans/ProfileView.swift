@@ -1766,11 +1766,7 @@ struct SettingsView: View {
         // 只有壁纸模式需要强制液态叠层；默认设置页继续沿用原本更明亮的系统材质。
         .environment(\.beansSettingsPerformanceMode, false)
         .preferredColorScheme(themeMode.colorScheme)
-        .searchable(
-            text: $settingsSearchText,
-            placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "搜索设置"
-        )
+        .modifier(SettingsSearchCompatibilityModifier(text: $settingsSearchText))
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
             if #unavailable(iOS 26) {
@@ -3885,6 +3881,25 @@ private struct SettingsCatalogGroup<Content: View>: View {
                     .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1)
                     .allowsHitTesting(false)
             }
+    }
+}
+
+/// 新系统保留导航栏搜索；旧系统避免在全屏导航容器中挂载系统 drawer，
+/// 防止打开设置时由系统搜索控制器触发布局崩溃。
+private struct SettingsSearchCompatibilityModifier: ViewModifier {
+    @Binding var text: String
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 27.0, *) {
+            content.searchable(
+                text: $text,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "搜索设置"
+            )
+        } else {
+            content
+        }
     }
 }
 
