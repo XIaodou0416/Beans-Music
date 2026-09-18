@@ -253,7 +253,9 @@ enum AdditionalCatalogSearchAPI {
     static func searchKuwoAlbums(keyword: String, limit: Int = 40) async throws -> [Album] {
         let root = try? await kuwoSearch(keyword: keyword, limit: limit, type: "album")
         let response = root ?? [:]
-        let direct = dictionaries(in: response["searchgroup"] ?? response["abslist"]).compactMap { item in
+        let source: Any? = response["searchgroup"] ?? response["abslist"]
+        let directItems: [[String: Any]] = dictionaries(in: source)
+        let direct: [Album] = directItems.compactMap { item -> Album? in
             guard let id = text(item["ALBUMID"] ?? item["id"] ?? item["albumid"]),
                   let name = text(item["ALBUM"] ?? item["album"] ?? item["name"]), !name.isEmpty else { return nil }
             return Album(id: id, name: name, artistName: text(item["ARTIST"] ?? item["artist"]) ?? "", coverURL: kuwoImageURL(imageText(in: item, keys: ["PICPATH", "albumpic", "albumPic", "pic", "img", "imgurl"])).flatMap(URL.init(string:)), source: .kuwo)
