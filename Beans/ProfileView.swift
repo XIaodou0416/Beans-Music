@@ -1445,12 +1445,6 @@ struct SettingsView: View {
         theme.backgroundSyncAll && theme.customBackgroundImage(for: colorScheme) != nil
     }
 
-    /// 旧系统使用稳定的导航和实体表面，避免系统玻璃与全屏设置容器组合时崩溃。
-    private var usesLegacySettingsSurface: Bool {
-        if #available(iOS 27.0, *) { return false }
-        return true
-    }
-
     private var visibleTabCount: Int {
         [discoverTabVisible, playlistsTabVisible, libraryTabVisible, profileTabVisible, searchTabVisible]
             .filter { $0 }
@@ -1735,11 +1729,12 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        BeansSettingsNavigationStack {
+        BeansNavigationStack {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 20) {
+                        settingsSearchField
                         coreSettingsGroup
                         playbackSettingsGroup
                         utilitySettingsGroup
@@ -1774,10 +1769,9 @@ struct SettingsView: View {
                 }
             }
         }
-        // 只有壁纸模式需要强制液态叠层；默认设置页继续沿用原本更明亮的系统材质。
-        .environment(\.beansSettingsPerformanceMode, usesLegacySettingsSurface)
+        // 设置页统一使用稳定的实体表面，避免系统玻璃在全屏容器内影响旧系统稳定性。
+        .environment(\.beansSettingsPerformanceMode, true)
         .preferredColorScheme(themeMode.colorScheme)
-        .modifier(SettingsSearchCompatibilityModifier(text: $settingsSearchText))
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
             if #unavailable(iOS 26) {
@@ -1890,6 +1884,39 @@ struct SettingsView: View {
 
     private var showAccountSettings: Bool {
         settingsMatches("账号 登录 网易云 QQ 酷狗")
+    }
+
+    /// 所有系统共用同一套设置搜索控件，不依赖导航栏 drawer 的系统实现。
+    private var settingsSearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.beansComment)
+            TextField("搜索设置", text: $settingsSearchText)
+                .font(BeansFont.appFont(16, .medium))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !settingsSearchText.isEmpty {
+                Button {
+                    settingsSearchText = ""
+                    BeansHaptics.tap()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Color.beansComment.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 48)
+        .background {
+            BeansGlass(shape: Capsule())
+        }
+        .overlay {
+            Capsule()
+                .strokeBorder(Color.beansLabel.opacity(0.08), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
     }
 
     private var showAppearanceSettings: Bool {
@@ -3892,43 +3919,6 @@ private struct SettingsCatalogGroup<Content: View>: View {
                     .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1)
                     .allowsHitTesting(false)
             }
-    }
-}
-
-/// 新系统保留导航栏搜索；旧系统避免在全屏导航容器中挂载系统 drawer，
-/// 防止打开设置时由系统搜索控制器触发布局崩溃。
-private struct SettingsSearchCompatibilityModifier: ViewModifier {
-    @Binding var text: String
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(iOS 27.0, *) {
-            content.searchable(
-                text: $text,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "搜索设置"
-            )
-        } else {
-            content
-        }
-    }
-}
-
-/// 设置页在旧系统使用稳定的导航容器，避免全屏设置与新导航实现组合触发系统崩溃。
-private struct BeansSettingsNavigationStack<Content: View>: View {
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        if #available(iOS 27.0, *) {
-            BeansNavigationStack {
-                content()
-            }
-        } else {
-            NavigationView {
-                content()
-            }
-            .navigationViewStyle(.stack)
-        }
     }
 }
 
