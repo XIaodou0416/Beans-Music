@@ -257,6 +257,9 @@ final class PlayerManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        // Ensure a stale auxiliary-audio category cannot carry a previous mix
+        // preference into the first playback after relaunch.
+        sessionConfigured = Self.applyAudioMixPreference(mixesWithOthers, activate: false)
         if let raw = defaults.string(forKey: playModeKey),
            let saved = PlayMode(rawValue: raw) {
             playMode = saved
@@ -1900,14 +1903,16 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     @discardableResult
-    static func applyAudioMixPreference(_ mixesWithOthers: Bool) -> Bool {
+    static func applyAudioMixPreference(_ mixesWithOthers: Bool, activate: Bool = true) -> Bool {
         do {
             let session = AVAudioSession.sharedInstance()
             // 「与其他音频同时播放」开关：开启时 mixWithOthers，打开其他音频软件也能继续播放；关闭则自动暂停
             let options: AVAudioSession.CategoryOptions = mixesWithOthers ? [.mixWithOthers] : []
             let policy: AVAudioSession.RouteSharingPolicy = mixesWithOthers ? .default : .longFormAudio
             try session.setCategory(.playback, mode: .default, policy: policy, options: options)
-            try session.setActive(true)
+            if activate {
+                try session.setActive(true)
+            }
             if mixesWithOthers, !session.categoryOptions.contains(.mixWithOthers) {
                 return false
             }

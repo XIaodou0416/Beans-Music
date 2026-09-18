@@ -318,9 +318,12 @@ enum AdditionalCatalogSearchAPI {
     static func lyric(for song: Song) async throws -> String {
         switch song.source {
         case .kuwo:
-            return try await kuwoLyric(songID: song.id)
+            if let lyric = try? await kuwoLyric(songID: song.id), !lyric.isEmpty {
+                return lyric
+            }
+            return try await kuwoFallbackLyric(songID: song.id)
         case .migu:
-            return try await miguLyric(songID: song.id)
+            return try await miguLyric(songID: song.id, copyrightID: song.miguCopyrightId)
         default:
             throw AdditionalCatalogSearchError.invalidResponse
         }
@@ -410,6 +413,7 @@ enum AdditionalCatalogSearchAPI {
             coverURL: image.flatMap(URL.init(string:)),
             duration: seconds(item["duration"] ?? item["length"]),
             source: .migu,
+            miguCopyrightId: text(item["copyrightId"]),
             fee: int(item["needPay"]) ?? int(item["payFlag"]) ?? 0
         )
     }
@@ -522,29 +526,54 @@ enum AdditionalCatalogSearchAPI {
         return lyric
     }
 
-    private static func miguLyric(songID: Int) async throws -> String {
+    private static func kuwoFallbackLyric(songID: Int) async throws -> String {
+        guard songID > 0 else { throw AdditionalCatalogSearchError.invalidResponse }
+        var components = URLComponents(string: "https://m.kuwo.cn/newh5/singles/songinfoandlrc")!
+        components.queryItems = [URLQueryItem(name: "musicId", value: String(songID))]
+        let root = try await fetchObject(
+            components.url!,
+            headers: ["Referer": "https://m.kuwo.cn/", "User-Agent": browserUserAgent]
+        )
+        let data = (root["data"] as? [String: Any]) ?? root
+        let rows = (data["lrclist"] as? [[String: Any]]) ?? []
+        let lyric = rows.compactMap { row -> String? in
+            guard let time = text(row["time"] ?? row["timeTag"]),
+                  let line = text(row["lineLyric"] ?? row["line"]),
+                  !line.isEmpty else { return nil }
+            return "[\(time)]\(line)"
+        }.joined(separator: "\n")
+        guard !lyric.isEmpty else { throw AdditionalCatalogSearchError.invalidResponse }
+        return lyric
+    }
+
+    private static func miguLyric(songID: Int, copyrightID: String?) async throws -> String {
         guard songID > 0,
               let url = URL(string: "https://c.musicapp.migu.cn/MIGUM2.0/v1.0/content/resourceinfo.do?resourceType=2") else {
             throw AdditionalCatalogSearchError.invalidResponse
         }
-        let root = try await fetchObject(
-            url,
-            method: "POST",
-            body: Data("resourceId=\(songID)".utf8),
-            headers: [
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Referer": "https://app.c.nf.migu.cn/",
-                "User-Agent": browserUserAgent,
-            ]
-        )
-        let resource = ((root["data"] as? [String: Any])?["resource"] as? [[String: Any]])?.first
-        guard let rawURL = text(resource?["lrcUrl"] ?? resource?["lrc_url"]),
-              let lyricURL = URL(string: rawURL) else {
-            throw AdditionalCatalogSearchError.invalidResponse
+        let identifiers = [copyrightID, String(songID)]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        for identifier in Array(Set(identifiers)) {
+            let encoded = identifier.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? identifier
+            guard let root = try? await fetchObject(
+                url,
+                method: "POST",
+                body: Data("resourceId=\(encoded)".utf8),
+                headers: [
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Referer": "https://app.c.nf.migu.cn/",
+                    "User-Agent": browserUserAgent,
+                ]
+            ) else { continue }
+            let resource = ((root["data"] as? [String: Any])?["resource"] as? [[String: Any]])?.first
+            guard let rawURL = text(resource?["lrcUrl"] ?? resource?["lrc_url"]),
+                  let lyricURL = URL(string: rawURL),
+                  let lyric = try? await fetchText(lyricURL, headers: ["Referer": "https://m.music.migu.cn/", "User-Agent": browserUserAgent]),
+                  !lyric.isEmpty else { continue }
+            return lyric
         }
-        let lyric = try await fetchText(lyricURL, headers: ["Referer": "https://m.music.migu.cn/", "User-Agent": browserUserAgent])
-        guard !lyric.isEmpty else { throw AdditionalCatalogSearchError.invalidResponse }
-        return lyric
+        throw AdditionalCatalogSearchError.invalidResponse
     }
 
     private static func dictionaries(in value: Any?) -> [[String: Any]] {

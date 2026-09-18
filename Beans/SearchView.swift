@@ -1662,6 +1662,7 @@ struct SearchView: View {
 private struct BeansSearchSongRow: View {
     let song: Song
     let onTap: () -> Void
+    @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
 
     private var sourceName: String {
         switch song.source {
@@ -1684,7 +1685,7 @@ private struct BeansSearchSongRow: View {
                             .foregroundStyle(Color.beansLabel)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                        if song.isVIP {
+                        if showSongVIPBadge, song.isVIP {
                             Text("VIP")
                                 .font(BeansFont.appFont(10, .bold))
                                 .foregroundStyle(.white)
