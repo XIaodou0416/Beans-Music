@@ -185,14 +185,14 @@ struct RootView: View {
         if usesStableTabHierarchy {
             return RootTab.bottomTabs
         }
-        RootTab.bottomTabs.filter { tabVisibility.isVisible($0) }
+        return RootTab.bottomTabs.filter { tabVisibility.isVisible($0) }
     }
 
     private func isTabVisible(_ tab: RootTab) -> Bool {
         if usesStableTabHierarchy {
             return true
         }
-        tabVisibility.isVisible(tab)
+        return tabVisibility.isVisible(tab)
     }
 
     /// Older tab hosts are not safe to mutate while another full-screen
