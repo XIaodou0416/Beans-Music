@@ -172,23 +172,24 @@ struct ArtistHomeSheet: View {
                 .foregroundStyle(Color.beansLabel)
                 .padding(.horizontal, 16)
             if !hotSongs.isEmpty {
-                HStack(spacing: 8) {
-                    ArtistHomeActionButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                HStack(spacing: 12) {
+                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
                         BeansHaptics.tap()
                         player.play(songs: displayedHotSongs, startAt: 0)
                     }
                     .frame(maxWidth: .infinity)
-                    ArtistHomeActionButton(title: "随机播放", systemName: "shuffle") {
+                    GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                         BeansHaptics.tap()
                         player.play(songs: displayedHotSongs.shuffled(), startAt: 0)
                     }
                     .frame(maxWidth: .infinity)
                     if downloadFeatureUnlocked, displayedHotSongs.count > 1 {
-                        ArtistHomeActionButton(title: "批量下载", systemName: "arrow.down.circle") {
+                        GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
                             BeansHaptics.tap()
                             showBatchDownload = true
                         }
-                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel("批量下载")
+                        .help("批量下载")
                     }
                 }
                 .padding(.horizontal, 16)
@@ -655,38 +656,5 @@ struct ArtistHomeSheet: View {
     private func persistLoadedContent() {
         guard !hotSongs.isEmpty || !albums.isEmpty else { return }
         ArtistHomeCache.shared.save(artist: artist, songs: hotSongs, albums: albums, for: cacheKey)
-    }
-}
-
-private struct ArtistHomeActionButton: View {
-    let title: String
-    let systemName: String
-    var prominent = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: systemName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(width: 16)
-                Text(title)
-                    .font(BeansFont.appFont(13, .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
-            .foregroundStyle(prominent ? Color.white : Color.beansLabel)
-            .frame(maxWidth: .infinity, minHeight: 42)
-            .padding(.horizontal, 8)
-            .background {
-                if prominent {
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                        .fill(Color.beansAmber)
-                } else {
-                    BeansSurface(shape: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                }
-            }
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
     }
 }
