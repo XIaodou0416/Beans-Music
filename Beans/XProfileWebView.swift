@@ -69,6 +69,9 @@ struct XProfileWebView: UIViewRepresentable {
         var listeningDuration: String
         var playCount: String
         private var didFinishLoading = false
+        private var lastSyncedDuration: String?
+        private var lastSyncedPlayCount: String?
+        private weak var attachedWebView: WKWebView?
 
         init(listeningDuration: String, playCount: String) {
             self.listeningDuration = listeningDuration
@@ -76,17 +79,22 @@ struct XProfileWebView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            attachedWebView = webView
             didFinishLoading = true
             syncStats(to: webView)
         }
 
         func syncStats(to webView: WKWebView) {
             guard didFinishLoading,
+                  attachedWebView === webView,
+                  listeningDuration != lastSyncedDuration || playCount != lastSyncedPlayCount,
                   let durationData = try? JSONSerialization.data(withJSONObject: listeningDuration),
                   let countData = try? JSONSerialization.data(withJSONObject: playCount),
                   let duration = String(data: durationData, encoding: .utf8),
                   let count = String(data: countData, encoding: .utf8) else { return }
-            webView.evaluateJavaScript("window.__beansUpdateStats && window.__beansUpdateStats({listeningDuration: \(duration), playCount: \(count)});")
+            lastSyncedDuration = listeningDuration
+            lastSyncedPlayCount = playCount
+            webView.evaluateJavaScript("window.__beansUpdateStats && window.__beansUpdateStats({listeningDuration: \(duration), playCount: \(count)});") { _, _ in }
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -136,11 +144,15 @@ struct XProfileWebView: UIViewRepresentable {
         }
 
         private func resolve(_ requestID: String, value: Any, in webView: WKWebView) {
-            guard JSONSerialization.isValidJSONObject(["value": value]) || value is NSNull || value is String || value is Bool else { return }
+            guard value is NSNull || value is String || value is Bool else { return }
             let data = (try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed])) ?? Data("null".utf8)
             let json = String(data: data, encoding: .utf8) ?? "null"
             let escapedID = requestID.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
-            webView.evaluateJavaScript("window.__beansBridgeResolve('\(escapedID)', \(json));")
+            webView.evaluateJavaScript("window.__beansBridgeResolve('\(escapedID)', \(json));") { _, _ in }
+        }
+
+        deinit {
+            attachedWebView?.configuration.userContentController.removeScriptMessageHandler(forName: "beansFileBridge")
         }
     }
 }
