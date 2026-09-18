@@ -17,6 +17,7 @@ targets:
     resources:
       - Beans/en.lproj
       - Beans/zh-Hans.lproj
+      - Beans/Resources/XProfile.html
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app

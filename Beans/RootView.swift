@@ -86,7 +86,7 @@ struct RootView: View {
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
-    @AppStorage("beans.tabIconStyle") private var tabIconStyleRaw = BeansTabIconStyle.appleMusic.rawValue
+    @AppStorage("beans.tabIconStyle") private var tabIconStyleRaw = BeansTabIconStyle.sfSymbols.rawValue
     @AppStorage("beans.tab.discover.visible") private var discoverTabVisible = true
     @AppStorage("beans.tab.playlists.visible") private var playlistsTabVisible = true
     @AppStorage("beans.tab.library.visible") private var libraryTabVisible = true
@@ -126,7 +126,7 @@ struct RootView: View {
     @State private var sidebarLocalPlaylist: LocalPlaylist?
 
     private var tabIconStyle: BeansTabIconStyle {
-        BeansTabIconStyle(rawValue: tabIconStyleRaw) ?? .appleMusic
+        BeansTabIconStyle(rawValue: tabIconStyleRaw) ?? .sfSymbols
     }
 
     private var visibleTabs: [RootTab] {
@@ -484,7 +484,8 @@ struct RootView: View {
                     labelsVisible: tabLabelsVisible,
                     accentIsNativeClean: isNativeClean,
                     onHomeLongPress: { showHomePlatformMenu = true },
-                    iconSize: 25
+                    iconSize: 25,
+                    isRoundedStyle: tabIconStyle == .rounded
                 ) { tab in
                     guard selection != tab else { return }
                     BeansHaptics.select()
@@ -1258,6 +1259,7 @@ private struct GlassTabBar: View {
     var accentIsNativeClean: Bool
     var onHomeLongPress: (() -> Void)?
     var iconSize: CGFloat
+    var isRoundedStyle: Bool
     var onSelect: (RootTab) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -1314,7 +1316,7 @@ private struct GlassTabBar: View {
                     .renderingMode(.template)
                     .scaledToFit()
                     .frame(width: iconSize, height: iconSize)
-            } else if isSelected {
+            } else if isSelected && !isRoundedStyle {
                 Image(systemName: item.icon)
                     .font(.system(size: iconSize, weight: .semibold))
                     .symbolVariant(.fill)

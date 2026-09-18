@@ -583,14 +583,36 @@ struct SearchView: View {
     // MARK: - 分类选择（歌曲 / 歌手 / 专辑）
 
     private var typeTabs: some View {
-        Picker("搜索类型", selection: $resultType) {
-            ForEach(SearchResultType.allCases) { type in
-                Text(LocalizedStringKey(type.rawValue)).tag(type)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(SearchResultType.allCases) { type in
+                    Button {
+                        guard resultType != type else { return }
+                        BeansHaptics.tap()
+                        resultType = type
+                    } label: {
+                        Text(LocalizedStringKey(type.rawValue))
+                            .font(BeansFont.appFont(13, .semibold))
+                            .foregroundStyle(resultType == type ? Color.beansAmber : Color.beansLabel)
+                            .frame(minWidth: 58, minHeight: 40)
+                            .padding(.horizontal, 7)
+                            .background {
+                                BeansGlass(shape: Capsule(), forceLiquid: true)
+                            }
+                            .overlay {
+                                Capsule()
+                                    .strokeBorder(
+                                        resultType == type ? Color.beansAmber.opacity(0.72) : Color.beansLabel.opacity(0.08),
+                                        lineWidth: resultType == type ? 1.1 : 0.6
+                                    )
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 2)
         }
-        .pickerStyle(.segmented)
-        .tint(Color.beansAmber)
-        .padding(.horizontal, 20)
         .padding(.bottom, 4)
     }
 

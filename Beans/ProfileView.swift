@@ -172,6 +172,7 @@ struct ProfileView: View {
                     } else {
                         header
                     }
+                    xProfileCard
                     customAvatarCard
                     communityCard
                     donationCard
@@ -311,6 +312,16 @@ struct ProfileView: View {
             .padding(32)
         }
         .transition(.opacity)
+    }
+
+    private var xProfileCard: some View {
+        XProfileWebView()
+            .frame(height: 540)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.beansLabel.opacity(0.10), lineWidth: 0.7)
+            }
     }
 
     private var easterEggCard: some View {
@@ -1330,7 +1341,7 @@ struct SettingsView: View {
     @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
-    @AppStorage("beans.tabIconStyle") private var tabIconStyleRaw = BeansTabIconStyle.appleMusic.rawValue
+    @AppStorage("beans.tabIconStyle") private var tabIconStyleRaw = BeansTabIconStyle.sfSymbols.rawValue
     @AppStorage("beans.tab.discover.visible") private var discoverTabVisible = true
     @AppStorage("beans.tab.playlists.visible") private var playlistsTabVisible = true
     @AppStorage("beans.tab.library.visible") private var libraryTabVisible = true

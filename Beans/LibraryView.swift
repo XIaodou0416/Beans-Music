@@ -60,6 +60,7 @@ struct LibraryView: View {
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
     @State private var showHistory = false
+    @State private var showLibraryPlatformMenu = false
     @State private var showSectionSort = false
     @State private var showSyncedPlaylistSort = false
     /// 音乐库板块顺序（本地音乐库 / 我的歌单 / 最近播放，可自定义）
@@ -246,6 +247,17 @@ struct LibraryView: View {
             Button("删除", role: .destructive) { confirmDeletePlaylist() }
             Button("取消", role: .cancel) {}
         }
+        .confirmationDialog("音乐库平台", isPresented: $showLibraryPlatformMenu, titleVisibility: .visible) {
+            ForEach(libraryProviders) { candidate in
+                Button {
+                    BeansHaptics.tap()
+                    guard source != candidate else { return }
+                    source = candidate
+                } label: {
+                    Label(LocalizedStringKey(candidate.rawValue), systemImage: candidate == source ? "checkmark" : candidate.icon)
+                }
+            }
+        }
         .beansNavigationDestination(for: LibraryRoute.self) { route in
             libraryDestination(route)
         }
@@ -282,7 +294,6 @@ struct LibraryView: View {
                 }
                 Spacer()
                 HStack(spacing: 10) {
-                libraryPlatformMenu
                 if !hideSortButton {
                     GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
                         BeansHaptics.tap()
@@ -304,7 +315,6 @@ struct LibraryView: View {
             HStack(alignment: .center) {
                 libraryTitleButton
                 Spacer(minLength: 12)
-                libraryPlatformMenu
                 if !hideSortButton {
                     GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
                         BeansHaptics.tap()
@@ -339,6 +349,15 @@ struct LibraryView: View {
         Text("音乐库")
             .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
             .foregroundStyle(Color.beansLabel)
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.55)
+                    .onEnded { _ in
+                        guard libraryProviders.count > 1 else { return }
+                        BeansHaptics.select()
+                        showLibraryPlatformMenu = true
+                    }
+            )
     }
 
     /// 与搜索页和歌单精选页一致的右上角快捷平台菜单。
