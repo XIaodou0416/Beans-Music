@@ -129,14 +129,17 @@ struct ProfileView: View {
     private func openSettings() {
         guard !showSettings, !showSettingsOverlay else { return }
         BeansHaptics.tap()
+        CrashReporter.shared.recordEvent("点击设置入口")
         homeRenderingPaused = true
         DispatchQueue.main.async {
             CrashReporter.shared.beginContext("settings")
             if usesCompatibilitySettingsOverlay {
+                CrashReporter.shared.recordEvent("使用低系统设置兼容容器")
                 withAnimation(.easeInOut(duration: 0.22)) {
                     showSettingsOverlay = true
                 }
             } else {
+                CrashReporter.shared.recordEvent("使用原生设置容器")
                 showSettings = true
             }
         }
