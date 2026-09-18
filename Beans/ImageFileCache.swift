@@ -96,6 +96,33 @@ struct BeansAvatarView: View {
     }
 }
 
+/// 各主页面共用的“我的”快捷入口，始终优先显示用户选择的本地头像。
+struct BeansProfileShortcutButton: View {
+    @EnvironmentObject private var auth: AuthStore
+    var action: () -> Void
+
+    var body: some View {
+        Button {
+            BeansHaptics.tap()
+            action()
+        } label: {
+            BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 38, useCustom: true)
+                .frame(width: 38, height: 38)
+                .overlay {
+                    Circle().strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
+                }
+                .padding(4)
+                .background {
+                    BeansGlass(shape: Circle(), forceLiquid: true)
+                }
+                .clipShape(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+        .accessibilityLabel(beansLocalized("我的", "Profile"))
+    }
+}
+
 /// 复用本地图片解码结果，避免设置页/歌词页滚动时反复从磁盘解码大图。
 enum BeansImageFileCache {
     private static let cache = NSCache<NSString, UIImage>()

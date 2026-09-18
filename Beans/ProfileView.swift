@@ -10,6 +10,8 @@ enum DownloadOutcome {
 }
 
 struct ProfileView: View {
+    /// 由主页头像以 sheet 打开时，使用主页同一套壁纸背景。
+    var forceHomeBackdrop = false
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
@@ -159,9 +161,12 @@ struct ProfileView: View {
     var body: some View {
         let _ = theme.accent
         ZStack {
-            if !usesSharedRootBackdrop {
-                // 页面背景：同步开启时显示壁纸/背景色，否则默认氛围渐变
-                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            if forceHomeBackdrop || !usesSharedRootBackdrop {
+                // 头像入口作为主页延伸时始终沿用主页壁纸；常规“我的”页继续遵循同步开关。
+                GlassBackdrop(
+                    customColor: forceHomeBackdrop ? theme.customBackground : (theme.backgroundSyncAll ? theme.customBackground : nil),
+                    homeMode: forceHomeBackdrop
+                )
             }
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()

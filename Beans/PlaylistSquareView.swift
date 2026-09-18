@@ -4,6 +4,7 @@ import SwiftUI
 struct PlaylistSquareView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var player: PlayerManager
     @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
@@ -26,6 +27,7 @@ struct PlaylistSquareView: View {
     @State private var neteaseOffset = 0
     @State private var isLoadingMore = false
     @State private var showPlaylistPlatformMenu = false
+    @State private var showProfile = false
 
     private let neteasePageSize = 30
 
@@ -154,6 +156,13 @@ struct PlaylistSquareView: View {
                 }
             }
         }
+        .sheet(isPresented: $showProfile) {
+            ProfileView(forceHomeBackdrop: true)
+                .environmentObject(theme)
+                .environmentObject(auth)
+                .environmentObject(player)
+                .modifier(BeansProfileSheetBackground())
+        }
         // 保留系统搜索栏，但让顶部导航区域随滚动内容透明化，歌单封面可以自然透出。
         .beansHomeNavigationBarTransparent()
     }
@@ -180,6 +189,9 @@ struct PlaylistSquareView: View {
                 )
 
             Spacer(minLength: 0)
+            BeansProfileShortcutButton {
+                showProfile = true
+            }
         }
     }
 

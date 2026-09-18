@@ -276,12 +276,11 @@ struct DiscoverView: View {
                     .onDisappear { SectionOrderStore.save(SectionOrderStore.homeKey, homeOrder) }
             }
             .sheet(isPresented: $showProfile) {
-                ProfileView()
+                ProfileView(forceHomeBackdrop: true)
                     .environmentObject(theme)
                     .environmentObject(auth)
                     .environmentObject(player)
-                    .environment(\.beansUsesSharedRootBackdrop, true)
-                    .modifier(DiscoverProfileSheetBackground())
+                    .modifier(BeansProfileSheetBackground())
             }
         }
             .beansNavigationDestination(for: DiscoverRoute.self) { route in
@@ -2436,7 +2435,7 @@ struct DailySongsSheet: View {
     }
 }
 
-private struct DiscoverProfileSheetBackground: ViewModifier {
+struct BeansProfileSheetBackground: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 16.4, *) {

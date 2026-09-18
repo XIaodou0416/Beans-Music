@@ -279,6 +279,7 @@ struct SearchView: View {
     @State private var playlistSearchTask: Task<Void, Never>?
     @State private var playlistSearchRequestID = UUID()
     @State private var showBatchDownload = false
+    @State private var showProfile = false
     @State private var artistCoverCache: [String: URL] = [:]
     /// UIKit 输入框控制器（提交拼音、收起键盘等由它统一处理）
     @State private var searchController = SearchFieldController()
@@ -384,6 +385,13 @@ struct SearchView: View {
             BatchDownloadSheet(songs: songResults, title: "下载搜索结果")
                 .environmentObject(theme)
         }
+        .sheet(isPresented: $showProfile) {
+            ProfileView(forceHomeBackdrop: true)
+                .environmentObject(theme)
+                .environmentObject(auth)
+                .environmentObject(player)
+                .modifier(BeansProfileSheetBackground())
+        }
     }
 
     @ViewBuilder
@@ -404,9 +412,14 @@ struct SearchView: View {
             TabBarAppearanceConfigurator()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    searchField
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
+                    HStack(spacing: 10) {
+                        searchField
+                        BeansProfileShortcutButton {
+                            showProfile = true
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
                     contentArea
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
@@ -447,6 +460,9 @@ struct SearchView: View {
                 .font(BeansFont.appFont(32, .bold))
                 .foregroundStyle(Color.beansLabel)
             Spacer(minLength: 0)
+            BeansProfileShortcutButton {
+                showProfile = true
+            }
         }
     }
 
