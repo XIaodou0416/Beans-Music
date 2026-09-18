@@ -87,6 +87,19 @@ enum SearchResultType: String, CaseIterable, Identifiable, Hashable {
     var id: String { rawValue }
 }
 
+private struct SearchResultCacheKey: Hashable {
+    let keyword: String
+    let provider: SearchCatalogProvider
+    let resultType: SearchResultType
+}
+
+private struct SearchResultCacheEntry {
+    let songs: [Song]
+    let artists: [Artist]
+    let albums: [Album]
+    let playlists: [Playlist]
+}
+
 /// 搜索页可用的平台不等同于首页或账号体系的平台。附加目录只在搜索页出现，
 /// 不会改变现有首页、歌单和登录流程。
 private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable {
@@ -249,6 +262,8 @@ struct SearchView: View {
     @State private var albumResults: [Album] = []
     @State private var playlistResults: [Playlist] = []
     @State private var hotWords: [String] = []
+    @State private var hotWordsCache: [SearchCatalogProvider: [String]] = [:]
+    @State private var searchResultCache: [SearchResultCacheKey: SearchResultCacheEntry] = [:]
     @State private var searching = false
     @State private var errorMessage: String?
     @State private var showAddToPlaylist: Song?
@@ -278,6 +293,11 @@ struct SearchView: View {
                 .navigationTitle(keyword.isEmpty ? "搜索" : keyword)
         }
         .task(id: provider) {
+            if let cached = hotWordsCache[provider] {
+                hotLoadedProvider = provider
+                hotWords = cached
+                return
+            }
             guard hotLoadedProvider != provider else { return }
             hotLoadedProvider = provider
             hotWords = []
@@ -684,32 +704,12 @@ struct SearchView: View {
     }
 
     private var searchResultsLoadingState: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            BeansShimmerSkeleton(cornerRadius: 5)
-                .frame(width: resultType == .song ? 160 : 132, height: 12)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-            if resultType == .all {
-                BeansSongRowsLoadingState(rowCount: 5, coverSize: 46, showsRank: false, horizontalPadding: 20)
-                HStack(spacing: 12) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        BeansShimmerSkeleton(cornerRadius: 14)
-                            .frame(width: 128, height: 156)
-                    }
-                }
-                .padding(.horizontal, 20)
-            } else {
-                BeansSongRowsLoadingState(
-                    rowCount: 8,
-                    coverSize: 46,
-                    showsRank: false,
-                    horizontalPadding: 20
-                )
-            }
-        }
-        .padding(.top, 4)
-        .padding(.bottom, 180)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        ProgressView()
+            .controlSize(.regular)
+            .tint(Color.beansAmber)
+            .frame(maxWidth: .infinity, minHeight: 112, alignment: .top)
+            .padding(.top, 20)
+            .padding(.bottom, 120)
     }
 
     private var isCurrentResultEmpty: Bool {
@@ -1136,6 +1136,7 @@ struct SearchView: View {
     }
 
     private func loadHotWords() async {
+        let requestedProvider = provider
         if provider == .aggregate {
             let values = await withTaskGroup(of: [String].self, returning: [[String]].self) { group in
                 for candidate in searchProviders where candidate != .aggregate {
@@ -1175,7 +1176,9 @@ struct SearchView: View {
         } else if let words = try? await NetEaseAPI.shared.hotSearch() {
             hotWords = words
         }
+        guard requestedProvider == provider else { return }
         hotWords = Array(hotWords.prefix(8))
+        hotWordsCache[requestedProvider] = hotWords
     }
 
     private func startSearch(_ text: String) async {
@@ -1184,6 +1187,20 @@ struct SearchView: View {
         searchTask?.cancel()
         let selectedProvider = provider
         let selectedType = resultType
+        let cacheKey = SearchResultCacheKey(
+            keyword: trimmed.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).lowercased(),
+            provider: selectedProvider,
+            resultType: selectedType
+        )
+        if let cached = searchResultCache[cacheKey] {
+            songResults = cached.songs
+            artistResults = cached.artists
+            albumResults = cached.albums
+            playlistResults = cached.playlists
+            searching = false
+            errorMessage = nil
+            return
+        }
         searchTask = Task {
             await MainActor.run {
                 searching = true
@@ -1219,6 +1236,12 @@ struct SearchView: View {
                         artistResults = metadata.artists
                         albumResults = metadata.albums
                         playlistResults = playlists
+                        searchResultCache[cacheKey] = SearchResultCacheEntry(
+                            songs: songs,
+                            artists: metadata.artists,
+                            albums: metadata.albums,
+                            playlists: playlists
+                        )
                         if !songs.isEmpty || !playlists.isEmpty { BeansHaptics.success() }
                     }
                 case .song:
@@ -1226,28 +1249,35 @@ struct SearchView: View {
                     guard !Task.isCancelled else { return }
                     await MainActor.run {
                         songResults = songs
+                        searchResultCache[cacheKey] = SearchResultCacheEntry(
+                            songs: songs,
+                            artists: [],
+                            albums: [],
+                            playlists: []
+                        )
                         if !songs.isEmpty { BeansHaptics.success() }
                     }
                 case .artist:
-                    let artists: [Artist]
-                    switch selectedProvider {
-                    case .netease:
-                        artists = try await NetEaseAPI.shared.searchArtists(keyword: trimmed)
-                    default:
-                        artists = catalogMetadata(from: await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)).artists
+                    let artists = await catalogArtists(keyword: trimmed, provider: selectedProvider, limit: 100)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        artistResults = artists
+                        searchResultCache[cacheKey] = SearchResultCacheEntry(songs: [], artists: artists, albums: [], playlists: [])
                     }
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { artistResults = artists }
                 case .album:
-                    let albums = catalogMetadata(
-                        from: await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)
-                    ).albums
+                    let albums = await catalogAlbums(keyword: trimmed, provider: selectedProvider, limit: 100)
                     guard !Task.isCancelled else { return }
-                    await MainActor.run { albumResults = albums }
+                    await MainActor.run {
+                        albumResults = albums
+                        searchResultCache[cacheKey] = SearchResultCacheEntry(songs: [], artists: [], albums: albums, playlists: [])
+                    }
                 case .playlist:
                     let playlists = try await catalogPlaylistsThrowing(keyword: trimmed, provider: selectedProvider, limit: 100)
                     guard !Task.isCancelled else { return }
-                    await MainActor.run { playlistResults = playlists }
+                    await MainActor.run {
+                        playlistResults = playlists
+                        searchResultCache[cacheKey] = SearchResultCacheEntry(songs: [], artists: [], albums: [], playlists: playlists)
+                    }
                 }
                 let count = await MainActor.run {
                     switch selectedType {
@@ -1336,15 +1366,67 @@ struct SearchView: View {
         case .netease:
             return (try? await NetEaseAPI.shared.search(keyword: keyword, limit: limit)) ?? []
         case .qq:
-            if let songs = try? await AdditionalCatalogSearchAPI.searchCatalogQQ(keyword: keyword, limit: limit), !songs.isEmpty {
-                return songs
-            }
             return (try? await QQMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
         case .kugou:
-            if let songs = try? await AdditionalCatalogSearchAPI.searchCatalogKugou(keyword: keyword, limit: limit), !songs.isEmpty {
-                return songs
-            }
             return (try? await KugouMusicAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
+        }
+    }
+
+    private func catalogArtists(keyword: String, provider: SearchCatalogProvider, limit: Int) async -> [Artist] {
+        switch provider {
+        case .aggregate:
+            let providers: [SearchCatalogProvider] = [.netease, .qq, .kugou, .kuwo, .migu]
+            let groups = await withTaskGroup(of: [Artist].self, returning: [[Artist]].self) { group in
+                for candidate in providers {
+                    group.addTask { await self.catalogArtists(keyword: keyword, provider: candidate, limit: limit) }
+                }
+                var result: [[Artist]] = []
+                for await value in group { result.append(value) }
+                return result
+            }
+            var seen = Set<String>()
+            return groups.flatMap { $0 }.filter {
+                seen.insert("\($0.source.rawValue)|\($0.name.localizedLowercase)").inserted
+            }
+        case .netease:
+            return (try? await NetEaseAPI.shared.searchArtists(keyword: keyword, limit: limit)) ?? []
+        case .qq:
+            return (try? await QQMusicAPI.shared.searchArtists(keyword: keyword, limit: limit)) ?? []
+        case .kugou:
+            return (try? await KugouMusicAPI.shared.searchArtists(keyword: keyword, limit: limit)) ?? []
+        case .kuwo:
+            return (try? await AdditionalCatalogSearchAPI.searchKuwoArtists(keyword: keyword, limit: limit)) ?? []
+        case .migu:
+            return (try? await AdditionalCatalogSearchAPI.searchMiguArtists(keyword: keyword, limit: limit)) ?? []
+        }
+    }
+
+    private func catalogAlbums(keyword: String, provider: SearchCatalogProvider, limit: Int) async -> [Album] {
+        switch provider {
+        case .aggregate:
+            let providers: [SearchCatalogProvider] = [.netease, .qq, .kugou, .kuwo, .migu]
+            let groups = await withTaskGroup(of: [Album].self, returning: [[Album]].self) { group in
+                for candidate in providers {
+                    group.addTask { await self.catalogAlbums(keyword: keyword, provider: candidate, limit: limit) }
+                }
+                var result: [[Album]] = []
+                for await value in group { result.append(value) }
+                return result
+            }
+            var seen = Set<String>()
+            return groups.flatMap { $0 }.filter {
+                seen.insert("\($0.source.rawValue)|\($0.name.localizedLowercase)|\($0.artistName.localizedLowercase)").inserted
+            }
+        case .netease:
+            return (try? await NetEaseAPI.shared.searchAlbums(keyword: keyword, limit: limit)) ?? []
+        case .qq:
+            return (try? await QQMusicAPI.shared.searchAlbums(keyword: keyword, limit: limit)) ?? []
+        case .kugou:
+            return (try? await KugouMusicAPI.shared.searchAlbums(keyword: keyword, limit: limit)) ?? []
+        case .kuwo:
+            return (try? await AdditionalCatalogSearchAPI.searchKuwoAlbums(keyword: keyword, limit: limit)) ?? []
+        case .migu:
+            return (try? await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: keyword, limit: limit)) ?? []
         }
     }
 
@@ -1501,6 +1583,8 @@ struct AlbumDetailView: View {
     @State private var tracks: [Song] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var showBatchDownload = false
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     var body: some View {
         Group {
@@ -1511,6 +1595,10 @@ struct AlbumDetailView: View {
             }
         }
         .task { await load() }
+        .sheet(isPresented: $showBatchDownload) {
+            BatchDownloadSheet(songs: tracks, title: "下载专辑")
+                .environmentObject(theme)
+        }
     }
 
     @ViewBuilder
@@ -1541,8 +1629,16 @@ struct AlbumDetailView: View {
                             Spacer(minLength: 0)
                         }
                         if !tracks.isEmpty {
-                            GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
-                                player.play(songs: tracks, startAt: 0)
+                            HStack(spacing: 10) {
+                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                                    player.play(songs: tracks, startAt: 0)
+                                }
+                                if downloadFeatureUnlocked, tracks.count > 1 {
+                                    GlassButton(title: "批量下载", systemName: "arrow.down.circle") {
+                                        BeansHaptics.tap()
+                                        showBatchDownload = true
+                                    }
+                                }
                             }
                         }
                     }

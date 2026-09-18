@@ -35,6 +35,8 @@ struct ArtistHomeSheet: View {
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var searchText = ""
+    @State private var showBatchDownload = false
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     private var cacheKey: String {
         let identity = artistID?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -52,6 +54,10 @@ struct ArtistHomeSheet: View {
             }
         }
         .task { await load() }
+        .sheet(isPresented: $showBatchDownload) {
+            BatchDownloadSheet(songs: displayedHotSongs, title: "下载歌手歌曲")
+                .environmentObject(theme)
+        }
     }
 
     @ViewBuilder
@@ -165,6 +171,12 @@ struct ArtistHomeSheet: View {
                     GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
                         BeansHaptics.tap()
                         player.play(songs: displayedHotSongs.shuffled(), startAt: 0)
+                    }
+                    if downloadFeatureUnlocked, displayedHotSongs.count > 1 {
+                        GlassButton(title: "批量下载", systemName: "arrow.down.circle", forceLiquid: true) {
+                            BeansHaptics.tap()
+                            showBatchDownload = true
+                        }
                     }
                 }
                 .padding(.horizontal, 16)

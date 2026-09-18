@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 已解锁下载权限时，用一个任务顺序下载列表中的歌曲，并在完成后一次性调出系统分享。
+/// 已解锁下载权限时，顺序下载列表中的歌曲到应用本地下载目录，并允许完成后分享。
 struct BatchDownloadSheet: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
@@ -37,7 +37,7 @@ struct BatchDownloadSheet: View {
                             Text("下载 \(uniqueSongCount) 首歌曲")
                                 .font(BeansFont.appFont(16, .semibold))
                                 .foregroundStyle(Color.beansLabel)
-                            Text("按顺序下载，完成后可一次性保存或分享")
+                            Text("按顺序下载并保存在本地，可在完成后一次性分享")
                                 .font(BeansFont.appFont(12))
                                 .foregroundStyle(Color.beansComment)
                         }
@@ -76,7 +76,7 @@ struct BatchDownloadSheet: View {
                             Button {
                                 showShareSheet = true
                             } label: {
-                                Label("保存或分享已下载歌曲（\(downloader.downloadedFiles.count)）", systemImage: "square.and.arrow.up")
+                                Label("分享已下载歌曲（\(downloader.downloadedFiles.count)）", systemImage: "square.and.arrow.up")
                             }
                         }
 

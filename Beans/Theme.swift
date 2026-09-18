@@ -147,7 +147,7 @@ enum BeansAccent: String, CaseIterable, Identifiable {
         case .red:
             return [Color(red: 0.996, green: 0.176, blue: 0.161), Color(red: 0.82, green: 0.08, blue: 0.06)]
         case .amber:
-            return [Color(red: 0.949, green: 0.639, blue: 0.235), Color(red: 0.753, green: 0.478, blue: 0.039)]
+            return [Color(red: 0.86, green: 0.57, blue: 0.04), Color(red: 0.68, green: 0.42, blue: 0.02)]
         case .mint:
             return [Color(red: 0.42, green: 0.78, blue: 0.62), Color(red: 0.16, green: 0.55, blue: 0.42)]
         case .pink:
@@ -176,7 +176,7 @@ enum BeansAccent: String, CaseIterable, Identifiable {
     var tintLight: UIColor {
         switch self {
         case .red: return UIColor(red: 0.996, green: 0.176, blue: 0.161, alpha: 1)
-        case .amber: return UIColor(red: 0.72, green: 0.44, blue: 0.03, alpha: 1)   // 深琥珀
+        case .amber: return UIColor(red: 0.74, green: 0.47, blue: 0.02, alpha: 1)
         case .mint: return UIColor(red: 0.15, green: 0.53, blue: 0.39, alpha: 1)    // 深湖绿
         case .pink: return UIColor(red: 0.78, green: 0.33, blue: 0.53, alpha: 1)    // 深樱粉
         case .sky: return UIColor(red: 0.20, green: 0.48, blue: 0.84, alpha: 1)     // 深星蓝
@@ -192,7 +192,7 @@ enum BeansAccent: String, CaseIterable, Identifiable {
     var tintDark: UIColor {
         switch self {
         case .red: return UIColor(red: 0.996, green: 0.176, blue: 0.161, alpha: 1)
-        case .amber: return UIColor(red: 0.96, green: 0.70, blue: 0.35, alpha: 1)
+        case .amber: return UIColor(red: 0.91, green: 0.64, blue: 0.20, alpha: 1)
         case .mint: return UIColor(red: 0.45, green: 0.80, blue: 0.64, alpha: 1)
         case .pink: return UIColor(red: 0.97, green: 0.60, blue: 0.74, alpha: 1)
         case .sky: return UIColor(red: 0.45, green: 0.72, blue: 0.98, alpha: 1)

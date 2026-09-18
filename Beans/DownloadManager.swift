@@ -345,7 +345,7 @@ final class DownloadManager {
 
 // MARK: - 批量下载
 
-/// 批量下载在同一个临时目录中顺序执行，避免多个音源请求同时抢占网络和内存。
+/// 批量下载顺序保存到应用 Documents 中，避免多个音源请求同时抢占网络和内存。
 @MainActor
 final class BatchDownloadManager: ObservableObject {
     static let shared = BatchDownloadManager()
@@ -393,9 +393,8 @@ final class BatchDownloadManager: ObservableObject {
         wasCancelled = false
         isDownloading = true
 
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("BeansBatchShare", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("BeansDownloads", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {

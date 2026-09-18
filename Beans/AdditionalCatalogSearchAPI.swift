@@ -148,7 +148,7 @@ enum AdditionalCatalogSearchAPI {
             return Playlist(
                 id: id,
                 name: text(item["name"] ?? item["title"] ?? item["playlistname"]) ?? "未命名歌单",
-                coverURL: kuwoImageURL(text(item["pic"] ?? item["img"] ?? item["cover"])).flatMap(URL.init(string:)),
+                coverURL: kuwoImageURL(text(item["pic"] ?? item["img"] ?? item["cover"] ?? item["picurl"] ?? item["imgurl"] ?? item["PICPATH"] ?? item["image"])).flatMap(URL.init(string:)),
                 trackCount: int(item["songnum"] ?? item["songcount"]) ?? 0,
                 playCount: int(item["playcnt"] ?? item["playCount"]) ?? 0,
                 creatorName: text(item["nickname"] ?? item["uname"] ?? item["creator"]) ?? "",
@@ -256,7 +256,7 @@ enum AdditionalCatalogSearchAPI {
         let root = try await miguSearch(keyword: keyword, limit: limit, switchValue: "{\"song\":0,\"album\":0,\"singer\":1,\"tagSong\":0,\"mvSong\":0,\"songlist\":0,\"bestShow\":0}")
         return dictionaries(in: (root["singerResultData"] as? [String: Any])?["result"]).compactMap { item in
             guard let id = text(item["id"]), let name = text(item["name"]), !name.isEmpty else { return nil }
-            return Artist(id: id, name: name, coverURL: miguImageURL(text(item["img"] ?? item["imgUrl"])).flatMap(URL.init(string:)), source: .migu)
+            return Artist(id: id, name: name, coverURL: miguImageURL(text(item["img"] ?? item["imgUrl"] ?? item["img1"] ?? item["img2"] ?? item["img3"] ?? item["singerPic"] ?? item["singerPicUrl"])).flatMap(URL.init(string:)), source: .migu)
         }
     }
 
@@ -264,7 +264,7 @@ enum AdditionalCatalogSearchAPI {
         let root = try await miguSearch(keyword: keyword, limit: limit, switchValue: "{\"song\":0,\"album\":1,\"singer\":0,\"tagSong\":0,\"mvSong\":0,\"songlist\":0,\"bestShow\":0}")
         return dictionaries(in: (root["albumResultData"] as? [String: Any])?["result"]).compactMap { item in
             guard let id = text(item["id"]), let name = text(item["name"]), !name.isEmpty else { return nil }
-            return Album(id: id, name: name, artistName: text(item["singer"] ?? item["singerName"]) ?? "", coverURL: miguImageURL(text(item["img"] ?? item["imgUrl"])).flatMap(URL.init(string:)), source: .migu)
+            return Album(id: id, name: name, artistName: text(item["singer"] ?? item["singerName"] ?? item["artist"] ?? item["artistName"]) ?? "", coverURL: miguImageURL(text(item["img"] ?? item["imgUrl"] ?? item["img1"] ?? item["img2"] ?? item["img3"] ?? item["albumPicUrl"] ?? item["albumPic"] ?? item["cover"])).flatMap(URL.init(string:)), source: .migu)
         }
     }
 
@@ -674,6 +674,7 @@ enum AdditionalCatalogSearchAPI {
 
     private static func kuwoImageURL(_ value: String?) -> String? {
         guard var value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        value = value.replacingOccurrences(of: "{size}", with: "400")
         if value.hasPrefix("//") { value = "https:\(value)" }
         if value.hasPrefix("http") { return value.replacingOccurrences(of: "http://", with: "https://") }
         var path = value.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
