@@ -3922,16 +3922,10 @@ private struct SettingsCatalogGroup<Content: View>: View {
 private struct TabVisibilitySettingsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("beans.tab.discover.visible") private var discoverTabVisible = true
-    @AppStorage("beans.tab.playlists.visible") private var playlistsTabVisible = true
-    @AppStorage("beans.tab.library.visible") private var libraryTabVisible = true
-    @AppStorage("beans.tab.profile.visible") private var profileTabVisible = true
-    @AppStorage("beans.tab.search.visible") private var searchTabVisible = true
+    @State private var visibility = BeansTabVisibility.load()
 
     private var visibleTabCount: Int {
-        [discoverTabVisible, playlistsTabVisible, libraryTabVisible, profileTabVisible, searchTabVisible]
-            .filter { $0 }
-            .count
+        RootTab.bottomTabs.filter { visibility.isVisible($0) }.count
     }
 
     var body: some View {
@@ -3939,15 +3933,15 @@ private struct TabVisibilitySettingsSheet: View {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 SettingsCatalogGroup {
-                    tabToggle("主页", systemName: "house.fill", isOn: $discoverTabVisible)
+                    tabToggle("主页", systemName: "house.fill", tab: .discover)
                     Divider().overlay(Color.beansComment.opacity(0.15))
-                    tabToggle("精选", systemName: "dot.radiowaves.left.and.right", isOn: $playlistsTabVisible)
+                    tabToggle("精选", systemName: "dot.radiowaves.left.and.right", tab: .playlists)
                     Divider().overlay(Color.beansComment.opacity(0.15))
-                    tabToggle("歌单", systemName: "music.note.list", isOn: $libraryTabVisible)
+                    tabToggle("歌单", systemName: "music.note.list", tab: .library)
                     Divider().overlay(Color.beansComment.opacity(0.15))
-                    tabToggle("我的", systemName: "person.crop.circle", isOn: $profileTabVisible)
+                    tabToggle("我的", systemName: "person.crop.circle", tab: .profile)
                     Divider().overlay(Color.beansComment.opacity(0.15))
-                    tabToggle("搜索", systemName: "magnifyingglass", isOn: $searchTabVisible)
+                    tabToggle("搜索", systemName: "magnifyingglass", tab: .search)
                 }
                 .padding(16)
             }
@@ -3964,8 +3958,8 @@ private struct TabVisibilitySettingsSheet: View {
         }
     }
 
-    private func tabToggle(_ title: String, systemName: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
+    private func tabToggle(_ title: String, systemName: String, tab: RootTab) -> some View {
+        Toggle(isOn: visibilityBinding(for: tab)) {
             Label(title, systemImage: systemName)
                 .font(BeansFont.appFont(15))
                 .foregroundStyle(Color.beansLabel)
@@ -3973,7 +3967,18 @@ private struct TabVisibilitySettingsSheet: View {
         .toggleStyle(.switch)
         .tint(Color.beansAmber)
         .padding(.vertical, 10)
-        .disabled(isOn.wrappedValue && visibleTabCount <= 1)
+        .disabled(visibility.isVisible(tab) && visibleTabCount <= 1)
+    }
+
+    private func visibilityBinding(for tab: RootTab) -> Binding<Bool> {
+        Binding(
+            get: { visibility.isVisible(tab) },
+            set: { isVisible in
+                guard !(visibility.isVisible(tab) && !isVisible && visibleTabCount <= 1) else { return }
+                visibility.setVisible(isVisible, for: tab)
+                visibility.save()
+            }
+        )
     }
 }
 

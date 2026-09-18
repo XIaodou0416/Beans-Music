@@ -68,6 +68,62 @@ private struct SidebarPlaylistGroup: Identifiable {
     let playlists: [Playlist]
 }
 
+/// Keeps the legacy tab hierarchy tied to one stable state value instead of
+/// rebuilding it from several AppStorage bindings during a presentation.
+struct BeansTabVisibility: Equatable {
+    static let didChangeNotification = Notification.Name("beans.tabVisibilityDidChange")
+
+    var discover = true
+    var playlists = true
+    var library = true
+    var profile = true
+    var search = true
+
+    static func load(defaults: UserDefaults = .standard) -> Self {
+        Self(
+            discover: value(for: "beans.tab.discover.visible", defaults: defaults),
+            playlists: value(for: "beans.tab.playlists.visible", defaults: defaults),
+            library: value(for: "beans.tab.library.visible", defaults: defaults),
+            profile: value(for: "beans.tab.profile.visible", defaults: defaults),
+            search: value(for: "beans.tab.search.visible", defaults: defaults)
+        )
+    }
+
+    mutating func setVisible(_ isVisible: Bool, for tab: RootTab) {
+        switch tab {
+        case .discover: discover = isVisible
+        case .playlists: playlists = isVisible
+        case .library: library = isVisible
+        case .profile: profile = isVisible
+        case .search: search = isVisible
+        }
+    }
+
+    func isVisible(_ tab: RootTab) -> Bool {
+        switch tab {
+        case .discover: discover
+        case .playlists: playlists
+        case .library: library
+        case .profile: profile
+        case .search: search
+        }
+    }
+
+    func save(defaults: UserDefaults = .standard) {
+        defaults.set(discover, forKey: "beans.tab.discover.visible")
+        defaults.set(playlists, forKey: "beans.tab.playlists.visible")
+        defaults.set(library, forKey: "beans.tab.library.visible")
+        defaults.set(profile, forKey: "beans.tab.profile.visible")
+        defaults.set(search, forKey: "beans.tab.search.visible")
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
+    }
+
+    private static func value(for key: String, defaults: UserDefaults) -> Bool {
+        guard defaults.object(forKey: key) != nil else { return true }
+        return defaults.bool(forKey: key)
+    }
+}
+
 struct RootView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
@@ -87,11 +143,7 @@ struct RootView: View {
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
     @AppStorage("beans.tabIconStyle") private var tabIconStyleRaw = BeansTabIconStyle.sfSymbols.rawValue
-    @AppStorage("beans.tab.discover.visible") private var discoverTabVisible = true
-    @AppStorage("beans.tab.playlists.visible") private var playlistsTabVisible = true
-    @AppStorage("beans.tab.library.visible") private var libraryTabVisible = true
-    @AppStorage("beans.tab.profile.visible") private var profileTabVisible = true
-    @AppStorage("beans.tab.search.visible") private var searchTabVisible = true
+    @State private var tabVisibility = BeansTabVisibility.load()
     @AppStorage("beans.queueOverlayPresented") private var queueOverlayPresented = false
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
     /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
@@ -130,26 +182,17 @@ struct RootView: View {
     }
 
     private var visibleTabs: [RootTab] {
-        RootTab.bottomTabs.filter { isTabVisible($0) }
-    }
-
-    private var visibleTabsSignature: String {
-        visibleTabs.map(\.rawValue).joined(separator: "|")
+        RootTab.bottomTabs.filter { tabVisibility.isVisible($0) }
     }
 
     private func isTabVisible(_ tab: RootTab) -> Bool {
-        switch tab {
-        case .discover: return discoverTabVisible
-        case .playlists: return playlistsTabVisible
-        case .library: return libraryTabVisible
-        case .profile: return profileTabVisible
-        case .search: return searchTabVisible
-        }
+        tabVisibility.isVisible(tab)
     }
 
     private func normalizeTabSelection() {
         guard !visibleTabs.isEmpty else {
-            discoverTabVisible = true
+            tabVisibility = BeansTabVisibility()
+            tabVisibility.save()
             selection = .discover
             return
         }
@@ -282,7 +325,8 @@ struct RootView: View {
                 showWhatsNew = true
             }
         }
-        .onChange(of: visibleTabsSignature) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: BeansTabVisibility.didChangeNotification)) { _ in
+            tabVisibility = BeansTabVisibility.load()
             normalizeTabSelection()
         }
         .onReceive(NotificationCenter.default.publisher(for: .beansSearchBackRequested)) { _ in
@@ -544,7 +588,7 @@ struct RootView: View {
     @available(iOS 26.0, *)
     private func nativeTabContent(isPadLandscape: Bool) -> some View {
         TabView(selection: $selection) {
-            if discoverTabVisible {
+            if tabVisibility.discover {
                 Tab(value: .discover) {
                     DiscoverView()
                 } label: {
@@ -552,7 +596,7 @@ struct RootView: View {
                 }
             }
 
-            if playlistsTabVisible {
+            if tabVisibility.playlists {
                 Tab(value: .playlists) {
                     PlaylistSquareView()
                 } label: {
@@ -560,7 +604,7 @@ struct RootView: View {
                 }
             }
 
-            if libraryTabVisible {
+            if tabVisibility.library {
                 Tab(value: .library) {
                     LibraryView()
                 } label: {
@@ -568,7 +612,7 @@ struct RootView: View {
                 }
             }
 
-            if profileTabVisible {
+            if tabVisibility.profile {
                 Tab(value: .profile) {
                     ProfileView()
                 } label: {
@@ -576,7 +620,7 @@ struct RootView: View {
                 }
             }
 
-            if searchTabVisible {
+            if tabVisibility.search {
                 Tab(value: .search, role: .search) {
                     SearchView()
                 } label: {
