@@ -131,6 +131,7 @@ struct ProfileView: View {
                 GlassIconButton(systemName: "gearshape.fill", forceLiquid: true) {
                     BeansHaptics.tap()
                     homeRenderingPaused = true
+                    CrashReporter.shared.beginContext("settings")
                     showSettings = true
                 }
             }
@@ -148,6 +149,7 @@ struct ProfileView: View {
                 GlassIconButton(systemName: "gearshape", forceLiquid: true) {
                     BeansHaptics.tap()
                     homeRenderingPaused = true
+                    CrashReporter.shared.beginContext("settings")
                     showSettings = true
                 }
             }
@@ -229,6 +231,12 @@ struct ProfileView: View {
                 .environmentObject(player)
                 .environmentObject(auth)
                 .ignoresSafeArea(.all)
+                .onAppear {
+                    CrashReporter.shared.beginContext("settings")
+                }
+                .onDisappear {
+                    CrashReporter.shared.endContext("settings")
+                }
         }
         .sheet(item: $updateShareFile, onDismiss: cleanupUpdateShareFile) { item in
             ShareSheet(items: [item.url])
