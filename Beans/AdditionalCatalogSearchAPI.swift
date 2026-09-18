@@ -318,9 +318,14 @@ enum AdditionalCatalogSearchAPI {
     static func lyric(for song: Song) async throws -> String {
         switch song.source {
         case .kuwo:
-            if let lyric = try? await kuwoFallbackLyric(songID: song.id),
-               !LyricParser.parse(lyric).isEmpty {
-                return lyric
+            // The mobile endpoint returns plain timed lines and is more stable
+            // than the encrypted desktop response. Retry it before decoding
+            // the legacy response so transient empty payloads do not hide lyrics.
+            for _ in 0..<3 {
+                if let lyric = try? await kuwoFallbackLyric(songID: song.id),
+                   !LyricParser.parse(lyric).isEmpty {
+                    return lyric
+                }
             }
             let lyric = try await kuwoLyric(songID: song.id)
             guard !LyricParser.parse(lyric).isEmpty else {
@@ -518,7 +523,9 @@ enum AdditionalCatalogSearchAPI {
         let key = Array("yeelion".utf8)
         let encoded = Data(params.utf8).enumerated().map { $0.element ^ key[$0.offset % key.count] }
         let query = Data(encoded).base64EncodedString()
-        guard let url = URL(string: "https://newlyric.kuwo.cn/newlyric.lrc?\(query)") else {
+        var components = URLComponents(string: "https://newlyric.kuwo.cn/newlyric.lrc")!
+        components.percentEncodedQuery = query
+        guard let url = components.url else {
             throw AdditionalCatalogSearchError.invalidResponse
         }
         let data = try await fetchData(url, headers: ["Referer": "https://www.kuwo.cn/", "User-Agent": browserUserAgent])
@@ -539,20 +546,28 @@ enum AdditionalCatalogSearchAPI {
         guard songID > 0 else { throw AdditionalCatalogSearchError.invalidResponse }
         var components = URLComponents(string: "https://m.kuwo.cn/newh5/singles/songinfoandlrc")!
         components.queryItems = [URLQueryItem(name: "musicId", value: String(songID))]
-        let root = try await fetchObject(
-            components.url!,
-            headers: ["Referer": "https://m.kuwo.cn/", "User-Agent": browserUserAgent]
-        )
-        let data = (root["data"] as? [String: Any]) ?? root
-        let rows = (data["lrclist"] as? [[String: Any]]) ?? []
-        let lyric = rows.compactMap { row -> String? in
-            guard let time = text(row["time"] ?? row["timeTag"]),
-                  let line = text(row["lineLyric"] ?? row["line"]),
-                  !line.isEmpty else { return nil }
-            return "[\(kuwoTimestamp(time))]\(line)"
-        }.joined(separator: "\n")
-        guard !lyric.isEmpty else { throw AdditionalCatalogSearchError.invalidResponse }
-        return lyric
+        for _ in 0..<3 {
+            guard let root = try? await fetchObject(
+                components.url!,
+                headers: ["Referer": "https://m.kuwo.cn/", "User-Agent": browserUserAgent]
+            ) else { continue }
+            let data = (root["data"] as? [String: Any]) ?? root
+            if let raw = text(data["lrc"] ?? data["lyric"]), !raw.isEmpty,
+               !LyricParser.parse(raw).isEmpty {
+                return raw
+            }
+            let rows = dictionaries(in: data["lrclist"] ?? data["lrcList"] ?? data["list"])
+            let lyric = rows.compactMap { row -> String? in
+                guard let time = text(row["time"] ?? row["timeTag"]),
+                      let line = text(row["lineLyric"] ?? row["line"]),
+                      !line.isEmpty else { return nil }
+                return "[\(kuwoTimestamp(time))]\(line)"
+            }.joined(separator: "\n")
+            if !lyric.isEmpty, !LyricParser.parse(lyric).isEmpty {
+                return lyric
+            }
+        }
+        throw AdditionalCatalogSearchError.invalidResponse
     }
 
     private static func miguLyric(songID: Int, copyrightID: String?, directURL: URL?) async throws -> String {
@@ -595,7 +610,7 @@ enum AdditionalCatalogSearchAPI {
         guard let seconds = Double(value), seconds >= 0 else { return value }
         let minutes = Int(seconds) / 60
         let remainder = seconds - Double(minutes * 60)
-        return String(format: "%02d:%05.2f", minutes, remainder)
+        return String(format: Locale(identifier: "en_US_POSIX"), "%02d:%05.2f", minutes, remainder)
     }
 
     private static func dictionaries(in value: Any?) -> [[String: Any]] {
