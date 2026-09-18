@@ -133,7 +133,9 @@ struct ProfileView: View {
         DispatchQueue.main.async {
             CrashReporter.shared.beginContext("settings")
             if usesCompatibilitySettingsOverlay {
-                showSettingsOverlay = true
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    showSettingsOverlay = true
+                }
             } else {
                 showSettings = true
             }
@@ -152,7 +154,9 @@ struct ProfileView: View {
     }
 
     private func closeCompatibilitySettings() {
-        showSettingsOverlay = false
+        withAnimation(.easeInOut(duration: 0.22)) {
+            showSettingsOverlay = false
+        }
     }
 
     /// 顶部标题 + 右上角设置齿轮
@@ -226,7 +230,7 @@ struct ProfileView: View {
         .overlay {
             if showSettingsOverlay {
                 settingsScreen(SettingsView(onClose: closeCompatibilitySettings))
-                .transition(.opacity)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
                 .zIndex(100)
             }
         }
