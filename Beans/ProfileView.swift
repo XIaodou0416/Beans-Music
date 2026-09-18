@@ -1441,6 +1441,7 @@ struct SettingsView: View {
     @State private var showFloatingImagePicker = false
     @State private var showTabVisibilitySettings = false
     @State private var settingsSearchText = ""
+    @State private var settingsContentReady = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1452,6 +1453,14 @@ struct SettingsView: View {
 
     private var usesCustomWallpaper: Bool {
         theme.backgroundSyncAll && theme.customBackgroundImage(for: colorScheme) != nil
+    }
+
+    /// iOS/iPadOS 26 and earlier can tear down a large full-screen SwiftUI tree
+    /// while its presenting tab is being recomputed.  Present a stable shell
+    /// first, then attach the existing settings content on the next run loop.
+    private var defersSettingsContentForCompatibility: Bool {
+        if #available(iOS 27, *) { return false }
+        return true
     }
 
     private func settingsMatches(_ terms: String...) -> Bool {
@@ -1735,26 +1744,13 @@ struct SettingsView: View {
         BeansNavigationStack {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        settingsSearchField
-                        coreSettingsGroup
-                        playbackSettingsGroup
-                        utilitySettingsGroup
-                        if !hasSettingsSearchResults {
-                            Text("没有找到相关设置")
-                                .font(BeansFont.appFont(14))
-                                .foregroundStyle(Color.beansComment)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 32)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 14)
-                    .padding(.bottom, 40)
-                    .beansAdaptiveContentWidth()
+                if settingsContentReady {
+                    settingsScrollContent
+                } else {
+                    ProgressView()
+                        .tint(Color.beansAmber)
+                        .controlSize(.regular)
                 }
-                .beansScrollIndicatorsHidden()
             }
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
@@ -1776,6 +1772,17 @@ struct SettingsView: View {
         .preferredColorScheme(themeMode.colorScheme)
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
+            if defersSettingsContentForCompatibility {
+                DispatchQueue.main.async {
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        settingsContentReady = true
+                    }
+                }
+            } else {
+                settingsContentReady = true
+            }
             if #unavailable(iOS 26) {
                 HighRefreshKeeper.shared.suspendTemporarily()
             }
@@ -1886,6 +1893,29 @@ struct SettingsView: View {
                 HighRefreshKeeper.shared.resumeAfterTemporaryPause()
             }
         }
+    }
+
+    private var settingsScrollContent: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                settingsSearchField
+                coreSettingsGroup
+                playbackSettingsGroup
+                utilitySettingsGroup
+                if !hasSettingsSearchResults {
+                    Text("没有找到相关设置")
+                        .font(BeansFont.appFont(14))
+                        .foregroundStyle(Color.beansComment)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 32)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 40)
+            .beansAdaptiveContentWidth()
+        }
+        .beansScrollIndicatorsHidden()
     }
 
     private var showAccountSettings: Bool {
