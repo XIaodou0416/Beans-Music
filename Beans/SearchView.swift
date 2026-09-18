@@ -276,6 +276,8 @@ struct SearchView: View {
     @State private var debounceTask: Task<Void, Never>?
     @State private var searchTask: Task<Void, Never>?
     @State private var searchRequestID = UUID()
+    @State private var playlistSearchTask: Task<Void, Never>?
+    @State private var playlistSearchRequestID = UUID()
     @State private var showBatchDownload = false
     @State private var artistCoverCache: [String: URL] = [:]
     /// UIKit 输入框控制器（提交拼音、收起键盘等由它统一处理）
@@ -320,7 +322,11 @@ struct SearchView: View {
             debounceTask = Task {
                 try? await Task.sleep(nanoseconds: 400_000_000)
                 guard !Task.isCancelled else { return }
-                await startSearch(trimmed)
+                if resultType == .playlist {
+                    await searchPlaylistTab(trimmed)
+                } else {
+                    await startSearch(trimmed)
+                }
             }
         }
         .onChange(of: provider) { _ in
@@ -328,14 +334,26 @@ struct SearchView: View {
             let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
             debounceTask?.cancel()
-            Task { await startSearch(trimmed) }
+            Task {
+                if resultType == .playlist {
+                    await searchPlaylistTab(trimmed)
+                } else {
+                    await startSearch(trimmed)
+                }
+            }
         }
         .onChange(of: resultType) { _ in
             let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
             BeansHaptics.tap()
             debounceTask?.cancel()
-            Task { await startSearch(trimmed) }
+            Task {
+                if resultType == .playlist {
+                    await searchPlaylistTab(trimmed)
+                } else {
+                    await startSearch(trimmed)
+                }
+            }
         }
         .onAppear {
             homeSourceSnapshot = UserDefaults.standard.string(forKey: "beans.homeSource")
@@ -493,7 +511,13 @@ struct SearchView: View {
         searchController.dismissKeyboard()
         debounceTask?.cancel()
         historyStore.record(trimmed)
-        Task { await startSearch(trimmed) }
+        Task {
+            if resultType == .playlist {
+                await searchPlaylistTab(trimmed)
+            } else {
+                await startSearch(trimmed)
+            }
+        }
     }
 
     private func restoreHomeSourceSnapshot() {
@@ -1166,7 +1190,13 @@ struct SearchView: View {
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         historyStore.record(trimmed)
-        Task { await startSearch(trimmed) }
+        Task {
+            if resultType == .playlist {
+                await searchPlaylistTab(trimmed)
+            } else {
+                await startSearch(trimmed)
+            }
+        }
     }
 
     /// 点击歌手 / 专辑：以其名称搜索歌曲
@@ -1376,6 +1406,37 @@ struct SearchView: View {
             return []
         }
         return await catalogPlaylists(keyword: keyword, provider: provider, limit: limit)
+    }
+
+    /// 歌单 tab 使用独立任务，不与“综合/单曲”等并发请求共享状态。
+    /// 这条路径和精选页一样在用户切换到歌单后立即发起 QQ 歌单请求。
+    private func searchPlaylistTab(_ text: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        searchTask?.cancel()
+        playlistSearchTask?.cancel()
+
+        let requestID = UUID()
+        playlistSearchRequestID = requestID
+        let selectedProvider = provider
+
+        searching = true
+        errorMessage = nil
+        playlistResults = []
+
+        playlistSearchTask = Task {
+            let playlists = await livePlaylistSearch(keyword: trimmed, provider: selectedProvider, limit: 100)
+            guard !Task.isCancelled, playlistSearchRequestID == requestID else { return }
+            await MainActor.run {
+                guard playlistSearchRequestID == requestID,
+                      resultType == .playlist,
+                      provider == selectedProvider else { return }
+                playlistResults = playlists
+                searching = false
+                if !playlists.isEmpty { BeansHaptics.success() }
+            }
+        }
+        await playlistSearchTask?.value
     }
 
     private func cacheEntryHasResults(_ entry: SearchResultCacheEntry, for type: SearchResultType) -> Bool {
