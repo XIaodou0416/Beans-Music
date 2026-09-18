@@ -3,7 +3,12 @@ import WebKit
 
 /// Hosts the bundled profile page while keeping image persistence in the app sandbox.
 struct XProfileWebView: UIViewRepresentable {
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    var listeningDuration: String = "--"
+    var playCount: String = "--"
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(listeningDuration: listeningDuration, playCount: playCount)
+    }
 
     func makeUIView(context: Context) -> WKWebView {
         let controller = WKUserContentController()
@@ -53,10 +58,36 @@ struct XProfileWebView: UIViewRepresentable {
         return webView
     }
 
-    func updateUIView(_ webView: WKWebView, context: Context) {}
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        context.coordinator.listeningDuration = listeningDuration
+        context.coordinator.playCount = playCount
+        context.coordinator.syncStats(to: webView)
+    }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         private let fileManager = FileManager.default
+        var listeningDuration: String
+        var playCount: String
+        private var didFinishLoading = false
+
+        init(listeningDuration: String, playCount: String) {
+            self.listeningDuration = listeningDuration
+            self.playCount = playCount
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            didFinishLoading = true
+            syncStats(to: webView)
+        }
+
+        func syncStats(to webView: WKWebView) {
+            guard didFinishLoading,
+                  let durationData = try? JSONSerialization.data(withJSONObject: listeningDuration),
+                  let countData = try? JSONSerialization.data(withJSONObject: playCount),
+                  let duration = String(data: durationData, encoding: .utf8),
+                  let count = String(data: countData, encoding: .utf8) else { return }
+            webView.evaluateJavaScript("window.__beansUpdateStats && window.__beansUpdateStats({listeningDuration: \(duration), playCount: \(count)});")
+        }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.name == "beansFileBridge",
