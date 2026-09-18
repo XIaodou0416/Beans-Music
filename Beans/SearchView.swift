@@ -880,20 +880,22 @@ struct SearchView: View {
             searchController.dismissKeyboard()
             selectedPlaylist = playlist
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(spacing: 7) {
                 CoverImage(url: playlist.coverURL, size: 132, cornerRadius: 12)
                 Text(playlist.name)
                     .font(BeansFont.appFont(13, .medium))
                     .foregroundStyle(Color.beansLabel)
                     .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 Text([sourceDisplayName(playlist.source), playlist.creatorName]
                     .filter { !$0.isEmpty }
                     .joined(separator: " · "))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
                     .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
-            .frame(width: 132, alignment: .leading)
+            .frame(width: 132, alignment: .center)
             .contentShape(Rectangle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
@@ -1308,7 +1310,7 @@ struct SearchView: View {
             } else if playlistResults.isEmpty {
                 EmptyStateView(icon: "music.note.list", text: "\(provider.rawValue)未找到相关歌单")
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 14)], alignment: .leading, spacing: 18) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 132, maximum: 152), spacing: 14)], alignment: .center, spacing: 18) {
                     ForEach(playlistResults) { playlist in
                         playlistCard(playlist)
                     }

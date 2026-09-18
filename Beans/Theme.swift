@@ -145,7 +145,7 @@ enum BeansAccent: String, CaseIterable, Identifiable {
     var gradientColors: [Color] {
         switch self {
         case .red:
-            return [Color(red: 0.996, green: 0.176, blue: 0.161), Color(red: 0.82, green: 0.08, blue: 0.06)]
+            return [Color(red: 0.973, green: 0.357, blue: 0.357), Color(red: 0.788, green: 0.161, blue: 0.161)]
         case .amber:
             return [Color(red: 0.86, green: 0.57, blue: 0.04), Color(red: 0.68, green: 0.42, blue: 0.02)]
         case .mint:
@@ -175,7 +175,7 @@ enum BeansAccent: String, CaseIterable, Identifiable {
     /// 常规着色（图标 / 文字）浅色模式版本：深色调保证浅色背景对比度
     var tintLight: UIColor {
         switch self {
-        case .red: return UIColor(red: 0.996, green: 0.176, blue: 0.161, alpha: 1)
+        case .red: return UIColor(red: 0.788, green: 0.161, blue: 0.161, alpha: 1)
         case .amber: return UIColor(red: 0.74, green: 0.47, blue: 0.02, alpha: 1)
         case .mint: return UIColor(red: 0.15, green: 0.53, blue: 0.39, alpha: 1)    // 深湖绿
         case .pink: return UIColor(red: 0.78, green: 0.33, blue: 0.53, alpha: 1)    // 深樱粉
@@ -191,7 +191,7 @@ enum BeansAccent: String, CaseIterable, Identifiable {
     /// 常规着色（图标 / 文字）深色模式版本：亮色调保证深色背景对比度
     var tintDark: UIColor {
         switch self {
-        case .red: return UIColor(red: 0.996, green: 0.176, blue: 0.161, alpha: 1)
+        case .red: return UIColor(red: 0.925, green: 0.286, blue: 0.286, alpha: 1)
         case .amber: return UIColor(red: 0.91, green: 0.64, blue: 0.20, alpha: 1)
         case .mint: return UIColor(red: 0.45, green: 0.80, blue: 0.64, alpha: 1)
         case .pink: return UIColor(red: 0.97, green: 0.60, blue: 0.74, alpha: 1)
@@ -412,7 +412,7 @@ final class ThemeStore: ObservableObject {
     private var wallpapersRestored = false
 
     private init() {
-        accent = BeansAccent(rawValue: UserDefaults.standard.string(forKey: AccentTheme.key) ?? "") ?? .amber
+        accent = BeansAccent(rawValue: UserDefaults.standard.string(forKey: AccentTheme.key) ?? "") ?? .red
         let savedAccent = UserDefaults.standard.string(forKey: customAccentKey)
         customAccentHex = (savedAccent?.isEmpty ?? true) ? nil : savedAccent
         let legacyBackground = UserDefaults.standard.string(forKey: backgroundKey) ?? ""

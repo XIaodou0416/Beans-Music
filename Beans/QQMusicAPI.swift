@@ -32,12 +32,18 @@ final class QQMusicAPI {
 
     // MARK: - 基础请求
 
-    private func get(_ urlString: String, referer: String = "https://y.qq.com/", cookie: String = "") async throws -> [String: Any] {
+    private func get(
+        _ urlString: String,
+        referer: String = "https://y.qq.com/",
+        cookie: String = "",
+        extraHeaders: [String: String] = [:]
+    ) async throws -> [String: Any] {
         guard let url = URL(string: urlString) else { throw NetEaseError.unknown("请求地址无效") }
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 QQMusic/9.0.5", forHTTPHeaderField: "User-Agent")
         request.setValue(referer, forHTTPHeaderField: "Referer")
         request.setValue(cookie.isEmpty ? "uin=0; qqmusic_fromtag=66" : cookie, forHTTPHeaderField: "Cookie")
+        extraHeaders.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         do {
             let (data, response) = try await session.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -323,6 +329,31 @@ final class QQMusicAPI {
     /// 搜索 QQ 音乐歌单（musicu search_type=3）。
     func searchPlaylists(keyword: String, limit: Int = 30) async throws -> [Playlist] {
         let target = max(limit, 1)
+        // This endpoint is the web search's dedicated songlist response. It
+        // remains available when the generic musicu search omits songlists.
+        var components = URLComponents(string: "https://c.y.qq.com/soso/fcgi-bin/client_music_search_songlist")!
+        components.queryItems = [
+            URLQueryItem(name: "page_no", value: "0"),
+            URLQueryItem(name: "num_per_page", value: String(target)),
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "query", value: keyword),
+            URLQueryItem(name: "remoteplace", value: "txt.yqq.playlist"),
+        ]
+        if let json = try? await get(
+            components.url!.absoluteString,
+            referer: "https://y.qq.com/portal/search.html",
+            extraHeaders: ["Origin": "https://y.qq.com"]
+        ) {
+            let rawItems = Self.searchPlaylistItems(from: json)
+            var seen = Set<Int>()
+            let playlists = rawItems.compactMap { item -> Playlist? in
+                guard let playlist = Self.playlist(fromQQDiss: item), seen.insert(playlist.id).inserted else {
+                    return nil
+                }
+                return playlist
+            }
+            if !playlists.isEmpty { return Array(playlists.prefix(target)) }
+        }
         if let json = try? await musicu(musicuSearchPayload(keyword: keyword, limit: target, type: .playlist)) {
             let rawItems = Self.searchPlaylistItems(from: json)
             var seen = Set<Int>()

@@ -87,6 +87,11 @@ struct RootView: View {
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
     @AppStorage("beans.tabIconStyle") private var tabIconStyleRaw = BeansTabIconStyle.appleMusic.rawValue
+    @AppStorage("beans.tab.discover.visible") private var discoverTabVisible = true
+    @AppStorage("beans.tab.playlists.visible") private var playlistsTabVisible = true
+    @AppStorage("beans.tab.library.visible") private var libraryTabVisible = true
+    @AppStorage("beans.tab.profile.visible") private var profileTabVisible = true
+    @AppStorage("beans.tab.search.visible") private var searchTabVisible = true
     @AppStorage("beans.queueOverlayPresented") private var queueOverlayPresented = false
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
     /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
@@ -122,6 +127,35 @@ struct RootView: View {
 
     private var tabIconStyle: BeansTabIconStyle {
         BeansTabIconStyle(rawValue: tabIconStyleRaw) ?? .appleMusic
+    }
+
+    private var visibleTabs: [RootTab] {
+        RootTab.bottomTabs.filter { isTabVisible($0) }
+    }
+
+    private var visibleTabsSignature: String {
+        visibleTabs.map(\.rawValue).joined(separator: "|")
+    }
+
+    private func isTabVisible(_ tab: RootTab) -> Bool {
+        switch tab {
+        case .discover: return discoverTabVisible
+        case .playlists: return playlistsTabVisible
+        case .library: return libraryTabVisible
+        case .profile: return profileTabVisible
+        case .search: return searchTabVisible
+        }
+    }
+
+    private func normalizeTabSelection() {
+        guard !visibleTabs.isEmpty else {
+            discoverTabVisible = true
+            selection = .discover
+            return
+        }
+        if !isTabVisible(selection) {
+            selection = visibleTabs[0]
+        }
     }
     @State private var sidebarPlaylist: Playlist?
     @State private var showSidebarQueue = false
@@ -235,6 +269,7 @@ struct RootView: View {
             }
             enableHighRefresh = true
             HighRefreshKeeper.shared.configure(enabled: true)
+            normalizeTabSelection()
         }
         .onChange(of: enableHighRefresh) { _ in
             if !enableHighRefresh {
@@ -246,6 +281,9 @@ struct RootView: View {
             if accepted, ChangelogStore.shouldShowWhatsNew {
                 showWhatsNew = true
             }
+        }
+        .onChange(of: visibleTabsSignature) { _ in
+            normalizeTabSelection()
         }
         .onReceive(NotificationCenter.default.publisher(for: .beansSearchBackRequested)) { _ in
             withAnimation(.easeInOut(duration: 0.22)) {
@@ -434,7 +472,7 @@ struct RootView: View {
 
             Group {
                 GlassTabBar(
-                    items: RootTab.bottomTabs.map {
+                    items: visibleTabs.map {
                         GlassTabBar.Item(
                             tab: $0,
                             title: LocalizedStringKey($0.title),
@@ -505,36 +543,44 @@ struct RootView: View {
     @available(iOS 26.0, *)
     private func nativeTabContent(isPadLandscape: Bool) -> some View {
         TabView(selection: $selection) {
-            Tab(value: .discover) {
-                DiscoverView()
-            } label: {
-                nativeTabLabel(.discover)
+            if discoverTabVisible {
+                Tab(value: .discover) {
+                    DiscoverView()
+                } label: {
+                    nativeTabLabel(.discover)
+                }
             }
 
-            Tab(value: .playlists) {
-                PlaylistSquareView()
-            } label: {
-                nativeTabLabel(.playlists)
+            if playlistsTabVisible {
+                Tab(value: .playlists) {
+                    PlaylistSquareView()
+                } label: {
+                    nativeTabLabel(.playlists)
+                }
             }
 
-            Tab(value: .library) {
-                LibraryView()
-            } label: {
-                nativeTabLabel(.library)
+            if libraryTabVisible {
+                Tab(value: .library) {
+                    LibraryView()
+                } label: {
+                    nativeTabLabel(.library)
+                }
             }
 
-            Tab(value: .profile) {
-                ProfileView()
-            } label: {
-                nativeTabLabel(.profile)
+            if profileTabVisible {
+                Tab(value: .profile) {
+                    ProfileView()
+                } label: {
+                    nativeTabLabel(.profile)
+                }
             }
 
-            // Keep search as the system-owned trailing action so iOS can
-            // compress both sides of the bar around the inline player.
-            Tab(value: .search, role: .search) {
-                SearchView()
-            } label: {
-                nativeTabLabel(.search)
+            if searchTabVisible {
+                Tab(value: .search, role: .search) {
+                    SearchView()
+                } label: {
+                    nativeTabLabel(.search)
+                }
             }
         }
         .tint(Color.beansAmber)
@@ -624,7 +670,7 @@ struct RootView: View {
                     .padding(.horizontal, 14)
                     .padding(.bottom, 6)
 
-                ForEach(RootTab.bottomTabs) { tab in
+                ForEach(visibleTabs) { tab in
                     iPadSidebarItem(tab)
                 }
 

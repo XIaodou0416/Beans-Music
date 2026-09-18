@@ -163,20 +163,25 @@ struct ArtistHomeSheet: View {
                 .foregroundStyle(Color.beansLabel)
                 .padding(.horizontal, 16)
             if !hotSongs.isEmpty {
-                HStack(spacing: 10) {
-                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, forceLiquid: true) {
-                        BeansHaptics.tap()
-                        player.play(songs: displayedHotSongs, startAt: 0)
-                    }
-                    GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
-                        BeansHaptics.tap()
-                        player.play(songs: displayedHotSongs.shuffled(), startAt: 0)
+                VStack(spacing: 10) {
+                    HStack(spacing: 10) {
+                        GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, forceLiquid: true) {
+                            BeansHaptics.tap()
+                            player.play(songs: displayedHotSongs, startAt: 0)
+                        }
+                        .frame(maxWidth: .infinity)
+                        GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
+                            BeansHaptics.tap()
+                            player.play(songs: displayedHotSongs.shuffled(), startAt: 0)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
                     if downloadFeatureUnlocked, displayedHotSongs.count > 1 {
                         GlassButton(title: "批量下载", systemName: "arrow.down.circle", forceLiquid: true) {
                             BeansHaptics.tap()
                             showBatchDownload = true
                         }
+                        .frame(maxWidth: .infinity)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -523,6 +528,21 @@ struct ArtistHomeSheet: View {
     /// 补充目录没有独立的歌手详情接口时，使用同源歌曲搜索构建歌手页，
     /// 不回退到其它平台，避免来源和封面错位。
     private func loadAdditionalCatalogArtist() async {
+        if artist?.coverURL == nil {
+            let candidates: [Artist]
+            switch artistSource {
+            case .kuwo:
+                candidates = (try? await AdditionalCatalogSearchAPI.searchKuwoArtists(keyword: artistName, limit: 20)) ?? []
+            case .migu:
+                candidates = (try? await AdditionalCatalogSearchAPI.searchMiguArtists(keyword: artistName, limit: 20)) ?? []
+            default:
+                candidates = []
+            }
+            let normalizedName = artistName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let resolved = candidates.first(where: { $0.name == normalizedName }) ?? candidates.first {
+                artist = resolved
+            }
+        }
         let songs: [Song]
         switch artistSource {
         case .kuwo:

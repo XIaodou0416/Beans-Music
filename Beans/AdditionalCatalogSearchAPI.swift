@@ -144,7 +144,7 @@ enum AdditionalCatalogSearchAPI {
         let root = try await kuwoSearch(keyword: keyword, limit: limit, type: "playlist")
         let items = dictionaries(in: root["abslist"] ?? root["playlist"] ?? root["list"] ?? root["data"])
         return items.compactMap { item in
-            guard let id = int(item["playlistid"] ?? item["playlistId"] ?? item["id"]), id > 0 else { return nil }
+            guard let id = positiveIdentifier(item["playlistid"] ?? item["playlistId"] ?? item["id"]) else { return nil }
             return Playlist(
                 id: id,
                 name: text(item["name"] ?? item["title"] ?? item["playlistname"]) ?? "未命名歌单",
@@ -192,13 +192,15 @@ enum AdditionalCatalogSearchAPI {
             limit: limit,
             switchValue: "{\"song\":0,\"album\":0,\"singer\":0,\"tagSong\":0,\"mvSong\":0,\"bestShow\":0,\"songlist\":1,\"lyricSong\":0}"
         )
-        let values = dictionaries(in: root["songListResultData"] ?? root["songlistResultData"] ?? root["result"] ?? root["data"])
+        let values = dictionaries(in: root["songListResultData"])
+            + dictionaries(in: root["songlistResultData"])
+            + dictionaries(in: root["result"])
         return values.compactMap { item in
             guard let id = int(item["id"] ?? item["playlistId"] ?? item["contentId"]), id > 0 else { return nil }
             return Playlist(
                 id: id,
                 name: text(item["name"] ?? item["title"] ?? item["listName"]) ?? "未命名歌单",
-                coverURL: miguImageURL(text(item["musicListPicUrl"] ?? item["img"] ?? item["cover"])).flatMap(URL.init(string:)),
+                coverURL: miguImageURL(imageText(in: item, keys: ["musicListPicUrl", "img", "imgUrl", "cover", "img1", "img2", "img3"])).flatMap(URL.init(string:)),
                 trackCount: int(item["musicNum"] ?? item["songCount"]) ?? 0,
                 playCount: int(item["playNum"] ?? item["playCount"]) ?? 0,
                 creatorName: text(item["userName"] ?? item["nickname"]) ?? "",
@@ -239,7 +241,12 @@ enum AdditionalCatalogSearchAPI {
         let root = try await kuwoSearch(keyword: keyword, limit: limit, type: "artist")
         return dictionaries(in: root["abslist"]).compactMap { item in
             guard let id = text(item["ARTISTID"] ?? item["id"]), let name = text(item["ARTIST"] ?? item["name"]), !name.isEmpty else { return nil }
-            return Artist(id: id, name: name, coverURL: kuwoImageURL(text(item["PICPATH"])).flatMap(URL.init(string:)), source: .kuwo)
+            return Artist(
+                id: id,
+                name: name,
+                coverURL: kuwoImageURL(imageText(in: item, keys: ["PICPATH", "ARTISTPIC", "artistpic", "pic", "img", "imgurl", "web_artistpic"])).flatMap(URL.init(string:)),
+                source: .kuwo
+            )
         }
     }
 
@@ -248,23 +255,23 @@ enum AdditionalCatalogSearchAPI {
         return dictionaries(in: root["searchgroup"] ?? root["abslist"]).compactMap { item in
             guard let id = text(item["ALBUMID"] ?? item["id"] ?? item["albumid"]),
                   let name = text(item["ALBUM"] ?? item["album"] ?? item["name"]), !name.isEmpty else { return nil }
-            return Album(id: id, name: name, artistName: text(item["ARTIST"] ?? item["artist"]) ?? "", coverURL: kuwoImageURL(text(item["PICPATH"] ?? item["albumpic"])).flatMap(URL.init(string:)), source: .kuwo)
+            return Album(id: id, name: name, artistName: text(item["ARTIST"] ?? item["artist"]) ?? "", coverURL: kuwoImageURL(imageText(in: item, keys: ["PICPATH", "albumpic", "albumPic", "pic", "img", "imgurl"])).flatMap(URL.init(string:)), source: .kuwo)
         }
     }
 
     static func searchMiguArtists(keyword: String, limit: Int = 40) async throws -> [Artist] {
         let root = try await miguSearch(keyword: keyword, limit: limit, switchValue: "{\"song\":0,\"album\":0,\"singer\":1,\"tagSong\":0,\"mvSong\":0,\"songlist\":0,\"bestShow\":0}")
-        return dictionaries(in: (root["singerResultData"] as? [String: Any])?["result"]).compactMap { item in
+        return dictionaries(in: root["singerResultData"]).compactMap { item in
             guard let id = text(item["id"]), let name = text(item["name"]), !name.isEmpty else { return nil }
-            return Artist(id: id, name: name, coverURL: miguImageURL(text(item["img"] ?? item["imgUrl"] ?? item["img1"] ?? item["img2"] ?? item["img3"] ?? item["singerPic"] ?? item["singerPicUrl"])).flatMap(URL.init(string:)), source: .migu)
+            return Artist(id: id, name: name, coverURL: miguImageURL(imageText(in: item, keys: ["img", "imgUrl", "img1", "img2", "img3", "singerPic", "singerPicUrl", "cover"])).flatMap(URL.init(string:)), source: .migu)
         }
     }
 
     static func searchMiguAlbums(keyword: String, limit: Int = 40) async throws -> [Album] {
         let root = try await miguSearch(keyword: keyword, limit: limit, switchValue: "{\"song\":0,\"album\":1,\"singer\":0,\"tagSong\":0,\"mvSong\":0,\"songlist\":0,\"bestShow\":0}")
-        return dictionaries(in: (root["albumResultData"] as? [String: Any])?["result"]).compactMap { item in
+        return dictionaries(in: root["albumResultData"]).compactMap { item in
             guard let id = text(item["id"]), let name = text(item["name"]), !name.isEmpty else { return nil }
-            return Album(id: id, name: name, artistName: text(item["singer"] ?? item["singerName"] ?? item["artist"] ?? item["artistName"]) ?? "", coverURL: miguImageURL(text(item["img"] ?? item["imgUrl"] ?? item["img1"] ?? item["img2"] ?? item["img3"] ?? item["albumPicUrl"] ?? item["albumPic"] ?? item["cover"])).flatMap(URL.init(string:)), source: .migu)
+            return Album(id: id, name: name, artistName: text(item["singer"] ?? item["singerName"] ?? item["artist"] ?? item["artistName"]) ?? "", coverURL: miguImageURL(imageText(in: item, keys: ["img", "imgUrl", "img1", "img2", "img3", "albumPicUrl", "albumPic", "cover"])).flatMap(URL.init(string:)), source: .migu)
         }
     }
 
@@ -372,8 +379,7 @@ enum AdditionalCatalogSearchAPI {
             .first
         let imageItems = dictionaries(in: item["imgItems"])
         let image = miguImageURL(
-            text(item["img3"]) ?? text(item["img2"]) ?? text(item["img1"])
-                ?? text(item["albumPicUrl"]) ?? text(item["cover"])
+            imageText(in: item, keys: ["img3", "img2", "img1", "albumPicUrl", "cover", "img", "imgUrl"])
                 ?? text(imageItems.first?["img"] ?? imageItems.first?["imgUrl"])
         )
         return Song(
@@ -413,7 +419,10 @@ enum AdditionalCatalogSearchAPI {
     }
 
     private static func miguSearch(keyword: String, limit: Int, switchValue: String) async throws -> [String: Any] {
-        var components = URLComponents(string: "https://app.c.nf.migu.cn/MIGUM2.0/v1.0/content/search_all.do")!
+        let timestamp = String(Int(Date().timeIntervalSince1970 * 1000))
+        let deviceID = "963B7AA0D21511ED807EE5846EC87D20"
+        let signatureSeed = "\(keyword)6cdc72a439cef99a3418d2a78aa28c73yyapp2d16148780a1dcc7408e06336b98cfd50\(deviceID)\(timestamp)"
+        var components = URLComponents(string: "https://jadeite.migu.cn/music_search/v3/search/searchAll")!
         components.queryItems = [
             URLQueryItem(name: "isCopyright", value: "1"),
             URLQueryItem(name: "isCorrect", value: "1"),
@@ -422,8 +431,16 @@ enum AdditionalCatalogSearchAPI {
             URLQueryItem(name: "searchSwitch", value: switchValue),
             URLQueryItem(name: "sort", value: "0"),
             URLQueryItem(name: "text", value: keyword),
+            URLQueryItem(name: "sid", value: "USS"),
         ]
-        let root = try await fetchObject(components.url!, headers: ["Referer": "https://m.music.migu.cn/", "User-Agent": browserUserAgent])
+        let root = try await fetchObject(components.url!, headers: [
+            "uiVersion": "A_music_3.6.1",
+            "deviceId": deviceID,
+            "timestamp": timestamp,
+            "sign": md5(signatureSeed),
+            "channel": "0146921",
+            "User-Agent": browserUserAgent,
+        ])
         guard text(root["code"]) == "000000" else { throw AdditionalCatalogSearchError.invalidResponse }
         return root
     }
@@ -659,6 +676,23 @@ enum AdditionalCatalogSearchAPI {
         if let value = value as? Int { return value }
         if let value = value as? NSNumber { return value.intValue }
         if let value = text(value) { return Int(value) }
+        return nil
+    }
+
+    private static func positiveIdentifier(_ value: Any?) -> Int? {
+        if let value = int(value), value > 0 { return value }
+        guard let string = text(value) else { return nil }
+        let digits = string.filter(\.isNumber)
+        guard let value = Int(digits), value > 0 else { return nil }
+        return value
+    }
+
+    private static func imageText(in item: [String: Any], keys: [String]) -> String? {
+        for candidate in dictionaries(in: item) {
+            for key in keys {
+                if let value = text(candidate[key]), !value.isEmpty { return value }
+            }
+        }
         return nil
     }
 
