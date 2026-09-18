@@ -1777,8 +1777,7 @@ struct SettingsView: View {
                 }
             }
         }
-        // 设置页统一使用稳定的实体表面，避免系统玻璃在全屏容器内影响旧系统稳定性。
-        .environment(\.beansSettingsPerformanceMode, true)
+        .environment(\.beansSettingsPerformanceMode, false)
         .preferredColorScheme(themeMode.colorScheme)
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light

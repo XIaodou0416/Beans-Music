@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import MetricKit
 
 /// 闪退检测与崩溃日志：捕获未捕获异常 / 崩溃信号，并在下次启动时检测上次是否异常退出。
 /// 崩溃信息写入 Documents/BeansLogs/crash-日期.log，同时写入 App 内日志，便于反馈排查。
@@ -99,9 +100,41 @@ final class CrashReporter {
         BeansLogger.shared.log("检测到崩溃/异常：\(text.components(separatedBy: "\n").first ?? text)", level: .error)
     }
 
+    /// 保存系统在下次启动交付的诊断数据，供定位未捕获的原生崩溃使用。
+    static func writeMetricDiagnostic(_ data: Data) {
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("BeansLogs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
+        let file = dir.appendingPathComponent("metric-diagnostic-\(formatter.string(from: Date())).json")
+        guard (try? data.write(to: file, options: .atomic)) != nil else { return }
+        BeansLogger.shared.log("已保存系统诊断文件：\(file.lastPathComponent)", level: .error)
+    }
+
     private static let contextTimestamp: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter
     }()
+}
+
+/// MetricKit 会在下次启动时交付系统采集的崩溃、卡死等原生诊断；不记录账号或播放数据。
+final class CrashMetricCollector: NSObject, MXMetricManagerSubscriber {
+    static let shared = CrashMetricCollector()
+
+    private override init() {
+        super.init()
+    }
+
+    func start() {
+        MXMetricManager.shared.add(self)
+    }
+
+    func didReceive(_ payloads: [MXDiagnosticPayload]) {
+        for payload in payloads {
+            CrashReporter.writeMetricDiagnostic(payload.jsonRepresentation())
+        }
+    }
 }
