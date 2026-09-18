@@ -1475,7 +1475,9 @@ final class PlayerManager: NSObject, ObservableObject {
         let resume = progress
         let songKey = song.identityKey
         crossPlatformFallbackInFlightSongKey = songKey
-        ToastCenter.shared.show("当前平台无法播放，正在查找其它平台的同一歌曲", duration: 2)
+        Task { @MainActor in
+            ToastCenter.shared.show("当前平台无法播放，正在查找其它平台的同一歌曲", duration: 2)
+        }
         Task { [weak self] in
             guard let self else { return }
             var replacement: Song?
