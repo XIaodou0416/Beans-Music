@@ -244,7 +244,7 @@ enum AdditionalCatalogSearchAPI {
             return Artist(
                 id: id,
                 name: name,
-                coverURL: kuwoImageURL(imageText(in: item, keys: ["PICPATH", "ARTISTPIC", "artistpic", "pic", "img", "imgurl", "web_artistpic"])).flatMap(URL.init(string:)),
+                coverURL: kuwoArtistImageURL(imageText(in: item, keys: ["PICPATH", "ARTISTPIC", "artistpic", "pic", "img", "imgurl", "web_artistpic"])).flatMap(URL.init(string:)),
                 source: .kuwo
             )
         }
@@ -717,6 +717,14 @@ enum AdditionalCatalogSearchAPI {
             path = "500/\(parts[1])"
         }
         return "https://img1.kuwo.cn/star/albumcover/\(path)"
+    }
+
+    private static func kuwoArtistImageURL(_ value: String?) -> String? {
+        guard var value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        if value.hasPrefix("//") { value = "https:\(value)" }
+        if value.hasPrefix("http") { return value.replacingOccurrences(of: "http://", with: "https://") }
+        let path = value.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return "https://star.kuwo.cn/star/starheads/\(path)"
     }
 
     private static func miguImageURL(_ value: String?) -> String? {

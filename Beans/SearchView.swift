@@ -253,6 +253,8 @@ struct SearchView: View {
 
     @State private var keyword = ""
     @State private var provider: SearchCatalogProvider = .aggregate
+    /// 搜索平台是页面内状态；保留进入搜索前的首页平台，避免搜索筛选意外影响首页。
+    @State private var homeSourceSnapshot = UserDefaults.standard.string(forKey: "beans.homeSource") ?? SearchProvider.netease.rawValue
     private var searchProviders: [SearchCatalogProvider] { SearchCatalogProvider.allCases }
     /// 已加载热门搜索的 provider（避免切 tab 反复加载）
     @State private var hotLoadedProvider: SearchCatalogProvider?
@@ -273,6 +275,7 @@ struct SearchView: View {
     @ObservedObject private var historyStore = SearchHistoryStore.shared
     @State private var debounceTask: Task<Void, Never>?
     @State private var searchTask: Task<Void, Never>?
+    @State private var searchRequestID = UUID()
     @State private var showBatchDownload = false
     @State private var artistCoverCache: [String: URL] = [:]
     /// UIKit 输入框控制器（提交拼音、收起键盘等由它统一处理）
@@ -321,6 +324,7 @@ struct SearchView: View {
             }
         }
         .onChange(of: provider) { _ in
+            restoreHomeSourceSnapshot()
             let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
             debounceTask?.cancel()
@@ -332,6 +336,10 @@ struct SearchView: View {
             BeansHaptics.tap()
             debounceTask?.cancel()
             Task { await startSearch(trimmed) }
+        }
+        .onAppear {
+            homeSourceSnapshot = UserDefaults.standard.string(forKey: "beans.homeSource")
+                ?? SearchProvider.netease.rawValue
         }
         .sheet(item: $showAddToPlaylist) { song in
             AddToLocalPlaylistSheet(song: song)
@@ -486,6 +494,11 @@ struct SearchView: View {
         debounceTask?.cancel()
         historyStore.record(trimmed)
         Task { await startSearch(trimmed) }
+    }
+
+    private func restoreHomeSourceSnapshot() {
+        guard UserDefaults.standard.string(forKey: "beans.homeSource") != homeSourceSnapshot else { return }
+        UserDefaults.standard.set(homeSourceSnapshot, forKey: "beans.homeSource")
     }
 
     // MARK: - 搜索结果平台选择
@@ -901,6 +914,36 @@ struct SearchView: View {
         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
     }
 
+    private func largePlaylistCard(_ playlist: Playlist) -> some View {
+        Button {
+            BeansHaptics.tap()
+            searchController.dismissKeyboard()
+            selectedPlaylist = playlist
+        } label: {
+            GeometryReader { proxy in
+                VStack(spacing: 8) {
+                    CoverImage(url: playlist.coverURL, size: proxy.size.width, cornerRadius: 14)
+                    Text(playlist.name)
+                        .font(BeansFont.appFont(14, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    Text([sourceDisplayName(playlist.source), playlist.creatorName]
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " · "))
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .frame(width: proxy.size.width, alignment: .top)
+            }
+            .aspectRatio(0.78, contentMode: .fit)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+    }
+
     private var songResultsArea: some View {
         Group {
             if let errorMessage, songResults.isEmpty {
@@ -1187,6 +1230,8 @@ struct SearchView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         searchTask?.cancel()
+        let requestID = UUID()
+        searchRequestID = requestID
         let selectedProvider = provider
         let selectedType = resultType
         let cacheKey = SearchResultCacheKey(
@@ -1221,7 +1266,10 @@ struct SearchView: View {
             }
             defer {
                 if !Task.isCancelled {
-                    Task { @MainActor in searching = false }
+                    Task { @MainActor in
+                        guard searchRequestID == requestID else { return }
+                        searching = false
+                    }
                 }
             }
             do {
@@ -1232,8 +1280,9 @@ struct SearchView: View {
                     let songs = await songsTask
                     let playlists = await playlistsTask
                     let metadata = catalogMetadata(from: songs)
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled, searchRequestID == requestID else { return }
                     await MainActor.run {
+                        guard searchRequestID == requestID else { return }
                         songResults = songs
                         artistResults = metadata.artists
                         albumResults = metadata.albums
@@ -1248,8 +1297,9 @@ struct SearchView: View {
                     }
                 case .song:
                     let songs = await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled, searchRequestID == requestID else { return }
                     await MainActor.run {
+                        guard searchRequestID == requestID else { return }
                         songResults = songs
                         searchResultCache[cacheKey] = SearchResultCacheEntry(
                             songs: songs,
@@ -1261,22 +1311,25 @@ struct SearchView: View {
                     }
                 case .artist:
                     let artists = await catalogArtists(keyword: trimmed, provider: selectedProvider, limit: 100)
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled, searchRequestID == requestID else { return }
                     await MainActor.run {
+                        guard searchRequestID == requestID else { return }
                         artistResults = artists
                         searchResultCache[cacheKey] = SearchResultCacheEntry(songs: [], artists: artists, albums: [], playlists: [])
                     }
                 case .album:
                     let albums = await catalogAlbums(keyword: trimmed, provider: selectedProvider, limit: 100)
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled, searchRequestID == requestID else { return }
                     await MainActor.run {
+                        guard searchRequestID == requestID else { return }
                         albumResults = albums
                         searchResultCache[cacheKey] = SearchResultCacheEntry(songs: [], artists: [], albums: albums, playlists: [])
                     }
                 case .playlist:
                     let playlists = try await catalogPlaylistsThrowing(keyword: trimmed, provider: selectedProvider, limit: 100)
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled, searchRequestID == requestID else { return }
                     await MainActor.run {
+                        guard searchRequestID == requestID else { return }
                         playlistResults = playlists
                         searchResultCache[cacheKey] = SearchResultCacheEntry(songs: [], artists: [], albums: [], playlists: playlists)
                     }
@@ -1292,8 +1345,9 @@ struct SearchView: View {
                 }
                 _ = count
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, searchRequestID == requestID else { return }
                 await MainActor.run {
+                    guard searchRequestID == requestID else { return }
                     errorMessage = error.localizedDescription
                 }
             }
@@ -1310,9 +1364,9 @@ struct SearchView: View {
             } else if playlistResults.isEmpty {
                 EmptyStateView(icon: "music.note.list", text: "\(provider.rawValue)未找到相关歌单")
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 132, maximum: 152), spacing: 14)], alignment: .center, spacing: 18) {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], alignment: .center, spacing: 20) {
                     ForEach(playlistResults) { playlist in
-                        playlistCard(playlist)
+                        largePlaylistCard(playlist)
                     }
                 }
                 .padding(.horizontal, 20)

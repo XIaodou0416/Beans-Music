@@ -36,6 +36,7 @@ struct ArtistHomeSheet: View {
     @State private var errorMessage: String?
     @State private var searchText = ""
     @State private var showBatchDownload = false
+    @State private var selectedAlbum: Album?
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     private var cacheKey: String {
@@ -58,6 +59,11 @@ struct ArtistHomeSheet: View {
             BatchDownloadSheet(songs: displayedHotSongs, title: "下载歌手歌曲")
                 .environmentObject(theme)
         }
+        .sheet(item: $selectedAlbum) { album in
+            AlbumDetailView(album: album)
+                .environmentObject(player)
+                .environmentObject(theme)
+        }
     }
 
     @ViewBuilder
@@ -77,9 +83,7 @@ struct ArtistHomeSheet: View {
                         VStack(alignment: .leading, spacing: 14) {
                             artistHeader
                             hotSongsSection
-                            if artistSource == .netease {
-                                albumsSection
-                            }
+                            albumsSection
                         }
                         .padding(.top, 6)
                         .padding(.bottom, 16)
@@ -109,9 +113,7 @@ struct ArtistHomeSheet: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                Text(artistSource == .netease
-                     ? beansLocalized("热门歌曲 \(hotSongs.count) 首 · 专辑 \(albums.count) 张", "Popular songs: \(hotSongs.count) · Albums: \(albums.count)")
-                     : beansLocalized("热门歌曲 \(hotSongs.count) 首", "Popular songs: \(hotSongs.count)"))
+                Text(beansLocalized("热门歌曲 \(hotSongs.count) 首 · 专辑 \(albums.count) 张", "Popular songs: \(hotSongs.count) · Albums: \(albums.count)"))
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
             }
@@ -163,19 +165,17 @@ struct ArtistHomeSheet: View {
                 .foregroundStyle(Color.beansLabel)
                 .padding(.horizontal, 16)
             if !hotSongs.isEmpty {
-                VStack(spacing: 10) {
-                    HStack(spacing: 10) {
-                        GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, forceLiquid: true) {
-                            BeansHaptics.tap()
-                            player.play(songs: displayedHotSongs, startAt: 0)
-                        }
-                        .frame(maxWidth: .infinity)
-                        GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
-                            BeansHaptics.tap()
-                            player.play(songs: displayedHotSongs.shuffled(), startAt: 0)
-                        }
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: 10) {
+                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, forceLiquid: true) {
+                        BeansHaptics.tap()
+                        player.play(songs: displayedHotSongs, startAt: 0)
                     }
+                    .frame(maxWidth: .infinity)
+                    GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
+                        BeansHaptics.tap()
+                        player.play(songs: displayedHotSongs.shuffled(), startAt: 0)
+                    }
+                    .frame(maxWidth: .infinity)
                     if downloadFeatureUnlocked, displayedHotSongs.count > 1 {
                         GlassButton(title: "批量下载", systemName: "arrow.down.circle", forceLiquid: true) {
                             BeansHaptics.tap()
@@ -306,7 +306,7 @@ struct ArtistHomeSheet: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 10)], spacing: 12) {
                     ForEach(albums) { album in
                         Button {
-                            playAlbum(album)
+                            openAlbum(album)
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
                                 CoverImage(url: album.coverURL, size: 88, cornerRadius: 12)
@@ -333,29 +333,20 @@ struct ArtistHomeSheet: View {
         }
     }
 
-    private func playAlbum(_ album: Album) {
-        guard let id = Int(album.id.replacingOccurrences(of: "netease-", with: "")) else { return }
+    private func openAlbum(_ album: Album) {
         BeansHaptics.tap()
-        Task {
-            if let songs = try? await NetEaseAPI.shared.albumSongs(albumID: id), !songs.isEmpty {
-                player.play(songs: songs, startAt: 0)
-                dismiss()
-            } else {
-                ToastCenter.shared.show("专辑歌曲加载失败", duration: 2)
-            }
-        }
+        selectedAlbum = album
     }
 
     private func load() async {
         let cache = ArtistHomeCache.shared
-        var hasCachedContent = false
-        if let cached = cache.cached(for: cacheKey) {
+        let cachedEntry = cache.cached(for: cacheKey)
+        if let cached = cachedEntry {
             artist = cached.artist ?? artist
             hotSongs = cached.songs
             albums = cached.albums
             loading = false
             errorMessage = nil
-            hasCachedContent = true
             if cache.isFresh(cached), !BeansNetworkStatus.shared.isReachable {
                 return
             }
@@ -372,12 +363,25 @@ struct ArtistHomeSheet: View {
         } else {
             await loadNetEaseArtist()
         }
+        // A transient catalog response must never replace a visible cached page with
+        // empty sections. Keep the last successful section independently while the
+        // other section refreshes in the background.
+        if let cached = cachedEntry {
+            if hotSongs.isEmpty, !cached.songs.isEmpty {
+                hotSongs = cached.songs
+            }
+            if albums.isEmpty, !cached.albums.isEmpty {
+                albums = cached.albums
+            }
+            if artist == nil {
+                artist = cached.artist
+            }
+        }
         if !hotSongs.isEmpty || !albums.isEmpty {
             cache.save(artist: artist, songs: hotSongs, albums: albums, for: cacheKey)
-        } else if hasCachedContent {
-            loading = false
-            errorMessage = nil
         }
+        loading = false
+        if !hotSongs.isEmpty || !albums.isEmpty { errorMessage = nil }
     }
 
     private func loadNetEaseArtist() async {
@@ -420,6 +424,7 @@ struct ArtistHomeSheet: View {
 
     /// QQ 歌手：优先用歌手 mid 拉热门歌曲，失败则按歌手名搜索 QQ 歌曲（保证不是网易云数据）
     private func loadQQArtist() async {
+        async let albumsTask = searchedAlbumsForCurrentArtist()
         var mid: String? = nil
         if let artistID, !artistID.hasPrefix("qq-") {
             mid = artistID
@@ -440,12 +445,14 @@ struct ArtistHomeSheet: View {
             songs = fallback.filter { seen.insert($0.identityKey).inserted }
         }
         hotSongs = songs
+        albums = await albumsTask
         loading = false
     }
 
     /// 酷狗歌手主页优先走作者歌曲接口，再补 `singer/song` 和综合搜索结果，
     /// 避免部分歌手页只停在首批 19 首。
     private func loadKugouArtist() async {
+        async let albumsTask = searchedAlbumsForCurrentArtist()
         let resolvedArtist: Artist?
         if let artistID,
            !artistID.isEmpty,
@@ -521,6 +528,7 @@ struct ArtistHomeSheet: View {
             hotSongs = primarySongs
         }
         hotSongs = Array(hotSongs.prefix(1_000))
+        albums = await albumsTask
         BeansLogger.shared.log("酷狗歌手主页完成：artist=\(artistName) songs=\(hotSongs.count)", level: .debug)
         loading = false
     }
@@ -528,6 +536,7 @@ struct ArtistHomeSheet: View {
     /// 补充目录没有独立的歌手详情接口时，使用同源歌曲搜索构建歌手页，
     /// 不回退到其它平台，避免来源和封面错位。
     private func loadAdditionalCatalogArtist() async {
+        async let albumsTask = searchedAlbumsForCurrentArtist()
         if artist?.coverURL == nil {
             let candidates: [Artist]
             switch artistSource {
@@ -562,6 +571,7 @@ struct ArtistHomeSheet: View {
                 .contains(normalized)
         }
         hotSongs = matched.isEmpty ? songs : matched
+        albums = await albumsTask
         if artist == nil {
             artist = Artist(
                 id: artistID ?? "\(artistSource.rawValue)-\(artistName)",
@@ -572,5 +582,34 @@ struct ArtistHomeSheet: View {
         }
         loading = false
         if hotSongs.isEmpty { errorMessage = "未找到歌手「\(artistName)」" }
+    }
+
+    private func searchedAlbumsForCurrentArtist() async -> [Album] {
+        let candidates: [Album]
+        switch artistSource {
+        case .qq:
+            candidates = (try? await QQMusicAPI.shared.searchAlbums(keyword: artistName, limit: 60)) ?? []
+        case .kugou:
+            candidates = (try? await KugouMusicAPI.shared.searchAlbums(keyword: artistName, limit: 60)) ?? []
+        case .kuwo:
+            candidates = (try? await AdditionalCatalogSearchAPI.searchKuwoAlbums(keyword: artistName, limit: 60)) ?? []
+        case .migu:
+            candidates = (try? await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: artistName, limit: 60)) ?? []
+        case .netease:
+            return []
+        }
+        let expected = normalizedArtistName(artistName)
+        let matched = candidates.filter { album in
+            let albumArtist = normalizedArtistName(album.artistName)
+            return albumArtist.contains(expected) || expected.contains(albumArtist)
+        }
+        return Array((matched.isEmpty ? candidates : matched).prefix(60))
+    }
+
+    private func normalizedArtistName(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "")
     }
 }
