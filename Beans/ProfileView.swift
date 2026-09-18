@@ -133,19 +133,14 @@ struct ProfileView: View {
     }
 
     private func settingsScreen(_ screen: SettingsView) -> some View {
-        Group {
-            if #available(iOS 27, *) {
-                screen.ignoresSafeArea(.all)
-            } else {
-                screen
+        screen
+            .ignoresSafeArea(.all)
+            .environmentObject(theme)
+            .environmentObject(player)
+            .environmentObject(auth)
+            .onDisappear {
+                CrashReporter.shared.endContext("settings")
             }
-        }
-        .environmentObject(theme)
-        .environmentObject(player)
-        .environmentObject(auth)
-        .onDisappear {
-            CrashReporter.shared.endContext("settings")
-        }
     }
 
     /// 顶部标题 + 右上角设置齿轮
@@ -250,7 +245,7 @@ struct ProfileView: View {
             }
         }
         .fullScreenCover(isPresented: $showSettings) {
-            settingsScreen(SettingsView())
+            settingsScreen(SettingsView(onClose: { showSettings = false }))
         }
         .sheet(item: $updateShareFile, onDismiss: cleanupUpdateShareFile) { item in
             ShareSheet(items: [item.url])
@@ -3969,15 +3964,15 @@ private struct SettingsCatalogGroup<Content: View>: View {
     }
 }
 
-/// Settings is presented full-screen from an active tab.  Keep the navigation
-/// host on the older UIKit-backed implementation through iOS 26 so that the
-/// active tab is not reconstructed by NavigationStack during presentation.
+/// Settings is presented full-screen from an active tab. Use the native
+/// navigation host on iOS 26 and later so the title, back button, and safe-area
+/// behavior match the modern settings presentation.
 private struct SettingsNavigationContainer<Content: View>: View {
     let onClose: () -> Void
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        if #available(iOS 27, *) {
+        if #available(iOS 26, *) {
             NavigationStack {
                 content()
             }
