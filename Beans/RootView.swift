@@ -182,11 +182,25 @@ struct RootView: View {
     }
 
     private var visibleTabs: [RootTab] {
+        if usesStableTabHierarchy {
+            return RootTab.bottomTabs
+        }
         RootTab.bottomTabs.filter { tabVisibility.isVisible($0) }
     }
 
     private func isTabVisible(_ tab: RootTab) -> Bool {
+        if usesStableTabHierarchy {
+            return true
+        }
         tabVisibility.isVisible(tab)
+    }
+
+    /// Older tab hosts are not safe to mutate while another full-screen
+    /// interface is being presented. Keep their identity fixed; tab visibility
+    /// remains configurable on the newer host.
+    private var usesStableTabHierarchy: Bool {
+        if #available(iOS 27, *) { return false }
+        return true
     }
 
     private func normalizeTabSelection() {
@@ -586,7 +600,57 @@ struct RootView: View {
     }
 
     @available(iOS 26.0, *)
+    @ViewBuilder
     private func nativeTabContent(isPadLandscape: Bool) -> some View {
+        if #available(iOS 27, *) {
+            dynamicNativeTabContent(isPadLandscape: isPadLandscape)
+        } else {
+            stableNativeTabContent(isPadLandscape: isPadLandscape)
+        }
+    }
+
+    /// This matches the fixed native tab tree used before tab visibility was
+    /// introduced. In particular, iOS 26 must not receive a conditional Tab
+    /// child list while it is presenting another screen.
+    @available(iOS 26.0, *)
+    private func stableNativeTabContent(isPadLandscape: Bool) -> some View {
+        TabView(selection: $selection) {
+            Tab(value: .discover) {
+                DiscoverView()
+            } label: {
+                nativeTabLabel(.discover)
+            }
+
+            Tab(value: .playlists) {
+                PlaylistSquareView()
+            } label: {
+                nativeTabLabel(.playlists)
+            }
+
+            Tab(value: .library) {
+                LibraryView()
+            } label: {
+                nativeTabLabel(.library)
+            }
+
+            Tab(value: .profile) {
+                ProfileView()
+            } label: {
+                nativeTabLabel(.profile)
+            }
+
+            Tab(value: .search, role: .search) {
+                SearchView()
+            } label: {
+                nativeTabLabel(.search)
+            }
+        }
+        .tint(Color.beansAmber)
+        .tabBarMinimizeBehavior(isPadLandscape || player.currentSong == nil ? .never : .onScrollDown)
+    }
+
+    @available(iOS 27.0, *)
+    private func dynamicNativeTabContent(isPadLandscape: Bool) -> some View {
         TabView(selection: $selection) {
             if tabVisibility.discover {
                 Tab(value: .discover) {

@@ -1765,7 +1765,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        SettingsNavigationContainer {
+        SettingsNavigationContainer(onClose: closeSettings) {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 if settingsContentReady {
@@ -3984,6 +3984,7 @@ private struct SettingsCatalogGroup<Content: View>: View {
 /// host on the older UIKit-backed implementation through iOS 26 so that the
 /// active tab is not reconstructed by NavigationStack during presentation.
 private struct SettingsNavigationContainer<Content: View>: View {
+    let onClose: () -> Void
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -3992,10 +3993,28 @@ private struct SettingsNavigationContainer<Content: View>: View {
                 content()
             }
         } else {
-            NavigationView {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Button(action: onClose) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 42, height: 42)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text("设置")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.beansLabel)
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 52)
+                .background(Color.clear)
+
                 content()
             }
-            .navigationViewStyle(.stack)
         }
     }
 }
