@@ -335,9 +335,6 @@ enum AdditionalCatalogSearchAPI {
         guard let id = Int(idText), id > 0 else { return nil }
         let duration = seconds(item["DURATION"] ?? item["duration"])
         let image = kuwoImageURL(text(item["web_albumpic_short"]) ?? text(item["albumpic"]) ?? text(item["PICPATH"]) ?? text(item["hts_MVPIC"]))
-        let ext = item["ext"] as? [String: Any]
-        let lyricURL = text(item["lrcUrl"] ?? item["lyricUrl"] ?? item["lyricsUrl"] ?? ext?["lrcUrl"] ?? ext?["lyricUrl"])
-            .flatMap(URL.init(string:))
         return Song(
             id: id,
             name: text(item["SONGNAME"]) ?? text(item["name"]) ?? "",
@@ -408,6 +405,9 @@ enum AdditionalCatalogSearchAPI {
             imageText(in: item, keys: ["img3", "img2", "img1", "albumPicUrl", "cover", "img", "imgUrl"])
                 ?? text(imageItems.first?["img"] ?? imageItems.first?["imgUrl"])
         )
+        let ext = item["ext"] as? [String: Any]
+        let lyricURL = text(item["lrcUrl"] ?? item["lyricUrl"] ?? item["lyricsUrl"] ?? ext?["lrcUrl"] ?? ext?["lyricUrl"])
+            .flatMap(URL.init(string:))
         return Song(
             id: id,
             name: text(item["name"]) ?? text(item["songName"]) ?? "",
