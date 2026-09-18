@@ -28,6 +28,7 @@ struct ProfileView: View {
     @State private var showAccountHub = false
     /// 设置页（外观 + 歌词翻译等）
     @State private var showSettings = false
+    @State private var showSettingsOverlay = false
     /// 手动检查更新
     @State private var checkingUpdate = false
     @State private var updateResult: UpdateChecker.CheckResult?
@@ -118,15 +119,40 @@ struct ProfileView: View {
             || (platformPrefs.isEnabled(SearchProvider.kugou) && kugouAuth.isLoggedIn)
     }
 
-    /// 将设置呈现放到下一次主线程循环，避免 iPadOS 15 在同一事务内重绘主页并展示全屏界面。
+    private var usesCompatibilitySettingsOverlay: Bool {
+        if #available(iOS 27, *) { return false }
+        return true
+    }
+
+    /// iOS/iPadOS 26 及以下不使用 SwiftUI 的全屏模态呈现，避免其在活跃 Tab
+    /// 上创建第二套承载控制器时触发系统崩溃。
     private func openSettings() {
-        guard !showSettings else { return }
+        guard !showSettings, !showSettingsOverlay else { return }
         BeansHaptics.tap()
         homeRenderingPaused = true
         DispatchQueue.main.async {
             CrashReporter.shared.beginContext("settings")
-            showSettings = true
+            if usesCompatibilitySettingsOverlay {
+                showSettingsOverlay = true
+            } else {
+                showSettings = true
+            }
         }
+    }
+
+    private func settingsScreen(_ screen: SettingsView) -> some View {
+        screen
+            .environmentObject(theme)
+            .environmentObject(player)
+            .environmentObject(auth)
+            .ignoresSafeArea(.all)
+            .onDisappear {
+                CrashReporter.shared.endContext("settings")
+            }
+    }
+
+    private func closeCompatibilitySettings() {
+        showSettingsOverlay = false
     }
 
     /// 顶部标题 + 右上角设置齿轮
@@ -197,6 +223,13 @@ struct ProfileView: View {
             }
             .beansScrollIndicatorsHidden()
         }
+        .overlay {
+            if showSettingsOverlay {
+                settingsScreen(SettingsView(onClose: closeCompatibilitySettings))
+                .transition(.opacity)
+                .zIndex(100)
+            }
+        }
         .task {
             guard !didRefreshProfileAccount else { return }
             didRefreshProfileAccount = true
@@ -231,17 +264,7 @@ struct ProfileView: View {
             }
         }
         .fullScreenCover(isPresented: $showSettings) {
-            SettingsView()
-                .environmentObject(theme)
-                .environmentObject(player)
-                .environmentObject(auth)
-                .ignoresSafeArea(.all)
-                .onAppear {
-                    CrashReporter.shared.beginContext("settings")
-                }
-                .onDisappear {
-                    CrashReporter.shared.endContext("settings")
-                }
+            settingsScreen(SettingsView())
         }
         .sheet(item: $updateShareFile, onDismiss: cleanupUpdateShareFile) { item in
             ShareSheet(items: [item.url])
@@ -1325,6 +1348,7 @@ struct AccountHubSheet: View {
 // MARK: - 设置页（外观 + 歌词翻译，从「我的」右上角齿轮进入）
 
 struct SettingsView: View {
+    var onClose: (() -> Void)? = nil
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
@@ -1757,7 +1781,7 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        dismiss()
+                        closeSettings()
                     } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 17, weight: .bold))
@@ -1916,6 +1940,14 @@ struct SettingsView: View {
             .beansAdaptiveContentWidth()
         }
         .beansScrollIndicatorsHidden()
+    }
+
+    private func closeSettings() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
     }
 
     private var showAccountSettings: Bool {
