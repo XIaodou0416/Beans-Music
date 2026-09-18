@@ -1741,7 +1741,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        BeansNavigationStack {
+        SettingsNavigationContainer {
             ZStack {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 if settingsContentReady {
@@ -3945,6 +3945,26 @@ private struct SettingsCatalogGroup<Content: View>: View {
                     .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1)
                     .allowsHitTesting(false)
             }
+    }
+}
+
+/// Settings is presented full-screen from an active tab.  Keep the navigation
+/// host on the older UIKit-backed implementation through iOS 26 so that the
+/// active tab is not reconstructed by NavigationStack during presentation.
+private struct SettingsNavigationContainer<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if #available(iOS 27, *) {
+            NavigationStack {
+                content()
+            }
+        } else {
+            NavigationView {
+                content()
+            }
+            .navigationViewStyle(.stack)
+        }
     }
 }
 
