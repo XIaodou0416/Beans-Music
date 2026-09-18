@@ -2959,16 +2959,11 @@ struct SettingsView: View {
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
-                Toggle("隐藏主页用户名", isOn: $homeHideUsername)
-                    .font(BeansFont.appFont(13))
-                Toggle("隐藏所有界面排序按钮", isOn: $homeHeaderHideSort)
-                    .font(BeansFont.appFont(13))
-                Toggle("隐藏顶部平台列表", isOn: $hidePlatformPicker)
-                    .font(BeansFont.appFont(13))
-                Toggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
-                    .font(BeansFont.appFont(13))
-                Toggle("每日推荐使用旧版样式", isOn: $dailySongsListStyle)
-                    .font(BeansFont.appFont(13))
+                appearanceToggle("隐藏主页用户名", isOn: $homeHideUsername)
+                appearanceToggle("隐藏所有界面排序按钮", isOn: $homeHeaderHideSort)
+                appearanceToggle("隐藏顶部平台列表", isOn: $hidePlatformPicker)
+                appearanceToggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
+                appearanceToggle("每日推荐使用旧版样式", isOn: $dailySongsListStyle)
 
                 HStack {
                     Image(systemName: "textformat")
@@ -3022,6 +3017,16 @@ struct SettingsView: View {
             .padding(.bottom, 14)
             }
         }
+    }
+
+    private func appearanceToggle(_ title: String, isOn: Binding<Bool>) -> some View {
+        Toggle(title, isOn: isOn)
+            .font(BeansFont.appFont(13))
+            .toggleStyle(.switch)
+            .tint(Color.beansAmber)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 10)
+            .contentShape(Rectangle())
     }
 
     /// 播放与歌词设置。
