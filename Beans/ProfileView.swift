@@ -44,9 +44,12 @@ struct ProfileView: View {
     @State private var loadingRemoteDonors = false
     @State private var showWeChatOpenError = false
     @State private var showFeedback = false
+    @State private var showAvatarPicker = false
     @State private var easterEggStep = 0
     @State private var easterEggPrompt = "点我有惊喜"
+    @AppStorage("beans.profile.customNickname") private var customNickname = ""
     @ObservedObject private var feedbackHistory = FeedbackHistoryStore.shared
+    @ObservedObject private var avatarStore = BeansAvatarStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
@@ -169,7 +172,7 @@ struct ProfileView: View {
                     } else {
                         header
                     }
-                    xProfileCard
+                    customAvatarCard
                     communityCard
                     donationCard
                     easterEggCard
@@ -209,6 +212,11 @@ struct ProfileView: View {
         .sheet(isPresented: $showFeedback) {
             FeedbackSheet()
                 .environmentObject(theme)
+        }
+        .sheet(isPresented: $showAvatarPicker) {
+            WallpaperPhotoPicker(allowsMultiple: false) { data in
+                avatarStore.save(data: data)
+            }
         }
         .fullScreenCover(isPresented: $showSettings) {
             SettingsView()
@@ -305,21 +313,88 @@ struct ProfileView: View {
         .transition(.opacity)
     }
 
-    private var xProfileCard: some View {
-        XProfileWebView(
-            listeningDuration: player.formattedListeningDuration,
-            playCount: "\(totalPlayCount) \(isEnglish ? "plays" : "次")"
-        )
-            .frame(height: 450)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.beansLabel.opacity(0.10), lineWidth: 0.7)
-            }
-    }
-
     private var totalPlayCount: Int {
         player.playCounts.values.reduce(0, +)
+    }
+
+    private var customAvatarCard: some View {
+        VStack(spacing: 15) {
+            HStack(spacing: 13) {
+                Button {
+                    BeansHaptics.tap()
+                    showAvatarPicker = true
+                } label: {
+                    BeansAvatarView(remoteURL: nil, size: 58, useCustom: true)
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Color.white)
+                                .frame(width: 20, height: 20)
+                                .background(Color.beansAmber, in: Circle())
+                                .overlay(Circle().stroke(Color.beansBackground, lineWidth: 2))
+                        }
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    TextField(isEnglish ? "Nickname" : "自定义昵称", text: $customNickname)
+                        .font(BeansFont.appFont(17, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1)
+                    Text(isEnglish ? "Your Beans listening record" : "Beans 本机听歌记录")
+                        .font(BeansFont.appFont(12, .medium))
+                        .foregroundStyle(Color.beansSecondary)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "waveform")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+            }
+
+            Rectangle()
+                .fill(Color.beansLabel.opacity(0.10))
+                .frame(height: 1)
+
+            HStack(spacing: 0) {
+                profileStat(
+                    title: isEnglish ? "Listening time" : "听歌时长",
+                    value: player.formattedListeningDuration,
+                    icon: "clock"
+                )
+                Rectangle()
+                    .fill(Color.beansLabel.opacity(0.10))
+                    .frame(width: 1, height: 31)
+                profileStat(
+                    title: isEnglish ? "Play count" : "播放次数",
+                    value: "\(totalPlayCount) \(isEnglish ? "plays" : "次")",
+                    icon: "music.note"
+                )
+            }
+        }
+        .padding(16)
+        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
+        .beansCardShadow(radius: 8, y: 3)
+    }
+
+    private func profileStat(title: String, value: String, icon: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.beansAmber)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(BeansFont.appFont(11, .medium))
+                    .foregroundStyle(Color.beansSecondary)
+                Text(value)
+                    .font(BeansFont.appFont(15, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
+            Spacer(minLength: 8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var easterEggCard: some View {
