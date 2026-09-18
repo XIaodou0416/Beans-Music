@@ -2088,6 +2088,8 @@ struct QQTopListDetailView: View {
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var searchText = ""
+    @State private var showBatchDownload = false
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     init(topID: Int, name: String) {
         self.topID = topID
@@ -2119,6 +2121,14 @@ struct QQTopListDetailView: View {
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))
                                 }
+                                if downloadFeatureUnlocked, filteredTracks.count > 1 {
+                                    GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
+                                        BeansHaptics.tap()
+                                        showBatchDownload = true
+                                    }
+                                    .accessibilityLabel("批量下载排行榜")
+                                    .help("批量下载")
+                                }
                             }
                             .listRowBackground(Color.clear)
                             .padding(.vertical, 8)
@@ -2142,6 +2152,10 @@ struct QQTopListDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         .task { await load() }
+        .sheet(isPresented: $showBatchDownload) {
+            BatchDownloadSheet(songs: filteredTracks, title: "下载排行榜")
+                .environmentObject(theme)
+        }
     }
 
     private var filteredTracks: [Song] {
@@ -2291,6 +2305,8 @@ struct DailySongsSheet: View {
     @State private var displayedSongs: [Song]
     @State private var isRefreshing = false
     @State private var refreshError: String?
+    @State private var showBatchDownload = false
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     init(songs: [Song], source: SearchProvider, onRefreshed: (([Song]) -> Void)? = nil) {
         self.songs = songs
@@ -2325,6 +2341,14 @@ struct DailySongsSheet: View {
                                 guard !filteredSongs.isEmpty else { return }
                                 BeansHaptics.tap()
                                 player.play(songs: filteredSongs, startAt: Int.random(in: 0..<filteredSongs.count))
+                            }
+                            if downloadFeatureUnlocked, filteredSongs.count > 1 {
+                                GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
+                                    BeansHaptics.tap()
+                                    showBatchDownload = true
+                                }
+                                .accessibilityLabel("批量下载每日推荐")
+                                .help("批量下载")
                             }
                         }
                         .listRowBackground(Color.clear)
@@ -2365,6 +2389,10 @@ struct DailySongsSheet: View {
             }
             .task {
                 await refreshDailySongs()
+            }
+            .sheet(isPresented: $showBatchDownload) {
+                BatchDownloadSheet(songs: filteredSongs, title: "下载每日推荐")
+                    .environmentObject(theme)
             }
     }
 
@@ -2438,6 +2466,8 @@ struct TopListDetailView: View {
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var searchText = ""
+    @State private var showBatchDownload = false
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     init(topList: TopList) {
         self.topList = topList
@@ -2469,6 +2499,14 @@ struct TopListDetailView: View {
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))
                                 }
+                                if downloadFeatureUnlocked, filteredTracks.count > 1 {
+                                    GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
+                                        BeansHaptics.tap()
+                                        showBatchDownload = true
+                                    }
+                                    .accessibilityLabel("批量下载排行榜")
+                                    .help("批量下载")
+                                }
                             }
                             .listRowBackground(Color.clear)
                             .padding(.vertical, 8)
@@ -2492,6 +2530,10 @@ struct TopListDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         .task { await load() }
+        .sheet(isPresented: $showBatchDownload) {
+            BatchDownloadSheet(songs: filteredTracks, title: "下载排行榜")
+                .environmentObject(theme)
+        }
     }
 
     private var header: some View {
@@ -2578,6 +2620,8 @@ struct KugouTopListDetailView: View {
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var searchText = ""
+    @State private var showBatchDownload = false
+    @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     init(topList: KugouTopInfo) {
         self.topList = topList
@@ -2611,6 +2655,14 @@ struct KugouTopListDetailView: View {
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))
                                 }
+                                if downloadFeatureUnlocked, filteredTracks.count > 1 {
+                                    GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
+                                        BeansHaptics.tap()
+                                        showBatchDownload = true
+                                    }
+                                    .accessibilityLabel("批量下载排行榜")
+                                    .help("批量下载")
+                                }
                             }
                             .listRowBackground(Color.clear)
                             .padding(.vertical, 8)
@@ -2634,6 +2686,10 @@ struct KugouTopListDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
         .task { await load() }
+        .sheet(isPresented: $showBatchDownload) {
+            BatchDownloadSheet(songs: filteredTracks, title: "下载排行榜")
+                .environmentObject(theme)
+        }
     }
 
     private var header: some View {
