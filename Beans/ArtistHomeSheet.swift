@@ -101,6 +101,11 @@ struct ArtistHomeSheet: View {
         }
         .navigationTitle("歌手主页")
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: beansLocalized("搜索歌手歌曲", "Search artist songs")
+        )
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("完成") { dismiss() }
@@ -192,42 +197,6 @@ struct ArtistHomeSheet: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 2)
-            }
-            if !hotSongs.isEmpty {
-                if #available(iOS 26, *) {
-                    NativeSearchBar(
-                        text: $searchText,
-                        placeholder: beansLocalized("搜索歌手歌曲", "Search artist songs"),
-                        onSubmit: { _ in }
-                    )
-                    .frame(height: 44)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 2)
-                } else {
-                    HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.beansComment)
-                        TextField(beansLocalized("搜索歌手歌曲", "Search artist songs"), text: $searchText)
-                            .font(BeansFont.appFont(14))
-                            .autocorrectionDisabled()
-                        if !searchText.isEmpty {
-                            Button {
-                                searchText = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(Color.beansComment)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)) }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 2)
-                }
             }
             if hotSongs.isEmpty {
                 Text("暂无歌曲")
