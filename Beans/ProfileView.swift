@@ -28,7 +28,6 @@ struct ProfileView: View {
     @State private var showAccountHub = false
     /// 设置页（外观 + 歌词翻译等）
     @State private var showSettings = false
-    @State private var showSettingsOverlay = false
     /// 手动检查更新
     @State private var checkingUpdate = false
     @State private var updateResult: UpdateChecker.CheckResult?
@@ -119,46 +118,33 @@ struct ProfileView: View {
             || (platformPrefs.isEnabled(SearchProvider.kugou) && kugouAuth.isLoggedIn)
     }
 
-    private var usesCompatibilitySettingsOverlay: Bool {
-        if #available(iOS 27, *) { return false }
-        return true
-    }
-
-    /// iOS/iPadOS 26 及以下不使用 SwiftUI 的全屏模态呈现，避免其在活跃 Tab
-    /// 上创建第二套承载控制器时触发系统崩溃。
+    /// Delay presentation by one main-queue turn so the active profile tab
+    /// finishes its update before the settings controller is created.
     private func openSettings() {
-        guard !showSettings, !showSettingsOverlay else { return }
+        guard !showSettings else { return }
         BeansHaptics.tap()
         CrashReporter.shared.recordEvent("点击设置入口")
         homeRenderingPaused = true
         DispatchQueue.main.async {
             CrashReporter.shared.beginContext("settings")
-            if usesCompatibilitySettingsOverlay {
-                CrashReporter.shared.recordEvent("使用低系统设置兼容容器")
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    showSettingsOverlay = true
-                }
-            } else {
-                CrashReporter.shared.recordEvent("使用原生设置容器")
-                showSettings = true
-            }
+            CrashReporter.shared.recordEvent("使用全屏设置容器")
+            showSettings = true
         }
     }
 
     private func settingsScreen(_ screen: SettingsView) -> some View {
-        screen
-            .environmentObject(theme)
-            .environmentObject(player)
-            .environmentObject(auth)
-            .ignoresSafeArea(.all)
-            .onDisappear {
-                CrashReporter.shared.endContext("settings")
+        Group {
+            if #available(iOS 27, *) {
+                screen.ignoresSafeArea(.all)
+            } else {
+                screen
             }
-    }
-
-    private func closeCompatibilitySettings() {
-        withAnimation(.easeInOut(duration: 0.22)) {
-            showSettingsOverlay = false
+        }
+        .environmentObject(theme)
+        .environmentObject(player)
+        .environmentObject(auth)
+        .onDisappear {
+            CrashReporter.shared.endContext("settings")
         }
     }
 
@@ -229,13 +215,6 @@ struct ProfileView: View {
                 .beansAdaptiveContentWidth()
             }
             .beansScrollIndicatorsHidden()
-        }
-        .overlay {
-            if showSettingsOverlay {
-                settingsScreen(SettingsView(onClose: closeCompatibilitySettings))
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-                .zIndex(100)
-            }
         }
         .task {
             guard !didRefreshProfileAccount else { return }

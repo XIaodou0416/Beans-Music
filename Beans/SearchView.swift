@@ -295,8 +295,12 @@ struct SearchView: View {
 
     var body: some View {
         BeansNavigationStack {
-            pageContent
-                .navigationTitle(keyword.isEmpty ? "搜索" : keyword)
+            if #available(iOS 26, *) {
+                pageContent
+                    .navigationTitle(keyword.isEmpty ? "搜索" : keyword)
+            } else {
+                pageContent
+            }
         }
         .task(id: provider) {
             if let cached = hotWordsCache[provider] {
