@@ -542,55 +542,7 @@ struct RootView: View {
     }
 
     @available(iOS 26.0, *)
-    @ViewBuilder
     private func nativeTabContent(isPadLandscape: Bool) -> some View {
-        if #available(iOS 27.0, *) {
-            dynamicNativeTabContent(isPadLandscape: isPadLandscape)
-        } else {
-            stableIOS26NativeTabContent(isPadLandscape: isPadLandscape)
-        }
-    }
-
-    /// iOS 26 在运行时增删 Tab 会导致系统 TabView 状态失效；保持固定结构以避免页面切换时异常退出。
-    @available(iOS 26.0, *)
-    private func stableIOS26NativeTabContent(isPadLandscape: Bool) -> some View {
-        TabView(selection: $selection) {
-            Tab(value: .discover) {
-                DiscoverView()
-            } label: {
-                nativeTabLabel(.discover)
-            }
-
-            Tab(value: .playlists) {
-                PlaylistSquareView()
-            } label: {
-                nativeTabLabel(.playlists)
-            }
-
-            Tab(value: .library) {
-                LibraryView()
-            } label: {
-                nativeTabLabel(.library)
-            }
-
-            Tab(value: .profile) {
-                ProfileView()
-            } label: {
-                nativeTabLabel(.profile)
-            }
-
-            Tab(value: .search, role: .search) {
-                SearchView()
-            } label: {
-                nativeTabLabel(.search)
-            }
-        }
-        .tint(Color.beansAmber)
-        .tabBarMinimizeBehavior(isPadLandscape || player.currentSong == nil ? .never : .onScrollDown)
-    }
-
-    @available(iOS 27.0, *)
-    private func dynamicNativeTabContent(isPadLandscape: Bool) -> some View {
         TabView(selection: $selection) {
             if discoverTabVisible {
                 Tab(value: .discover) {

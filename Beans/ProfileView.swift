@@ -118,6 +118,17 @@ struct ProfileView: View {
             || (platformPrefs.isEnabled(SearchProvider.kugou) && kugouAuth.isLoggedIn)
     }
 
+    /// 将设置呈现放到下一次主线程循环，避免 iPadOS 15 在同一事务内重绘主页并展示全屏界面。
+    private func openSettings() {
+        guard !showSettings else { return }
+        BeansHaptics.tap()
+        homeRenderingPaused = true
+        DispatchQueue.main.async {
+            CrashReporter.shared.beginContext("settings")
+            showSettings = true
+        }
+    }
+
     /// 顶部标题 + 右上角设置齿轮
     private var header: some View {
         HStack(alignment: .center) {
@@ -129,10 +140,7 @@ struct ProfileView: View {
             Spacer()
             HStack(spacing: 10) {
                 GlassIconButton(systemName: "gearshape.fill", forceLiquid: true) {
-                    BeansHaptics.tap()
-                    homeRenderingPaused = true
-                    CrashReporter.shared.beginContext("settings")
-                    showSettings = true
+                    openSettings()
                 }
             }
         }
@@ -147,10 +155,7 @@ struct ProfileView: View {
                     .foregroundStyle(Color.beansLabel)
                 Spacer(minLength: 12)
                 GlassIconButton(systemName: "gearshape", forceLiquid: true) {
-                    BeansHaptics.tap()
-                    homeRenderingPaused = true
-                    CrashReporter.shared.beginContext("settings")
-                    showSettings = true
+                    openSettings()
                 }
             }
             Rectangle()
@@ -1342,11 +1347,6 @@ struct SettingsView: View {
     /// 底栏是否显示文字（关闭后只显示图标）
     @AppStorage("beans.tabLabelsVisible") private var tabLabelsVisible = true
     @AppStorage("beans.tabIconStyle") private var tabIconStyleRaw = BeansTabIconStyle.sfSymbols.rawValue
-    @AppStorage("beans.tab.discover.visible") private var discoverTabVisible = true
-    @AppStorage("beans.tab.playlists.visible") private var playlistsTabVisible = true
-    @AppStorage("beans.tab.library.visible") private var libraryTabVisible = true
-    @AppStorage("beans.tab.profile.visible") private var profileTabVisible = true
-    @AppStorage("beans.tab.search.visible") private var searchTabVisible = true
     @AppStorage("beans.legacyTabCornerRadius") private var legacyTabCornerRadius = 32.0
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
@@ -1439,6 +1439,7 @@ struct SettingsView: View {
     @State private var showUpdateResult = false
     @State private var disclaimerExpanded = false
     @State private var showFloatingImagePicker = false
+    @State private var showTabVisibilitySettings = false
     @State private var settingsSearchText = ""
 
     private var themeMode: BeansThemeMode {
@@ -1451,12 +1452,6 @@ struct SettingsView: View {
 
     private var usesCustomWallpaper: Bool {
         theme.backgroundSyncAll && theme.customBackgroundImage(for: colorScheme) != nil
-    }
-
-    private var visibleTabCount: Int {
-        [discoverTabVisible, playlistsTabVisible, libraryTabVisible, profileTabVisible, searchTabVisible]
-            .filter { $0 }
-            .count
     }
 
     private func settingsMatches(_ terms: String...) -> Bool {
@@ -1864,6 +1859,10 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showEqualizer) {
             EqualizerSettingsView()
+                .environmentObject(theme)
+        }
+        .sheet(isPresented: $showTabVisibilitySettings) {
+            TabVisibilitySettingsSheet()
                 .environmentObject(theme)
         }
         .fullScreenCover(isPresented: $showRestorePicker) {
@@ -2453,30 +2452,32 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 .tint(Color.beansAmber)
 
-                VStack(alignment: .leading, spacing: 10) {
+                Button {
+                    BeansHaptics.tap()
+                    showTabVisibilitySettings = true
+                } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "rectangle.3.group.bubble")
                             .font(.system(size: 14))
                             .foregroundStyle(Color.beansAmber)
                             .frame(width: 28)
-                        Text("底部栏显示")
-                            .font(BeansFont.appFont(15))
-                            .foregroundStyle(Color.beansLabel)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("底部栏显示")
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text("选择要显示的主页入口")
+                                .font(BeansFont.appFont(12))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.beansComment)
                     }
-                    VStack(spacing: 0) {
-                        tabVisibilityToggle("主页", systemName: "house.fill", isOn: $discoverTabVisible)
-                        Divider().overlay(Color.beansComment.opacity(0.15))
-                        tabVisibilityToggle("精选", systemName: "dot.radiowaves.left.and.right", isOn: $playlistsTabVisible)
-                        Divider().overlay(Color.beansComment.opacity(0.15))
-                        tabVisibilityToggle("歌单", systemName: "music.note.list", isOn: $libraryTabVisible)
-                        Divider().overlay(Color.beansComment.opacity(0.15))
-                        tabVisibilityToggle("我的", systemName: "person.crop.circle", isOn: $profileTabVisible)
-                        Divider().overlay(Color.beansComment.opacity(0.15))
-                        tabVisibilityToggle("搜索", systemName: "magnifyingglass", isOn: $searchTabVisible)
-                    }
-                    .padding(.horizontal, 12)
-                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 12) {
@@ -3569,18 +3570,6 @@ struct SettingsView: View {
         }
     }
 
-    private func tabVisibilityToggle(_ title: String, systemName: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            Label(title, systemImage: systemName)
-                .font(BeansFont.appFont(14))
-                .foregroundStyle(Color.beansLabel)
-        }
-        .toggleStyle(.switch)
-        .tint(Color.beansAmber)
-        .padding(.vertical, 7)
-        .disabled(isOn.wrappedValue && visibleTabCount <= 1)
-    }
-
     private var legacyTabBarSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
@@ -3926,6 +3915,65 @@ private struct SettingsCatalogGroup<Content: View>: View {
                     .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1)
                     .allowsHitTesting(false)
             }
+    }
+}
+
+/// 单独呈现底栏可见项编辑，避免首次打开设置时同时创建多组 Tab 状态绑定。
+private struct TabVisibilitySettingsSheet: View {
+    @EnvironmentObject private var theme: ThemeStore
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("beans.tab.discover.visible") private var discoverTabVisible = true
+    @AppStorage("beans.tab.playlists.visible") private var playlistsTabVisible = true
+    @AppStorage("beans.tab.library.visible") private var libraryTabVisible = true
+    @AppStorage("beans.tab.profile.visible") private var profileTabVisible = true
+    @AppStorage("beans.tab.search.visible") private var searchTabVisible = true
+
+    private var visibleTabCount: Int {
+        [discoverTabVisible, playlistsTabVisible, libraryTabVisible, profileTabVisible, searchTabVisible]
+            .filter { $0 }
+            .count
+    }
+
+    var body: some View {
+        BeansNavigationStack {
+            ZStack {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                SettingsCatalogGroup {
+                    tabToggle("主页", systemName: "house.fill", isOn: $discoverTabVisible)
+                    Divider().overlay(Color.beansComment.opacity(0.15))
+                    tabToggle("精选", systemName: "dot.radiowaves.left.and.right", isOn: $playlistsTabVisible)
+                    Divider().overlay(Color.beansComment.opacity(0.15))
+                    tabToggle("歌单", systemName: "music.note.list", isOn: $libraryTabVisible)
+                    Divider().overlay(Color.beansComment.opacity(0.15))
+                    tabToggle("我的", systemName: "person.crop.circle", isOn: $profileTabVisible)
+                    Divider().overlay(Color.beansComment.opacity(0.15))
+                    tabToggle("搜索", systemName: "magnifyingglass", isOn: $searchTabVisible)
+                }
+                .padding(16)
+            }
+            .navigationTitle("底部栏显示")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                    .foregroundStyle(Color.beansAmber)
+                }
+            }
+        }
+    }
+
+    private func tabToggle(_ title: String, systemName: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Label(title, systemImage: systemName)
+                .font(BeansFont.appFont(15))
+                .foregroundStyle(Color.beansLabel)
+        }
+        .toggleStyle(.switch)
+        .tint(Color.beansAmber)
+        .padding(.vertical, 10)
+        .disabled(isOn.wrappedValue && visibleTabCount <= 1)
     }
 }
 
