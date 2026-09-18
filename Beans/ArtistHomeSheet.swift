@@ -408,10 +408,12 @@ struct ArtistHomeSheet: View {
             }
             async let songsTask = (try? NetEaseAPI.shared.artistHotSongs(artistID: id, limit: 300)) ?? []
             async let albumsTask = (try? NetEaseAPI.shared.artistAlbums(artistID: id)) ?? []
-            let s = await songsTask
-            hotSongs = s
+            let fetchedSongs = await songsTask
+            if !fetchedSongs.isEmpty {
+                hotSongs = fetchedSongs
+            }
             // 接口异常时兜底：分页搜索补全歌手歌曲（避免再次退回 30 首）。
-            if hotSongs.isEmpty {
+            if fetchedSongs.isEmpty {
                 var fallback: [Song] = []
                 for offset in stride(from: 0, to: 300, by: 30) {
                     let page = (try? await NetEaseAPI.shared.search(keyword: artistName, limit: 30, offset: offset)) ?? []
@@ -419,10 +421,15 @@ struct ArtistHomeSheet: View {
                     fallback.append(contentsOf: page)
                     if page.count < 30 { break }
                 }
-                hotSongs = fallback
+                if !fallback.isEmpty {
+                    hotSongs = fallback
+                }
             }
             persistLoadedContent()
-            self.albums = await albumsTask
+            let fetchedAlbums = await albumsTask
+            if !fetchedAlbums.isEmpty {
+                self.albums = fetchedAlbums
+            }
             loading = false
         } catch {
             errorMessage = error.localizedDescription
@@ -452,9 +459,14 @@ struct ArtistHomeSheet: View {
             var seen = Set<String>()
             songs = fallback.filter { seen.insert($0.identityKey).inserted }
         }
-        hotSongs = songs
+        if !songs.isEmpty {
+            hotSongs = songs
+        }
         persistLoadedContent()
-        albums = await albumsTask
+        let fetchedAlbums = await albumsTask
+        if !fetchedAlbums.isEmpty {
+            albums = fetchedAlbums
+        }
         loading = false
     }
 
@@ -532,13 +544,20 @@ struct ArtistHomeSheet: View {
             }
         }
 
-        hotSongs = songs
-        if hotSongs.isEmpty, !primarySongs.isEmpty {
+        if !songs.isEmpty {
+            hotSongs = songs
+        }
+        if songs.isEmpty, !primarySongs.isEmpty {
             hotSongs = primarySongs
         }
-        hotSongs = Array(hotSongs.prefix(1_000))
+        if !hotSongs.isEmpty {
+            hotSongs = Array(hotSongs.prefix(1_000))
+        }
         persistLoadedContent()
-        albums = await albumsTask
+        let fetchedAlbums = await albumsTask
+        if !fetchedAlbums.isEmpty {
+            albums = fetchedAlbums
+        }
         BeansLogger.shared.log("酷狗歌手主页完成：artist=\(artistName) songs=\(hotSongs.count)", level: .debug)
         loading = false
     }
@@ -580,14 +599,20 @@ struct ArtistHomeSheet: View {
                 .lowercased()
                 .contains(normalized)
         }
-        hotSongs = matched.isEmpty ? songs : matched
+        let fetchedSongs = matched.isEmpty ? songs : matched
+        if !fetchedSongs.isEmpty {
+            hotSongs = fetchedSongs
+        }
         persistLoadedContent()
-        albums = await albumsTask
+        let fetchedAlbums = await albumsTask
+        if !fetchedAlbums.isEmpty {
+            albums = fetchedAlbums
+        }
         if artist == nil {
             artist = Artist(
                 id: artistID ?? "\(artistSource.rawValue)-\(artistName)",
                 name: artistName,
-                coverURL: hotSongs.first?.coverURL,
+                coverURL: fetchedSongs.first?.coverURL,
                 source: artistSource
             )
         }
