@@ -37,6 +37,7 @@ struct ArtistHomeSheet: View {
     @State private var searchText = ""
     @State private var showBatchDownload = false
     @State private var selectedAlbum: Album?
+    @State private var loadTask: Task<Void, Never>?
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     private var cacheKey: String {
@@ -54,7 +55,13 @@ struct ArtistHomeSheet: View {
                     .modifier(BeansSheetModifier(detents: [.large], dragIndicator: true))
             }
         }
-        .task { await load() }
+        .onAppear {
+            loadTask?.cancel()
+            loadTask = Task { await load() }
+        }
+        .onDisappear {
+            loadTask?.cancel()
+        }
         .sheet(isPresented: $showBatchDownload) {
             BatchDownloadSheet(songs: displayedHotSongs, title: "下载歌手歌曲")
                 .environmentObject(theme)
@@ -165,19 +172,19 @@ struct ArtistHomeSheet: View {
                 .foregroundStyle(Color.beansLabel)
                 .padding(.horizontal, 16)
             if !hotSongs.isEmpty {
-                HStack(spacing: 10) {
-                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, forceLiquid: true) {
+                HStack(spacing: 8) {
+                    ArtistHomeActionButton(title: "播放全部", systemName: "play.fill", prominent: true) {
                         BeansHaptics.tap()
                         player.play(songs: displayedHotSongs, startAt: 0)
                     }
                     .frame(maxWidth: .infinity)
-                    GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
+                    ArtistHomeActionButton(title: "随机播放", systemName: "shuffle") {
                         BeansHaptics.tap()
                         player.play(songs: displayedHotSongs.shuffled(), startAt: 0)
                     }
                     .frame(maxWidth: .infinity)
                     if downloadFeatureUnlocked, displayedHotSongs.count > 1 {
-                        GlassButton(title: "批量下载", systemName: "arrow.down.circle", forceLiquid: true) {
+                        ArtistHomeActionButton(title: "批量下载", systemName: "arrow.down.circle") {
                             BeansHaptics.tap()
                             showBatchDownload = true
                         }
@@ -599,9 +606,10 @@ struct ArtistHomeSheet: View {
             return []
         }
         let expected = normalizedArtistName(artistName)
+        guard !expected.isEmpty else { return Array(candidates.prefix(60)) }
         let matched = candidates.filter { album in
             let albumArtist = normalizedArtistName(album.artistName)
-            return albumArtist.contains(expected) || expected.contains(albumArtist)
+            return !albumArtist.isEmpty && (albumArtist.contains(expected) || expected.contains(albumArtist))
         }
         return Array((matched.isEmpty ? candidates : matched).prefix(60))
     }
@@ -611,5 +619,38 @@ struct ArtistHomeSheet: View {
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
             .replacingOccurrences(of: " ", with: "")
+    }
+}
+
+private struct ArtistHomeActionButton: View {
+    let title: String
+    let systemName: String
+    var prominent = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 16)
+                Text(title)
+                    .font(BeansFont.appFont(13, .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            .foregroundStyle(prominent ? Color.white : Color.beansLabel)
+            .frame(maxWidth: .infinity, minHeight: 42)
+            .padding(.horizontal, 8)
+            .background {
+                if prominent {
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .fill(Color.beansAmber)
+                } else {
+                    BeansSurface(shape: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                }
+            }
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
     }
 }

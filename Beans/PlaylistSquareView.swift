@@ -111,7 +111,7 @@ struct PlaylistSquareView: View {
 
                             Color.clear.frame(height: 100)
                         }
-                        .padding(.horizontal, isNativeClean ? 20 : 16)
+                        .padding(.horizontal, 20)
                         .padding(.top, 2)
                     }
                     .beansScrollIndicatorsHidden()
@@ -156,6 +156,10 @@ struct PlaylistSquareView: View {
         }
         // 保留系统搜索栏，但让顶部导航区域随滚动内容透明化，歌单封面可以自然透出。
         .beansHomeNavigationBarTransparent()
+    }
+
+    private var largePlaylistColumns: [GridItem] {
+        [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
     }
 
     private var headerTitle: some View {
@@ -227,13 +231,13 @@ struct PlaylistSquareView: View {
 
     private var playlistGrid: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 16)],
+            columns: largePlaylistColumns,
             alignment: .center,
-            spacing: 18
+            spacing: 20
         ) {
             ForEach(visiblePlaylists) { playlist in
                 NavigationLink(destination: PlaylistView(playlist: playlist)) {
-                    playlistCard(playlist, showsContainer: false)
+                    largePlaylistCard(playlist)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .buttonStyle(GlassPressButtonStyle(scale: 0.97))
@@ -253,17 +257,17 @@ struct PlaylistSquareView: View {
 
     private var playlistLoadingGrid: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 16)],
+            columns: largePlaylistColumns,
             alignment: .center,
-            spacing: 18
+            spacing: 20
         ) {
             ForEach(0..<6, id: \.self) { index in
-                VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .center, spacing: 8) {
                     BeansShimmerSkeleton(cornerRadius: isNativeClean ? 14 : 16)
                         .aspectRatio(1, contentMode: .fit)
                     BeansShimmerSkeleton(cornerRadius: 5)
                         .frame(height: 12)
-                        .frame(maxWidth: index.isMultiple(of: 3) ? 112 : 138, alignment: .leading)
+                        .frame(maxWidth: index.isMultiple(of: 3) ? 112 : 138, alignment: .center)
                     BeansShimmerSkeleton(cornerRadius: 5)
                         .frame(width: 86, height: 10)
                 }
@@ -322,6 +326,39 @@ struct PlaylistSquareView: View {
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
+    private func largePlaylistCard(_ playlist: Playlist) -> some View {
+        GeometryReader { proxy in
+            VStack(spacing: 8) {
+                CoverImage(url: playlist.coverURL, size: proxy.size.width, cornerRadius: 14)
+                Text(playlist.name)
+                    .font(BeansFont.appFont(14, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                Text([sourceDisplayName(playlist.source), playlist.creatorName]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " · "))
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .frame(width: proxy.size.width, alignment: .top)
+        }
+        .aspectRatio(0.78, contentMode: .fit)
+        .contentShape(Rectangle())
+    }
+
+    private func sourceDisplayName(_ source: SongSource) -> String {
+        switch source {
+        case .netease: return "网易云"
+        case .qq: return "QQ音乐"
+        case .kugou: return "酷狗"
+        case .kuwo: return "酷我"
+        case .migu: return "咪咕"
+        }
+    }
+
     private func formatPlaylistPlayCount(_ count: Int) -> String {
         if count >= 100_000_000 { return String(format: "%.1f亿", Double(count) / 100_000_000) }
         if count >= 10_000 { return String(format: "%.1f万", Double(count) / 10_000) }
@@ -337,13 +374,13 @@ struct PlaylistSquareView: View {
                 EmptyStateView(icon: "magnifyingglass", text: beansLocalized("没有找到相关歌单", "No matching playlists found"))
             } else {
                 LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 16)],
+                    columns: largePlaylistColumns,
                     alignment: .center,
-                    spacing: 18
+                    spacing: 20
                 ) {
                     ForEach(searchResults) { playlist in
                         NavigationLink(destination: PlaylistView(playlist: playlist)) {
-                            playlistCard(playlist)
+                            largePlaylistCard(playlist)
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
                         .buttonStyle(GlassPressButtonStyle(scale: 0.97))

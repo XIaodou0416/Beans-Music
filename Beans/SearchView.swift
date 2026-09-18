@@ -1239,7 +1239,7 @@ struct SearchView: View {
             provider: selectedProvider,
             resultType: selectedType
         )
-        if let cached = searchResultCache[cacheKey] {
+        if let cached = searchResultCache[cacheKey], cacheEntryHasResults(cached, for: selectedType) {
             songResults = cached.songs
             artistResults = cached.artists
             albumResults = cached.albums
@@ -1353,6 +1353,17 @@ struct SearchView: View {
             }
         }
         await searchTask?.value
+    }
+
+    private func cacheEntryHasResults(_ entry: SearchResultCacheEntry, for type: SearchResultType) -> Bool {
+        switch type {
+        case .all:
+            return !entry.songs.isEmpty || !entry.artists.isEmpty || !entry.albums.isEmpty || !entry.playlists.isEmpty
+        case .song: return !entry.songs.isEmpty
+        case .artist: return !entry.artists.isEmpty
+        case .album: return !entry.albums.isEmpty
+        case .playlist: return !entry.playlists.isEmpty
+        }
     }
 
     private var playlistResultsArea: some View {
