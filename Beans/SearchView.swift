@@ -1239,7 +1239,11 @@ struct SearchView: View {
             provider: selectedProvider,
             resultType: selectedType
         )
-        if let cached = searchResultCache[cacheKey], cacheEntryHasResults(cached, for: selectedType) {
+        // 歌单结果不复用搜索页内缓存。QQ 歌单的服务端偶发返回空列表，
+        // 缓存会让用户停留在“暂无”而无法走与精选页相同的实时请求。
+        if selectedType != .playlist,
+           let cached = searchResultCache[cacheKey],
+           cacheEntryHasResults(cached, for: selectedType) {
             songResults = cached.songs
             artistResults = cached.artists
             albumResults = cached.albums
@@ -1326,12 +1330,11 @@ struct SearchView: View {
                         searchResultCache[cacheKey] = SearchResultCacheEntry(songs: [], artists: [], albums: albums, playlists: [])
                     }
                 case .playlist:
-                    let playlists = try await catalogPlaylistsThrowing(keyword: trimmed, provider: selectedProvider, limit: 100)
+                    let playlists = await livePlaylistSearch(keyword: trimmed, provider: selectedProvider, limit: 100)
                     guard !Task.isCancelled, searchRequestID == requestID else { return }
                     await MainActor.run {
                         guard searchRequestID == requestID else { return }
                         playlistResults = playlists
-                        searchResultCache[cacheKey] = SearchResultCacheEntry(songs: [], artists: [], albums: [], playlists: playlists)
                     }
                 }
                 let count = await MainActor.run {
@@ -1353,6 +1356,26 @@ struct SearchView: View {
             }
         }
         await searchTask?.value
+    }
+
+    /// 歌单分类页始终使用实时结果；QQ 分支与精选页使用相同的 API，
+    /// 并在短暂空响应时做一次轻量重试，避免切换分类后误显示“暂无”。
+    private func livePlaylistSearch(
+        keyword: String,
+        provider: SearchCatalogProvider,
+        limit: Int
+    ) async -> [Playlist] {
+        if provider == .qq {
+            for attempt in 0..<2 {
+                let playlists = (try? await QQMusicAPI.shared.searchPlaylists(keyword: keyword, limit: limit)) ?? []
+                if !playlists.isEmpty || Task.isCancelled { return playlists }
+                if attempt == 0 {
+                    try? await Task.sleep(nanoseconds: 220_000_000)
+                }
+            }
+            return []
+        }
+        return await catalogPlaylists(keyword: keyword, provider: provider, limit: limit)
     }
 
     private func cacheEntryHasResults(_ entry: SearchResultCacheEntry, for type: SearchResultType) -> Bool {
