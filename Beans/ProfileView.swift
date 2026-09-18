@@ -1928,11 +1928,14 @@ struct SettingsView: View {
 
     private var settingsScrollContent: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
-                settingsSearchField
-                coreSettingsGroup
-                playbackSettingsGroup
-                utilitySettingsGroup
+            VStack(alignment: .leading, spacing: 20) {
+                // Keep each large settings group type-erased. Older SwiftUI
+                // runtimes can overflow while decoding the deeply nested
+                // generic metadata produced by the lazy stack.
+                AnyView(settingsSearchField)
+                AnyView(coreSettingsGroup)
+                AnyView(playbackSettingsGroup)
+                AnyView(utilitySettingsGroup)
                 if !hasSettingsSearchResults {
                     Text("没有找到相关设置")
                         .font(BeansFont.appFont(14))
