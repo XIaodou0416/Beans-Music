@@ -214,7 +214,10 @@ struct ArtistHomeSheet: View {
                                 Text("\(index + 1)")
                                     .font(BeansFont.appFont(13, .semibold, .rounded))
                                     .foregroundStyle(index < 3 ? Color.beansAmber : Color.beansComment)
-                                    .frame(width: 22)
+                                    .monospacedDigit()
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                    .frame(width: 32, alignment: .trailing)
                                 CoverImage(url: song.coverURL, song: song, size: 40, cornerRadius: 8)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(song.name)
@@ -318,7 +321,7 @@ struct ArtistHomeSheet: View {
         let cachedEntry = cache.cached(for: cacheKey)
         if let cached = cachedEntry {
             artist = cached.artist ?? artist
-            hotSongs = cached.songs
+            hotSongs = songsCreditedToCurrentArtist(cached.songs)
             albums = cached.albums
             loading = false
             errorMessage = nil
@@ -343,7 +346,7 @@ struct ArtistHomeSheet: View {
         // other section refreshes in the background.
         if let cached = cachedEntry {
             if hotSongs.isEmpty, !cached.songs.isEmpty {
-                hotSongs = cached.songs
+                hotSongs = songsCreditedToCurrentArtist(cached.songs)
             }
             if albums.isEmpty, !cached.albums.isEmpty {
                 albums = cached.albums
@@ -558,16 +561,7 @@ struct ArtistHomeSheet: View {
         default:
             songs = []
         }
-        let normalized = artistName
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-            .lowercased()
-        let matched = songs.filter { song in
-            song.artists
-                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                .lowercased()
-                .contains(normalized)
-        }
-        let fetchedSongs = matched.isEmpty ? songs : matched
+        let fetchedSongs = songsCreditedToCurrentArtist(songs)
         if !fetchedSongs.isEmpty {
             hotSongs = fetchedSongs
         }
@@ -615,13 +609,36 @@ struct ArtistHomeSheet: View {
         value
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
-            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "（", with: "(")
+            .replacingOccurrences(of: "）", with: ")")
+            .replacingOccurrences(of: #"[(].*?[)]"#, with: "", options: .regularExpression)
+            .filter { !$0.isWhitespace && !$0.isPunctuation }
+    }
+
+    private func songsCreditedToCurrentArtist(_ songs: [Song]) -> [Song] {
+        let expected = Set([artistName, artist?.name]
+            .compactMap { $0 }
+            .flatMap(artistNameTokens))
+        guard !expected.isEmpty else { return songs }
+        let matched = songs.filter { song in
+            !expected.isDisjoint(with: Set(artistNameTokens(song.artists)))
+        }
+        return matched.isEmpty ? songs : matched
+    }
+
+    private func artistNameTokens(_ value: String) -> [String] {
+        let separators = CharacterSet(charactersIn: "/／,，、&＆+＋|｜;；")
+        return value
+            .components(separatedBy: separators)
+            .map(normalizedArtistName)
+            .filter { !$0.isEmpty }
     }
 
     /// 歌曲列表先到时立即落盘，不能因为专辑请求较慢或用户返回上一页而丢掉
     /// 已经成功加载的歌手页内容。
     private func persistLoadedContent() {
         guard !hotSongs.isEmpty || !albums.isEmpty else { return }
+        hotSongs = songsCreditedToCurrentArtist(hotSongs)
         ArtistHomeCache.shared.save(artist: artist, songs: hotSongs, albums: albums, for: cacheKey)
     }
 }

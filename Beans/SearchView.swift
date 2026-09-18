@@ -1050,56 +1050,28 @@ struct SearchView: View {
             } else if artistResults.isEmpty {
                 EmptyStateView(icon: "person.crop.circle", text: "\(provider.rawValue)未找到相关歌手")
             } else {
-                VStack {
-                    LazyVStack(spacing: 8) {
-                        HStack {
-                            Text(beansLocalized("找到 \(artistResults.count) 位 · \(provider.rawValue)", "Found \(artistResults.count) artists · \(provider.englishName)"))
-                                .font(BeansFont.appFont(12))
-                                .foregroundStyle(Color.beansComment)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
-                                .truncationMode(.tail)
-                                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                                .layoutPriority(1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 8)
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(beansLocalized("找到 \(artistResults.count) 位 · \(provider.rawValue)", "Found \(artistResults.count) artists · \(provider.englishName)"))
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .truncationMode(.tail)
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 18),
+                            GridItem(.flexible(), spacing: 18),
+                        ],
+                        spacing: 26
+                    ) {
                         ForEach(artistResults) { artist in
-                            Button {
-                                BeansHaptics.tap()
-                                searchController.dismissKeyboard()
-                                selectedArtist = artist
-                            } label: {
-                                HStack(spacing: 12) {
-                                    CoverImage(url: artist.coverURL, size: 46, cornerRadius: 23)
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(artist.name)
-                                            .font(BeansFont.appFont(15, .medium))
-                                            .foregroundStyle(Color.beansLabel)
-                                            .lineLimit(1)
-                                        Text("查看歌手主页")
-                                            .font(BeansFont.appFont(12))
-                                            .foregroundStyle(Color.beansComment)
-                                    }
-                                    Spacer(minLength: 8)
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Color.beansComment)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 8)
-                                .contentShape(Rectangle())
-                                .background {
-                                BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                }
-                            }
-                            .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+                            artistSearchResultCard(artist)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
-                    .padding(.bottom, 180)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 4)
+                .padding(.bottom, 180)
                 .overlay(alignment: .top) {
                     ProgressView()
                         .controlSize(.small)
@@ -1120,57 +1092,28 @@ struct SearchView: View {
             } else if albumResults.isEmpty {
                 EmptyStateView(icon: "square.stack", text: "\(provider.rawValue)未找到相关专辑")
             } else {
-                VStack {
-                    LazyVStack(spacing: 8) {
-                        HStack {
-                            Text(beansLocalized("找到 \(albumResults.count) 张 · \(provider.rawValue)", "Found \(albumResults.count) albums · \(provider.englishName)"))
-                                .font(BeansFont.appFont(12))
-                                .foregroundStyle(Color.beansComment)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
-                                .truncationMode(.tail)
-                                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                                .layoutPriority(1)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 8)
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(beansLocalized("找到 \(albumResults.count) 张 · \(provider.rawValue)", "Found \(albumResults.count) albums · \(provider.englishName)"))
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .truncationMode(.tail)
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 14),
+                            GridItem(.flexible(), spacing: 14),
+                        ],
+                        spacing: 22
+                    ) {
                         ForEach(albumResults) { album in
-                            Button {
-                                BeansHaptics.tap()
-                                searchController.dismissKeyboard()
-                                selectedAlbum = album
-                            } label: {
-                                HStack(spacing: 12) {
-                                    CoverImage(url: album.coverURL, size: 46, cornerRadius: 10)
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(album.name)
-                                            .font(BeansFont.appFont(15, .medium))
-                                            .foregroundStyle(Color.beansLabel)
-                                            .lineLimit(1)
-                                        Text(album.artistName.isEmpty ? "未知歌手" : album.artistName)
-                                            .font(BeansFont.appFont(12))
-                                            .foregroundStyle(Color.beansComment)
-                                    }
-                                    Spacer(minLength: 8)
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Color.beansComment)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 8)
-                                .contentShape(Rectangle())
-                                .background {
-                                BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                }
-                            }
-                            .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+                            albumSearchResultCard(album)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
-                    .padding(.bottom, 180)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 4)
+                .padding(.bottom, 180)
                 .overlay(alignment: .top) {
                     ProgressView()
                         .controlSize(.small)
@@ -1448,6 +1391,56 @@ struct SearchView: View {
         case .album: return !entry.albums.isEmpty
         case .playlist: return !entry.playlists.isEmpty
         }
+    }
+
+    private func artistSearchResultCard(_ artist: Artist) -> some View {
+        Button {
+            BeansHaptics.tap()
+            searchController.dismissKeyboard()
+            selectedArtist = artist
+        } label: {
+            VStack(spacing: 10) {
+                ZStack {
+                    BeansGlass(shape: Circle(), forceLiquid: true)
+                    CoverImage(url: artist.coverURL, size: 120, cornerRadius: 60)
+                        .clipShape(Circle())
+                }
+                .frame(width: 132, height: 132)
+                .overlay(Circle().stroke(Color.white.opacity(0.16), lineWidth: 1))
+                Text(artist.name)
+                    .font(BeansFont.appFont(14, .medium))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+    }
+
+    private func albumSearchResultCard(_ album: Album) -> some View {
+        Button {
+            BeansHaptics.tap()
+            searchController.dismissKeyboard()
+            selectedAlbum = album
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                CoverImage(url: album.coverURL, size: 148, cornerRadius: 16)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                Text(album.name)
+                    .font(BeansFont.appFont(14, .medium))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(1)
+                Text(album.artistName.isEmpty ? "未知歌手" : album.artistName)
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
     }
 
     private var playlistResultsArea: some View {

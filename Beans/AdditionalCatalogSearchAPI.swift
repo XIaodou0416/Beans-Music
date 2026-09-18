@@ -251,11 +251,28 @@ enum AdditionalCatalogSearchAPI {
     }
 
     static func searchKuwoAlbums(keyword: String, limit: Int = 40) async throws -> [Album] {
-        let root = try await kuwoSearch(keyword: keyword, limit: limit, type: "album")
-        return dictionaries(in: root["searchgroup"] ?? root["abslist"]).compactMap { item in
+        let root = try? await kuwoSearch(keyword: keyword, limit: limit, type: "album")
+        let direct = dictionaries(in: root?["searchgroup"] ?? root?["abslist"]).compactMap { item in
             guard let id = text(item["ALBUMID"] ?? item["id"] ?? item["albumid"]),
                   let name = text(item["ALBUM"] ?? item["album"] ?? item["name"]), !name.isEmpty else { return nil }
             return Album(id: id, name: name, artistName: text(item["ARTIST"] ?? item["artist"]) ?? "", coverURL: kuwoImageURL(imageText(in: item, keys: ["PICPATH", "albumpic", "albumPic", "pic", "img", "imgurl"])).flatMap(URL.init(string:)), source: .kuwo)
+        }
+        guard direct.isEmpty else { return direct }
+
+        let songs = (try? await searchKuwo(keyword: keyword, limit: limit)) ?? []
+        var seen = Set<String>()
+        return songs.compactMap { song in
+            let name = song.album.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+            let key = "\(name.localizedLowercase)|\(song.artists.localizedLowercase)"
+            guard seen.insert(key).inserted else { return nil }
+            return Album(
+                id: "kuwo-search-\(key)",
+                name: name,
+                artistName: song.artists,
+                coverURL: song.coverURL,
+                source: .kuwo
+            )
         }
     }
 
