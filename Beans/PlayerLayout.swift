@@ -255,7 +255,13 @@ enum VinylPlayerLayoutStore {
               let dict = try? JSONDecoder().decode([String: PlayerLayoutEntry].self, from: data) else {
             return [:]
         }
-        return dict
+        var migrated = dict
+        let lyricKey = PlayerLayoutPart.vinylLyricsText.rawValue
+        if migrated[lyricKey] == PlayerLayoutEntry(y: -52) {
+            migrated[lyricKey] = defaultEntry(for: .vinylLyricsText)
+            save(migrated)
+        }
+        return migrated
     }
 
     static func save(_ dict: [String: PlayerLayoutEntry]) {
@@ -284,7 +290,7 @@ enum VinylPlayerLayoutStore {
         case .vinylLyricsHeader:
             return PlayerLayoutEntry(y: 30)
         case .vinylLyricsText:
-            return PlayerLayoutEntry(y: -52)
+            return PlayerLayoutEntry(x: -18, y: -15)
         case .progress:
             return PlayerLayoutEntry(y: -20)
         case .controls:

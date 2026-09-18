@@ -318,10 +318,15 @@ enum AdditionalCatalogSearchAPI {
     static func lyric(for song: Song) async throws -> String {
         switch song.source {
         case .kuwo:
-            if let lyric = try? await kuwoLyric(songID: song.id), !lyric.isEmpty {
+            if let lyric = try? await kuwoFallbackLyric(songID: song.id),
+               !LyricParser.parse(lyric).isEmpty {
                 return lyric
             }
-            return try await kuwoFallbackLyric(songID: song.id)
+            let lyric = try await kuwoLyric(songID: song.id)
+            guard !LyricParser.parse(lyric).isEmpty else {
+                throw AdditionalCatalogSearchError.invalidResponse
+            }
+            return lyric
         case .migu:
             return try await miguLyric(songID: song.id, copyrightID: song.miguCopyrightId, directURL: song.miguLyricURL)
         default:
