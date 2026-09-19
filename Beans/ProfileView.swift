@@ -3983,9 +3983,6 @@ private struct TabVisibilitySettingsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
     @State private var visibility = BeansTabVisibility.load()
-    @AppStorage("beans.bottomSearchUsesAvatar") private var bottomSearchUsesAvatar = false
-    @AppStorage("beans.bottomAvatarAction") private var bottomAvatarActionRaw = BeansBottomAvatarAction.search.rawValue
-    @AppStorage("beans.headerAccessoryMode") private var headerAccessoryModeRaw = BeansHeaderAccessoryMode.avatar.rawValue
 
     private var visibleTabCount: Int {
         RootTab.bottomTabs.filter { visibility.isVisible($0) }.count
@@ -4005,38 +4002,6 @@ private struct TabVisibilitySettingsSheet: View {
                     tabToggle("我的", systemName: "person.crop.circle", tab: .profile)
                     Divider().overlay(Color.beansComment.opacity(0.15))
                     tabToggle("搜索", systemName: "magnifyingglass", tab: .search)
-                    Divider().overlay(Color.beansComment.opacity(0.15))
-                    tabToggle("设置", systemName: "gearshape", tab: .settings)
-                    Divider().overlay(Color.beansComment.opacity(0.15))
-                    Toggle(isOn: $bottomSearchUsesAvatar) {
-                        Label("搜索位置显示头像", systemImage: "person.crop.circle")
-                            .font(BeansFont.appFont(15))
-                            .foregroundStyle(Color.beansLabel)
-                    }
-                    .toggleStyle(.switch)
-                    .tint(Color.beansAmber)
-                    .padding(.vertical, 10)
-
-                    if bottomSearchUsesAvatar {
-                        Picker("头像点击后", selection: $bottomAvatarActionRaw) {
-                            ForEach(BeansBottomAvatarAction.allCases) { item in
-                                Text(item.title).tag(item.rawValue)
-                            }
-                        }
-                        .font(BeansFont.appFont(15))
-                        .tint(Color.beansAmber)
-                        .padding(.vertical, 8)
-                    }
-
-                    Divider().overlay(Color.beansComment.opacity(0.15))
-                    Picker("右上角入口", selection: $headerAccessoryModeRaw) {
-                        ForEach(BeansHeaderAccessoryMode.allCases) { item in
-                            Text(item.title).tag(item.rawValue)
-                        }
-                    }
-                    .font(BeansFont.appFont(15))
-                    .tint(Color.beansAmber)
-                    .padding(.vertical, 8)
                 }
                 .padding(16)
             }
