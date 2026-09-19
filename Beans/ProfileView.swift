@@ -1747,6 +1747,16 @@ struct SettingsView: View {
     var body: some View {
         ZStack {
             GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            if #unavailable(iOS 27) {
+                // iOS 26 does not consistently retain a sampling surface while
+                // this sheet is at its compact detent. Keep one transparent
+                // native glass layer behind the content so half-screen and
+                // expanded settings use the same liquid treatment.
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(.clear)
+                    .glassEffect(.clear, in: .rect(cornerRadius: 28))
+                    .allowsHitTesting(false)
+            }
             if settingsContentReady {
                 settingsScrollContent
             } else {
