@@ -318,14 +318,6 @@ struct RootView: View {
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
-        .overlay(alignment: .topTrailing) {
-            if BeansDeveloperAccess.isAuthorized && homeFrameMeterEnabled && selection == .discover {
-                DeveloperFrameRateOverlay()
-                    .padding(.top, 10)
-                    .padding(.trailing, 14)
-                    .zIndex(24)
-            }
-        }
         .onAppear {
             // 启动已完成：标记本次启动正常（供下次启动检测闪退）
             CrashReporter.shared.markLaunchCompleted()
@@ -334,6 +326,7 @@ struct RootView: View {
             }
             enableHighRefresh = true
             HighRefreshKeeper.shared.configure(enabled: true)
+            DeveloperFPSOverlayWindow.shared.setVisible(homeFrameMeterEnabled)
             normalizeTabSelection()
         }
         .onChange(of: enableHighRefresh) { _ in
@@ -341,6 +334,9 @@ struct RootView: View {
                 enableHighRefresh = true
             }
             HighRefreshKeeper.shared.configure(enabled: true)
+        }
+        .onChange(of: homeFrameMeterEnabled) { enabled in
+            DeveloperFPSOverlayWindow.shared.setVisible(enabled)
         }
         .onChange(of: disclaimerAccepted) { accepted in
             if accepted, ChangelogStore.shouldShowWhatsNew {

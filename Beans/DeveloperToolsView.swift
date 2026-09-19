@@ -78,9 +78,12 @@ struct DeveloperToolsView: View {
             }
             developerRow("界面帧间隔", value: String(format: "%.2f ms", refreshMonitor.frameInterval * 1_000))
             developerRow("低电量模式", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "已开启" : "未开启")
-            Toggle("主页显示实时刷新率", isOn: $homeFrameMeterEnabled)
+            Toggle("全局显示实时刷新率", isOn: $homeFrameMeterEnabled)
                 .font(BeansFont.appFont(13, .medium))
                 .tint(Color.beansAmber)
+                .onChange(of: homeFrameMeterEnabled) { enabled in
+                    DeveloperFPSOverlayWindow.shared.setVisible(enabled)
+                }
             Button {
                 HighRefreshKeeper.shared.configure(enabled: true)
                 refreshMonitor.restart()
@@ -214,21 +217,62 @@ struct DeveloperToolsView: View {
     }
 }
 
-struct DeveloperFrameRateOverlay: View {
+private struct DeveloperFrameRateOverlay: View {
     @StateObject private var monitor = BeansRefreshRateMonitor()
 
     var body: some View {
-        Text("\(Int(monitor.framesPerSecond.rounded())) FPS")
-            .font(.system(size: 12, weight: .bold, design: .monospaced))
-            .foregroundStyle(Color.beansLabel)
-            .monospacedDigit()
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
-            .overlay { Capsule().strokeBorder(Color.beansLabel.opacity(0.1), lineWidth: 0.8) }
-            .allowsHitTesting(false)
-            .onAppear { monitor.start() }
-            .onDisappear { monitor.stop() }
+        GeometryReader { proxy in
+            Text("\(Int(monitor.framesPerSecond.rounded())) FPS")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+                .padding(.horizontal, 10)
+                .frame(height: 28)
+                .background(.thinMaterial, in: Capsule())
+                .overlay { Capsule().strokeBorder(.white.opacity(0.24), lineWidth: 0.8) }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(.top, max(proxy.safeAreaInsets.top, 10))
+                .padding(.trailing, 14)
+        }
+        .allowsHitTesting(false)
+        .onAppear { monitor.start() }
+        .onDisappear { monitor.stop() }
+    }
+}
+
+/// 开发者设备上的独立浮层窗口，覆盖 Tab、sheet 和全屏播放器，保证帧率读数来自当前全局渲染循环。
+@MainActor
+final class DeveloperFPSOverlayWindow {
+    static let shared = DeveloperFPSOverlayWindow()
+
+    private var window: UIWindow?
+
+    func setVisible(_ requested: Bool) {
+        guard requested, BeansDeveloperAccess.isAuthorized else {
+            window?.isHidden = true
+            window = nil
+            return
+        }
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else { return }
+
+        if window?.windowScene !== scene {
+            window?.isHidden = true
+            window = nil
+        }
+        if window == nil {
+            let overlayWindow = UIWindow(windowScene: scene)
+            let controller = UIHostingController(rootView: DeveloperFrameRateOverlay())
+            controller.view.backgroundColor = .clear
+            controller.view.isUserInteractionEnabled = false
+            overlayWindow.rootViewController = controller
+            overlayWindow.backgroundColor = .clear
+            overlayWindow.isUserInteractionEnabled = false
+            overlayWindow.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue - 1)
+            window = overlayWindow
+        }
+        window?.isHidden = false
     }
 }
 

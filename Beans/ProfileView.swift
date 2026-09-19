@@ -810,7 +810,7 @@ struct ProfileView: View {
 
     /// 我的页底部赞助入口与赞助排行榜
     private var donationCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: donationExpanded ? 14 : 0) {
             Button {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                     donationExpanded.toggle()
@@ -819,27 +819,25 @@ struct ProfileView: View {
                     Task { await refreshRemoteDonorsIfNeeded() }
                 }
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     Image(systemName: "heart.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(Color.beansAmber)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("自愿赞助")
-                            .font(BeansFont.appFont(16, .bold))
-                            .foregroundStyle(Color.beansLabel)
-                        Text("感谢每一份愿意留下的支持")
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
-                    }
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.beansHighlight)
+                        .frame(width: 28)
+                    Text("自愿赞助")
+                        .font(BeansFont.appFont(14, .semibold))
+                        .foregroundStyle(Color.beansLabel)
                     Spacer()
                     Image(systemName: donationExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.beansComment)
                 }
+                .padding(16)
             }
             .buttonStyle(.plain)
 
             if donationExpanded {
+                VStack(alignment: .leading, spacing: 14) {
                 Image("DonationQR")
                 .resizable()
                 .scaledToFit()
@@ -938,9 +936,10 @@ struct ProfileView: View {
                     }
                 }
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
         }
-        .padding(16)
         .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)) }
         .beansCardShadow(radius: 9, y: 3)
     }
@@ -1362,8 +1361,6 @@ struct SettingsView: View {
     /// 第三方音源播放会员歌成功时提醒，默认开启
     @AppStorage("beans.showThirdPartyVIPNotice") private var showThirdPartyVIPNotice = true
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
-    /// 高刷新率请求，默认开启
-    @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
     @AppStorage("beans.audio.mixothers.v1") private var mixesWithOthers = false
     @AppStorage("beans.nowPlaying.enabled.v1") private var nowPlayingEnabled = true
     @AppStorage("beans.audioQuality") private var playbackAudioQualityRaw = BeansAudioQuality.hires.rawValue
@@ -1408,7 +1405,6 @@ struct SettingsView: View {
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @AppStorage("beans.home.dailySongsListStyle") private var dailySongsListStyle = false
-    @AppStorage(BeansEdgeBackGesture.enabledKey) private var edgeBackGestureEnabled = true
     @AppStorage("beans.profile.hideDonation") private var hideDonation = false
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
     @ObservedObject private var equalizer = BeansEqualizer.shared
@@ -1962,7 +1958,7 @@ struct SettingsView: View {
         }
     }
 
-    private var showAppearanceSettings: Bool { settingsMatches("主题 外观 背景 壁纸 字体 底栏 颜色 返回 滑动 手势 赞助") }
+    private var showAppearanceSettings: Bool { settingsMatches("主题 外观 背景 壁纸 字体 底栏 颜色 赞助") }
     private var showPlatformSettings: Bool { settingsMatches("平台 显示 网易云 QQ 酷狗") }
     private var showAudioSettings: Bool { settingsMatches("音源 音质 网络 Wi-Fi 蜂窝 导入") }
     private var showPlaybackSettings: Bool { settingsMatches("播放 触感 锁屏 灵动岛 收藏") }
@@ -2986,7 +2982,6 @@ struct SettingsView: View {
                 appearanceToggle("隐藏顶部平台列表", isOn: $hidePlatformPicker)
                 appearanceToggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
                 appearanceToggle("每日推荐使用旧版样式", isOn: $dailySongsListStyle)
-                appearanceToggle("开启双侧外滑返回", isOn: $edgeBackGestureEnabled)
                 appearanceToggle("隐藏自愿赞助", isOn: $hideDonation)
 
                 HStack {
@@ -3153,28 +3148,6 @@ struct SettingsView: View {
                 .tint(Color.beansAmber)
                 .onChange(of: nowPlayingEnabled) { value in
                     player.setNowPlayingEnabled(value)
-                }
-
-                Divider().overlay(Color.beansComment.opacity(0.15))
-
-                HStack(spacing: 12) {
-                    Image(systemName: "speedometer")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.beansAmber)
-                        .frame(width: 28)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("120Hz 高刷新")
-                            .font(BeansFont.appFont(15))
-                            .foregroundStyle(Color.beansLabel)
-                    }
-                    Spacer()
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 17))
-                        .foregroundStyle(Color.beansAmber)
-                }
-                .onAppear {
-                    enableHighRefresh = true
-                    HighRefreshKeeper.shared.configure(enabled: true)
                 }
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
@@ -3736,7 +3709,38 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 14)
+            catalogDivider
+            runtimeEnvironmentFooter
         }
+    }
+
+    private var runtimeEnvironmentFooter: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "iphone.gen3")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.beansComment)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("运行环境")
+                    .font(BeansFont.appFont(14, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                Text("\(UIDevice.current.model) · \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+                Text(runtimeVersionText)
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(Color.beansComment.opacity(0.8))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 14)
+    }
+
+    private var runtimeVersionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        return "Beans \(version) (Build \(build))"
     }
 
     private var developerToolsSection: some View {

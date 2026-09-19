@@ -178,7 +178,7 @@ struct ArtistHomeSheet: View {
                 .padding(.horizontal, 16)
             if !hotSongs.isEmpty {
                 HStack(spacing: 12) {
-                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, expandsHorizontally: true) {
                         BeansHaptics.tap()
                         player.play(songs: displayedHotSongs, startAt: 0)
                     }

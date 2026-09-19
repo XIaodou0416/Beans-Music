@@ -553,20 +553,17 @@ struct PlayPauseMorphIcon: View {
 /// iOS 16+ 使用 NavigationStack，iOS 15 回退 NavigationView（堆栈样式）
 struct BeansNavigationStack<Content: View>: View {
     @ViewBuilder var content: () -> Content
-    @AppStorage(BeansEdgeBackGesture.enabledKey) private var edgeBackGestureEnabled = true
 
     var body: some View {
         if #available(iOS 16, *) {
             NavigationStack {
                 content()
                     .background(BeansNavigationSurfaceClearer())
-                    .background(BeansEdgeBackGestureInstaller(enabled: edgeBackGestureEnabled))
             }
         } else {
             NavigationView {
                 content()
                     .background(BeansNavigationSurfaceClearer())
-                    .background(BeansEdgeBackGestureInstaller(enabled: edgeBackGestureEnabled))
             }
             .navigationViewStyle(.stack)
         }
@@ -577,184 +574,19 @@ struct BeansNavigationStack<Content: View>: View {
 struct BeansNavigationStackWithPath<Route: Hashable, Content: View>: View {
     @Binding var path: [Route]
     @ViewBuilder var content: () -> Content
-    @AppStorage(BeansEdgeBackGesture.enabledKey) private var edgeBackGestureEnabled = true
 
     var body: some View {
         if #available(iOS 16, *) {
             NavigationStack(path: $path) {
                 content()
                     .background(BeansNavigationSurfaceClearer())
-                    .background(BeansEdgeBackGestureInstaller(enabled: edgeBackGestureEnabled))
             }
         } else {
             NavigationView {
                 content()
                     .background(BeansNavigationSurfaceClearer())
-                    .background(BeansEdgeBackGestureInstaller(enabled: edgeBackGestureEnabled))
             }
             .navigationViewStyle(.stack)
-        }
-    }
-}
-
-enum BeansEdgeBackGesture {
-    static let enabledKey = "beans.navigation.edgeBack.enabled"
-}
-
-/// 让详情页支持从任一屏幕边缘向外滑动返回：左边向左，右边向右。
-private struct BeansEdgeBackGestureInstaller: UIViewControllerRepresentable {
-    let enabled: Bool
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        UIViewController()
-    }
-
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
-        context.coordinator.update(from: uiViewController, enabled: enabled)
-    }
-
-    static func dismantleUIViewController(_ uiViewController: UIViewController, coordinator: Coordinator) {
-        coordinator.detach()
-    }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        private enum StartEdge {
-            case left
-            case right
-        }
-
-        private weak var navigationController: UINavigationController?
-        private var panGesture: UIPanGestureRecognizer?
-        private var isEnabled = true
-        private var startEdge: StartEdge?
-        private var retryScheduled = false
-
-        func update(from host: UIViewController, enabled: Bool) {
-            DispatchQueue.main.async { [weak self, weak host] in
-                guard let self, let host else { return }
-                guard let navigationController = self.findNavigationController(from: host) else {
-                    self.retryAttach(from: host, enabled: enabled)
-                    return
-                }
-                self.attach(to: navigationController)
-                self.isEnabled = enabled
-                self.panGesture?.isEnabled = enabled
-                navigationController.interactivePopGestureRecognizer?.isEnabled = !enabled
-            }
-        }
-
-        func detach() {
-            panGesture.map { gesture in
-                gesture.view?.removeGestureRecognizer(gesture)
-            }
-            navigationController?.interactivePopGestureRecognizer?.isEnabled = true
-            navigationController = nil
-            panGesture = nil
-            startEdge = nil
-        }
-
-        private func attach(to navigationController: UINavigationController) {
-            guard self.navigationController !== navigationController else { return }
-            detach()
-            self.navigationController = navigationController
-            let gesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
-            gesture.delegate = self
-            gesture.cancelsTouchesInView = false
-            gesture.delaysTouchesBegan = false
-            gesture.maximumNumberOfTouches = 1
-            navigationController.view.addGestureRecognizer(gesture)
-            panGesture = gesture
-        }
-
-        private func findNavigationController(from controller: UIViewController) -> UINavigationController? {
-            if let navigationController = controller.navigationController {
-                return navigationController
-            }
-            var current: UIViewController? = controller
-            while let candidate = current {
-                if let navigationController = candidate as? UINavigationController {
-                    return navigationController
-                }
-                if let navigationController = candidate.navigationController {
-                    return navigationController
-                }
-                current = candidate.parent
-            }
-            guard let rootController = controller.view.window?.rootViewController else { return nil }
-            return findNavigationController(in: rootController)
-        }
-
-        private func findNavigationController(in controller: UIViewController) -> UINavigationController? {
-            if let navigationController = controller as? UINavigationController {
-                return navigationController
-            }
-            if let navigationController = controller.navigationController {
-                return navigationController
-            }
-            for child in controller.children {
-                if let navigationController = findNavigationController(in: child) {
-                    return navigationController
-                }
-            }
-            if let presented = controller.presentedViewController {
-                return findNavigationController(in: presented)
-            }
-            return nil
-        }
-
-        private func retryAttach(from host: UIViewController, enabled: Bool) {
-            guard !retryScheduled else { return }
-            retryScheduled = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self, weak host] in
-                guard let self, let host else { return }
-                self.retryScheduled = false
-                self.update(from: host, enabled: enabled)
-            }
-        }
-
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            guard isEnabled,
-                  let panGesture = gestureRecognizer as? UIPanGestureRecognizer,
-                  let navigationController,
-                  navigationController.viewControllers.count > 1 else { return false }
-
-            let location = panGesture.location(in: navigationController.view)
-            let velocity = panGesture.velocity(in: navigationController.view)
-            let edgeInset: CGFloat = 28
-            let isHorizontal = abs(velocity.x) > max(abs(velocity.y), 1) * 1.25
-            let outwardFromLeft = location.x <= edgeInset && velocity.x < 0
-            let outwardFromRight = location.x >= navigationController.view.bounds.width - edgeInset && velocity.x > 0
-            return isHorizontal && (outwardFromLeft || outwardFromRight)
-        }
-
-        func gestureRecognizer(
-            _ gestureRecognizer: UIGestureRecognizer,
-            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
-        ) -> Bool {
-            true
-        }
-
-        @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
-            guard let navigationController else { return }
-            switch gesture.state {
-            case .began:
-                let x = gesture.location(in: navigationController.view).x
-                startEdge = x <= 28 ? .left : .right
-            case .ended:
-                let translation = gesture.translation(in: navigationController.view).x
-                let completedFromLeft = startEdge == .left && translation < -64
-                let completedFromRight = startEdge == .right && translation > 64
-                startEdge = nil
-                guard completedFromLeft || completedFromRight else { return }
-                BeansHaptics.tap()
-                navigationController.popViewController(animated: true)
-            case .cancelled, .failed:
-                startEdge = nil
-            default:
-                break
-            }
         }
     }
 }
@@ -1368,6 +1200,7 @@ struct GlassButton: View {
     var systemName: String?
     var prominent = false
     var forceLiquid = false
+    var expandsHorizontally = false
     let action: () -> Void
 
     private var isNativeClean: Bool {
@@ -1387,6 +1220,7 @@ struct GlassButton: View {
             .foregroundStyle(prominent ? Color.white : Color.beansLabel)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
+            .frame(maxWidth: expandsHorizontally ? .infinity : nil)
             .background {
                 if prominent {
                     ZStack {

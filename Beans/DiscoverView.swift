@@ -2101,7 +2101,7 @@ struct QQTopListDetailView: View {
                     List {
                         Section {
                             HStack(spacing: 12) {
-                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, expandsHorizontally: true) {
                                     guard !filteredTracks.isEmpty else { return }
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
@@ -2217,7 +2217,7 @@ struct QQPlaylistSongsSheet: View {
                     List {
                         Section {
                             HStack(spacing: 12) {
-                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, expandsHorizontally: true) {
                                     guard !filteredTracks.isEmpty else { return }
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
@@ -2312,7 +2312,7 @@ struct DailySongsSheet: View {
                     }
                     Section {
                         HStack(spacing: 12) {
-                            GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                            GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, expandsHorizontally: true) {
                                 guard !filteredSongs.isEmpty else { return }
                                 BeansHaptics.tap()
                                 player.play(songs: filteredSongs, startAt: 0)
@@ -2464,7 +2464,7 @@ struct TopListDetailView: View {
                         header
                         Section {
                             HStack(spacing: 12) {
-                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, expandsHorizontally: true) {
                                     guard !filteredTracks.isEmpty else { return }
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
@@ -2615,7 +2615,7 @@ struct KugouTopListDetailView: View {
                         header
                         Section {
                             HStack(spacing: 12) {
-                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, expandsHorizontally: true) {
                                     guard !filteredTracks.isEmpty else { return }
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)

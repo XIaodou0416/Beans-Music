@@ -1755,7 +1755,7 @@ private struct BeansSearchSongRow: View {
                         .foregroundStyle(Color.beansComment)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    Text("来源：\(sourceName) · 音质：待检测")
+                    Text("来源：\(sourceName)")
                         .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment.opacity(0.72))
                         .lineLimit(1)
