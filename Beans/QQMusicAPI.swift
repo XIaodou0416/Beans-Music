@@ -419,7 +419,8 @@ final class QQMusicAPI {
                 coverURL: image ?? Self.photoURL(mid),
                 source: .qq,
                 trackCount: Self.integerValue(item["total"] ?? item["songnum"] ?? item["song_count"]),
-                releaseType: item["type"] as? String ?? item["albumType"] as? String
+                releaseType: item["type"] as? String ?? item["albumType"] as? String,
+                releaseDate: Album.releaseDateText(from: item["publicTime"] ?? item["publishDate"] ?? item["publish_time"])
             ))
         }
         return albums
@@ -2137,7 +2138,8 @@ final class QQMusicAPI {
                 coverURL: Self.normalizedQQImageURL(item["pic"]) ?? Self.photoURL(albumMid.isEmpty ? nil : albumMid),
                 source: .qq,
                 trackCount: item["songnum"] as? Int,
-                releaseType: item["type"] as? String ?? item["albumType"] as? String
+                releaseType: item["type"] as? String ?? item["albumType"] as? String,
+                releaseDate: Album.releaseDateText(from: item["publicTime"] ?? item["publishDate"] ?? item["publish_time"])
             ))
         }
         return albums

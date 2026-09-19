@@ -294,26 +294,24 @@ struct ArtistHomeSheet: View {
                     .padding(.horizontal, 16)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 14) {
+                    LazyHStack(alignment: .top, spacing: 16) {
                         ForEach(albums) { album in
                             Button {
                                 openAlbum(album)
                             } label: {
-                                VStack(alignment: .leading, spacing: 7) {
-                                    CoverImage(url: album.coverURL, size: 128, cornerRadius: 12)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    CoverImage(url: album.coverURL, size: 160, cornerRadius: 12)
                                     Text(album.name)
                                         .font(BeansFont.appFont(13, .medium))
                                         .foregroundStyle(Color.beansLabel)
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
-                                        .frame(width: 128, alignment: .leading)
-                                    Text(album.releaseType?.isEmpty == false
-                                        ? album.releaseType!
-                                        : (album.trackCount.map(beansSongCountText) ?? ""))
+                                        .frame(width: 160, alignment: .leading)
+                                    Text(album.releaseCaption)
                                         .font(BeansFont.appFont(11))
                                         .foregroundStyle(Color.beansComment)
                                         .lineLimit(1)
-                                        .frame(width: 128, alignment: .leading)
+                                        .frame(width: 160, alignment: .leading)
                                 }
                                 .contentShape(Rectangle())
                             }
@@ -416,6 +414,8 @@ struct ArtistHomeSheet: View {
             let fetchedAlbums = await albumsTask
             if !fetchedAlbums.isEmpty {
                 self.albums = fetchedAlbums
+            } else {
+                self.albums = await searchedAlbumsForCurrentArtist()
             }
             loading = false
         } catch {
@@ -610,7 +610,7 @@ struct ArtistHomeSheet: View {
         case .migu:
             candidates = (try? await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: artistName, limit: 60)) ?? []
         case .netease:
-            return []
+            candidates = (try? await NetEaseAPI.shared.searchAlbums(keyword: artistName, limit: 60)) ?? []
         }
         let expected = normalizedArtistName(artistName)
         guard !expected.isEmpty else { return Array(candidates.prefix(60)) }

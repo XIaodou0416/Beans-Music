@@ -1820,119 +1820,120 @@ struct AlbumDetailView: View {
             } else if let errorMessage {
                 ErrorStateView(message: errorMessage) { Task { await load() } }
             } else {
-                List {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 14) {
-                            CoverImage(url: album.coverURL, size: 92, cornerRadius: 16)
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(album.name)
-                                    .font(BeansFont.appFont(19, .bold))
-                                    .foregroundStyle(Color.beansLabel)
-                                    .lineLimit(2)
-                                if album.artistName.isEmpty {
-                                    Text("未知歌手")
-                                        .font(BeansFont.appFont(13))
-                                        .foregroundStyle(Color.beansComment)
-                                } else {
-                                    Button {
-                                        BeansHaptics.tap()
-                                        showArtistHome = true
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Text(album.artistName)
-                                            Image(systemName: "chevron.right")
-                                                .font(.system(size: 10, weight: .semibold))
-                                        }
-                                        .font(BeansFont.appFont(13))
-                                        .foregroundStyle(Color.beansComment)
-                                        .lineLimit(1)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("打开 \(album.artistName) 的歌手主页")
-                                }
-                                Text(beansSongCountText(tracks.count))
-                                    .font(BeansFont.appFont(12))
-                                    .foregroundStyle(Color.beansComment)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        if !tracks.isEmpty {
-                            HStack(spacing: 10) {
-                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
-                                    player.play(songs: tracks, startAt: 0)
-                                }
-                                if downloadFeatureUnlocked, tracks.count > 1 {
-                                    GlassButton(title: "批量下载", systemName: "arrow.down.circle") {
-                                        BeansHaptics.tap()
-                                        showBatchDownload = true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.vertical, 10)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        albumHeader
 
-                    ForEach(Array(tracks.enumerated()), id: \.element.identityKey) { index, song in
-                        SongCell(song: song, glassRow: true, playbackContext: tracks, playbackIndex: index) {
-                            player.play(songs: tracks, startAt: index)
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                    }
-
-                    if !otherAlbums.isEmpty {
-                        Section {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(alignment: .top, spacing: 14) {
-                                    ForEach(otherAlbums) { item in
-                                        Button {
-                                            BeansHaptics.tap()
-                                            selectedOtherAlbum = item
-                                        } label: {
-                                            VStack(alignment: .leading, spacing: 7) {
-                                                CoverImage(url: item.coverURL, size: 128, cornerRadius: 12)
-                                                Text(item.name)
-                                                    .font(BeansFont.appFont(13, .medium))
-                                                    .foregroundStyle(Color.beansLabel)
-                                                    .lineLimit(2)
-                                                    .multilineTextAlignment(.leading)
-                                                    .frame(width: 128, alignment: .leading)
-                                                Text(item.releaseType?.isEmpty == false
-                                                    ? item.releaseType!
-                                                    : (item.trackCount.map(beansSongCountText) ?? ""))
-                                                    .font(BeansFont.appFont(11))
-                                                    .foregroundStyle(Color.beansComment)
-                                                    .lineLimit(1)
-                                                    .frame(width: 128, alignment: .leading)
-                                            }
-                                            .contentShape(Rectangle())
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 4)
+                        ForEach(Array(tracks.enumerated()), id: \.element.identityKey) { index, song in
+                            SongCell(song: song, glassRow: true, playbackContext: tracks, playbackIndex: index) {
+                                player.play(songs: tracks, startAt: index)
                             }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        } header: {
-                            Text("该歌手的其他专辑")
-                                .font(BeansFont.appFont(17, .bold))
-                                .foregroundStyle(Color.beansLabel)
-                                .textCase(nil)
                         }
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
+
+                        if !otherAlbums.isEmpty {
+                            otherAlbumsShelf
+                                .padding(.top, 20)
+                        }
                     }
+                    .padding(.top, 12)
+                    .padding(.bottom, 118)
                 }
-                .listStyle(.plain)
-                .beansScrollContentBackgroundHidden()
+                .beansScrollIndicatorsHidden()
             }
         }
         .navigationTitle(album.name)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var albumHeader: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                CoverImage(url: album.coverURL, size: 120, cornerRadius: 12)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(album.name)
+                        .font(BeansFont.appFont(16, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                        .lineLimit(3)
+                    if album.artistName.isEmpty {
+                        Text("未知歌手")
+                            .font(BeansFont.appFont(13))
+                            .foregroundStyle(Color.beansComment)
+                    } else {
+                        Button {
+                            BeansHaptics.tap()
+                            showArtistHome = true
+                        } label: {
+                            Text(album.artistName)
+                                .font(BeansFont.appFont(13, .medium))
+                                .foregroundStyle(Color.beansHighlight)
+                                .lineLimit(1)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("打开 \(album.artistName) 的歌手主页")
+                    }
+                    Text([beansSongCountText(tracks.count), album.releaseCaption]
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " · "))
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer(minLength: 0)
+            }
+            if !tracks.isEmpty {
+                HStack(spacing: 10) {
+                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                        player.play(songs: tracks, startAt: 0)
+                    }
+                    if downloadFeatureUnlocked, tracks.count > 1 {
+                        GlassButton(title: "批量下载", systemName: "arrow.down.circle") {
+                            BeansHaptics.tap()
+                            showBatchDownload = true
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
+    }
+
+    private var otherAlbumsShelf: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("该歌手的其他专辑")
+                .font(BeansFont.appFont(17, .bold))
+                .foregroundStyle(Color.beansLabel)
+                .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 16) {
+                    ForEach(otherAlbums) { item in
+                        Button {
+                            BeansHaptics.tap()
+                            selectedOtherAlbum = item
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                CoverImage(url: item.coverURL, size: 160, cornerRadius: 12)
+                                Text(item.name)
+                                    .font(BeansFont.appFont(13, .medium))
+                                    .foregroundStyle(Color.beansLabel)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(width: 160, alignment: .leading)
+                                Text(item.releaseCaption)
+                                    .font(BeansFont.appFont(11))
+                                    .foregroundStyle(Color.beansComment)
+                                    .lineLimit(1)
+                                    .frame(width: 160, alignment: .leading)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
+            }
+        }
     }
 
     private func load() async {
