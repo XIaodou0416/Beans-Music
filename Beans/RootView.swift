@@ -199,8 +199,7 @@ struct RootView: View {
     /// interface is being presented. Keep their identity fixed; tab visibility
     /// remains configurable on the newer host.
     private var usesStableTabHierarchy: Bool {
-        if #available(iOS 27, *) { return false }
-        return true
+        false
     }
 
     private func normalizeTabSelection() {
@@ -602,11 +601,7 @@ struct RootView: View {
     @available(iOS 26.0, *)
     @ViewBuilder
     private func nativeTabContent(isPadLandscape: Bool) -> some View {
-        if #available(iOS 27, *) {
-            dynamicNativeTabContent(isPadLandscape: isPadLandscape)
-        } else {
-            stableNativeTabContent(isPadLandscape: isPadLandscape)
-        }
+        dynamicNativeTabContent(isPadLandscape: isPadLandscape)
     }
 
     /// This matches the fixed native tab tree used before tab visibility was
@@ -649,7 +644,7 @@ struct RootView: View {
         .tabBarMinimizeBehavior(isPadLandscape || player.currentSong == nil ? .never : .onScrollDown)
     }
 
-    @available(iOS 27.0, *)
+    @available(iOS 26.0, *)
     private func dynamicNativeTabContent(isPadLandscape: Bool) -> some View {
         TabView(selection: $selection) {
             if tabVisibility.discover {

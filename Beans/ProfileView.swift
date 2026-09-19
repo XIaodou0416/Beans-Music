@@ -132,13 +132,8 @@ struct ProfileView: View {
     }
 
     private func settingsScreen(_ screen: SettingsView) -> some View {
-        Group {
-            if #available(iOS 27, *) {
-                screen.ignoresSafeArea(.all)
-            } else {
-                screen
-            }
-        }
+        screen
+            .ignoresSafeArea(.all)
         .environmentObject(theme)
         .environmentObject(player)
         .environmentObject(auth)
@@ -1778,7 +1773,7 @@ struct SettingsView: View {
         }
         .environment(\.beansSettingsPerformanceMode, false)
         .preferredColorScheme(themeMode.colorScheme)
-        .simultaneousGesture(settingsEdgeDismissGesture, including: .all)
+        .highPriorityGesture(settingsEdgeDismissGesture, including: .all)
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
             if defersSettingsContentForCompatibility {
@@ -1940,14 +1935,13 @@ struct SettingsView: View {
         dismiss()
     }
 
-    /// A full-screen settings cover has no system interactive-pop gesture.
-    /// Keep the familiar left-edge swipe available on pre-iOS 27 devices even
-    /// when their navigation bar temporarily fails to render its back control.
+    /// Keep the familiar left-edge swipe available on every system version,
+    /// including native navigation hosts that do not expose the gesture from a
+    /// full-screen cover.
     private var settingsEdgeDismissGesture: some Gesture {
         DragGesture(minimumDistance: 12, coordinateSpace: .global)
             .onEnded { value in
-                if #available(iOS 27, *) { return }
-                guard value.startLocation.x <= 28 else { return }
+                guard value.startLocation.x <= 42 else { return }
                 guard value.translation.width >= 72 else { return }
                 guard abs(value.translation.width) > abs(value.translation.height) * 1.35 else { return }
                 closeSettings()
@@ -3977,8 +3971,9 @@ private struct SettingsCatalogGroup<Content: View>: View {
     }
 }
 
-/// iOS 27 uses the native navigation host. Earlier releases retain the stable
-/// settings header so their full-screen presentation always has a close control.
+/// iOS 27 keeps the native navigation host. Earlier releases use a plain
+/// full-screen surface so settings matches the home page without a second
+/// legacy navigation header.
 private struct SettingsNavigationContainer<Content: View>: View {
     let onClose: () -> Void
     @ViewBuilder let content: () -> Content
@@ -3989,28 +3984,7 @@ private struct SettingsNavigationContainer<Content: View>: View {
                 content()
             }
         } else {
-            VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    Button(action: onClose) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(width: 42, height: 42)
-                    }
-                    .buttonStyle(.plain)
-
-                    Text("设置")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.beansLabel)
-
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 8)
-                .frame(height: 52)
-                .background(Color.clear)
-
-                content()
-            }
+            content()
         }
     }
 }

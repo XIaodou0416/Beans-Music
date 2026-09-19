@@ -285,11 +285,9 @@ struct PlayerView: View {
     private func toggleLocalFavorite(_ song: Song) {
         favoriteCandidate = song
         if usesOfficialFavoriteDestination(for: song) {
-            if favorites.isOfficiallyLiked(song) {
-                showOfficialFavoriteActionPicker = true
-            } else {
-                beginOfficialFavorite(song)
-            }
+            // Always ask first so a song can be added to another official
+            // playlist without forcing the user through the cancel flow.
+            showOfficialFavoriteActionPicker = true
         } else {
             if localLibrary.containsSong(song) {
                 removeLocalFavorite(song)
