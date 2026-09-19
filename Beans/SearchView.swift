@@ -1844,7 +1844,7 @@ struct AlbumDetailView: View {
                     .listRowSeparator(.hidden)
 
                     ForEach(Array(tracks.enumerated()), id: \.element.identityKey) { index, song in
-                        SongCell(song: song, groupedRow: true, playbackContext: tracks, playbackIndex: index) {
+                        SongCell(song: song, glassRow: true, playbackContext: tracks, playbackIndex: index) {
                             player.play(songs: tracks, startAt: index)
                         }
                         .listRowBackground(Color.clear)
@@ -1853,7 +1853,6 @@ struct AlbumDetailView: View {
                 }
                 .listStyle(.plain)
                 .beansScrollContentBackgroundHidden()
-                .beansGroupedSongListSurface()
             }
         }
         .navigationTitle(album.name)

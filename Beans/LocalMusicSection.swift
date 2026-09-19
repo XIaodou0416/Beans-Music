@@ -447,7 +447,7 @@ struct LocalPlaylistDetailSheet: View {
                                             Image(systemName: selectedSongKeys.contains(song.identityKey) ? "checkmark.circle.fill" : "circle")
                                                 .font(.system(size: 20, weight: .semibold))
                                                 .foregroundStyle(selectedSongKeys.contains(song.identityKey) ? Color.beansAmber : Color.beansComment)
-                                            SongCell(song: song, groupedRow: true) {
+                                            SongCell(song: song, glassRow: true) {
                                                 toggleSelection(song)
                                             }
                                         }
@@ -458,7 +458,7 @@ struct LocalPlaylistDetailSheet: View {
                                         .listRowBackground(Color.clear)
                                         .listRowSeparator(.hidden)
                                     } else {
-                                        SongCell(song: song, groupedRow: true, playbackContext: playlist.songs, playbackIndex: index) {
+                                        SongCell(song: song, glassRow: true, playbackContext: playlist.songs, playbackIndex: index) {
                                             player.play(songs: playlist.songs, startAt: index)
                                         }
                                         .listRowBackground(Color.clear)
@@ -478,7 +478,6 @@ struct LocalPlaylistDetailSheet: View {
                     }
                     .beansScrollContentBackgroundHidden()
                     .listStyle(.plain)
-                    .beansGroupedSongListSurface()
                     .searchable(text: $playlistSearchText, placement: .navigationBarDrawer(displayMode: .always), prompt: LocalizedStringKey("搜索本地歌单歌曲"))
                 } else {
                     EmptyStateView(icon: "music.note.list", text: "歌单不存在或已删除")

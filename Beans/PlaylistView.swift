@@ -61,7 +61,7 @@ struct PlaylistView: View {
                             .listRowSeparator(.hidden)
                         Section {
                             ForEach(Array(displayedTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, groupedRow: true, playbackContext: displayedTracks, playbackIndex: index) {
+                                SongCell(song: song, glassRow: true, playbackContext: displayedTracks, playbackIndex: index) {
                                     player.play(songs: displayedTracks, startAt: index)
                                 }
                                 .listRowBackground(Color.clear)
@@ -71,7 +71,6 @@ struct PlaylistView: View {
                     }
                     .beansScrollContentBackgroundHidden()
                     .listStyle(.plain)
-                    .beansGroupedSongListSurface()
                 }
             }
             }

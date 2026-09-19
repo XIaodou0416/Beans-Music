@@ -706,16 +706,6 @@ extension View {
         if #available(iOS 16, *) { self.scrollContentBackground(.hidden) } else { self }
     }
 
-    /// 详情页歌曲列表使用一个连续的背景表面，避免每一首歌曲各自叠加玻璃层。
-    func beansGroupedSongListSurface() -> some View {
-        self
-            .padding(.horizontal, 12)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-
     /// 在歌单、排行榜等详情页底部保留可用的迷你播放器。
     func beansDetailMiniPlayer() -> some View {
         modifier(BeansDetailMiniPlayerModifier())
