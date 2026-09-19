@@ -3983,6 +3983,7 @@ private struct TabVisibilitySettingsSheet: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
     @State private var visibility = BeansTabVisibility.load()
+    @AppStorage("beans.headerAccessoryMode") private var headerAccessoryModeRaw = BeansHeaderAccessoryMode.avatar.rawValue
 
     private var visibleTabCount: Int {
         RootTab.bottomTabs.filter { visibility.isVisible($0) }.count
@@ -4002,6 +4003,15 @@ private struct TabVisibilitySettingsSheet: View {
                     tabToggle("我的", systemName: "person.crop.circle", tab: .profile)
                     Divider().overlay(Color.beansComment.opacity(0.15))
                     tabToggle("搜索", systemName: "magnifyingglass", tab: .search)
+                    Divider().overlay(Color.beansComment.opacity(0.15))
+                    Picker("右上角入口", selection: $headerAccessoryModeRaw) {
+                        ForEach(BeansHeaderAccessoryMode.allCases) { item in
+                            Text(item.title).tag(item.rawValue)
+                        }
+                    }
+                    .font(BeansFont.appFont(15))
+                    .tint(Color.beansAmber)
+                    .padding(.vertical, 8)
                 }
                 .padding(16)
             }

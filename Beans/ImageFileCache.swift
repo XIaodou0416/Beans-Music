@@ -152,27 +152,78 @@ struct BeansAvatarView: View {
 /// 各主页面共用的“我的”快捷入口，始终优先显示用户选择的本地头像。
 struct BeansProfileShortcutButton: View {
     @EnvironmentObject private var auth: AuthStore
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("beans.headerAccessoryMode") private var accessoryModeRaw = BeansHeaderAccessoryMode.avatar.rawValue
     var action: () -> Void
+
+    var body: some View {
+        Group {
+            switch BeansHeaderAccessoryMode(rawValue: accessoryModeRaw) ?? .avatar {
+            case .avatar:
+                Button {
+                    BeansHaptics.tap()
+                    action()
+                } label: {
+                    avatarLabel
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.92))
+                .accessibilityLabel(beansLocalized("我的", "Profile"))
+            case .themeToggle:
+                BeansThemeToggleButton(colorScheme: colorScheme)
+            case .hidden:
+                EmptyView()
+            }
+        }
+    }
+
+    private var avatarLabel: some View {
+        BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 38, useCustom: true)
+            .frame(width: 38, height: 38)
+            .overlay {
+                Circle().strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
+            }
+            .padding(4)
+            .background {
+                BeansGlass(shape: Circle(), forceLiquid: true)
+            }
+            .clipShape(Circle())
+            .contentShape(Circle())
+    }
+}
+
+private struct BeansThemeToggleButton: View {
+    let colorScheme: ColorScheme
+    @State private var touchLocation = CGPoint.zero
 
     var body: some View {
         Button {
             BeansHaptics.tap()
-            action()
+            NotificationCenter.default.post(
+                name: .beansThemeToggleRequested,
+                object: BeansThemeToggleRequest(
+                    location: touchLocation == .zero
+                        ? CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY)
+                        : touchLocation
+                )
+            )
         } label: {
-            BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 38, useCustom: true)
+            Image(systemName: colorScheme == .dark ? "sun.max.fill" : "moon.stars.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color.beansLabel)
                 .frame(width: 38, height: 38)
-                .overlay {
-                    Circle().strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
-                }
-                .padding(4)
                 .background {
                     BeansGlass(shape: Circle(), forceLiquid: true)
                 }
-                .clipShape(Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.92))
-        .accessibilityLabel(beansLocalized("我的", "Profile"))
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { value in
+                    touchLocation = value.startLocation
+                }
+        )
+        .accessibilityLabel(beansLocalized("切换浅深色模式", "Toggle light and dark mode"))
     }
 }
 

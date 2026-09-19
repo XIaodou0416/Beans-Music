@@ -62,6 +62,30 @@ enum RootTab: String, CaseIterable, Identifiable {
     static let bottomTabs: [RootTab] = [.discover, .playlists, .library, .profile, .search]
 }
 
+enum BeansHeaderAccessoryMode: String, CaseIterable, Identifiable {
+    case avatar
+    case themeToggle
+    case hidden
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .avatar: return "头像"
+        case .themeToggle: return "浅深色切换"
+        case .hidden: return "隐藏"
+        }
+    }
+}
+
+struct BeansThemeToggleRequest {
+    let location: CGPoint
+}
+
+extension Notification.Name {
+    static let beansThemeToggleRequested = Notification.Name("beans.themeToggleRequested")
+}
+
 private struct SidebarPlaylistGroup: Identifiable {
     let id: String
     let title: String
@@ -130,6 +154,7 @@ struct RootView: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var favorites: FavoritesStore
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
@@ -177,6 +202,9 @@ struct RootView: View {
     @State private var showHomePlatformMenu = false
     @State private var sidebarRemotePlaylists: [Playlist] = []
     @State private var sidebarLocalPlaylist: LocalPlaylist?
+    @State private var themeRevealSnapshot: UIImage?
+    @State private var themeRevealOrigin = CGPoint.zero
+    @State private var themeRevealProgress: CGFloat = 0
 
     private var tabIconStyle: BeansTabIconStyle {
         BeansTabIconStyle(rawValue: tabIconStyleRaw) ?? .sfSymbols
@@ -278,6 +306,13 @@ struct RootView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.985)))
                 }
 
+                if let themeRevealSnapshot {
+                    BeansThemeRevealOverlay(
+                        snapshot: themeRevealSnapshot,
+                        origin: themeRevealOrigin,
+                        progress: themeRevealProgress
+                    )
+                }
             }
             .animation(
                 .spring(response: 0.42, dampingFraction: 0.86, blendDuration: 0.08),
@@ -352,6 +387,10 @@ struct RootView: View {
             withAnimation(.easeInOut(duration: 0.22)) {
                 selection = .discover
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .beansThemeToggleRequested)) { notification in
+            let request = notification.object as? BeansThemeToggleRequest
+            beginThemeReveal(from: request?.location)
         }
         .sheet(isPresented: $showWhatsNew) {
             WhatsNewSheet()
@@ -1096,6 +1135,60 @@ struct RootView: View {
         .accessibilityLabel(LocalizedStringKey(tab.title))
     }
 
+    private var resolvedThemeToggleTarget: BeansThemeMode {
+        if themeMode == .dark { return .light }
+        if themeMode == .light { return .dark }
+        return colorScheme == .dark ? .light : .dark
+    }
+
+    private func beginThemeReveal(from location: CGPoint?) {
+        let target = resolvedThemeToggleTarget
+        guard themeRevealSnapshot == nil else { return }
+
+        if reduceMotion {
+            themeModeRaw = target.rawValue
+            return
+        }
+
+        guard let snapshot = currentWindowSnapshot() else {
+            themeModeRaw = target.rawValue
+            return
+        }
+
+        themeRevealSnapshot = snapshot
+        themeRevealOrigin = location ?? CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY)
+        themeRevealProgress = 0
+
+        // Switch the real view immediately. The captured old frame masks it
+        // outside the expanding circle, so the circle reveals live content,
+        // rather than showing a blank white/dark placeholder.
+        themeModeRaw = target.rawValue
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.62)) {
+                themeRevealProgress = 1
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.72) {
+            themeRevealSnapshot = nil
+            themeRevealProgress = 0
+        }
+    }
+
+    private func currentWindowSnapshot() -> UIImage? {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter { $0.windowLevel == .normal && !$0.isHidden }
+        guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return nil }
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = window.screen.scale
+        format.opaque = false
+        return UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
+        }
+    }
+
     /// 旧系统将页面、底部播放器和胶囊底栏放在同一个 ZStack 中，
     /// 让收缩、上划展开和页面切换共享同一套手势层级。
     private var legacyRootTabs: some View {
@@ -1126,6 +1219,42 @@ struct RootView: View {
             }
         }
         .environment(\.beansUsesSharedRootBackdrop, usesSharedRootBackdrop)
+    }
+}
+
+private struct BeansThemeRevealOverlay: View {
+    let snapshot: UIImage
+    let origin: CGPoint
+    let progress: CGFloat
+
+    var body: some View {
+        GeometryReader { proxy in
+            let farthestX = max(origin.x, proxy.size.width - origin.x)
+            let farthestY = max(origin.y, proxy.size.height - origin.y)
+            let radius = hypot(farthestX, farthestY) + 4
+            let diameter = max(1, radius * 2 * max(progress, 0.001))
+
+            Image(uiImage: snapshot)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
+                .mask {
+                    Rectangle()
+                        .fill(Color.white)
+                        .overlay {
+                            Circle()
+                                .fill(Color.black)
+                                .frame(width: diameter, height: diameter)
+                                .position(origin)
+                                .blendMode(.destinationOut)
+                        }
+                        .compositingGroup()
+                }
+                .allowsHitTesting(false)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 }
 

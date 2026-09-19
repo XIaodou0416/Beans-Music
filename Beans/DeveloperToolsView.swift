@@ -309,7 +309,15 @@ final class DeveloperFPSOverlayWindow {
         }
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }) else { return }
+            .first(where: { $0.activationState == .foregroundActive }) else {
+            // The root view can appear one run loop before the scene becomes
+            // active. Retry once so the global meter does not silently vanish.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                guard let self else { return }
+                self.setVisible(requested)
+            }
+            return
+        }
 
         if window?.windowScene !== scene {
             window?.isHidden = true
