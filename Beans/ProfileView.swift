@@ -1775,6 +1775,7 @@ struct SettingsView: View {
         }
         .environment(\.beansSettingsPerformanceMode, false)
         .preferredColorScheme(themeMode.colorScheme)
+        .simultaneousGesture(settingsEdgeDismissGesture, including: .all)
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
             if defersSettingsContentForCompatibility {
@@ -1929,9 +1930,25 @@ struct SettingsView: View {
     private func closeSettings() {
         if let onClose {
             onClose()
-        } else {
-            dismiss()
         }
+        // The full-screen cover binding is the primary dismissal path. Calling
+        // the presentation dismiss action as well keeps the native back control
+        // reliable on older SwiftUI navigation hosts.
+        dismiss()
+    }
+
+    /// A full-screen settings cover has no system interactive-pop gesture.
+    /// Keep the familiar left-edge swipe available on pre-iOS 27 devices even
+    /// when their navigation bar temporarily fails to render its back control.
+    private var settingsEdgeDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .global)
+            .onEnded { value in
+                if #available(iOS 27, *) { return }
+                guard value.startLocation.x <= 28 else { return }
+                guard value.translation.width >= 72 else { return }
+                guard abs(value.translation.width) > abs(value.translation.height) * 1.35 else { return }
+                closeSettings()
+            }
     }
 
     private var showAccountSettings: Bool {
