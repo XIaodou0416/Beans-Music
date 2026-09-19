@@ -252,6 +252,8 @@ private struct DeveloperDownloadGrantSheet: View {
     @State private var targetDeviceID = ""
     @State private var enabled = true
     @State private var isSubmitting = false
+    @State private var isLoadingRecords = false
+    @State private var accessRecords: [BeansDownloadAccessRecord] = []
     @State private var errorMessage = ""
 
     var body: some View {
@@ -296,6 +298,7 @@ private struct DeveloperDownloadGrantSheet: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(isSubmitting || targetDeviceID.trimmingCharacters(in: .whitespacesAndNewlines).count < 16)
+                        accessRecordsSection
                     }
                     .padding(20)
                     .beansAdaptiveContentWidth()
@@ -310,6 +313,91 @@ private struct DeveloperDownloadGrantSheet: View {
                 }
             }
         }
+        .task {
+            await reloadRecords()
+        }
+    }
+
+    private var accessRecordsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("授权记录")
+                    .font(BeansFont.appFont(16, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer()
+                if isLoadingRecords {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Button {
+                        Task { await reloadRecords() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("刷新授权记录")
+                }
+            }
+
+            if latestRecords.isEmpty && !isLoadingRecords {
+                Text("暂无下载权限记录")
+                    .font(BeansFont.appFont(13))
+                    .foregroundStyle(Color.beansComment)
+            } else {
+                ForEach(latestRecords) { record in
+                    downloadAccessRow(record)
+                }
+            }
+        }
+        .padding(14)
+        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous), forceLiquid: true) }
+    }
+
+    private var latestRecords: [BeansDownloadAccessRecord] {
+        var seen = Set<String>()
+        return accessRecords.filter { seen.insert($0.userID).inserted }.prefix(50).map { $0 }
+    }
+
+    private func downloadAccessRow(_ record: BeansDownloadAccessRecord) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(record.deviceName.isEmpty ? record.deviceModel : record.deviceName)
+                        .font(BeansFont.appFont(13, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text("\(record.systemName) \(record.systemVersion) · \(record.userID)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 8)
+                Text(record.enabled ? "已开放" : "已取消")
+                    .font(BeansFont.appFont(11, .semibold))
+                    .foregroundStyle(record.enabled ? Color.beansSage : Color.beansComment)
+            }
+            HStack {
+                Text(record.changedAt.isEmpty ? "" : "最后操作：\(record.changedAt)")
+                    .font(BeansFont.appFont(10))
+                    .foregroundStyle(Color.beansComment)
+                    .lineLimit(1)
+                Spacer()
+                Button {
+                    targetDeviceID = record.userID
+                    enabled = !record.enabled
+                    submit()
+                } label: {
+                    Text(record.enabled ? "取消权限" : "重新开放")
+                        .font(BeansFont.appFont(11, .semibold))
+                        .foregroundStyle(record.enabled ? .red : Color.beansAmber)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private func submit() {
@@ -320,11 +408,24 @@ private struct DeveloperDownloadGrantSheet: View {
             do {
                 try await DeviceReporter.shared.grantDownloadAccess(to: targetDeviceID, enabled: enabled)
                 ToastCenter.shared.show(enabled ? "已开放该设备的下载功能" : "已关闭该设备的下载功能")
-                dismiss()
+                await reloadRecords()
             } catch {
                 errorMessage = error.localizedDescription
             }
             isSubmitting = false
+        }
+    }
+
+    private func reloadRecords() async {
+        guard !isLoadingRecords else { return }
+        isLoadingRecords = true
+        defer { isLoadingRecords = false }
+        do {
+            accessRecords = try await DeviceReporter.shared.fetchDownloadAccessRecords()
+        } catch {
+            if accessRecords.isEmpty {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }

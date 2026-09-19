@@ -105,13 +105,53 @@ function createBeansRouter(options = {}) {
     mutateDatabase((database) => {
       const user = database.users[targetUserID];
       if (!user) return;
-      user.download_unlocked = Boolean(payload.download_unlocked);
+      const enabled = Boolean(payload.download_unlocked);
+      user.download_unlocked = enabled;
+      if (!Array.isArray(user.download_access_history)) {
+        user.download_access_history = [];
+      }
+      user.download_access_history.unshift({
+        enabled,
+        changed_at: now(),
+        changed_by: developerUserID,
+      });
+      user.download_access_history = user.download_access_history.slice(0, 100);
       updatedUser = user;
     });
     if (!updatedUser) {
       return response.status(404).json({ ok: false, message: 'user_not_found' });
     }
     return response.json(publicUserState(updatedUser));
+  });
+
+  router.get('/developer/download-access', (request, response) => {
+    const developerUserID = text(request.query.developer_user_id, 80).toLowerCase();
+    if (!isDeveloperDeviceID(developerUserID)) {
+      return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
+    }
+
+    const database = loadDatabase();
+    const records = Object.values(database.users)
+      .flatMap((user) => {
+        const history = Array.isArray(user.download_access_history)
+          ? user.download_access_history
+          : (user.download_unlocked ? [{ enabled: true, changed_at: user.last_seen_at || '' }] : []);
+        return history.map((entry) => ({
+          user_id: user.user_id,
+          device_model: user.device_model,
+          device_name: user.device_name,
+          system_name: user.system_name,
+          system_version: user.system_version,
+          app_version: user.app_version,
+          app_build: user.app_build,
+          last_seen_at: user.last_seen_at,
+          enabled: Boolean(entry.enabled),
+          changed_at: text(entry.changed_at, 64),
+        }));
+      })
+      .sort((left, right) => right.changed_at.localeCompare(left.changed_at))
+      .slice(0, 500);
+    return response.json({ ok: true, records });
   });
 
   router.post('/feedback', upload.array('attachments[]', MAX_ATTACHMENTS), (request, response, next) => {
@@ -410,6 +450,9 @@ function createBeansRouter(options = {}) {
         location_updated_at: existing?.location_updated_at || '',
         is_blacklisted: Boolean(existing?.is_blacklisted),
         download_unlocked: Boolean(existing?.download_unlocked),
+        download_access_history: Array.isArray(existing?.download_access_history)
+          ? existing.download_access_history
+          : [],
         action_note: existing?.action_note || '',
       };
       database.users[userID] = record;

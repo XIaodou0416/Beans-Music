@@ -7,6 +7,34 @@ struct FeedbackSubmissionResult: Sendable {
     let submittedAt: String?
 }
 
+struct BeansDownloadAccessRecord: Decodable, Identifiable, Equatable {
+    let userID: String
+    let deviceModel: String
+    let deviceName: String
+    let systemName: String
+    let systemVersion: String
+    let appVersion: String
+    let appBuild: String
+    let lastSeenAt: String
+    let enabled: Bool
+    let changedAt: String
+
+    var id: String { "\(userID)-\(changedAt)-\(enabled)" }
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case deviceModel = "device_model"
+        case deviceName = "device_name"
+        case systemName = "system_name"
+        case systemVersion = "system_version"
+        case appVersion = "app_version"
+        case appBuild = "app_build"
+        case lastSeenAt = "last_seen_at"
+        case enabled
+        case changedAt = "changed_at"
+    }
+}
+
 enum BeansBackendSettings {
     static let downloadUnlockKey = "beans.downloadFeatureUnlocked"
     static let blockedKey = "beans.backend.userBlocked"
@@ -280,6 +308,36 @@ final class DeviceReporter {
         }
     }
 
+    func fetchDownloadAccessRecords() async throws -> [BeansDownloadAccessRecord] {
+        guard BeansDeveloperAccess.isAuthorized else {
+            throw BackendRequestError.server("当前设备没有开发者权限")
+        }
+        guard var components = URLComponents(
+            url: endpoint(for: "developer/download-access"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw BackendRequestError.invalidResponse
+        }
+        components.queryItems = [
+            URLQueryItem(name: "developer_user_id", value: DeviceIdentity.userID)
+        ]
+        guard let url = components.url else {
+            throw BackendRequestError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+        request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response, body: data)
+        let result = try JSONDecoder().decode(BeansDownloadAccessResponse.self, from: data)
+        guard result.ok != false else {
+            throw BackendRequestError.server(result.message ?? "获取下载权限记录失败")
+        }
+        return result.records
+    }
+
     private func backendMessage(from data: Data) -> String? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let rawMessage = object["message"] as? String,
@@ -300,6 +358,10 @@ final class DeviceReporter {
             return beansLocalized("请填写全部必填项。", "Please complete all required fields.")
         case "invalid_user_id":
             return beansLocalized("设备标识无效，请重启应用后重试。", "The device identifier is invalid. Restart the app and try again.")
+        case "developer_unauthorized":
+            return beansLocalized("当前设备没有开发者权限。", "This device does not have developer access.")
+        case "user_not_found":
+            return beansLocalized("没有找到这个设备，请确认对方已经启动过软件。", "That device was not found. Ask the user to launch the app first.")
         case "server_error":
             return beansLocalized("服务器处理失败，请稍后重试。", "The server could not process the request. Please try again later.")
         default:
@@ -377,6 +439,23 @@ private struct BackendResponse: Decodable {
         feedbackID = nil
         submittedAt = nil
         feedbackReplies = []
+    }
+}
+
+private struct BeansDownloadAccessResponse: Decodable {
+    let ok: Bool?
+    let message: String?
+    let records: [BeansDownloadAccessRecord]
+
+    enum CodingKeys: String, CodingKey {
+        case ok, message, records
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try container.decodeIfPresent(Bool.self, forKey: .ok)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        records = try container.decodeIfPresent([BeansDownloadAccessRecord].self, forKey: .records) ?? []
     }
 }
 

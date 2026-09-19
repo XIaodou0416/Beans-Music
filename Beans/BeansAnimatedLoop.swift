@@ -76,21 +76,22 @@ private struct BeansFallbackAnimatedLoop: View {
 
 struct BeansIntroAnimation: View {
     var body: some View {
-        ZStack {
-            Color.black
-            BeansAnimatedLoop()
-                .opacity(0.72)
-                .ignoresSafeArea()
-            VStack(spacing: 12) {
-                Image(systemName: "music.note")
-                    .font(.system(size: 42, weight: .medium))
-                    .foregroundStyle(.white)
-                    .shadow(color: Color.beansHighlight.opacity(0.65), radius: 18)
-                Text("Beans Music")
-                    .font(BeansFont.appFont(22, .semibold))
-                    .foregroundStyle(.white.opacity(0.94))
+        BeansAnimatedLoop()
+            .opacity(0.86)
+            .overlay {
+                VStack(spacing: 12) {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 42, weight: .medium))
+                        .foregroundStyle(.white)
+                        .shadow(color: Color.beansHighlight.opacity(0.65), radius: 18)
+                    Text("Beans Music")
+                        .font(BeansFont.appFont(22, .semibold))
+                        .foregroundStyle(.white.opacity(0.94))
+                }
+                .compositingGroup()
             }
-        }
+            .background(Color.black)
+            .compositingGroup()
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }

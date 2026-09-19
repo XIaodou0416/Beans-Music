@@ -58,7 +58,7 @@ struct BeansApp: App {
                     .transition(.opacity)
                     .zIndex(100)
                 }
-                if showLaunchAnimation {
+                if #available(iOS 26.0, *), showLaunchAnimation {
                     BeansIntroAnimation()
                         .transition(.opacity)
                         .zIndex(200)
@@ -75,14 +75,15 @@ struct BeansApp: App {
                 BeansCarPlayCoordinator.shared.configure(player: player)
             }
             .task {
-                if UIAccessibility.isReduceMotionEnabled {
-                    showLaunchAnimation = false
-                } else {
-                    try? await Task.sleep(nanoseconds: 820_000_000)
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.easeOut(duration: 0.22)) {
-                        showLaunchAnimation = false
+                if #available(iOS 26.0, *), !UIAccessibility.isReduceMotionEnabled {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    if !Task.isCancelled {
+                        withAnimation(.easeOut(duration: 0.24)) {
+                            showLaunchAnimation = false
+                        }
                     }
+                } else {
+                    showLaunchAnimation = false
                 }
                 // 先让系统完成首帧，再恢复仅影响已安装用户的数据与媒体偏好。
                 await Task.yield()
