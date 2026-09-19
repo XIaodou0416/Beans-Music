@@ -1783,6 +1783,7 @@ struct AlbumDetailView: View {
     @State private var errorMessage: String?
     @State private var showBatchDownload = false
     @State private var selectedOtherAlbum: Album?
+    @State private var showArtistHome = false
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     var body: some View {
@@ -1800,6 +1801,11 @@ struct AlbumDetailView: View {
         }
         .sheet(item: $selectedOtherAlbum) { album in
             AlbumDetailView(album: album)
+                .environmentObject(player)
+                .environmentObject(theme)
+        }
+        .sheet(isPresented: $showArtistHome) {
+            ArtistHomeSheet(artistName: album.artistName, artistSource: album.source)
                 .environmentObject(player)
                 .environmentObject(theme)
         }
@@ -1823,9 +1829,27 @@ struct AlbumDetailView: View {
                                     .font(BeansFont.appFont(19, .bold))
                                     .foregroundStyle(Color.beansLabel)
                                     .lineLimit(2)
-                                Text(album.artistName.isEmpty ? "未知歌手" : album.artistName)
-                                    .font(BeansFont.appFont(13))
-                                    .foregroundStyle(Color.beansComment)
+                                if album.artistName.isEmpty {
+                                    Text("未知歌手")
+                                        .font(BeansFont.appFont(13))
+                                        .foregroundStyle(Color.beansComment)
+                                } else {
+                                    Button {
+                                        BeansHaptics.tap()
+                                        showArtistHome = true
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Text(album.artistName)
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 10, weight: .semibold))
+                                        }
+                                        .font(BeansFont.appFont(13))
+                                        .foregroundStyle(Color.beansComment)
+                                        .lineLimit(1)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("打开 \(album.artistName) 的歌手主页")
+                                }
                                 Text(beansSongCountText(tracks.count))
                                     .font(BeansFont.appFont(12))
                                     .foregroundStyle(Color.beansComment)
@@ -2031,8 +2055,7 @@ struct AlbumDetailView: View {
         let candidates: [Album]
         switch album.source {
         case .netease:
-            guard let id = Int(album.id.replacingOccurrences(of: "netease-", with: "")) else { return [] }
-            candidates = (try? await NetEaseAPI.shared.artistAlbumsForAlbum(albumID: id, limit: 12)) ?? []
+            candidates = await loadNetEaseRelatedAlbums(artistName: name)
         case .qq:
             candidates = (try? await QQMusicAPI.shared.searchAlbums(keyword: name, limit: 30)) ?? []
         case .kugou:
@@ -2049,6 +2072,31 @@ struct AlbumDetailView: View {
             return actual.isEmpty || actual.contains(expected) || expected.contains(actual)
         }
         return Array((matching.isEmpty ? candidates : matching).filter { $0.id != album.id }.prefix(12))
+    }
+
+    private func loadNetEaseRelatedAlbums(artistName: String) async -> [Album] {
+        var candidates: [Album] = []
+        if let id = Int(album.id.replacingOccurrences(of: "netease-", with: "")) {
+            candidates = (try? await NetEaseAPI.shared.artistAlbumsForAlbum(albumID: id, limit: 50)) ?? []
+        }
+        if candidates.count > 1 {
+            return candidates
+        }
+
+        let expected = normalizedArtist(artistName)
+        let artists = (try? await NetEaseAPI.shared.searchArtists(keyword: artistName, limit: 10)) ?? []
+        if let matchedArtist = artists.first(where: {
+            let actual = normalizedArtist($0.name)
+            return !actual.isEmpty && (actual == expected || actual.contains(expected) || expected.contains(actual))
+        }), let artistID = Int(matchedArtist.id.replacingOccurrences(of: "netease-", with: "")) {
+            let albums = (try? await NetEaseAPI.shared.artistAlbums(artistID: artistID, limit: 50)) ?? []
+            if !albums.isEmpty {
+                return albums
+            }
+        }
+
+        let searchResults = (try? await NetEaseAPI.shared.searchAlbums(keyword: artistName, limit: 50)) ?? []
+        return candidates.isEmpty ? searchResults : candidates + searchResults
     }
 
     private func searchFallbackSongs(
