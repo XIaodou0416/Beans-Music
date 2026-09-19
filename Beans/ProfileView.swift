@@ -1747,16 +1747,6 @@ struct SettingsView: View {
     var body: some View {
         ZStack {
             GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
-            if #unavailable(iOS 27) {
-                // On iOS 26 a transparent half-sheet can lose its sampling
-                // surface until the detent expands. Provide one native glass
-                // surface for the sheet itself so the compact detent is glass
-                // from the moment it appears.
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.clear)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 28))
-                    .allowsHitTesting(false)
-            }
             if settingsContentReady {
                 settingsScrollContent
             } else {

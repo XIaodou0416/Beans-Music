@@ -383,12 +383,12 @@ struct BeansGlass<S: Shape>: View {
                                 .fill(.clear)
                                 .glassEffect(.clear, in: shape)
                         } else if forceLiquid {
-                            // Settings uses the native regular glass on iOS 26 as
-                            // well. Keep the surface transparent so the system
-                            // glass, rather than a material fallback, is visible.
+                            // Match the same transparent native glass used by the
+                            // home cards. The sheet itself stays transparent, so
+                            // wallpaper remains visible through the settings UI.
                             shape
                                 .fill(.clear)
-                                .glassEffect(.regular, in: shape)
+                                .glassEffect(.clear, in: shape)
                         } else {
                             shape
                                 .fill(.clear)
