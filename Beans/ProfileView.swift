@@ -242,8 +242,9 @@ struct ProfileView: View {
                 avatarStore.save(data: data)
             }
         }
-        .fullScreenCover(isPresented: $showSettings) {
+        .sheet(isPresented: $showSettings) {
             settingsScreen(SettingsView(onClose: { showSettings = false }))
+                .modifier(BeansSheetModifier(detents: [.fraction(0.62)], dragIndicator: true))
         }
         .sheet(item: $updateShareFile, onDismiss: cleanupUpdateShareFile) { item in
             ShareSheet(items: [item.url])
@@ -1442,40 +1443,8 @@ struct SettingsView: View {
     @State private var disclaimerExpanded = false
     @State private var showFloatingImagePicker = false
     @State private var showTabVisibilitySettings = false
+    @State private var settingsSearchText = ""
     @State private var settingsContentReady = false
-    @State private var selectedSettingsSection: SettingsSection?
-
-    private enum SettingsSection: String, CaseIterable, Identifiable {
-        case accountAndAppearance
-        case playback
-        case dataAndSupport
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .accountAndAppearance: return "账号与外观"
-            case .playback: return "播放与音质"
-            case .dataAndSupport: return "数据与支持"
-            }
-        }
-
-        var subtitle: String {
-            switch self {
-            case .accountAndAppearance: return "账号、主题、壁纸与平台"
-            case .playback: return "音源、音质、播放与均衡器"
-            case .dataAndSupport: return "备份、缓存、更新与帮助"
-            }
-        }
-
-        var systemImage: String {
-            switch self {
-            case .accountAndAppearance: return "person.crop.circle"
-            case .playback: return "play.circle"
-            case .dataAndSupport: return "externaldrive"
-            }
-        }
-    }
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1495,6 +1464,12 @@ struct SettingsView: View {
     private var defersSettingsContentForCompatibility: Bool {
         if #available(iOS 27, *) { return false }
         return true
+    }
+
+    private func settingsMatches(_ terms: String...) -> Bool {
+        let query = settingsSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        return terms.joined(separator: " ").localizedCaseInsensitiveContains(query)
     }
 
     private var customSourceCount: Int {
@@ -1771,24 +1746,16 @@ struct SettingsView: View {
     var body: some View {
         ZStack {
             GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
-            VStack(spacing: 0) {
-                settingsHeader
-                Rectangle()
-                    .fill(Color.beansLabel.opacity(0.08))
-                    .frame(height: 1)
-                if settingsContentReady {
-                    settingsScrollContent
-                } else {
-                    Spacer(minLength: 0)
-                    ProgressView()
-                        .tint(Color.beansAmber)
-                    Spacer(minLength: 0)
-                }
+            if settingsContentReady {
+                settingsScrollContent
+            } else {
+                ProgressView()
+                    .tint(Color.beansAmber)
+                    .controlSize(.regular)
             }
         }
         .environment(\.beansSettingsPerformanceMode, false)
         .preferredColorScheme(themeMode.colorScheme)
-        .simultaneousGesture(settingsEdgeDismissGesture, including: .gesture)
         .onAppear {
             wallpaperAppearanceTarget = colorScheme == .dark ? .dark : .light
             if defersSettingsContentForCompatibility {
@@ -1916,190 +1883,120 @@ struct SettingsView: View {
 
     private var settingsScrollContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if let section = selectedSettingsSection {
-                    AnyView(settingsSectionContent(section))
-                } else {
-                    settingsHomeCatalog
+            VStack(alignment: .leading, spacing: 20) {
+                AnyView(settingsSearchField)
+                AnyView(coreSettingsGroup)
+                AnyView(playbackSettingsGroup)
+                AnyView(utilitySettingsGroup)
+                if !hasSettingsSearchResults {
+                    Text("没有找到相关设置")
+                        .font(BeansFont.appFont(14))
+                        .foregroundStyle(Color.beansComment)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 32)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 18)
+            .padding(.top, 14)
             .padding(.bottom, 40)
             .beansAdaptiveContentWidth()
         }
         .beansScrollIndicatorsHidden()
     }
 
-    private var settingsHeader: some View {
-        HStack(spacing: 12) {
-            Button {
-                if selectedSettingsSection == nil {
-                    closeSettings()
-                } else {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedSettingsSection = nil
-                    }
-                }
-            } label: {
-                Image(systemName: selectedSettingsSection == nil ? "xmark" : "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                    .frame(width: 44, height: 44)
-                    .background {
-                        BeansSurface(shape: Circle())
-                    }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(selectedSettingsSection == nil ? "关闭设置" : "返回设置")
+    private func closeSettings() {
+        onClose?()
+        dismiss()
+    }
 
-            Text(selectedSettingsSection?.title ?? "设置")
-                .font(BeansFont.appFont(20, .bold))
-                .foregroundStyle(Color.beansLabel)
+    private var showAccountSettings: Bool {
+        settingsMatches("账号 登录 网易云 QQ 酷狗")
+    }
 
-            Spacer(minLength: 0)
-
-            if selectedSettingsSection != nil {
-                Button(action: closeSettings) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.beansComment)
-                        .frame(width: 40, height: 40)
+    private var settingsSearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.beansComment)
+            TextField("搜索设置", text: $settingsSearchText)
+                .font(BeansFont.appFont(16, .medium))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !settingsSearchText.isEmpty {
+                Button {
+                    settingsSearchText = ""
+                    BeansHaptics.tap()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Color.beansComment.opacity(0.7))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("关闭设置")
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .frame(height: 48)
+        .background {
+            BeansGlass(shape: Capsule())
+        }
+        .overlay {
+            Capsule()
+                .strokeBorder(Color.beansLabel.opacity(0.08), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
     }
 
-    private var settingsHomeCatalog: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("偏好设置")
-                .font(BeansFont.appFont(28, .bold))
-                .foregroundStyle(Color.beansLabel)
-                .padding(.horizontal, 4)
+    private var showAppearanceSettings: Bool { settingsMatches("主题 外观 背景 壁纸 字体 底栏 颜色") }
+    private var showPlatformSettings: Bool { settingsMatches("平台 显示 网易云 QQ 酷狗") }
+    private var showAudioSettings: Bool { settingsMatches("音源 音质 网络 Wi-Fi 蜂窝 导入") }
+    private var showPlaybackSettings: Bool { settingsMatches("播放 触感 锁屏 灵动岛 收藏") }
+    private var showEqualizerSettings: Bool { settingsMatches("均衡器 音效") }
+    private var showBackupSettings: Bool { settingsMatches("备份 恢复 导出 导入 缓存") }
+    private var showChangelogSettings: Bool { settingsMatches("更新 日志 版本") }
+    private var showSupportSettings: Bool { settingsMatches("帮助 反馈 声明 检查更新") }
 
-            Text("选择一个分类以继续")
-                .font(BeansFont.appFont(13))
-                .foregroundStyle(Color.beansComment)
-                .padding(.horizontal, 4)
+    private var hasSettingsSearchResults: Bool {
+        showAccountSettings || showAppearanceSettings || showPlatformSettings
+            || showAudioSettings || showPlaybackSettings || showEqualizerSettings
+            || showBackupSettings || showChangelogSettings || showSupportSettings
+    }
 
-            VStack(spacing: 10) {
-                ForEach(SettingsSection.allCases) { section in
-                    settingsCatalogRow(section)
-                }
+    @ViewBuilder
+    private var coreSettingsGroup: some View {
+        if showAccountSettings || showAppearanceSettings || showPlatformSettings {
+            SettingsCatalogGroup {
+                if showAccountSettings { accountSection }
+                if showAccountSettings && (showAppearanceSettings || showPlatformSettings) { catalogDivider }
+                if showAppearanceSettings { appearanceSection }
+                if showAppearanceSettings && showPlatformSettings { catalogDivider }
+                if showPlatformSettings { platformSection }
             }
         }
     }
 
-    private func settingsCatalogRow(_ section: SettingsSection) -> some View {
-        Button {
-            BeansHaptics.tap()
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedSettingsSection = section
-            }
-        } label: {
-            HStack(spacing: 13) {
-                Image(systemName: section.systemImage)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .frame(width: 42, height: 42)
-                    .background(Color.beansAmber, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(section.title)
-                        .font(BeansFont.appFont(16, .bold))
-                        .foregroundStyle(Color.beansLabel)
-                    Text(section.subtitle)
-                        .font(BeansFont.appFont(12))
-                        .foregroundStyle(Color.beansComment)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.beansComment)
-            }
-            .contentShape(Rectangle())
-            .padding(16)
-            .background {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.beansLabel.opacity(colorScheme == .dark ? 0.11 : 0.055))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(Color.beansLabel.opacity(0.08), lineWidth: 1)
-                    .allowsHitTesting(false)
+    @ViewBuilder
+    private var playbackSettingsGroup: some View {
+        if showAudioSettings || showPlaybackSettings || showEqualizerSettings {
+            SettingsCatalogGroup {
+                if showAudioSettings { audioQualitySection }
+                if showAudioSettings && (showPlaybackSettings || showEqualizerSettings) { catalogDivider }
+                if showPlaybackSettings { playbackSection }
+                if showPlaybackSettings && showEqualizerSettings { catalogDivider }
+                if showEqualizerSettings { equalizerSection }
             }
         }
-        .buttonStyle(.plain)
     }
 
-    private func settingsSectionContent(_ section: SettingsSection) -> AnyView {
-        switch section {
-        case .accountAndAppearance:
-            return AnyView(VStack(spacing: 14) {
-                settingsDetailPanel("账号", subtitle: "登录与账号管理", content: AnyView(accountSection))
-                settingsDetailPanel("外观", subtitle: "主题、壁纸、底栏与显示", content: AnyView(appearanceSection))
-                settingsDetailPanel("平台", subtitle: "选择显示在应用内的平台", content: AnyView(platformSection))
-            })
-        case .playback:
-            return AnyView(VStack(spacing: 14) {
-                settingsDetailPanel("音源与音质", subtitle: "播放来源、网络音质与音源配置", content: AnyView(audioQualitySection))
-                settingsDetailPanel("播放", subtitle: "音频、锁屏与播放行为", content: AnyView(playbackSection))
-                settingsDetailPanel("均衡器", subtitle: "调整声音效果", content: AnyView(equalizerSection))
-            })
-        case .dataAndSupport:
-            return AnyView(VStack(spacing: 14) {
-                settingsDetailPanel("备份与缓存", subtitle: "导入、导出与清理本地数据", content: AnyView(backupSection))
-                settingsDetailPanel("关于版本", subtitle: "查看本次更新内容", content: AnyView(changelogSection))
-                settingsDetailPanel("帮助与支持", subtitle: "检查更新、反馈与免责声明", content: AnyView(settingsSupportSection))
-            })
+    @ViewBuilder
+    private var utilitySettingsGroup: some View {
+        if showBackupSettings || showChangelogSettings || showSupportSettings {
+            SettingsCatalogGroup {
+                if showBackupSettings { backupSection }
+                if showBackupSettings && (showChangelogSettings || showSupportSettings) { catalogDivider }
+                if showChangelogSettings { changelogSection }
+                if showChangelogSettings && showSupportSettings { catalogDivider }
+                if showSupportSettings { settingsSupportSection }
+            }
         }
-    }
-
-    private func settingsDetailPanel(_ title: String, subtitle: String, content: AnyView) -> AnyView {
-        AnyView(
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(BeansFont.appFont(17, .bold))
-                        .foregroundStyle(Color.beansLabel)
-                    Text(subtitle)
-                        .font(BeansFont.appFont(12))
-                        .foregroundStyle(Color.beansComment)
-                }
-                content
-            }
-            .padding(16)
-            .background {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.beansLabel.opacity(colorScheme == .dark ? 0.11 : 0.055))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(Color.beansLabel.opacity(0.08), lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
-        )
-    }
-
-    private func closeSettings() {
-        onClose?()
-    }
-
-    /// Keep the familiar left-edge swipe available on every system version,
-    /// including native navigation hosts that do not expose the gesture from a
-    /// full-screen cover.
-    private var settingsEdgeDismissGesture: some Gesture {
-        DragGesture(minimumDistance: 12, coordinateSpace: .global)
-            .onEnded { value in
-                guard value.startLocation.x <= 42 else { return }
-                guard value.translation.width >= 72 else { return }
-                guard abs(value.translation.width) > abs(value.translation.height) * 1.35 else { return }
-                closeSettings()
-            }
     }
 
     private var catalogDivider: some View {
@@ -3952,8 +3849,13 @@ struct SettingsView: View {
 // MARK: - 均衡器
 
 private struct SettingsCatalogGroup<Content: View>: View {
+    @EnvironmentObject private var theme: ThemeStore
     @Environment(\.colorScheme) private var colorScheme
     private let content: Content
+
+    private var usesCustomWallpaper: Bool {
+        theme.backgroundSyncAll && theme.customBackgroundImage(for: colorScheme) != nil
+    }
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -3963,15 +3865,14 @@ private struct SettingsCatalogGroup<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             content
         }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 16)
             .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.beansLabel.opacity(colorScheme == .dark ? 0.11 : 0.055))
+                let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+                BeansGlass(shape: shape, forceLiquid: usesCustomWallpaper)
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Color.beansLabel.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1)
                     .allowsHitTesting(false)
             }
     }
