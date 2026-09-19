@@ -378,9 +378,23 @@ struct BeansGlass<S: Shape>: View {
             } else if isLiquid {
                 if #available(iOS 26, *) {
                     GlassEffectContainer {
-                        shape
-                            .fill(.clear)
-                            .glassEffect(.clear, in: shape)
+                        if #available(iOS 27, *) {
+                            shape
+                                .fill(.clear)
+                                .glassEffect(.clear, in: shape)
+                        } else if forceLiquid {
+                            // iOS 26 does not render a clear glass background
+                            // reliably inside a clear sheet. Settings explicitly
+                            // requests liquid surfaces, so use the visible system
+                            // material for that compatibility path.
+                            shape
+                                .fill(.clear)
+                                .glassEffect(.regular, in: shape)
+                        } else {
+                            shape
+                                .fill(.clear)
+                                .glassEffect(.clear, in: shape)
+                        }
                     }
                 } else {
                     shape
