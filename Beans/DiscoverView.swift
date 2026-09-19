@@ -928,11 +928,6 @@ struct DiscoverView: View {
             VStack(alignment: .leading, spacing: 10) {
                 ZStack {
                     CoverImage(url: coverURL, size: 148, cornerRadius: 6)
-                    LinearGradient(
-                        colors: [.black.opacity(0.08), .black.opacity(0.68)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
                 }
                 .frame(width: 148, height: 148)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

@@ -1828,9 +1828,9 @@ struct AlbumDetailView: View {
                             SongCell(
                                 song: song,
                                 showCover: false,
+                                suppressNativeCleanRowGlass: true,
                                 leadingIndex: index + 1,
                                 compactAlbumRow: true,
-                                suppressNativeCleanRowGlass: true,
                                 playbackContext: tracks,
                                 playbackIndex: index
                             ) {
