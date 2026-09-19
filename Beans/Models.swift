@@ -454,7 +454,7 @@ struct Album: Identifiable, Hashable, Codable {
         return trimmed.count == 4 && trimmed.allSatisfy(\.isNumber) ? trimmed : nil
     }
 
-    private static func releaseDateString(timestamp: TimeInterval) -> String {
+    private static func releaseDateString(timestamp: TimeInterval) -> String? {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
         let components = calendar.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: timestamp))
