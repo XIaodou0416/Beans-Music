@@ -494,6 +494,24 @@ final class NetEaseAPI {
         return list.compactMap { Song(json: $0) }
     }
 
+    /// 读取专辑所属歌手，再加载该歌手的其它专辑。
+    /// 专辑详情接口本身返回 artist 信息，因此不需要额外的歌手搜索请求。
+    func artistAlbumsForAlbum(albumID: Int, limit: Int = 12) async throws -> [Album] {
+        let json = try await request("/api/album", payload: ["id": albumID], crypto: "weapi")
+        let album = json["album"] as? [String: Any] ?? [:]
+        var artistID: Int?
+        if let artist = album["artist"] as? [String: Any] {
+            artistID = artist["id"] as? Int
+        }
+        if artistID == nil,
+           let artists = album["artists"] as? [[String: Any]],
+           let first = artists.first {
+            artistID = first["id"] as? Int
+        }
+        guard let artistID, artistID > 0 else { return [] }
+        return try await artistAlbums(artistID: artistID, limit: limit)
+    }
+
     // MARK: - 收藏
 
     /// 听歌排行（type=1 最近一周 / type=0 所有时间）

@@ -270,36 +270,51 @@ struct ArtistHomeSheet: View {
     }
 
     private var albumsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("专辑")
-                .font(BeansFont.appFont(17, .bold))
-                .foregroundStyle(Color.beansLabel)
-                .padding(.horizontal, 16)
-            if albums.isEmpty {
-                Text("暂无专辑")
-                    .font(BeansFont.appFont(13))
-                    .foregroundStyle(Color.beansComment)
+        VStack(alignment: .leading, spacing: 14) {
+            albumShelf(title: "专辑", albums: studioAlbums)
+            albumShelf(title: "EP 与单曲", albums: epsAndSingles)
+        }
+    }
+
+    /// 网易云返回的专辑列表同时包含正式专辑、EP 和单曲。
+    /// 其它平台没有稳定的类型字段时，沿用曲目数量做兼容分类。
+    private var studioAlbums: [Album] {
+        albums.filter { ($0.trackCount ?? 2) > 1 }
+    }
+
+    private var epsAndSingles: [Album] {
+        albums.filter { ($0.trackCount ?? 2) <= 1 }
+    }
+
+    @ViewBuilder
+    private func albumShelf(title: String, albums: [Album]) -> some View {
+        if !albums.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(BeansFont.appFont(17, .bold))
+                    .foregroundStyle(Color.beansLabel)
                     .padding(.horizontal, 16)
-            } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 10)], spacing: 12) {
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 124), spacing: 10)], spacing: 12) {
                     ForEach(albums) { album in
                         Button {
                             openAlbum(album)
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
-                                CoverImage(url: album.coverURL, size: 88, cornerRadius: 12)
+                                CoverImage(url: album.coverURL, size: 112, cornerRadius: 12)
                                     .frame(maxWidth: .infinity)
                                 Text(album.name)
-                                    .font(BeansFont.appFont(11, .medium))
+                                    .font(BeansFont.appFont(12, .medium))
                                     .foregroundStyle(Color.beansLabel)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
                                 if let count = album.trackCount {
                                     Text(beansSongCountText(count))
                                         .font(BeansFont.appFont(10))
                                         .foregroundStyle(Color.beansComment)
                                 }
                             }
-                            .padding(6)
+                            .padding(7)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
                         }

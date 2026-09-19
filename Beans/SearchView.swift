@@ -1778,9 +1778,11 @@ struct AlbumDetailView: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
     @State private var tracks: [Song] = []
+    @State private var otherAlbums: [Album] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showBatchDownload = false
+    @State private var selectedOtherAlbum: Album?
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     var body: some View {
@@ -1794,6 +1796,11 @@ struct AlbumDetailView: View {
         .task { await load() }
         .sheet(isPresented: $showBatchDownload) {
             BatchDownloadSheet(songs: tracks, title: "下载专辑")
+                .environmentObject(theme)
+        }
+        .sheet(item: $selectedOtherAlbum) { album in
+            AlbumDetailView(album: album)
+                .environmentObject(player)
                 .environmentObject(theme)
         }
     }
@@ -1850,6 +1857,48 @@ struct AlbumDetailView: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                     }
+
+                    if !otherAlbums.isEmpty {
+                        Section {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 124), spacing: 10)], spacing: 12) {
+                                ForEach(otherAlbums) { item in
+                                    Button {
+                                        BeansHaptics.tap()
+                                        selectedOtherAlbum = item
+                                    } label: {
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            CoverImage(url: item.coverURL, size: 112, cornerRadius: 12)
+                                                .frame(maxWidth: .infinity)
+                                            Text(item.name)
+                                                .font(BeansFont.appFont(12, .medium))
+                                                .foregroundStyle(Color.beansLabel)
+                                                .lineLimit(2)
+                                                .multilineTextAlignment(.leading)
+                                            if let count = item.trackCount {
+                                                Text(beansSongCountText(count))
+                                                    .font(BeansFont.appFont(10))
+                                                    .foregroundStyle(Color.beansComment)
+                                            }
+                                        }
+                                        .padding(7)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        } header: {
+                            Text("该歌手的其他专辑")
+                                .font(BeansFont.appFont(17, .bold))
+                                .foregroundStyle(Color.beansLabel)
+                                .textCase(nil)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
                 }
                 .listStyle(.plain)
                 .beansScrollContentBackgroundHidden()
@@ -1879,6 +1928,7 @@ struct AlbumDetailView: View {
             errorMessage = nil
         }
         do {
+            async let relatedAlbumsTask = loadOtherAlbums()
             let result: [Song]
             switch album.source {
             case .netease:
@@ -1943,6 +1993,10 @@ struct AlbumDetailView: View {
                 isLoading = false
                 if result.isEmpty { errorMessage = "未找到专辑歌曲" }
             }
+            let relatedAlbums = await relatedAlbumsTask
+            await MainActor.run {
+                otherAlbums = relatedAlbums.filter { $0.id != album.id }
+            }
         } catch {
             await MainActor.run {
                 if tracks.isEmpty {
@@ -1965,6 +2019,33 @@ struct AlbumDetailView: View {
     private var albumSearchQuery: String {
         let artist = album.artistName.trimmingCharacters(in: .whitespacesAndNewlines)
         return artist.isEmpty ? album.name : "\(artist) \(album.name)"
+    }
+
+    private func loadOtherAlbums() async -> [Album] {
+        let name = album.artistName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return [] }
+
+        let candidates: [Album]
+        switch album.source {
+        case .netease:
+            guard let id = Int(album.id.replacingOccurrences(of: "netease-", with: "")) else { return [] }
+            candidates = (try? await NetEaseAPI.shared.artistAlbumsForAlbum(albumID: id, limit: 12)) ?? []
+        case .qq:
+            candidates = (try? await QQMusicAPI.shared.searchAlbums(keyword: name, limit: 30)) ?? []
+        case .kugou:
+            candidates = (try? await KugouMusicAPI.shared.searchAlbums(keyword: name, limit: 30)) ?? []
+        case .kuwo:
+            candidates = (try? await AdditionalCatalogSearchAPI.searchKuwoAlbums(keyword: name, limit: 30)) ?? []
+        case .migu:
+            candidates = (try? await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: name, limit: 30)) ?? []
+        }
+
+        let expected = normalizedArtist(name)
+        let matching = candidates.filter { candidate in
+            let actual = normalizedArtist(candidate.artistName)
+            return actual.isEmpty || actual.contains(expected) || expected.contains(actual)
+        }
+        return Array((matching.isEmpty ? candidates : matching).filter { $0.id != album.id }.prefix(12))
     }
 
     private func searchFallbackSongs(
@@ -2153,6 +2234,7 @@ struct NativeSearchBar: UIViewRepresentable {
             field.resignFirstResponder()
         }
     }
+
 }
 
 struct SearchTextField: UIViewRepresentable {
