@@ -132,14 +132,19 @@ struct ProfileView: View {
     }
 
     private func settingsScreen(_ screen: SettingsView) -> some View {
-        screen
-            .ignoresSafeArea(.all)
-            .environmentObject(theme)
-            .environmentObject(player)
-            .environmentObject(auth)
-            .onDisappear {
-                CrashReporter.shared.endContext("settings")
+        Group {
+            if #available(iOS 27, *) {
+                screen.ignoresSafeArea(.all)
+            } else {
+                screen
             }
+        }
+        .environmentObject(theme)
+        .environmentObject(player)
+        .environmentObject(auth)
+        .onDisappear {
+            CrashReporter.shared.endContext("settings")
+        }
     }
 
     /// 顶部标题 + 右上角设置齿轮
@@ -3972,15 +3977,14 @@ private struct SettingsCatalogGroup<Content: View>: View {
     }
 }
 
-/// Settings is presented full-screen from an active tab. Use the native
-/// navigation host on iOS 26 and later so the title, back button, and safe-area
-/// behavior match the modern settings presentation.
+/// iOS 27 uses the native navigation host. Earlier releases retain the stable
+/// settings header so their full-screen presentation always has a close control.
 private struct SettingsNavigationContainer<Content: View>: View {
     let onClose: () -> Void
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 27, *) {
             NavigationStack {
                 content()
             }
