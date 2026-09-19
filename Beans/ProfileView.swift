@@ -1976,23 +1976,18 @@ struct SettingsView: View {
 
     private var settingsHomeCatalog: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("设置")
-                .font(BeansFont.appFont(30, .bold))
+            Text("偏好设置")
+                .font(BeansFont.appFont(28, .bold))
                 .foregroundStyle(Color.beansLabel)
                 .padding(.horizontal, 4)
 
-            Text("将功能收纳为三个分类，进入后可直接调整。")
+            Text("选择一个分类以继续")
                 .font(BeansFont.appFont(13))
                 .foregroundStyle(Color.beansComment)
                 .padding(.horizontal, 4)
 
-            SettingsCatalogGroup {
+            VStack(spacing: 10) {
                 ForEach(SettingsSection.allCases) { section in
-                    if section != .accountAndAppearance {
-                        Divider()
-                            .overlay(Color.primary.opacity(0.09))
-                            .padding(.leading, 48)
-                    }
                     settingsCatalogRow(section)
                 }
             }
@@ -2008,12 +2003,13 @@ struct SettingsView: View {
         } label: {
             HStack(spacing: 13) {
                 Image(systemName: section.systemImage)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(width: 30, height: 30)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: 42, height: 42)
+                    .background(Color.beansAmber, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(section.title)
-                        .font(BeansFont.appFont(16, .semibold))
+                        .font(BeansFont.appFont(16, .bold))
                         .foregroundStyle(Color.beansLabel)
                     Text(section.subtitle)
                         .font(BeansFont.appFont(12))
@@ -2026,7 +2022,16 @@ struct SettingsView: View {
                     .foregroundStyle(Color.beansComment)
             }
             .contentShape(Rectangle())
-            .padding(.vertical, 14)
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.beansLabel.opacity(colorScheme == .dark ? 0.11 : 0.055))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(Color.beansLabel.opacity(0.08), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
         }
         .buttonStyle(.plain)
     }
@@ -2035,23 +2040,49 @@ struct SettingsView: View {
         switch section {
         case .accountAndAppearance:
             return AnyView(VStack(spacing: 14) {
-                AnyView(SettingsCatalogGroup { accountSection })
-                AnyView(SettingsCatalogGroup { appearanceSection })
-                AnyView(SettingsCatalogGroup { platformSection })
+                settingsDetailPanel("账号", subtitle: "登录与账号管理", content: AnyView(accountSection))
+                settingsDetailPanel("外观", subtitle: "主题、壁纸、底栏与显示", content: AnyView(appearanceSection))
+                settingsDetailPanel("平台", subtitle: "选择显示在应用内的平台", content: AnyView(platformSection))
             })
         case .playback:
             return AnyView(VStack(spacing: 14) {
-                AnyView(SettingsCatalogGroup { audioQualitySection })
-                AnyView(SettingsCatalogGroup { playbackSection })
-                AnyView(SettingsCatalogGroup { equalizerSection })
+                settingsDetailPanel("音源与音质", subtitle: "播放来源、网络音质与音源配置", content: AnyView(audioQualitySection))
+                settingsDetailPanel("播放", subtitle: "音频、锁屏与播放行为", content: AnyView(playbackSection))
+                settingsDetailPanel("均衡器", subtitle: "调整声音效果", content: AnyView(equalizerSection))
             })
         case .dataAndSupport:
             return AnyView(VStack(spacing: 14) {
-                AnyView(SettingsCatalogGroup { backupSection })
-                AnyView(SettingsCatalogGroup { changelogSection })
-                AnyView(SettingsCatalogGroup { settingsSupportSection })
+                settingsDetailPanel("备份与缓存", subtitle: "导入、导出与清理本地数据", content: AnyView(backupSection))
+                settingsDetailPanel("关于版本", subtitle: "查看本次更新内容", content: AnyView(changelogSection))
+                settingsDetailPanel("帮助与支持", subtitle: "检查更新、反馈与免责声明", content: AnyView(settingsSupportSection))
             })
         }
+    }
+
+    private func settingsDetailPanel(_ title: String, subtitle: String, content: AnyView) -> AnyView {
+        AnyView(
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(BeansFont.appFont(17, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(subtitle)
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                }
+                content
+            }
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.beansLabel.opacity(colorScheme == .dark ? 0.11 : 0.055))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(Color.beansLabel.opacity(0.08), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+        )
     }
 
     private func closeSettings() {
@@ -3921,13 +3952,8 @@ struct SettingsView: View {
 // MARK: - 均衡器
 
 private struct SettingsCatalogGroup<Content: View>: View {
-    @EnvironmentObject private var theme: ThemeStore
     @Environment(\.colorScheme) private var colorScheme
     private let content: Content
-
-    private var usesCustomWallpaper: Bool {
-        theme.backgroundSyncAll && theme.customBackgroundImage(for: colorScheme) != nil
-    }
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -3937,51 +3963,17 @@ private struct SettingsCatalogGroup<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             content
         }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 4)
             .background {
-                let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
-                BeansGlass(shape: shape, forceLiquid: usesCustomWallpaper)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.beansLabel.opacity(colorScheme == .dark ? 0.11 : 0.055))
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.beansLabel.opacity(0.08), lineWidth: 1)
                     .allowsHitTesting(false)
             }
-    }
-}
-
-/// iOS 26 and later use the same plain full-screen surface as the home page.
-/// Older systems retain the small compatibility header.
-private struct SettingsNavigationContainer<Content: View>: View {
-    let onClose: () -> Void
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        if #available(iOS 26, *) {
-            content()
-        } else {
-            VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    Button(action: onClose) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(Color.beansAmber)
-                            .frame(width: 42, height: 42)
-                    }
-                    .buttonStyle(.plain)
-
-                    Text("设置")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.beansLabel)
-
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 8)
-                .frame(height: 52)
-
-                content()
-            }
-        }
     }
 }
 
