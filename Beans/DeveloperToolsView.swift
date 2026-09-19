@@ -20,6 +20,7 @@ struct DeveloperToolsView: View {
     @ObservedObject private var logger = BeansLogger.shared
     @StateObject private var refreshMonitor = BeansRefreshRateMonitor()
     @State private var showLogShare = false
+    @AppStorage("beans.developer.homeFrameMeter") private var homeFrameMeterEnabled = true
 
     private var appVersion: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
@@ -77,6 +78,9 @@ struct DeveloperToolsView: View {
             }
             developerRow("界面帧间隔", value: String(format: "%.2f ms", refreshMonitor.frameInterval * 1_000))
             developerRow("低电量模式", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "已开启" : "未开启")
+            Toggle("主页显示实时刷新率", isOn: $homeFrameMeterEnabled)
+                .font(BeansFont.appFont(13, .medium))
+                .tint(Color.beansAmber)
             Button {
                 HighRefreshKeeper.shared.configure(enabled: true)
                 refreshMonitor.restart()
@@ -210,8 +214,26 @@ struct DeveloperToolsView: View {
     }
 }
 
+struct DeveloperFrameRateOverlay: View {
+    @StateObject private var monitor = BeansRefreshRateMonitor()
+
+    var body: some View {
+        Text("\(Int(monitor.framesPerSecond.rounded())) FPS")
+            .font(.system(size: 12, weight: .bold, design: .monospaced))
+            .foregroundStyle(Color.beansLabel)
+            .monospacedDigit()
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
+            .overlay { Capsule().strokeBorder(Color.beansLabel.opacity(0.1), lineWidth: 0.8) }
+            .allowsHitTesting(false)
+            .onAppear { monitor.start() }
+            .onDisappear { monitor.stop() }
+    }
+}
+
 @MainActor
-private final class BeansRefreshRateMonitor: NSObject, ObservableObject {
+final class BeansRefreshRateMonitor: NSObject, ObservableObject {
     @Published private(set) var framesPerSecond: Double = 0
     @Published private(set) var frameInterval: TimeInterval = 0
 

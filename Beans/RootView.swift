@@ -148,6 +148,7 @@ struct RootView: View {
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
     /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
     @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
+    @AppStorage("beans.developer.homeFrameMeter") private var homeFrameMeterEnabled = true
     @AppStorage("beans.legacyTabCornerRadius") private var legacyTabCornerRadius = 32.0
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
     @AppStorage("beans.legacyTabOffsetX") private var legacyTabOffsetX = 0.0
@@ -316,6 +317,14 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.22), value: selection)
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
+        }
+        .overlay(alignment: .topTrailing) {
+            if BeansDeveloperAccess.isAuthorized && homeFrameMeterEnabled && selection == .discover {
+                DeveloperFrameRateOverlay()
+                    .padding(.top, 10)
+                    .padding(.trailing, 14)
+                    .zIndex(24)
+            }
         }
         .onAppear {
             // 启动已完成：标记本次启动正常（供下次启动检测闪退）
