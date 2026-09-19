@@ -49,6 +49,7 @@ struct ProfileView: View {
     @State private var easterEggStep = 0
     @State private var easterEggPrompt = "点我有惊喜"
     @AppStorage("beans.profile.customNickname") private var customNickname = ""
+    @AppStorage("beans.profile.hideDonation") private var hideDonation = false
     @ObservedObject private var feedbackHistory = FeedbackHistoryStore.shared
     @ObservedObject private var avatarStore = BeansAvatarStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
@@ -198,7 +199,9 @@ struct ProfileView: View {
                     }
                     customAvatarCard
                     communityCard
-                    donationCard
+                    if !hideDonation {
+                        donationCard
+                    }
                     easterEggCard
                     profileVersionFooter
                 }
@@ -238,8 +241,12 @@ struct ProfileView: View {
                 .environmentObject(theme)
         }
         .sheet(isPresented: $showAvatarPicker) {
-            WallpaperPhotoPicker(allowsMultiple: false) { data in
-                avatarStore.save(data: data)
+            AvatarMediaPicker { selection in
+                if selection.isVideo {
+                    avatarStore.saveVideo(data: selection.data, fileExtension: selection.fileExtension)
+                } else {
+                    avatarStore.save(data: selection.data)
+                }
             }
         }
         .sheet(isPresented: $showSettings) {
@@ -364,9 +371,6 @@ struct ProfileView: View {
                         .foregroundStyle(Color.beansLabel)
                         .textFieldStyle(.plain)
                         .lineLimit(1)
-                    Text(isEnglish ? "Your Beans listening record" : "Beans 本机听歌记录")
-                        .font(BeansFont.appFont(12, .medium))
-                        .foregroundStyle(Color.beansSecondary)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "waveform")
@@ -806,7 +810,7 @@ struct ProfileView: View {
 
     /// 我的页底部赞助入口与赞助排行榜
     private var donationCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             Button {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                     donationExpanded.toggle()
@@ -823,6 +827,9 @@ struct ProfileView: View {
                         Text("自愿赞助")
                             .font(BeansFont.appFont(16, .bold))
                             .foregroundStyle(Color.beansLabel)
+                        Text("感谢每一份愿意留下的支持")
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
                     }
                     Spacer()
                     Image(systemName: donationExpanded ? "chevron.up" : "chevron.down")
@@ -836,13 +843,19 @@ struct ProfileView: View {
                 Image("DonationQR")
                 .resizable()
                 .scaledToFit()
-                .frame(maxWidth: 190)
+                .frame(maxWidth: 172)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .strokeBorder(Color.beansComment.opacity(0.14), lineWidth: 0.8)
                 }
+
+                Text("感谢你愿意为 Beans 的持续完善添一份力。无论金额多少，这份支持都会被认真记下。")
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansSecondary)
+                    .lineSpacing(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button {
                     openWeChatPayment()
@@ -928,16 +941,7 @@ struct ProfileView: View {
             }
         }
         .padding(16)
-        .background {
-            ZStack {
-                if donationExpanded {
-                    SponsorRankAtmosphere()
-                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .opacity(0.9)
-                }
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            }
-        }
+        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)) }
         .beansCardShadow(radius: 9, y: 3)
     }
 
@@ -1405,6 +1409,7 @@ struct SettingsView: View {
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @AppStorage("beans.home.dailySongsListStyle") private var dailySongsListStyle = false
     @AppStorage(BeansEdgeBackGesture.enabledKey) private var edgeBackGestureEnabled = true
+    @AppStorage("beans.profile.hideDonation") private var hideDonation = false
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
     @ObservedObject private var equalizer = BeansEqualizer.shared
     @AppStorage(ThirdPartyAudioQuality.storageKey) private var thirdPartyAudioQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
@@ -1957,7 +1962,7 @@ struct SettingsView: View {
         }
     }
 
-    private var showAppearanceSettings: Bool { settingsMatches("主题 外观 背景 壁纸 字体 底栏 颜色 返回 滑动 手势") }
+    private var showAppearanceSettings: Bool { settingsMatches("主题 外观 背景 壁纸 字体 底栏 颜色 返回 滑动 手势 赞助") }
     private var showPlatformSettings: Bool { settingsMatches("平台 显示 网易云 QQ 酷狗") }
     private var showAudioSettings: Bool { settingsMatches("音源 音质 网络 Wi-Fi 蜂窝 导入") }
     private var showPlaybackSettings: Bool { settingsMatches("播放 触感 锁屏 灵动岛 收藏") }
@@ -2982,6 +2987,7 @@ struct SettingsView: View {
                 appearanceToggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
                 appearanceToggle("每日推荐使用旧版样式", isOn: $dailySongsListStyle)
                 appearanceToggle("开启双侧外滑返回", isOn: $edgeBackGestureEnabled)
+                appearanceToggle("隐藏自愿赞助", isOn: $hideDonation)
 
                 HStack {
                     Image(systemName: "textformat")
@@ -4451,6 +4457,58 @@ struct WallpaperPhotoPicker: UIViewControllerRepresentable {
     }
 }
 
+struct AvatarMediaSelection {
+    let data: Data
+    let fileExtension: String
+    let isVideo: Bool
+}
+
+/// 头像可从相册选择静态图片或视频；视频保留为本地文件供头像循环播放。
+struct AvatarMediaPicker: UIViewControllerRepresentable {
+    let onPicked: (AvatarMediaSelection) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .any(of: [.images, .videos])
+        configuration.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let parent: AvatarMediaPicker
+
+        init(_ parent: AvatarMediaPicker) { self.parent = parent }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            guard let provider = results.first?.itemProvider else { return }
+
+            if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+                provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, _ in
+                    guard let url, let data = try? Data(contentsOf: url), !data.isEmpty else { return }
+                    let ext = url.pathExtension.isEmpty ? "mov" : url.pathExtension
+                    DispatchQueue.main.async {
+                        self.parent.onPicked(AvatarMediaSelection(data: data, fileExtension: ext, isVideo: true))
+                    }
+                }
+            } else {
+                provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                    guard let data, !data.isEmpty else { return }
+                    DispatchQueue.main.async {
+                        self.parent.onPicked(AvatarMediaSelection(data: data, fileExtension: "jpg", isVideo: false))
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// 赞助排行前三名的动态边框高光，不参与交互，也不影响列表布局。
 private struct SponsorRankHighlight: View {
     let color: Color
@@ -4478,55 +4536,6 @@ private struct SponsorRankHighlight: View {
                         lineWidth: rank == 0 ? 1.7 : 1.25
                     )
                     .shadow(color: color.opacity(rank == 0 ? 0.42 : 0.28), radius: rank == 0 ? 10 : 7)
-            }
-        }
-        .allowsHitTesting(false)
-    }
-}
-
-/// 赞助排行展开后的低对比动态光效，不参与交互，也不影响列表布局。
-private struct SponsorRankAtmosphere: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-            Canvas { context, size in
-                guard size.width > 1, size.height > 1 else { return }
-                let time = timeline.date.timeIntervalSinceReferenceDate
-                let drift = CGFloat(sin(time * 0.18)) * size.width * 0.12
-                let warm = Color(red: 1.0, green: 0.62, blue: 0.20)
-                let cool = colorScheme == .dark ? Color.white : Color(red: 0.18, green: 0.34, blue: 0.56)
-
-                context.fill(
-                    Path(ellipseIn: CGRect(
-                        x: size.width * 0.04 + drift,
-                        y: -size.height * 0.12,
-                        width: size.width * 0.72,
-                        height: size.height * 0.62
-                    )),
-                    with: .radialGradient(
-                        Gradient(colors: [warm.opacity(0.13), .clear]),
-                        center: CGPoint(x: size.width * 0.35 + drift, y: size.height * 0.14),
-                        startRadius: 2,
-                        endRadius: size.width * 0.48
-                    )
-                )
-
-                let counterDrift = CGFloat(cos(time * 0.15)) * size.width * 0.1
-                context.fill(
-                    Path(ellipseIn: CGRect(
-                        x: size.width * 0.48 + counterDrift,
-                        y: size.height * 0.46,
-                        width: size.width * 0.62,
-                        height: size.height * 0.48
-                    )),
-                    with: .radialGradient(
-                        Gradient(colors: [cool.opacity(0.09), .clear]),
-                        center: CGPoint(x: size.width * 0.70 + counterDrift, y: size.height * 0.68),
-                        startRadius: 2,
-                        endRadius: size.width * 0.42
-                    )
-                )
             }
         }
         .allowsHitTesting(false)

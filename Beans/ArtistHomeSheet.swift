@@ -182,10 +182,6 @@ struct ArtistHomeSheet: View {
                         BeansHaptics.tap()
                         player.play(songs: displayedHotSongs, startAt: 0)
                     }
-                    GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
-                        BeansHaptics.tap()
-                        player.play(songs: displayedHotSongs.shuffled(), startAt: 0)
-                    }
                     if downloadFeatureUnlocked, displayedHotSongs.count > 1 {
                         GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
                             BeansHaptics.tap()

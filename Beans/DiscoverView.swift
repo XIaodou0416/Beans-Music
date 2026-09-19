@@ -2106,11 +2106,6 @@ struct QQTopListDetailView: View {
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
                                 }
-                                GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
-                                    guard !filteredTracks.isEmpty else { return }
-                                    BeansHaptics.tap()
-                                    player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))
-                                }
                                 if downloadFeatureUnlocked, filteredTracks.count > 1 {
                                     GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
                                         BeansHaptics.tap()
@@ -2227,11 +2222,6 @@ struct QQPlaylistSongsSheet: View {
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
                                 }
-                                GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
-                                    guard !filteredTracks.isEmpty else { return }
-                                    BeansHaptics.tap()
-                                    player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))
-                                }
                             }
                             .listRowBackground(Color.clear)
                             .padding(.vertical, 8)
@@ -2326,11 +2316,6 @@ struct DailySongsSheet: View {
                                 guard !filteredSongs.isEmpty else { return }
                                 BeansHaptics.tap()
                                 player.play(songs: filteredSongs, startAt: 0)
-                            }
-                            GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
-                                guard !filteredSongs.isEmpty else { return }
-                                BeansHaptics.tap()
-                                player.play(songs: filteredSongs, startAt: Int.random(in: 0..<filteredSongs.count))
                             }
                             if downloadFeatureUnlocked, filteredSongs.count > 1 {
                                 GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
@@ -2484,11 +2469,6 @@ struct TopListDetailView: View {
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
                                 }
-                                GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
-                                    guard !filteredTracks.isEmpty else { return }
-                                    BeansHaptics.tap()
-                                    player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))
-                                }
                                 if downloadFeatureUnlocked, filteredTracks.count > 1 {
                                     GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
                                         BeansHaptics.tap()
@@ -2639,11 +2619,6 @@ struct KugouTopListDetailView: View {
                                     guard !filteredTracks.isEmpty else { return }
                                     BeansHaptics.tap()
                                     player.play(songs: filteredTracks, startAt: 0)
-                                }
-                                GlassButton(title: "随机播放", systemName: "shuffle", forceLiquid: true) {
-                                    guard !filteredTracks.isEmpty else { return }
-                                    BeansHaptics.tap()
-                                    player.play(songs: filteredTracks, startAt: Int.random(in: 0..<filteredTracks.count))
                                 }
                                 if downloadFeatureUnlocked, filteredTracks.count > 1 {
                                     GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {

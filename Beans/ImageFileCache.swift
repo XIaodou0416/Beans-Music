@@ -1,5 +1,7 @@
 import UIKit
 import SwiftUI
+import AVFoundation
+import UniformTypeIdentifiers
 
 /// 主页和“我的”共用的自定义头像，图片只保存在本机沙盒内。
 @MainActor
@@ -37,6 +39,12 @@ final class BeansAvatarStore: ObservableObject {
         }
     }
 
+    var isVideo: Bool {
+        guard !path.isEmpty,
+              let type = UTType(filenameExtension: URL(fileURLWithPath: path).pathExtension) else { return false }
+        return type.conforms(to: .movie)
+    }
+
     func save(data: Data) {
         let fileURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("BeansProfileAvatar.jpg")
@@ -47,6 +55,10 @@ final class BeansAvatarStore: ObservableObject {
             )
             guard let image = UIImage(data: data),
                   let jpeg = image.jpegData(compressionQuality: 0.88) else { return }
+            if !path.isEmpty, path != fileURL.path {
+                try? FileManager.default.removeItem(atPath: path)
+                BeansImageFileCache.remove(path)
+            }
             try jpeg.write(to: fileURL, options: .atomic)
             path = fileURL.path
             UserDefaults.standard.set(path, forKey: defaultsKey)
@@ -54,6 +66,25 @@ final class BeansAvatarStore: ObservableObject {
             BeansImageFileCache.remove(path)
         } catch {
             BeansLogger.shared.log("自定义头像保存失败：\(error.localizedDescription)", level: .warn)
+        }
+    }
+
+    func saveVideo(data: Data, fileExtension: String) {
+        let ext = fileExtension.isEmpty ? "mov" : fileExtension.lowercased()
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let fileURL = directory.appendingPathComponent("BeansProfileAvatar").appendingPathExtension(ext)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            if !path.isEmpty, path != fileURL.path {
+                try? FileManager.default.removeItem(atPath: path)
+                BeansImageFileCache.remove(path)
+            }
+            try data.write(to: fileURL, options: .atomic)
+            path = fileURL.path
+            UserDefaults.standard.set(path, forKey: defaultsKey)
+            UserDefaults.standard.removeObject(forKey: dataKey)
+        } catch {
+            BeansLogger.shared.log("自定义视频头像保存失败：\(error.localizedDescription)", level: .warn)
         }
     }
 
@@ -77,7 +108,9 @@ struct BeansAvatarView: View {
 
     var body: some View {
         Group {
-            if useCustom, let custom = BeansImageFileCache.image(at: store.path) {
+            if useCustom, store.isVideo {
+                CustomCoverMediaView(url: URL(fileURLWithPath: store.path), isMuted: true)
+            } else if useCustom, let custom = BeansImageFileCache.image(at: store.path) {
                 Image(uiImage: custom)
                     .resizable()
                     .scaledToFill()

@@ -178,8 +178,11 @@ struct PlatformPreferencePicker: View {
                     }
                     .padding(12)
                     .background {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(store.isEnabled(provider) ? Color.beansAmber.opacity(0.12) : Color.primary.opacity(0.04))
+                        ZStack {
+                            BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous), forceLiquid: true)
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(store.isEnabled(provider) ? Color.beansAmber.opacity(0.14) : Color.clear)
+                        }
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)

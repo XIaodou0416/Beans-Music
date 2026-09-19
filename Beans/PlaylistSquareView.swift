@@ -299,7 +299,7 @@ struct PlaylistSquareView: View {
 
     private func playlistCard(_ playlist: Playlist, showsContainer: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            CoverImage(url: playlist.coverURL, size: 150, cornerRadius: isNativeClean ? 14 : 16)
+            CoverImage(url: playlist.coverURL, size: 150, cornerRadius: 11)
             Text(playlist.name)
                 .font(BeansFont.appFont(13, .medium))
                 .foregroundStyle(Color.beansLabel)
@@ -332,7 +332,7 @@ struct PlaylistSquareView: View {
         .background {
             if showsContainer {
                 if !isNativeClean {
-                    BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }
         }
@@ -342,7 +342,7 @@ struct PlaylistSquareView: View {
     private func largePlaylistCard(_ playlist: Playlist) -> some View {
         GeometryReader { proxy in
             VStack(spacing: 8) {
-                CoverImage(url: playlist.coverURL, size: proxy.size.width, cornerRadius: 14)
+                CoverImage(url: playlist.coverURL, size: proxy.size.width, cornerRadius: 11)
                 Text(playlist.name)
                     .font(BeansFont.appFont(14, .semibold))
                     .foregroundStyle(Color.beansLabel)
