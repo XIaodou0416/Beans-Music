@@ -27,8 +27,6 @@ struct ProfileView: View {
     @State private var showAccountHub = false
     /// 设置页（外观 + 歌词翻译等）
     @State private var showSettings = false
-    /// iOS 26 及以下沿用 1.6.9 的全屏设置呈现，避开系统半屏玻璃采样差异。
-    @State private var showLegacySettings = false
     /// 手动检查更新
     @State private var checkingUpdate = false
     @State private var updateResult: UpdateChecker.CheckResult?
@@ -122,19 +120,14 @@ struct ProfileView: View {
     /// Delay presentation by one main-queue turn so the active profile tab
     /// finishes its update before the settings controller is created.
     private func openSettings() {
-        guard !showSettings && !showLegacySettings else { return }
+        guard !showSettings else { return }
         BeansHaptics.tap()
         CrashReporter.shared.recordEvent("点击设置入口")
         homeRenderingPaused = true
         DispatchQueue.main.async {
             CrashReporter.shared.beginContext("settings")
-            if #available(iOS 27, *) {
-                CrashReporter.shared.recordEvent("使用半屏设置容器")
-                showSettings = true
-            } else {
-                CrashReporter.shared.recordEvent("使用 1.6.9 全屏设置容器")
-                showLegacySettings = true
-            }
+            CrashReporter.shared.recordEvent("使用全屏设置容器")
+            showSettings = true
         }
     }
 
@@ -253,10 +246,6 @@ struct ProfileView: View {
             settingsScreen(SettingsView(onClose: { showSettings = false }))
                 .modifier(BeansSheetModifier(detents: [.fraction(0.62), .large], dragIndicator: true))
                 .modifier(SettingsLiquidSheetPresentation())
-        }
-        .fullScreenCover(isPresented: $showLegacySettings) {
-            settingsScreen(SettingsView(onClose: { showLegacySettings = false }, legacyFullscreenStyle: true))
-                .ignoresSafeArea()
         }
         .sheet(item: $updateShareFile, onDismiss: cleanupUpdateShareFile) { item in
             ShareSheet(items: [item.url])
@@ -1341,7 +1330,6 @@ struct AccountHubSheet: View {
 
 struct SettingsView: View {
     var onClose: (() -> Void)? = nil
-    var legacyFullscreenStyle = false
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
@@ -1756,45 +1744,21 @@ struct SettingsView: View {
         }
     }
 
-    private var settingsRoot: some View {
+    var body: some View {
         ZStack {
-            GlassBackdrop(
-                customColor: legacyFullscreenStyle ? (theme.backgroundSyncAll ? theme.customBackground : nil) : theme.customBackground,
-                homeMode: !legacyFullscreenStyle
-            )
-            if !legacyFullscreenStyle {
-                SettingsCompactGlassSurface()
-            }
+            // Settings is presented over the home screen. Sample the same
+            // wallpaper/backdrop as the home cards so its clear glass does not
+            // turn into a milky white surface at either sheet detent.
+            GlassBackdrop(customColor: theme.customBackground, homeMode: true)
+            SettingsCompactGlassSurface()
             if settingsContentReady {
                 settingsScrollContent
             } else {
                 ProgressView()
                     .tint(Color.beansAmber)
-                .controlSize(.regular)
+                    .controlSize(.regular)
             }
         }
-    }
-
-    @ViewBuilder
-    private var presentedSettingsRoot: some View {
-        if legacyFullscreenStyle {
-            BeansNavigationStack {
-                settingsRoot
-                    .navigationTitle("设置")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("完成", action: closeSettings)
-                        }
-                    }
-            }
-        } else {
-            settingsRoot
-        }
-    }
-
-    var body: some View {
-        presentedSettingsRoot
         .environment(\.beansSettingsPerformanceMode, false)
         .preferredColorScheme(themeMode.colorScheme)
         .onAppear {
