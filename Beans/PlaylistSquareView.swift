@@ -10,7 +10,6 @@ struct PlaylistSquareView: View {
 
     @AppStorage("beans.playlistSquareSource") private var playlistSourceRaw = SearchProvider.netease.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
-    @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @State private var playlists: [Playlist] = []
     @State private var selectedCategory = PlaylistSquareCategory.all.id
     @State private var categories: [PlaylistSquareCategory] = [.all]
@@ -40,10 +39,6 @@ struct PlaylistSquareView: View {
 
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
-    }
-
-    private var usesSolidSurface: Bool {
-        isNativeClean && appleSolidSurface
     }
 
     private var providers: [SearchProvider] {
@@ -336,14 +331,7 @@ struct PlaylistSquareView: View {
         .padding(isNativeClean || source == .netease ? 0 : 8)
         .background {
             if showsContainer {
-                if usesSolidSurface {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.primary.opacity(0.04))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.7)
-                        }
-                } else if !isNativeClean {
+                if !isNativeClean {
                     BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
             }

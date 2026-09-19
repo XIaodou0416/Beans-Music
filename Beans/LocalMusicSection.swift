@@ -362,7 +362,7 @@ fileprivate struct SyncPlatformPicker: View {
         .onAppear {
             selectedTargets = []
         }
-        .modifier(BeansSheetModifier(detents: [.medium], dragIndicator: true))
+        .modifier(BeansSheetModifier(detents: [.fraction(0.5)], dragIndicator: true))
     }
 
     private func icon(for target: LocalMusicSection.SyncTarget) -> String {

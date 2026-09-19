@@ -18,7 +18,6 @@ struct ProfileView: View {
     @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
-    @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
 
@@ -1337,7 +1336,6 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
-    @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @AppStorage("beans.globalFloatingEffect") private var globalFloatingEffectRaw = BeansGlobalFloatingEffect.off.rawValue
@@ -2607,13 +2605,6 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    if isNativeClean {
-                        Toggle(
-                            beansLocalized("Apple 样式使用纯色背景", "Use solid background for Apple style"),
-                            isOn: $appleSolidSurface
-                        )
-                        .font(BeansFont.appFont(13))
-                    }
                 }
 
                 Divider().overlay(Color.beansComment.opacity(0.15))
@@ -4058,6 +4049,7 @@ private struct TabVisibilitySettingsSheet: View {
                 }
             }
         }
+        .modifier(BeansSheetModifier(detents: [.fraction(0.5)], dragIndicator: true))
     }
 
     private func tabToggle(_ title: String, systemName: String, tab: RootTab) -> some View {

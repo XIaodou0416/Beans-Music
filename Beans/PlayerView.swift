@@ -25,6 +25,7 @@ struct PlayerView: View {
     @State private var showAddToPlaylist = false
     @State private var showComments = false
     @State private var showOfficialPlaylistPicker = false
+    @State private var showOfficialFavoriteActionPicker = false
     @State private var officialPlaylistMode: OfficialPlaylistMode = .save
     @State private var officialPlaylists: [Playlist] = []
     @State private var officialPlaylistLoading = false
@@ -285,7 +286,7 @@ struct PlayerView: View {
         favoriteCandidate = song
         if usesOfficialFavoriteDestination(for: song) {
             if favorites.isOfficiallyLiked(song) {
-                beginRemoveOfficialFavorite(song)
+                showOfficialFavoriteActionPicker = true
             } else {
                 beginOfficialFavorite(song)
             }
@@ -985,6 +986,21 @@ struct PlayerView: View {
                     deleteOfficialPlaylist(playlist)
                 }
             )
+        }
+        .confirmationDialog("官方歌单收藏", isPresented: $showOfficialFavoriteActionPicker, titleVisibility: .visible) {
+            Button("收藏到其他官方歌单") {
+                guard let song = favoriteCandidate else { return }
+                beginOfficialFavorite(song)
+            }
+            Button("取消官方歌单收藏", role: .destructive) {
+                guard let song = favoriteCandidate else { return }
+                beginRemoveOfficialFavorite(song)
+            }
+            Button("取消", role: .cancel) {
+                favoriteCandidate = nil
+            }
+        } message: {
+            Text("这首歌已收藏到官方歌单；可以继续保存到另一份歌单，或选择要取消的歌单。")
         }
         .sheet(isPresented: $showPlayerSettings) {
             PlayerSettingsSheet(layoutMode: $layoutMode, onDismiss: closePlayerSettings)

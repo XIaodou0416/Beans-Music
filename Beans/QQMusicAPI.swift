@@ -624,7 +624,13 @@ final class QQMusicAPI {
                 begin += rawPage.count
             }
             if !allSongs.isEmpty {
-                return limit > 0 ? Array(allSongs.prefix(limit)) : allSongs
+                // Some accounts ignore `song_begin` after the first full page.
+                // When an unlimited request stops at exactly 300 tracks, use the
+                // resolved real playlist ID below and retry through its paged
+                // playlist-detail path instead of treating that page as complete.
+                if limit > 0 || allSongs.count < pageSize {
+                    return limit > 0 ? Array(allSongs.prefix(limit)) : allSongs
+                }
             }
         }
 
@@ -647,13 +653,22 @@ final class QQMusicAPI {
             BeansLogger.shared.log("QQ 我的喜欢歌单解析失败：未找到真实歌单 ID", level: .error)
             return []
         }
-        let fallbackLimit = limit > 0 ? limit : pageSize
         for cookie in cookieCandidates {
-            let songs = try await playlistSongs(listID: mapid, preferredCookie: cookie, limit: fallbackLimit)
+            let songs: [Song]
+            if limit > 0 {
+                songs = try await playlistSongs(listID: mapid, preferredCookie: cookie, limit: limit)
+            } else {
+                songs = try await playlistSongsUnlimited(listID: mapid)
+            }
             BeansLogger.shared.log("QQ 我的喜欢最终详情 mapid=\(mapid) songs=\(songs.count)", level: songs.isEmpty ? .warn : .info)
             if !songs.isEmpty { return songs }
         }
-        let songs = try await playlistSongs(listID: mapid, preferredCookie: nil, limit: fallbackLimit)
+        let songs: [Song]
+        if limit > 0 {
+            songs = try await playlistSongs(listID: mapid, preferredCookie: nil, limit: limit)
+        } else {
+            songs = try await playlistSongsUnlimited(listID: mapid)
+        }
         BeansLogger.shared.log("QQ 我的喜欢加载结束 mapid=\(mapid) songs=\(songs.count)", level: songs.isEmpty ? .error : .info)
         return songs
     }

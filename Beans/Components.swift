@@ -353,7 +353,6 @@ struct WallpaperImage: View {
 
 struct BeansGlass<S: Shape>: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
-    @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
     @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
 
@@ -365,7 +364,7 @@ struct BeansGlass<S: Shape>: View {
     }
 
     private var isLiquid: Bool {
-        !disableLiquidGlass && (forceLiquid || uiStyle == .liquid || (uiStyle == .nativeClean && !appleSolidSurface))
+        !disableLiquidGlass && (forceLiquid || uiStyle == .liquid || uiStyle == .nativeClean)
     }
 
     @ViewBuilder
@@ -439,7 +438,6 @@ struct BeansSurface<S: Shape>: View {
 struct GlassCard<Content: View>: View {
     var cornerRadius: CGFloat = 24
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
-    @AppStorage("beans.appleSolidSurface") private var appleSolidSurface = false
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
     @ViewBuilder var content: () -> Content
 
@@ -448,7 +446,7 @@ struct GlassCard<Content: View>: View {
     }
 
     private var isLiquid: Bool {
-        !disableLiquidGlass && (uiStyle == .liquid || (uiStyle == .nativeClean && !appleSolidSurface))
+        !disableLiquidGlass && (uiStyle == .liquid || uiStyle == .nativeClean)
     }
 
     private var resolvedCornerRadius: CGFloat {
