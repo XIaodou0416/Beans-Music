@@ -31,11 +31,8 @@ final class HighRefreshKeeper {
     }
 
     func attach(to view: UIView) {
+        _ = view
         start()
-        applyPreferredRange(to: view.window?.windowScene)
-        DispatchQueue.main.async { [weak self, weak view] in
-            self?.applyPreferredRange(to: view?.window?.windowScene)
-        }
     }
 
     /// 设置页展开大量控件时暂停刷新率请求，避免额外占用主线程。
@@ -53,7 +50,6 @@ final class HighRefreshKeeper {
     }
 
     private func start() {
-        applyPreferredRangeToForegroundScenes()
         guard displayLink == nil else { return }
         let link = CADisplayLink(target: self, selector: #selector(tick))
         if #available(iOS 15.0, *) {
@@ -70,19 +66,6 @@ final class HighRefreshKeeper {
         let maximum = Float(min(120, max(60, UIScreen.main.maximumFramesPerSecond)))
         let minimum: Float = maximum >= 120 ? 120 : 60
         return CAFrameRateRange(minimum: minimum, maximum: maximum, preferred: maximum)
-    }
-
-    private func applyPreferredRangeToForegroundScenes() {
-        guard #available(iOS 15.0, *) else { return }
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .filter { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive }
-            .forEach { applyPreferredRange(to: $0) }
-    }
-
-    private func applyPreferredRange(to scene: UIWindowScene?) {
-        guard #available(iOS 15.0, *), let scene else { return }
-        scene.preferredFrameRateRange = preferredFrameRateRange
     }
 
     private func stop() {
