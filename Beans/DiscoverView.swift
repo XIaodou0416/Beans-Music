@@ -1288,7 +1288,7 @@ struct DiscoverView: View {
                             )
                         }
                 } else {
-                    RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
                         .overlay(alignment: .topTrailing) {
                             Circle()
@@ -1330,9 +1330,9 @@ struct DiscoverView: View {
                 .padding(14)
             }
             .frame(width: cardWidth, height: cardHeight)
-            .clipShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .shadow(color: Color.black.opacity(isNativeClean ? 0.06 : 0.12), radius: 16, x: 0, y: 8)
-            .contentShape(RoundedRectangle(cornerRadius: isNativeClean ? 16 : 18, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.95))
         .disabled(loadingKey != nil && recommendationActionLoading != nil)

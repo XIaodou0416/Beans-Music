@@ -903,7 +903,11 @@ struct SearchView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 14, content: content)
                     .padding(.horizontal, 1)
+                    .padding(.vertical, 2)
+                    .padding(.trailing, 20)
             }
+            .beansCompatScrollClipDisabled()
+            .padding(.trailing, -20)
         }
     }
 

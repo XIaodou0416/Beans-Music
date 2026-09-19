@@ -9,6 +9,7 @@ struct OnboardingView: View {
     @State private var page = 0
     @State private var typed = ""
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
+    @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
     private let totalPages = 4
     private var confirmText: String {
@@ -283,18 +284,19 @@ struct OnboardingView: View {
                 .font(BeansFont.appFont(26, .bold))
                 .foregroundStyle(Color.beansLabel)
 
-            Text(isEnglish ? "Sync playlists from NetEase Cloud Music, QQ Music, and Kugou" : "网易云 + QQ 音乐 + 酷狗歌单同步")
+            Text(isEnglish ? "Choose the platforms you want to show. You can change this later in Settings." : "选择要显示的平台，之后也可随时在设置中更改")
                 .font(BeansFont.appFont(14))
                 .foregroundStyle(Color.beansSecondary)
+                .multilineTextAlignment(.center)
 
             VStack(spacing: 12) {
-                platformRow(imageName: "BrandNetease", tint: Color(red: 0.87, green: 0.23, blue: 0.23),
+                platformRow(provider: .netease, imageName: "BrandNetease", tint: Color(red: 0.87, green: 0.23, blue: 0.23),
                             title: isEnglish ? "NetEase Cloud Music" : "网易云音乐",
                             detail: isEnglish ? "Scan or sign in on the web to sync playlists, favorites, charts, and VIP status" : "扫码 / 网页登录，同步歌单、收藏、听歌排行、VIP")
-                platformRow(imageName: "BrandQQ", tint: Color(red: 0.13, green: 0.51, blue: 0.95),
+                platformRow(provider: .qq, imageName: "BrandQQ", tint: Color(red: 0.13, green: 0.51, blue: 0.95),
                             title: isEnglish ? "QQ Music" : "QQ 音乐",
                             detail: isEnglish ? "Scan, sign in on the web, or use a Cookie to sync playlists and VIP status" : "扫码 / 网页 / Cookie 登录，同步歌单与 VIP")
-                platformRow(imageName: "BrandKugou", tint: Color(red: 0.12, green: 0.55, blue: 1.0),
+                platformRow(provider: .kugou, imageName: "BrandKugou", tint: Color(red: 0.12, green: 0.55, blue: 1.0),
                             title: isEnglish ? "Kugou Music" : "酷狗音乐",
                             detail: isEnglish ? "Sign in to sync cloud playlists and search Kugou songs" : "登录同步云端歌单，并支持酷狗歌曲搜索")
             }
@@ -305,37 +307,48 @@ struct OnboardingView: View {
         }
     }
 
-    private func platformRow(imageName: String, tint: Color, title: String, detail: String) -> some View {
-        HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(tint.opacity(0.16))
-                .frame(width: 46, height: 46)
-                .overlay(
-                    Image(imageName)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 30, height: 30)
-                )
-            VStack(alignment: .leading, spacing: 3) {
-                Text(LocalizedStringKey(title))
-                    .font(BeansFont.appFont(15, .bold))
-                    .foregroundStyle(Color.beansLabel)
-                Text(LocalizedStringKey(detail))
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansSecondary)
+    private func platformRow(provider: SearchProvider, imageName: String, tint: Color, title: String, detail: String) -> some View {
+        let enabled = platformPrefs.isEnabled(provider)
+        return Button {
+            BeansHaptics.select()
+            platformPrefs.set(provider, enabled: !enabled)
+        } label: {
+            HStack(spacing: 14) {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(tint.opacity(0.16))
+                    .frame(width: 46, height: 46)
+                    .overlay(
+                        Image(imageName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 30, height: 30)
+                    )
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(LocalizedStringKey(title))
+                        .font(BeansFont.appFont(15, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(LocalizedStringKey(detail))
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansSecondary)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(enabled ? tint : Color.beansComment)
             }
-            Spacer(minLength: 0)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(enabled ? tint.opacity(0.12) : Color.beansCard.opacity(0.75))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(enabled ? tint.opacity(0.35) : Color.beansLabel.opacity(0.08), lineWidth: 1)
+            )
+            .beansCardShadow(radius: 8, y: 3)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.beansCard.opacity(0.75))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Color.beansLabel.opacity(0.08), lineWidth: 1)
-        )
-        .beansCardShadow(radius: 8, y: 3)
+        .buttonStyle(.plain)
     }
 
     // MARK: 第 4 页 · 免责确认
