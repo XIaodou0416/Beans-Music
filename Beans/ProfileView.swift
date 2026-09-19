@@ -3742,7 +3742,7 @@ struct SettingsView: View {
             runtimeEnvironmentRow("版本", value: runtimeVersionText)
             runtimeEnvironmentRow(
                 "界面尺寸",
-                value: "\(Int(UIScreen.main.bounds.width)) × \(Int(UIScreen.main.bounds.height)) @\(String(format: \"%.0f\", UIScreen.main.scale))x"
+                value: runtimeScreenDimensions
             )
             Button {
                 UIPasteboard.general.string = DeviceIdentity.userID
@@ -3774,6 +3774,11 @@ struct SettingsView: View {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
         return "Beans \(version) (Build \(build))"
+    }
+
+    private var runtimeScreenDimensions: String {
+        let bounds = UIScreen.main.bounds
+        return "\(Int(bounds.width)) × \(Int(bounds.height)) @\(Int(UIScreen.main.scale.rounded()))x"
     }
 
     private var developerToolsSection: some View {
