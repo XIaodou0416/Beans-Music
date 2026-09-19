@@ -1404,6 +1404,7 @@ struct SettingsView: View {
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @AppStorage("beans.home.dailySongsListStyle") private var dailySongsListStyle = false
+    @AppStorage(BeansEdgeBackGesture.enabledKey) private var edgeBackGestureEnabled = true
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
     @ObservedObject private var equalizer = BeansEqualizer.shared
     @AppStorage(ThirdPartyAudioQuality.storageKey) private var thirdPartyAudioQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
@@ -1444,6 +1445,7 @@ struct SettingsView: View {
     @State private var disclaimerExpanded = false
     @State private var showFloatingImagePicker = false
     @State private var showTabVisibilitySettings = false
+    @State private var showDeveloperTools = false
     @State private var settingsSearchText = ""
     @State private var settingsContentReady = false
 
@@ -1837,6 +1839,11 @@ struct SettingsView: View {
             FeedbackSheet()
                 .environmentObject(theme)
         }
+        .sheet(isPresented: $showDeveloperTools) {
+            DeveloperToolsView()
+                .environmentObject(theme)
+                .environmentObject(player)
+        }
         .alert("检查更新", isPresented: $showUpdateResult, presenting: updateResult) { result in
             switch result {
             case .update(let info):
@@ -1950,7 +1957,7 @@ struct SettingsView: View {
         }
     }
 
-    private var showAppearanceSettings: Bool { settingsMatches("主题 外观 背景 壁纸 字体 底栏 颜色") }
+    private var showAppearanceSettings: Bool { settingsMatches("主题 外观 背景 壁纸 字体 底栏 颜色 返回 滑动 手势") }
     private var showPlatformSettings: Bool { settingsMatches("平台 显示 网易云 QQ 酷狗") }
     private var showAudioSettings: Bool { settingsMatches("音源 音质 网络 Wi-Fi 蜂窝 导入") }
     private var showPlaybackSettings: Bool { settingsMatches("播放 触感 锁屏 灵动岛 收藏") }
@@ -1958,11 +1965,12 @@ struct SettingsView: View {
     private var showBackupSettings: Bool { settingsMatches("备份 恢复 导出 导入 缓存") }
     private var showChangelogSettings: Bool { settingsMatches("更新 日志 版本") }
     private var showSupportSettings: Bool { settingsMatches("帮助 反馈 声明 检查更新") }
+    private var showDeveloperSettings: Bool { BeansDeveloperAccess.isAuthorized && settingsMatches("开发者 调试 诊断 刷新率 日志") }
 
     private var hasSettingsSearchResults: Bool {
         showAccountSettings || showAppearanceSettings || showPlatformSettings
             || showAudioSettings || showPlaybackSettings || showEqualizerSettings
-            || showBackupSettings || showChangelogSettings || showSupportSettings
+            || showBackupSettings || showChangelogSettings || showSupportSettings || showDeveloperSettings
     }
 
     @ViewBuilder
@@ -1993,13 +2001,15 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var utilitySettingsGroup: some View {
-        if showBackupSettings || showChangelogSettings || showSupportSettings {
+        if showBackupSettings || showChangelogSettings || showSupportSettings || showDeveloperSettings {
             SettingsCatalogGroup {
                 if showBackupSettings { backupSection }
-                if showBackupSettings && (showChangelogSettings || showSupportSettings) { catalogDivider }
+                if showBackupSettings && (showChangelogSettings || showSupportSettings || showDeveloperSettings) { catalogDivider }
                 if showChangelogSettings { changelogSection }
-                if showChangelogSettings && showSupportSettings { catalogDivider }
+                if showChangelogSettings && (showSupportSettings || showDeveloperSettings) { catalogDivider }
                 if showSupportSettings { settingsSupportSection }
+                if showSupportSettings && showDeveloperSettings { catalogDivider }
+                if showDeveloperSettings { developerToolsSection }
             }
         }
     }
@@ -2971,6 +2981,7 @@ struct SettingsView: View {
                 appearanceToggle("隐藏顶部平台列表", isOn: $hidePlatformPicker)
                 appearanceToggle("隐藏主页刷新按钮", isOn: $homeHeaderHideRefresh)
                 appearanceToggle("每日推荐使用旧版样式", isOn: $dailySongsListStyle)
+                appearanceToggle("开启双侧外滑返回", isOn: $edgeBackGestureEnabled)
 
                 HStack {
                     Image(systemName: "textformat")
@@ -3719,6 +3730,16 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 14)
+        }
+    }
+
+    private var developerToolsSection: some View {
+        settingsSupportButton(
+            icon: "hammer.fill",
+            title: "开发者工具",
+            tint: Color.beansAmber
+        ) {
+            showDeveloperTools = true
         }
     }
 
