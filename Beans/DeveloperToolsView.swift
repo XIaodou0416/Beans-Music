@@ -222,24 +222,75 @@ struct DeveloperToolsView: View {
 
 private struct DeveloperFrameRateOverlay: View {
     @StateObject private var monitor = BeansRefreshRateMonitor()
+    @AppStorage("beans.developer.fpsOverlay.x") private var storedX = -1.0
+    @AppStorage("beans.developer.fpsOverlay.y") private var storedY = -1.0
+    @State private var displayPosition: CGPoint?
+    @State private var dragOrigin: CGPoint?
+
+    private let badgeSize = CGSize(width: 84, height: 28)
 
     var body: some View {
         GeometryReader { proxy in
+            let currentPosition = resolvedPosition(in: proxy)
+
             Text("\(Int(monitor.framesPerSecond.rounded())) FPS")
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.primary)
                 .monospacedDigit()
-                .padding(.horizontal, 10)
-                .frame(height: 28)
+                .frame(width: badgeSize.width, height: badgeSize.height)
                 .background(.thinMaterial, in: Capsule())
                 .overlay { Capsule().strokeBorder(.white.opacity(0.24), lineWidth: 0.8) }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(.top, max(proxy.safeAreaInsets.top, 10))
-                .padding(.trailing, 14)
+                .accessibilityIdentifier("beans.developer.fpsBadge")
+                .position(currentPosition)
+                .gesture(dragGesture(in: proxy, currentPosition: currentPosition))
         }
-        .allowsHitTesting(false)
         .onAppear { monitor.start() }
         .onDisappear { monitor.stop() }
+    }
+
+    private func resolvedPosition(in proxy: GeometryProxy) -> CGPoint {
+        let fallback = CGPoint(
+            x: proxy.size.width - badgeSize.width / 2 - 14,
+            y: max(proxy.safeAreaInsets.top, 10) + badgeSize.height / 2
+        )
+        let persisted = storedX >= 0 && storedY >= 0
+            ? CGPoint(x: storedX * proxy.size.width, y: storedY * proxy.size.height)
+            : fallback
+        return clamped(displayPosition ?? persisted, in: proxy)
+    }
+
+    private func clamped(_ point: CGPoint, in proxy: GeometryProxy) -> CGPoint {
+        let horizontalInset = badgeSize.width / 2 + 8
+        let topInset = max(proxy.safeAreaInsets.top, 8) + badgeSize.height / 2
+        let bottomInset = max(proxy.safeAreaInsets.bottom, 8) + badgeSize.height / 2
+        return CGPoint(
+            x: min(max(point.x, horizontalInset), max(horizontalInset, proxy.size.width - horizontalInset)),
+            y: min(max(point.y, topInset), max(topInset, proxy.size.height - bottomInset))
+        )
+    }
+
+    private func dragGesture(in proxy: GeometryProxy, currentPosition: CGPoint) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                if dragOrigin == nil {
+                    dragOrigin = currentPosition
+                }
+                guard let dragOrigin else { return }
+                displayPosition = clamped(
+                    CGPoint(
+                        x: dragOrigin.x + value.translation.width,
+                        y: dragOrigin.y + value.translation.height
+                    ),
+                    in: proxy
+                )
+            }
+            .onEnded { _ in
+                let finalPosition = clamped(displayPosition ?? currentPosition, in: proxy)
+                storedX = Double(finalPosition.x / max(proxy.size.width, 1))
+                storedY = Double(finalPosition.y / max(proxy.size.height, 1))
+                displayPosition = finalPosition
+                dragOrigin = nil
+            }
     }
 }
 
@@ -248,7 +299,7 @@ private struct DeveloperFrameRateOverlay: View {
 final class DeveloperFPSOverlayWindow {
     static let shared = DeveloperFPSOverlayWindow()
 
-    private var window: UIWindow?
+    private var window: DeveloperFPSPassthroughWindow?
 
     func setVisible(_ requested: Bool) {
         guard requested, BeansDeveloperAccess.isAuthorized else {
@@ -265,18 +316,34 @@ final class DeveloperFPSOverlayWindow {
             window = nil
         }
         if window == nil {
-            let overlayWindow = UIWindow(windowScene: scene)
+            let overlayWindow = DeveloperFPSPassthroughWindow(windowScene: scene)
             let controller = UIHostingController(rootView: DeveloperFrameRateOverlay())
             controller.view.backgroundColor = .clear
-            controller.view.isUserInteractionEnabled = false
+            controller.view.isUserInteractionEnabled = true
             overlayWindow.rootViewController = controller
             overlayWindow.backgroundColor = .clear
-            overlayWindow.isUserInteractionEnabled = false
+            overlayWindow.isUserInteractionEnabled = true
             overlayWindow.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue - 1)
             window = overlayWindow
         }
         HighRefreshKeeper.shared.configure(enabled: true)
         window?.isHidden = false
+    }
+}
+
+/// Only the badge accepts touches, so the rest of the app keeps its normal gestures.
+@MainActor
+private final class DeveloperFPSPassthroughWindow: UIWindow {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard let hitView = super.hitTest(point, with: event) else { return nil }
+        var view: UIView? = hitView
+        while let current = view {
+            if current.accessibilityIdentifier == "beans.developer.fpsBadge" {
+                return hitView
+            }
+            view = current.superview
+        }
+        return nil
     }
 }
 

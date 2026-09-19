@@ -8,6 +8,7 @@ enum RootTab: String, CaseIterable, Identifiable {
     case library
     case profile
     case search
+    case settings
 
     var id: String { rawValue }
 
@@ -18,6 +19,7 @@ enum RootTab: String, CaseIterable, Identifiable {
         case .library: return "歌单"
         case .profile: return "我的"
         case .search: return "搜索"
+        case .settings: return "设置"
         }
     }
 
@@ -28,7 +30,8 @@ enum RootTab: String, CaseIterable, Identifiable {
             case .playlists: return "dot.radiowaves.left.and.right"
             case .library: return "music.note.list"
             case .profile: return "person.crop.circle"
-                case .search: return "magnifyingglass"
+            case .search: return "magnifyingglass"
+            case .settings: return "gearshape"
             }
         }
         if style == .rounded {
@@ -38,6 +41,7 @@ enum RootTab: String, CaseIterable, Identifiable {
             case .library: return "music.note.list"
             case .profile: return "person.circle"
             case .search: return "magnifyingglass.circle"
+            case .settings: return "gearshape.circle"
             }
         }
         switch self {
@@ -46,6 +50,7 @@ enum RootTab: String, CaseIterable, Identifiable {
         case .library: return "music.note.list"
         case .profile: return "person.crop.circle"
         case .search: return "magnifyingglass"
+        case .settings: return "gearshape"
         }
     }
 
@@ -55,11 +60,51 @@ enum RootTab: String, CaseIterable, Identifiable {
         case .discover: return "BottomHome"
         case .playlists: return "BottomBroadcast"
         case .library: return "BottomLibrary"
-        case .profile, .search: return nil
+        case .profile, .search, .settings: return nil
         }
     }
 
-    static let bottomTabs: [RootTab] = [.discover, .playlists, .library, .profile, .search]
+    static let bottomTabs: [RootTab] = [.discover, .playlists, .library, .profile, .search, .settings]
+}
+
+enum BeansBottomAvatarAction: String, CaseIterable, Identifiable {
+    case search
+    case settings
+    case profile
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .search: return "打开搜索"
+        case .settings: return "打开设置"
+        case .profile: return "打开我的"
+        }
+    }
+}
+
+enum BeansHeaderAccessoryMode: String, CaseIterable, Identifiable {
+    case avatar
+    case themeToggle
+    case hidden
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .avatar: return "头像"
+        case .themeToggle: return "浅深色切换"
+        case .hidden: return "隐藏"
+        }
+    }
+}
+
+struct BeansThemeToggleRequest {
+    let location: CGPoint
+}
+
+extension Notification.Name {
+    static let beansThemeToggleRequested = Notification.Name("beans.themeToggleRequested")
 }
 
 private struct SidebarPlaylistGroup: Identifiable {
@@ -78,6 +123,7 @@ struct BeansTabVisibility: Equatable {
     var library = true
     var profile = true
     var search = true
+    var settings = false
 
     static func load(defaults: UserDefaults = .standard) -> Self {
         Self(
@@ -85,7 +131,8 @@ struct BeansTabVisibility: Equatable {
             playlists: value(for: "beans.tab.playlists.visible", defaults: defaults),
             library: value(for: "beans.tab.library.visible", defaults: defaults),
             profile: value(for: "beans.tab.profile.visible", defaults: defaults),
-            search: value(for: "beans.tab.search.visible", defaults: defaults)
+            search: value(for: "beans.tab.search.visible", defaults: defaults),
+            settings: value(for: "beans.tab.settings.visible", defaults: defaults, defaultValue: false)
         )
     }
 
@@ -96,6 +143,7 @@ struct BeansTabVisibility: Equatable {
         case .library: library = isVisible
         case .profile: profile = isVisible
         case .search: search = isVisible
+        case .settings: settings = isVisible
         }
     }
 
@@ -106,6 +154,7 @@ struct BeansTabVisibility: Equatable {
         case .library: library
         case .profile: profile
         case .search: search
+        case .settings: settings
         }
     }
 
@@ -115,11 +164,12 @@ struct BeansTabVisibility: Equatable {
         defaults.set(library, forKey: "beans.tab.library.visible")
         defaults.set(profile, forKey: "beans.tab.profile.visible")
         defaults.set(search, forKey: "beans.tab.search.visible")
+        defaults.set(settings, forKey: "beans.tab.settings.visible")
         NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
     }
 
-    private static func value(for key: String, defaults: UserDefaults) -> Bool {
-        guard defaults.object(forKey: key) != nil else { return true }
+    private static func value(for key: String, defaults: UserDefaults, defaultValue: Bool = true) -> Bool {
+        guard defaults.object(forKey: key) != nil else { return defaultValue }
         return defaults.bool(forKey: key)
     }
 }
@@ -130,11 +180,14 @@ struct RootView: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var favorites: FavoritesStore
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
+    @AppStorage("beans.bottomSearchUsesAvatar") private var bottomSearchUsesAvatar = false
+    @AppStorage("beans.bottomAvatarAction") private var bottomAvatarActionRaw = BeansBottomAvatarAction.search.rawValue
 
     @State private var selection: RootTab = .discover
     @State private var showPlayer = false
@@ -177,9 +230,18 @@ struct RootView: View {
     @State private var showHomePlatformMenu = false
     @State private var sidebarRemotePlaylists: [Playlist] = []
     @State private var sidebarLocalPlaylist: LocalPlaylist?
+    @State private var selectionBeforeAvatarShortcut: RootTab = .discover
+    @State private var showShortcutSettings = false
+    @State private var themeRevealRequest: BeansThemeToggleRequest?
+    @State private var themeRevealExpanded = false
+    @State private var themeRevealOpacity = 1.0
 
     private var tabIconStyle: BeansTabIconStyle {
         BeansTabIconStyle(rawValue: tabIconStyleRaw) ?? .sfSymbols
+    }
+
+    private var bottomAvatarAction: BeansBottomAvatarAction {
+        BeansBottomAvatarAction(rawValue: bottomAvatarActionRaw) ?? .search
     }
 
     private var visibleTabs: [RootTab] {
@@ -277,6 +339,15 @@ struct RootView: View {
                     legacyRootTabs
                         .transition(.opacity.combined(with: .scale(scale: 0.985)))
                 }
+
+                if let themeRevealRequest {
+                    BeansThemeRevealOverlay(
+                        origin: themeRevealRequest.location,
+                        revealsDarkTheme: resolvedThemeToggleTarget == .dark,
+                        isExpanded: themeRevealExpanded,
+                        opacity: themeRevealOpacity
+                    )
+                }
             }
             .animation(
                 .spring(response: 0.42, dampingFraction: 0.86, blendDuration: 0.08),
@@ -338,6 +409,13 @@ struct RootView: View {
         .onChange(of: homeFrameMeterEnabled) { enabled in
             DeveloperFPSOverlayWindow.shared.setVisible(enabled)
         }
+        .onChange(of: selection) { tab in
+            guard tab == .search, bottomSearchUsesAvatar else {
+                selectionBeforeAvatarShortcut = tab
+                return
+            }
+            routeBottomAvatarShortcut()
+        }
         .onChange(of: disclaimerAccepted) { accepted in
             if accepted, ChangelogStore.shouldShowWhatsNew {
                 showWhatsNew = true
@@ -351,6 +429,17 @@ struct RootView: View {
             withAnimation(.easeInOut(duration: 0.22)) {
                 selection = .discover
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .beansThemeToggleRequested)) { notification in
+            let request = notification.object as? BeansThemeToggleRequest
+            beginThemeReveal(from: request?.location)
+        }
+        .sheet(isPresented: $showShortcutSettings) {
+            SettingsView(onClose: { showShortcutSettings = false })
+                .environmentObject(theme)
+                .environmentObject(player)
+                .environmentObject(auth)
+                .modifier(BeansSheetModifier(detents: [.fraction(0.62), .large], dragIndicator: true))
         }
         .sheet(isPresented: $showWhatsNew) {
             WhatsNewSheet()
@@ -537,9 +626,12 @@ struct RootView: View {
                     items: visibleTabs.map {
                         GlassTabBar.Item(
                             tab: $0,
-                            title: LocalizedStringKey($0.title),
+                            title: $0 == .search && bottomSearchUsesAvatar
+                                ? LocalizedStringKey("")
+                                : LocalizedStringKey($0.title),
                             icon: $0.icon(for: tabIconStyle),
-                            assetName: $0.assetName(for: tabIconStyle)
+                            assetName: $0.assetName(for: tabIconStyle),
+                            showsAvatar: $0 == .search && bottomSearchUsesAvatar
                         )
                     },
                     selection: $selection,
@@ -549,10 +641,9 @@ struct RootView: View {
                     iconSize: 25,
                     isRoundedStyle: tabIconStyle == .rounded
                 ) { tab in
-                    guard selection != tab else { return }
                     BeansHaptics.select()
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        selection = tab
+                        handleTabSelection(tab)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -644,6 +735,12 @@ struct RootView: View {
             } label: {
                 nativeTabLabel(.search)
             }
+
+            Tab(value: .settings) {
+                SettingsView(onClose: { selection = .profile })
+            } label: {
+                nativeTabLabel(.settings)
+            }
         }
         .tint(Color.beansAmber)
         .tabBarMinimizeBehavior(isPadLandscape || player.currentSong == nil ? .never : .onScrollDown)
@@ -691,13 +788,24 @@ struct RootView: View {
                     nativeTabLabel(.search)
                 }
             }
+
+            if tabVisibility.settings {
+                Tab(value: .settings) {
+                    SettingsView(onClose: { selection = .profile })
+                } label: {
+                    nativeTabLabel(.settings)
+                }
+            }
         }
         .tint(Color.beansAmber)
         .tabBarMinimizeBehavior(isPadLandscape || player.currentSong == nil ? .never : .onScrollDown)
     }
 
     private func nativeTabTitle(_ tab: RootTab) -> LocalizedStringKey {
-        tabLabelsVisible ? LocalizedStringKey(tab.title) : LocalizedStringKey("")
+        if tab == .search && bottomSearchUsesAvatar {
+            return LocalizedStringKey("")
+        }
+        return tabLabelsVisible ? LocalizedStringKey(tab.title) : LocalizedStringKey("")
     }
 
     @available(iOS 26.0, *)
@@ -706,7 +814,11 @@ struct RootView: View {
         Label {
             Text(nativeTabTitle(tab))
         } icon: {
-            if let assetName = tab.assetName(for: tabIconStyle) {
+            if tab == .search && bottomSearchUsesAvatar {
+                BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 25, useCustom: true)
+                    .frame(width: 25, height: 25)
+                    .clipShape(Circle())
+            } else if let assetName = tab.assetName(for: tabIconStyle) {
                 Image(assetName)
                     .resizable()
                     .renderingMode(.template)
@@ -1093,6 +1205,68 @@ struct RootView: View {
         .accessibilityLabel(LocalizedStringKey(tab.title))
     }
 
+    private func handleTabSelection(_ tab: RootTab) {
+        if tab == .search && bottomSearchUsesAvatar {
+            routeBottomAvatarShortcut()
+            return
+        }
+        guard isTabVisible(tab) || tab == .settings else { return }
+        selection = tab
+    }
+
+    private func routeBottomAvatarShortcut() {
+        switch bottomAvatarAction {
+        case .search:
+            selection = .search
+        case .profile:
+            selection = .profile
+        case .settings:
+            showShortcutSettings = true
+            if selection == .search {
+                selection = isTabVisible(selectionBeforeAvatarShortcut)
+                    ? selectionBeforeAvatarShortcut
+                    : .discover
+            }
+        }
+    }
+
+    private var resolvedThemeToggleTarget: BeansThemeMode {
+        if themeMode == .dark { return .light }
+        if themeMode == .light { return .dark }
+        return colorScheme == .dark ? .light : .dark
+    }
+
+    private func beginThemeReveal(from location: CGPoint?) {
+        let target = resolvedThemeToggleTarget
+        if reduceMotion {
+            themeModeRaw = target.rawValue
+            return
+        }
+
+        themeRevealRequest = BeansThemeToggleRequest(
+            location: location ?? CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY)
+        )
+        themeRevealExpanded = false
+        themeRevealOpacity = 1
+
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.36)) {
+                themeRevealExpanded = true
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+            themeModeRaw = target.rawValue
+            withAnimation(.easeOut(duration: 0.16)) {
+                themeRevealOpacity = 0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                themeRevealRequest = nil
+                themeRevealExpanded = false
+                themeRevealOpacity = 1
+            }
+        }
+    }
+
     /// 旧系统将页面、底部播放器和胶囊底栏放在同一个 ZStack 中，
     /// 让收缩、上划展开和页面切换共享同一套手势层级。
     private var legacyRootTabs: some View {
@@ -1120,9 +1294,36 @@ struct RootView: View {
                 LibraryView()
             case .profile:
                 ProfileView()
+            case .settings:
+                SettingsView(onClose: { selection = .profile })
             }
         }
         .environment(\.beansUsesSharedRootBackdrop, usesSharedRootBackdrop)
+    }
+}
+
+private struct BeansThemeRevealOverlay: View {
+    let origin: CGPoint
+    let revealsDarkTheme: Bool
+    let isExpanded: Bool
+    let opacity: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            let farthestX = max(origin.x, proxy.size.width - origin.x)
+            let farthestY = max(origin.y, proxy.size.height - origin.y)
+            let radius = hypot(farthestX, farthestY) + 2
+
+            Circle()
+                .fill(revealsDarkTheme ? Color.black : Color.white)
+                .frame(width: radius * 2, height: radius * 2)
+                .scaleEffect(isExpanded ? 1 : 0.001)
+                .opacity(opacity)
+                .position(origin)
+                .allowsHitTesting(false)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 }
 
@@ -1358,6 +1559,7 @@ private struct GlassTabBar: View {
         let title: LocalizedStringKey
         let icon: String
         let assetName: String?
+        let showsAvatar: Bool
         var id: RootTab { tab }
     }
 
@@ -1371,6 +1573,7 @@ private struct GlassTabBar: View {
     var onSelect: (RootTab) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var auth: AuthStore
     @State private var dragX: CGFloat?
     @State private var isDragging = false
 
@@ -1418,7 +1621,11 @@ private struct GlassTabBar: View {
     private func itemLabel(_ item: Item) -> some View {
         let isSelected = selection == item.tab
         return VStack(spacing: 3) {
-            if let assetName = item.assetName {
+            if item.showsAvatar {
+                BeansAvatarView(remoteURL: auth.user?.avatarURL, size: iconSize, useCustom: true)
+                    .frame(width: iconSize, height: iconSize)
+                    .clipShape(Circle())
+            } else if let assetName = item.assetName {
                 Image(assetName)
                     .resizable()
                     .renderingMode(.template)

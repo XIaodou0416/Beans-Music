@@ -483,31 +483,9 @@ struct DiscoverView: View {
 
     /// 主页右上角的“我的”入口，复用我的页面头像并保持液态玻璃边框。
     private var homeProfileButton: some View {
-        Button {
-            BeansHaptics.tap()
+        BeansProfileShortcutButton {
             showProfile = true
-        } label: {
-            ZStack {
-                BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 38, useCustom: true)
-            }
-            .frame(width: 38, height: 38)
-            .clipShape(Circle())
-            .overlay {
-                Circle()
-                    .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
-            }
-            .padding(4)
-            .background {
-                BeansGlass(
-                    shape: Circle(),
-                    forceLiquid: true
-                )
-            }
-            .clipShape(Circle())
-            .contentShape(Circle())
         }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.92))
-        .accessibilityLabel(beansLocalized("我的", "Profile"))
     }
 
     /// 平台选择（网易云 / QQ音乐 / 酷狗音乐，样式与搜索页一致）
