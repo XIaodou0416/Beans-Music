@@ -1755,6 +1755,22 @@ struct SettingsView: View {
                         .controlSize(.regular)
                 }
             }
+            .overlay(alignment: .topLeading) {
+                if #available(iOS 26, *) {
+                    GeometryReader { proxy in
+                        Button(action: closeSettings) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(Color.beansLabel)
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                        .padding(.leading, 10)
+                        .padding(.top, proxy.safeAreaInsets.top + 6)
+                    }
+                }
+            }
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1918,11 +1934,16 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 14)
+            .padding(.top, settingsContentTopPadding)
             .padding(.bottom, 40)
             .beansAdaptiveContentWidth()
         }
         .beansScrollIndicatorsHidden()
+    }
+
+    private var settingsContentTopPadding: CGFloat {
+        if #available(iOS 26, *) { return 72 }
+        return 14
     }
 
     private func closeSettings() {
@@ -3971,20 +3992,37 @@ private struct SettingsCatalogGroup<Content: View>: View {
     }
 }
 
-/// iOS 27 keeps the native navigation host. Earlier releases use a plain
-/// full-screen surface so settings matches the home page without a second
-/// legacy navigation header.
+/// iOS 26 and later use the same plain full-screen surface as the home page.
+/// Older systems retain the small compatibility header.
 private struct SettingsNavigationContainer<Content: View>: View {
     let onClose: () -> Void
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        if #available(iOS 27, *) {
-            NavigationStack {
+        if #available(iOS 26, *) {
+            content()
+        } else {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Button(action: onClose) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 42, height: 42)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text("设置")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.beansLabel)
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 52)
+
                 content()
             }
-        } else {
-            content()
         }
     }
 }
