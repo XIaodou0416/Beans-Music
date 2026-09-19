@@ -252,6 +252,34 @@ final class DeviceReporter {
         }
     }
 
+    func grantDownloadAccess(to targetUserID: String, enabled: Bool) async throws {
+        guard BeansDeveloperAccess.isAuthorized else {
+            throw BackendRequestError.server("当前设备没有开发者权限")
+        }
+        let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalizedTarget.count >= 16 else {
+            throw BackendRequestError.server("设备标识格式不正确")
+        }
+
+        var request = URLRequest(url: endpoint(for: "developer/grant-download"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 8
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "developer_user_id": DeviceIdentity.userID,
+            "target_user_id": normalizedTarget,
+            "download_unlocked": enabled
+        ])
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response, body: data)
+        let result = try decodeResponse(data)
+        guard result.ok != false else {
+            throw BackendRequestError.server(result.message ?? "下载权限操作失败")
+        }
+    }
+
     private func backendMessage(from data: Data) -> String? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let rawMessage = object["message"] as? String,

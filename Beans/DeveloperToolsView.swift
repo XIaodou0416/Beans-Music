@@ -20,6 +20,7 @@ struct DeveloperToolsView: View {
     @ObservedObject private var logger = BeansLogger.shared
     @StateObject private var refreshMonitor = BeansRefreshRateMonitor()
     @State private var showLogShare = false
+    @State private var showDownloadGrant = false
     @AppStorage("beans.developer.homeFrameMeter") private var homeFrameMeterEnabled = true
 
     private var appVersion: String {
@@ -46,6 +47,7 @@ struct DeveloperToolsView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         refreshCard
                         runtimeCard
+                        downloadPermissionCard
                         playbackCard
                         diagnosticsCard
                     }
@@ -70,6 +72,10 @@ struct DeveloperToolsView: View {
         .onDisappear { refreshMonitor.stop() }
         .sheet(isPresented: $showLogShare) {
             ShareSheet(items: [BeansLogger.shared.exportLogURL()])
+        }
+        .sheet(isPresented: $showDownloadGrant) {
+            DeveloperDownloadGrantSheet()
+                .environmentObject(theme)
         }
     }
 
@@ -140,6 +146,26 @@ struct DeveloperToolsView: View {
             developerRow("队列", value: "\(player.currentIndex + 1) / \(max(player.queue.count, 0))")
             developerRow("播放模式", value: player.playMode.rawValue)
             developerRow("播放速率", value: String(format: "%.2fx", player.rate))
+        }
+    }
+
+    private var downloadPermissionCard: some View {
+        developerCard(title: "下载权限", icon: "arrow.down.circle", tint: Color.beansHighlight) {
+            Text("使用其他设备的设备标识，为该设备开放或关闭下载功能。")
+                .font(BeansFont.appFont(12))
+                .foregroundStyle(Color.beansComment)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                showDownloadGrant = true
+            } label: {
+                Label("管理其他设备", systemImage: "person.badge.key")
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 38)
+                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -217,6 +243,89 @@ struct DeveloperToolsView: View {
     private func formatTime(_ value: TimeInterval) -> String {
         let total = max(0, Int(value.rounded(.down)))
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+private struct DeveloperDownloadGrantSheet: View {
+    @EnvironmentObject private var theme: ThemeStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var targetDeviceID = ""
+    @State private var enabled = true
+    @State private var isSubmitting = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        BeansNavigationStack {
+            ZStack {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("下载权限")
+                            .font(BeansFont.appFont(24, .bold))
+                            .foregroundStyle(Color.beansLabel)
+                        Text("输入对方设备的设备标识。设备需要先启动过 Beans，才能被找到并更新权限。")
+                            .font(BeansFont.appFont(13))
+                            .foregroundStyle(Color.beansComment)
+                            .fixedSize(horizontal: false, vertical: true)
+                        TextField("设备标识", text: $targetDeviceID)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .font(.system(size: 13, design: .monospaced))
+                            .padding(.horizontal, 14)
+                            .frame(height: 48)
+                            .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), forceLiquid: true) }
+                        Toggle("开放下载功能", isOn: $enabled)
+                            .tint(Color.beansAmber)
+                        if !errorMessage.isEmpty {
+                            Text(errorMessage)
+                                .font(BeansFont.appFont(12, .medium))
+                                .foregroundStyle(.red)
+                        }
+                        Button {
+                            submit()
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isSubmitting { ProgressView().tint(Color.beansLabel) }
+                                Text(isSubmitting ? "正在保存" : "保存权限")
+                            }
+                            .font(BeansFont.appFont(14, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSubmitting || targetDeviceID.trimmingCharacters(in: .whitespacesAndNewlines).count < 16)
+                    }
+                    .padding(20)
+                    .beansAdaptiveContentWidth()
+                }
+                .beansScrollIndicatorsHidden()
+            }
+            .navigationTitle("开发者权限")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func submit() {
+        guard !isSubmitting else { return }
+        isSubmitting = true
+        errorMessage = ""
+        Task { @MainActor in
+            do {
+                try await DeviceReporter.shared.grantDownloadAccess(to: targetDeviceID, enabled: enabled)
+                ToastCenter.shared.show(enabled ? "已开放该设备的下载功能" : "已关闭该设备的下载功能")
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isSubmitting = false
+        }
     }
 }
 

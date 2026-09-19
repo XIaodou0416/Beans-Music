@@ -205,6 +205,7 @@ struct RootView: View {
     @State private var themeRevealSnapshot: UIImage?
     @State private var themeRevealOrigin = CGPoint.zero
     @State private var themeRevealProgress: CGFloat = 0
+    @State private var themeRevealCanvasSize = CGSize.zero
 
     private var tabIconStyle: BeansTabIconStyle {
         BeansTabIconStyle(rawValue: tabIconStyleRaw) ?? .sfSymbols
@@ -1150,31 +1151,42 @@ struct RootView: View {
             return
         }
 
-        guard let snapshot = currentWindowSnapshot() else {
+        guard let captured = currentWindowSnapshot() else {
             themeModeRaw = target.rawValue
             return
         }
 
-        themeRevealSnapshot = snapshot
-        themeRevealOrigin = location ?? CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY)
+        themeRevealSnapshot = captured.image
+        themeRevealCanvasSize = captured.size
+        let canvas = captured.size
+        let requestedOrigin = location ?? CGPoint(x: canvas.width * 0.5, y: canvas.height * 0.5)
+        themeRevealOrigin = CGPoint(
+            x: min(max(requestedOrigin.x, 0), canvas.width),
+            y: min(max(requestedOrigin.y, 0), canvas.height)
+        )
         themeRevealProgress = 0
 
         // Switch the real view immediately. The captured old frame masks it
         // outside the expanding circle, so the circle reveals live content,
         // rather than showing a blank white/dark placeholder.
-        themeModeRaw = target.rawValue
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            themeModeRaw = target.rawValue
+        }
         DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.62)) {
+            withAnimation(.timingCurve(0.18, 0.88, 0.22, 1.0, duration: 0.78)) {
                 themeRevealProgress = 1
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.72) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.92) {
             themeRevealSnapshot = nil
             themeRevealProgress = 0
+            themeRevealCanvasSize = .zero
         }
     }
 
-    private func currentWindowSnapshot() -> UIImage? {
+    private func currentWindowSnapshot() -> (image: UIImage, size: CGSize)? {
         let windows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
@@ -1182,11 +1194,14 @@ struct RootView: View {
         guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return nil }
 
         let format = UIGraphicsImageRendererFormat()
-        format.scale = window.screen.scale
+        // A full 3x screenshot is expensive on iPad. The reveal is a short-lived
+        // mask, so cap the backing scale to keep the first frame responsive.
+        format.scale = min(window.screen.scale, 1.5)
         format.opaque = false
-        return UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
+        let image = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
         }
+        return (image, window.bounds.size)
     }
 
     /// 旧系统将页面、底部播放器和胶囊底栏放在同一个 ZStack 中，
@@ -1251,6 +1266,7 @@ private struct BeansThemeRevealOverlay: View {
                         }
                         .compositingGroup()
                 }
+                .drawingGroup(opaque: false, colorMode: .linear)
                 .allowsHitTesting(false)
         }
         .ignoresSafeArea()

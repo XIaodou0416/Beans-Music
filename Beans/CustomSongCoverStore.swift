@@ -424,6 +424,7 @@ final class CustomCoverMediaUIView: UIView {
     private var videoLayer: AVPlayerLayer?
     private var currentURL: URL?
     private var currentKind: CustomCoverMediaKind?
+    private var activeObserver: NSObjectProtocol?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -433,9 +434,31 @@ final class CustomCoverMediaUIView: UIView {
         videoHost.clipsToBounds = true
         addSubview(imageView)
         addSubview(videoHost)
+        activeObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.resumePlaybackIfNeeded()
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    deinit {
+        if let activeObserver {
+            NotificationCenter.default.removeObserver(activeObserver)
+        }
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            player?.pause()
+        } else {
+            resumePlaybackIfNeeded()
+        }
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -448,8 +471,9 @@ final class CustomCoverMediaUIView: UIView {
 
     func configure(url: URL, isMuted: Bool) {
         let kind = CustomCoverMedia.kind(for: url)
-        guard currentURL != url || currentKind != kind else {
+        guard currentURL != url || currentKind != kind || (kind == .video && player == nil) else {
             player?.isMuted = isMuted
+            resumePlaybackIfNeeded()
             return
         }
         currentURL = url
@@ -478,14 +502,21 @@ final class CustomCoverMediaUIView: UIView {
             let item = AVPlayerItem(url: url)
             let player = AVQueuePlayer()
             player.isMuted = isMuted
+            player.actionAtItemEnd = .none
+            player.automaticallyWaitsToMinimizeStalling = false
             self.player = player
             looper = AVPlayerLooper(player: player, templateItem: item)
             let layer = AVPlayerLayer(player: player)
             layer.videoGravity = .resizeAspectFill
             videoHost.layer.addSublayer(layer)
             videoLayer = layer
-            player.play()
+            player.playImmediately(atRate: 1.0)
         }
         setNeedsLayout()
+    }
+
+    private func resumePlaybackIfNeeded() {
+        guard currentKind == .video, window != nil else { return }
+        player?.playImmediately(atRate: 1.0)
     }
 }

@@ -10,6 +10,8 @@ const LOCATION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const ONLINE_WINDOW_MS = 3 * 60 * 1000;
 const INACTIVE_USER_WINDOW_MS = 10 * 24 * 60 * 60 * 1000;
 const USER_ID_PATTERN = /^[a-f0-9-]{16,80}$/i;
+const DEVELOPER_DEVICE_ID_HASH = process.env.BEANS_DEVELOPER_DEVICE_ID_HASH
+  || 'f6073926d77dd0947338f5f27f133201a484a2d2b28f68f7fbd95cb168526d36';
 const locationCache = new Map();
 const MEDIA_TYPES = new Set([
   'image/jpeg',
@@ -84,6 +86,32 @@ function createBeansRouter(options = {}) {
     } catch (error) {
       next(error);
     }
+  });
+
+  // The authorized developer installation can grant or revoke download access
+  // for a registered device without opening the browser admin panel.
+  router.post('/developer/grant-download', (request, response) => {
+    const payload = request.body || {};
+    const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
+    const targetUserID = text(payload.target_user_id, 80);
+    if (!isDeveloperDeviceID(developerUserID)) {
+      return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
+    }
+    if (!USER_ID_PATTERN.test(targetUserID)) {
+      return response.status(422).json({ ok: false, message: 'invalid_user_id' });
+    }
+
+    let updatedUser;
+    mutateDatabase((database) => {
+      const user = database.users[targetUserID];
+      if (!user) return;
+      user.download_unlocked = Boolean(payload.download_unlocked);
+      updatedUser = user;
+    });
+    if (!updatedUser) {
+      return response.status(404).json({ ok: false, message: 'user_not_found' });
+    }
+    return response.json(publicUserState(updatedUser));
   });
 
   router.post('/feedback', upload.array('attachments[]', MAX_ATTACHMENTS), (request, response, next) => {
@@ -544,6 +572,11 @@ function secureEqual(left, right) {
 
 function text(value, maxLength) {
   return String(value || '').trim().slice(0, maxLength);
+}
+
+function isDeveloperDeviceID(value) {
+  const digest = crypto.createHash('sha256').update(String(value).toLowerCase()).digest('hex');
+  return secureEqual(digest, DEVELOPER_DEVICE_ID_HASH);
 }
 
 function listeningSeconds(value) {

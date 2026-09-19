@@ -9,6 +9,7 @@ final class BeansAvatarStore: ObservableObject {
     static let shared = BeansAvatarStore()
 
     @Published private(set) var path: String
+    @Published private(set) var revision = 0
     private let defaultsKey = "beans.profile.customAvatarPath"
     private let dataKey = "beans.profile.customAvatarData"
     private let filenameKey = "beans.profile.customAvatarFilename"
@@ -82,6 +83,7 @@ final class BeansAvatarStore: ObservableObject {
             UserDefaults.standard.set(jpeg.base64EncodedString(), forKey: dataKey)
             UserDefaults.standard.set(fileURL.lastPathComponent, forKey: filenameKey)
             BeansImageFileCache.remove(path)
+            revision &+= 1
         } catch {
             BeansLogger.shared.log("自定义头像保存失败：\(error.localizedDescription)", level: .warn)
         }
@@ -102,6 +104,7 @@ final class BeansAvatarStore: ObservableObject {
             UserDefaults.standard.set(path, forKey: defaultsKey)
             UserDefaults.standard.removeObject(forKey: dataKey)
             UserDefaults.standard.set(fileURL.lastPathComponent, forKey: filenameKey)
+            revision &+= 1
         } catch {
             BeansLogger.shared.log("自定义视频头像保存失败：\(error.localizedDescription)", level: .warn)
         }
@@ -116,6 +119,7 @@ final class BeansAvatarStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: defaultsKey)
         UserDefaults.standard.removeObject(forKey: dataKey)
         UserDefaults.standard.removeObject(forKey: filenameKey)
+        revision &+= 1
     }
 }
 
@@ -130,6 +134,7 @@ struct BeansAvatarView: View {
         Group {
             if useCustom, store.isVideo {
                 CustomCoverMediaView(url: URL(fileURLWithPath: store.path), isMuted: true)
+                    .id(store.revision)
             } else if useCustom, let custom = BeansImageFileCache.image(at: store.path) {
                 Image(uiImage: custom)
                     .resizable()
@@ -193,20 +198,9 @@ struct BeansProfileShortcutButton: View {
 
 private struct BeansThemeToggleButton: View {
     let colorScheme: ColorScheme
-    @State private var touchLocation = CGPoint.zero
 
     var body: some View {
-        Button {
-            BeansHaptics.tap()
-            NotificationCenter.default.post(
-                name: .beansThemeToggleRequested,
-                object: BeansThemeToggleRequest(
-                    location: touchLocation == .zero
-                        ? CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY)
-                        : touchLocation
-                )
-            )
-        } label: {
+        ZStack {
             Image(systemName: colorScheme == .dark ? "sun.max.fill" : "moon.stars.fill")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(Color.beansLabel)
@@ -216,14 +210,28 @@ private struct BeansThemeToggleButton: View {
                 }
                 .contentShape(Circle())
         }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.92))
-        .simultaneousGesture(
+        .contentShape(Circle())
+        .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                .onChanged { value in
-                    touchLocation = value.startLocation
+                .onEnded { value in
+                    BeansHaptics.tap()
+                    NotificationCenter.default.post(
+                        name: .beansThemeToggleRequested,
+                        object: BeansThemeToggleRequest(location: value.location)
+                    )
                 }
         )
         .accessibilityLabel(beansLocalized("切换浅深色模式", "Toggle light and dark mode"))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            BeansHaptics.tap()
+            NotificationCenter.default.post(
+                name: .beansThemeToggleRequested,
+                object: BeansThemeToggleRequest(
+                    location: CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY)
+                )
+            )
+        }
     }
 }
 
