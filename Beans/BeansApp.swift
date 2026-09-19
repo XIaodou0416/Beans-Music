@@ -80,6 +80,8 @@ struct BeansApp: App {
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
+                // The settings option is intentionally hidden, but high-refresh rendering stays enabled.
+                HighRefreshKeeper.shared.configure(enabled: true)
                 Task {
                     await DeviceReporter.shared.reportHeartbeat()
                     await RemoteControlStore.shared.refreshIfNeeded()

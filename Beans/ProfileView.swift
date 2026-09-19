@@ -16,6 +16,7 @@ struct ProfileView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
     @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
@@ -838,7 +839,7 @@ struct ProfileView: View {
 
             if donationExpanded {
                 VStack(alignment: .leading, spacing: 14) {
-                Image("DonationQR")
+                Image(colorScheme == .dark ? "DonationQRDark" : "DonationQR")
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: 172)
@@ -3716,7 +3717,8 @@ struct SettingsView: View {
     }
 
     private var runtimeEnvironmentFooter: some View {
-        HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
             Image(systemName: "iphone.gen3")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.beansComment)
@@ -3725,17 +3727,47 @@ struct SettingsView: View {
                 Text("运行环境")
                     .font(BeansFont.appFont(14, .semibold))
                     .foregroundStyle(Color.beansLabel)
-                Text("\(UIDevice.current.model) · \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansComment)
-                Text(runtimeVersionText)
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(Color.beansComment.opacity(0.8))
             }
             Spacer(minLength: 0)
+            }
+
+            runtimeEnvironmentRow(
+                "设备",
+                value: "\(UIDevice.current.model) · \(DeviceIdentity.hardwareModel)"
+            )
+            runtimeEnvironmentRow(
+                "系统",
+                value: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
+            )
+            runtimeEnvironmentRow("版本", value: runtimeVersionText)
+            runtimeEnvironmentRow(
+                "界面尺寸",
+                value: "\(Int(UIScreen.main.bounds.width)) × \(Int(UIScreen.main.bounds.height)) @\(String(format: \"%.0f\", UIScreen.main.scale))x"
+            )
+            Button {
+                UIPasteboard.general.string = DeviceIdentity.userID
+                ToastCenter.shared.show("设备标识已复制")
+            } label: {
+                runtimeEnvironmentRow("设备标识", value: DeviceIdentity.userID, monospaced: true)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 14)
+    }
+
+    private func runtimeEnvironmentRow(_ title: String, value: String, monospaced: Bool = false) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(BeansFont.appFont(12))
+                .foregroundStyle(Color.beansSecondary)
+            Spacer(minLength: 12)
+            Text(value)
+                .font(monospaced ? .system(size: 11, design: .monospaced) : BeansFont.appFont(12, .medium))
+                .foregroundStyle(Color.beansComment)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
     }
 
     private var runtimeVersionText: String {

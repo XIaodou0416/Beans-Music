@@ -11,17 +11,33 @@ final class BeansAvatarStore: ObservableObject {
     @Published private(set) var path: String
     private let defaultsKey = "beans.profile.customAvatarPath"
     private let dataKey = "beans.profile.customAvatarData"
+    private let filenameKey = "beans.profile.customAvatarFilename"
+
+    private static var storageDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    }
 
     private init() {
         let defaults = UserDefaults.standard
         let storedPath = defaults.string(forKey: defaultsKey) ?? ""
-        if !storedPath.isEmpty, FileManager.default.fileExists(atPath: storedPath) {
+        let storedFilename = defaults.string(forKey: filenameKey) ?? ""
+        let migratedFilename = storedPath.isEmpty ? "" : URL(fileURLWithPath: storedPath).lastPathComponent
+        let stableFilenames = [storedFilename, migratedFilename].filter { !$0.isEmpty }
+
+        if let stableURL = stableFilenames.lazy
+            .map({ Self.storageDirectory.appendingPathComponent($0) })
+            .first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
+            path = stableURL.path
+            defaults.set(stableURL.path, forKey: defaultsKey)
+            defaults.set(stableURL.lastPathComponent, forKey: filenameKey)
+        } else if !storedPath.isEmpty, FileManager.default.fileExists(atPath: storedPath) {
             path = storedPath
+            defaults.set(URL(fileURLWithPath: storedPath).lastPathComponent, forKey: filenameKey)
         } else if let encoded = defaults.string(forKey: dataKey),
                   let data = Data(base64Encoded: encoded),
                   let image = UIImage(data: data),
                   let jpeg = image.jpegData(compressionQuality: 0.88) {
-            let fileURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            let fileURL = Self.storageDirectory
                 .appendingPathComponent("BeansProfileAvatar.jpg")
             do {
                 try FileManager.default.createDirectory(
@@ -31,6 +47,7 @@ final class BeansAvatarStore: ObservableObject {
                 try jpeg.write(to: fileURL, options: .atomic)
                 path = fileURL.path
                 defaults.set(path, forKey: defaultsKey)
+                defaults.set(fileURL.lastPathComponent, forKey: filenameKey)
             } catch {
                 path = ""
             }
@@ -46,7 +63,7 @@ final class BeansAvatarStore: ObservableObject {
     }
 
     func save(data: Data) {
-        let fileURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let fileURL = Self.storageDirectory
             .appendingPathComponent("BeansProfileAvatar.jpg")
         do {
             try FileManager.default.createDirectory(
@@ -63,6 +80,7 @@ final class BeansAvatarStore: ObservableObject {
             path = fileURL.path
             UserDefaults.standard.set(path, forKey: defaultsKey)
             UserDefaults.standard.set(jpeg.base64EncodedString(), forKey: dataKey)
+            UserDefaults.standard.set(fileURL.lastPathComponent, forKey: filenameKey)
             BeansImageFileCache.remove(path)
         } catch {
             BeansLogger.shared.log("自定义头像保存失败：\(error.localizedDescription)", level: .warn)
@@ -71,7 +89,7 @@ final class BeansAvatarStore: ObservableObject {
 
     func saveVideo(data: Data, fileExtension: String) {
         let ext = fileExtension.isEmpty ? "mov" : fileExtension.lowercased()
-        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let directory = Self.storageDirectory
         let fileURL = directory.appendingPathComponent("BeansProfileAvatar").appendingPathExtension(ext)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -83,6 +101,7 @@ final class BeansAvatarStore: ObservableObject {
             path = fileURL.path
             UserDefaults.standard.set(path, forKey: defaultsKey)
             UserDefaults.standard.removeObject(forKey: dataKey)
+            UserDefaults.standard.set(fileURL.lastPathComponent, forKey: filenameKey)
         } catch {
             BeansLogger.shared.log("自定义视频头像保存失败：\(error.localizedDescription)", level: .warn)
         }
@@ -96,6 +115,7 @@ final class BeansAvatarStore: ObservableObject {
         path = ""
         UserDefaults.standard.removeObject(forKey: defaultsKey)
         UserDefaults.standard.removeObject(forKey: dataKey)
+        UserDefaults.standard.removeObject(forKey: filenameKey)
     }
 }
 
