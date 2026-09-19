@@ -276,14 +276,12 @@ struct ArtistHomeSheet: View {
         }
     }
 
-    /// 网易云返回的专辑列表同时包含正式专辑、EP 和单曲。
-    /// 其它平台没有稳定的类型字段时，沿用曲目数量做兼容分类。
     private var studioAlbums: [Album] {
-        albums.filter { ($0.trackCount ?? 2) > 1 }
+        albums.filter { !$0.isEPOrSingle }
     }
 
     private var epsAndSingles: [Album] {
-        albums.filter { ($0.trackCount ?? 2) <= 1 }
+        albums.filter(\.isEPOrSingle)
     }
 
     @ViewBuilder
@@ -295,33 +293,36 @@ struct ArtistHomeSheet: View {
                     .foregroundStyle(Color.beansLabel)
                     .padding(.horizontal, 16)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 124), spacing: 10)], spacing: 12) {
-                    ForEach(albums) { album in
-                        Button {
-                            openAlbum(album)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                CoverImage(url: album.coverURL, size: 112, cornerRadius: 12)
-                                    .frame(maxWidth: .infinity)
-                                Text(album.name)
-                                    .font(BeansFont.appFont(12, .medium))
-                                    .foregroundStyle(Color.beansLabel)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                if let count = album.trackCount {
-                                    Text(beansSongCountText(count))
-                                        .font(BeansFont.appFont(10))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 14) {
+                        ForEach(albums) { album in
+                            Button {
+                                openAlbum(album)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 7) {
+                                    CoverImage(url: album.coverURL, size: 128, cornerRadius: 12)
+                                    Text(album.name)
+                                        .font(BeansFont.appFont(13, .medium))
+                                        .foregroundStyle(Color.beansLabel)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                        .frame(width: 128, alignment: .leading)
+                                    Text(album.releaseType?.isEmpty == false
+                                        ? album.releaseType!
+                                        : (album.trackCount.map(beansSongCountText) ?? ""))
+                                        .font(BeansFont.appFont(11))
                                         .foregroundStyle(Color.beansComment)
+                                        .lineLimit(1)
+                                        .frame(width: 128, alignment: .leading)
                                 }
+                                .contentShape(Rectangle())
                             }
-                            .padding(7)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
                 }
-                .padding(.horizontal, 10)
             }
         }
     }

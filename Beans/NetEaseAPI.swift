@@ -418,7 +418,8 @@ final class NetEaseAPI {
                 artistName: artist,
                 coverURL: pic.isEmpty ? nil : URL(string: pic),
                 source: .netease,
-                trackCount: item["size"] as? Int
+                trackCount: item["size"] as? Int,
+                releaseType: item["subType"] as? String ?? item["type"] as? String
             ))
         }
         return albums
@@ -481,7 +482,8 @@ final class NetEaseAPI {
                 artistName: artistName,
                 coverURL: pic.isEmpty ? nil : URL(string: pic),
                 source: .netease,
-                trackCount: item["size"] as? Int
+                trackCount: item["size"] as? Int,
+                releaseType: item["subType"] as? String ?? item["type"] as? String
             ))
         }
         return albums

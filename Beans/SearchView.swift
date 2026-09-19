@@ -1860,34 +1860,37 @@ struct AlbumDetailView: View {
 
                     if !otherAlbums.isEmpty {
                         Section {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 124), spacing: 10)], spacing: 12) {
-                                ForEach(otherAlbums) { item in
-                                    Button {
-                                        BeansHaptics.tap()
-                                        selectedOtherAlbum = item
-                                    } label: {
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            CoverImage(url: item.coverURL, size: 112, cornerRadius: 12)
-                                                .frame(maxWidth: .infinity)
-                                            Text(item.name)
-                                                .font(BeansFont.appFont(12, .medium))
-                                                .foregroundStyle(Color.beansLabel)
-                                                .lineLimit(2)
-                                                .multilineTextAlignment(.leading)
-                                            if let count = item.trackCount {
-                                                Text(beansSongCountText(count))
-                                                    .font(BeansFont.appFont(10))
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                LazyHStack(alignment: .top, spacing: 14) {
+                                    ForEach(otherAlbums) { item in
+                                        Button {
+                                            BeansHaptics.tap()
+                                            selectedOtherAlbum = item
+                                        } label: {
+                                            VStack(alignment: .leading, spacing: 7) {
+                                                CoverImage(url: item.coverURL, size: 128, cornerRadius: 12)
+                                                Text(item.name)
+                                                    .font(BeansFont.appFont(13, .medium))
+                                                    .foregroundStyle(Color.beansLabel)
+                                                    .lineLimit(2)
+                                                    .multilineTextAlignment(.leading)
+                                                    .frame(width: 128, alignment: .leading)
+                                                Text(item.releaseType?.isEmpty == false
+                                                    ? item.releaseType!
+                                                    : (item.trackCount.map(beansSongCountText) ?? ""))
+                                                    .font(BeansFont.appFont(11))
                                                     .foregroundStyle(Color.beansComment)
+                                                    .lineLimit(1)
+                                                    .frame(width: 128, alignment: .leading)
                                             }
+                                            .contentShape(Rectangle())
                                         }
-                                        .padding(7)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)) }
+                                        .buttonStyle(.plain)
                                     }
-                                    .buttonStyle(.plain)
                                 }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 4)
                             }
-                            .padding(.horizontal, 10)
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                         } header: {

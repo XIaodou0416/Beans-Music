@@ -408,6 +408,18 @@ struct Album: Identifiable, Hashable, Codable {
     let coverURL: URL?
     let source: SongSource
     var trackCount: Int?
+    /// 平台返回的发行类型，例如 Album / EP / Single。缺失时按曲目数降级判断。
+    var releaseType: String? = nil
+
+    var isEPOrSingle: Bool {
+        let normalized = releaseType?
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased() ?? ""
+        if normalized.contains("ep") || normalized.contains("single") || normalized.contains("单曲") {
+            return true
+        }
+        return trackCount == 1
+    }
 }
 
 struct Playlist: Identifiable, Hashable, Codable {
