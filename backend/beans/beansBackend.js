@@ -93,7 +93,7 @@ function createBeansRouter(options = {}) {
   router.post('/developer/grant-download', (request, response) => {
     const payload = request.body || {};
     const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
-    const targetUserID = text(payload.target_user_id, 80);
+    const targetUserID = text(payload.target_user_id, 80).toLowerCase();
     if (!isDeveloperDeviceID(developerUserID)) {
       return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
     }
@@ -103,7 +103,8 @@ function createBeansRouter(options = {}) {
 
     let updatedUser;
     mutateDatabase((database) => {
-      const user = database.users[targetUserID];
+      const userKey = Object.keys(database.users).find((key) => key.toLowerCase() === targetUserID);
+      const user = userKey ? database.users[userKey] : null;
       if (!user) return;
       const enabled = Boolean(payload.download_unlocked);
       user.download_unlocked = enabled;

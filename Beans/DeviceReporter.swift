@@ -276,6 +276,12 @@ final class DeviceReporter {
             if let body, let message = backendMessage(from: body) {
                 throw BackendRequestError.server(message)
             }
+            if http.statusCode == 404 {
+                throw BackendRequestError.server(beansLocalized(
+                    "服务器尚未部署下载授权接口，请先更新后台服务。",
+                    "The server has not deployed the download-access endpoint yet. Update the backend first."
+                ))
+            }
             throw BackendRequestError.httpStatus(http.statusCode)
         }
     }
