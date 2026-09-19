@@ -1746,7 +1746,10 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            // Settings is presented over the home screen. Sample the same
+            // wallpaper/backdrop as the home cards so its clear glass does not
+            // turn into a milky white surface at either sheet detent.
+            GlassBackdrop(customColor: theme.customBackground, homeMode: true)
             if #unavailable(iOS 27) {
                 // iOS 26 does not consistently retain a sampling surface while
                 // this sheet is at its compact detent. Keep one transparent
