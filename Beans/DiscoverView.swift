@@ -933,10 +933,6 @@ struct DiscoverView: View {
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    Image(systemName: "waveform")
-                        .font(.system(size: 58, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.18))
-                        .offset(x: 24, y: -16)
                 }
                 .frame(width: 148, height: 148)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
