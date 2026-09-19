@@ -253,8 +253,19 @@ struct ArtistHomeSheet: View {
                                 Label("立即播放", systemImage: "play.fill")
                             }
                         }
+                        if index < displayedHotSongs.count - 1 {
+                            Divider()
+                                .overlay(Color.beansComment.opacity(0.16))
+                                .padding(.leading, 60)
+                        }
                     }
                 }
+                .padding(.vertical, 4)
+                .background {
+                    BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .padding(.horizontal, 12)
             }
         }
     }

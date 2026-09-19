@@ -13,6 +13,8 @@ struct SongCell: View {
     var showCover = true
     /// 玻璃行模式：为行添加清透液态玻璃底（二级列表页统一风格用）
     var glassRow = false
+    /// 详情页的大型歌曲容器内使用，行自身不再重复创建玻璃背景。
+    var groupedRow = false
     /// 需要整体玻璃容器时，单行保持纯净背景
     var suppressNativeCleanRowGlass = false
     var playbackContext: [Song] = []
@@ -145,7 +147,7 @@ struct SongCell: View {
     var body: some View {
         let _ = theme.accent
         Group {
-        if glassRow || (isNativeClean && !suppressNativeCleanRowGlass) {
+        if !groupedRow && (glassRow || (isNativeClean && !suppressNativeCleanRowGlass)) {
                 rowContent
                     .padding(.horizontal, 10)
                     .background {

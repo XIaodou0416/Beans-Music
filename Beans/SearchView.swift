@@ -151,15 +151,12 @@ struct BeansUnifiedSearchField: View {
 
     @ViewBuilder
     var body: some View {
-        if #available(iOS 26, *) {
-            GlassEffectContainer {
-                fieldContent
-                    .frame(minHeight: 56)
-                    .glassEffect(.regular.interactive(), in: Capsule())
+        fieldContent
+            .frame(minHeight: 56)
+            .background {
+                BeansGlass(shape: Capsule(), forceLiquid: true)
             }
-        } else {
-            legacyField
-        }
+            .clipShape(Capsule())
     }
 
     /// 保留旧系统原有的圆角、尺寸与材质，避免 iOS 26 的液态搜索栏影响低系统布局。
@@ -212,7 +209,7 @@ struct BeansUnifiedSearchField: View {
         }
         .padding(.horizontal, 15)
         .frame(maxWidth: .infinity)
-        .contentShape(Capsule())
+        .contentShape(Rectangle())
         .allowsHitTesting(true)
         .zIndex(20)
     }
@@ -1847,7 +1844,7 @@ struct AlbumDetailView: View {
                     .listRowSeparator(.hidden)
 
                     ForEach(Array(tracks.enumerated()), id: \.element.identityKey) { index, song in
-                        SongCell(song: song, glassRow: true, playbackContext: tracks, playbackIndex: index) {
+                        SongCell(song: song, groupedRow: true, playbackContext: tracks, playbackIndex: index) {
                             player.play(songs: tracks, startAt: index)
                         }
                         .listRowBackground(Color.clear)
@@ -1856,6 +1853,7 @@ struct AlbumDetailView: View {
                 }
                 .listStyle(.plain)
                 .beansScrollContentBackgroundHidden()
+                .beansGroupedSongListSurface()
             }
         }
         .navigationTitle(album.name)

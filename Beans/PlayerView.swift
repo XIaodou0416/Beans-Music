@@ -6151,7 +6151,7 @@ struct PlayerSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("beans.playerSettings.playbackExpanded") private var playbackExpanded = false
     @AppStorage("beans.playerSettings.lyricEffectExpanded") private var lyricEffectExpanded = false
-    @AppStorage("beans.playerSettings.coverExpanded") private var coverExpanded = false
+    @AppStorage("beans.playerSettings.coverExpanded") private var coverExpanded = true
     @AppStorage("beans.playerSettings.appleMusicExpanded") private var appleMusicExpanded = false
     @State private var showLyricBackgroundPicker = false
 
@@ -6940,38 +6940,10 @@ private struct CompactSettingGroup<Content: View>: View {
 }
 
 private struct PlayerSettingsLiquidGlass<S: Shape>: View {
-    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     let shape: S
 
-    private var uiStyle: BeansUIStyle {
-        uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
-    }
-
     var body: some View {
-        Group {
-            if #available(iOS 26, *), uiStyle == .liquid {
-                GlassEffectContainer {
-                    shape
-                        .fill(.clear)
-                        .glassEffect(.clear, in: shape)
-                }
-            } else {
-                switch uiStyle {
-                case .clear, .liquid:
-                    if #available(iOS 26, *) {
-                        shape.fill(.ultraThinMaterial)
-                    } else {
-                        shape.fill(Color.beansGlassFill.opacity(0.88))
-                    }
-                case .compact:
-                    shape.fill(Color.beansGlassFill.opacity(0.74))
-                case .nativeClean:
-                    shape.fill(Color.primary.opacity(0.038))
-                }
-            }
-        }
-        // 纯视觉背景不能覆盖 Slider、Toggle 等设置控件的命中区域。
-        .allowsHitTesting(false)
+        BeansGlass(shape: shape)
     }
 
 }

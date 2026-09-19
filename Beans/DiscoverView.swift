@@ -2134,7 +2134,7 @@ struct QQTopListDetailView: View {
                         }
                         Section {
                             ForEach(Array(filteredTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true) {
+                                SongCell(song: song, groupedRow: true) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
                                 .listRowBackground(Color.clear)
@@ -2144,6 +2144,7 @@ struct QQTopListDetailView: View {
                     }
                     .beansScrollContentBackgroundHidden()
                     .listStyle(.plain)
+                    .beansGroupedSongListSurface()
                 }
             }
             }
@@ -2247,7 +2248,7 @@ struct QQPlaylistSongsSheet: View {
                         }
                         Section {
                             ForEach(Array(filteredTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true) {
+                                SongCell(song: song, groupedRow: true) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
                                 .listRowBackground(Color.clear)
@@ -2257,6 +2258,7 @@ struct QQPlaylistSongsSheet: View {
                     }
                     .beansScrollContentBackgroundHidden()
                     .listStyle(.plain)
+                    .beansGroupedSongListSurface()
                 }
             }
             }
@@ -2355,7 +2357,7 @@ struct DailySongsSheet: View {
                     }
                     Section {
                         ForEach(Array(filteredSongs.enumerated()), id: \.element.identityKey) { index, song in
-                            SongCell(song: song, glassRow: true) {
+                            SongCell(song: song, groupedRow: true) {
                                 BeansHaptics.tap()
                                 player.play(songs: filteredSongs, startAt: index)
                             }
@@ -2366,6 +2368,7 @@ struct DailySongsSheet: View {
                 }
                 .beansScrollContentBackgroundHidden()
                 .listStyle(.plain)
+                .beansGroupedSongListSurface()
                 .refreshable {
                     await refreshDailySongs()
                 }
@@ -2512,7 +2515,7 @@ struct TopListDetailView: View {
                         }
                         Section {
                             ForEach(Array(filteredTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true) {
+                                SongCell(song: song, groupedRow: true) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
                                 .listRowBackground(Color.clear)
@@ -2522,6 +2525,7 @@ struct TopListDetailView: View {
                     }
                     .beansScrollContentBackgroundHidden()
                     .listStyle(.plain)
+                    .beansGroupedSongListSurface()
                 }
             }
             }
@@ -2668,7 +2672,7 @@ struct KugouTopListDetailView: View {
                         }
                         Section {
                             ForEach(Array(filteredTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true) {
+                                SongCell(song: song, groupedRow: true) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
                                 .listRowBackground(Color.clear)
@@ -2678,6 +2682,7 @@ struct KugouTopListDetailView: View {
                     }
                     .beansScrollContentBackgroundHidden()
                     .listStyle(.plain)
+                    .beansGroupedSongListSurface()
                 }
             }
             }

@@ -380,7 +380,7 @@ struct BeansGlass<S: Shape>: View {
                     GlassEffectContainer {
                         shape
                             .fill(.clear)
-                            .glassEffect(.regular, in: shape)
+                            .glassEffect(.clear, in: shape)
                     }
                 } else {
                     shape
@@ -467,7 +467,7 @@ struct GlassCard<Content: View>: View {
                 GlassEffectContainer {
                     content()
                         .padding(resolvedPadding)
-                        .glassEffect(.regular, in: .rect(cornerRadius: resolvedCornerRadius))
+                        .glassEffect(.clear, in: .rect(cornerRadius: resolvedCornerRadius))
                 }
                 .beansCardShadow(radius: 9, y: 3)
             } else {
@@ -690,6 +690,16 @@ extension View {
     @ViewBuilder
     func beansScrollContentBackgroundHidden() -> some View {
         if #available(iOS 16, *) { self.scrollContentBackground(.hidden) } else { self }
+    }
+
+    /// 详情页歌曲列表使用一个连续的背景表面，避免每一首歌曲各自叠加玻璃层。
+    func beansGroupedSongListSurface() -> some View {
+        self
+            .padding(.horizontal, 12)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     /// 在歌单、排行榜等详情页底部保留可用的迷你播放器。
