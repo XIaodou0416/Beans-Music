@@ -383,12 +383,11 @@ struct BeansGlass<S: Shape>: View {
                                 .fill(.clear)
                                 .glassEffect(.clear, in: shape)
                         } else if forceLiquid {
-                            // iOS 26 can leave a clear glass surface invisible when
-                            // it is hosted by a transparent sheet. Keep a material
-                            // under the native glass so the settings surface remains
-                            // visibly liquid while retaining the iOS 27 behavior.
+                            // Settings uses the native regular glass on iOS 26 as
+                            // well. Keep the surface transparent so the system
+                            // glass, rather than a material fallback, is visible.
                             shape
-                                .fill(.ultraThinMaterial)
+                                .fill(.clear)
                                 .glassEffect(.regular, in: shape)
                         } else {
                             shape
