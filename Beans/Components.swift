@@ -760,6 +760,7 @@ struct BeansShimmerSkeleton: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    @State private var shimmerActive = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -780,22 +781,30 @@ struct BeansShimmerSkeleton: View {
                 if reduceMotion {
                     Color.clear
                 } else {
-                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-                        let phase = context.date.timeIntervalSinceReferenceDate
-                            .truncatingRemainder(dividingBy: 1.5) / 1.5
-
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                highlightColor.opacity(0.22),
-                                baseColor.opacity(0.08),
-                                .clear
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: bandWidth, height: height)
-                        .offset(x: (width * 1.6) * phase - bandWidth)
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            highlightColor.opacity(0.22),
+                            baseColor.opacity(0.08),
+                            .clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: bandWidth, height: height)
+                    .offset(x: shimmerActive ? width * 1.6 : -bandWidth)
+                    .onAppear {
+                        guard !shimmerActive else { return }
+                        withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                            shimmerActive = true
+                        }
+                    }
+                    .onDisappear {
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            shimmerActive = false
+                        }
                     }
                 }
             }

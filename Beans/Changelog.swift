@@ -75,6 +75,23 @@ enum ChangelogStore {
 
     static let logs: [VersionLog] = [
         VersionLog(
+            id: "1.7.01",
+            version: "1.7.01",
+            title: "流畅性与稳定性优化",
+            notices: [
+                "重点：本次优化高刷新渲染、列表滚动和更新说明加载体验。"
+            ],
+            features: [
+                "优化封面加载中的扫光渲染，减少列表快速滚动时的主线程负担",
+                "高刷新率请求覆盖主界面、弹窗与全屏播放器",
+                "设置底部补充完整运行环境信息"
+            ],
+            fixes: [
+                "修复更新后首次打开更新说明短暂显示旧版 1.6.7 内容的问题",
+                "修复自定义视频头像在覆盖更新后可能丢失的问题"
+            ]
+        ),
+        VersionLog(
             id: "1.6.7",
             version: "1.6.7",
             title: "主页、播放器与缓存体验优化",
@@ -156,13 +173,21 @@ enum ChangelogStore {
 struct WhatsNewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var remoteLog: VersionLog?
+    @State private var isLoading = true
 
     var body: some View {
         BeansNavigationStack {
             ZStack {
                 GlassBackdrop(customColor: ThemeStore.shared.backgroundSyncAll ? ThemeStore.shared.customBackground : nil)
                 ScrollView {
-                    if let log = remoteLog ?? ChangelogStore.latest {
+                    if let log = remoteLog {
+                        VersionLogCard(log: log)
+                            .padding(16)
+                    } else if isLoading {
+                        ProgressView()
+                            .tint(Color.beansAmber)
+                            .frame(maxWidth: .infinity, minHeight: 160)
+                    } else if let log = ChangelogStore.latest {
                         VersionLogCard(log: log)
                             .padding(16)
                     }
@@ -185,6 +210,7 @@ struct WhatsNewSheet: View {
         .modifier(BeansSheetModifier(detents: [.medium, .large]))
         .task {
             remoteLog = await ChangelogStore.fetchRemoteLatest()
+            isLoading = false
         }
         .onDisappear {
             ChangelogStore.markSeen()
@@ -195,6 +221,7 @@ struct WhatsNewSheet: View {
 struct ChangelogListView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var remoteLogs: [VersionLog] = []
+    @State private var isLoading = true
 
     var body: some View {
         let remoteVersions = Set(remoteLogs.map(\.version))
@@ -202,17 +229,23 @@ struct ChangelogListView: View {
             ZStack {
                 GlassBackdrop(customColor: ThemeStore.shared.backgroundSyncAll ? ThemeStore.shared.customBackground : nil)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(remoteLogs) { log in
-                            VersionLogCard(log: log)
+                    if isLoading {
+                        ProgressView()
+                            .tint(Color.beansAmber)
+                            .frame(maxWidth: .infinity, minHeight: 160)
+                    } else {
+                        VStack(alignment: .leading, spacing: 14) {
+                            ForEach(remoteLogs) { log in
+                                VersionLogCard(log: log)
+                            }
+                            ForEach(ChangelogStore.logs.filter { log in
+                                !remoteVersions.contains(log.version)
+                            }) { log in
+                                VersionLogCard(log: log)
+                            }
                         }
-                        ForEach(ChangelogStore.logs.filter { log in
-                            !remoteVersions.contains(log.version)
-                        }) { log in
-                            VersionLogCard(log: log)
-                        }
+                        .padding(16)
                     }
-                    .padding(16)
                 }
                 .beansScrollIndicatorsHidden()
             }
@@ -227,6 +260,7 @@ struct ChangelogListView: View {
         .modifier(BeansSheetModifier(detents: [.medium, .large]))
         .task {
             remoteLogs = await ChangelogStore.fetchRemoteHistory()
+            isLoading = false
         }
     }
 }

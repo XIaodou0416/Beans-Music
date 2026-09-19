@@ -63,7 +63,10 @@ struct DeveloperToolsView: View {
                 }
             }
         }
-        .onAppear { refreshMonitor.start() }
+        .onAppear {
+            HighRefreshKeeper.shared.configure(enabled: true)
+            refreshMonitor.start()
+        }
         .onDisappear { refreshMonitor.stop() }
         .sheet(isPresented: $showLogShare) {
             ShareSheet(items: [BeansLogger.shared.exportLogURL()])
@@ -272,6 +275,7 @@ final class DeveloperFPSOverlayWindow {
             overlayWindow.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue - 1)
             window = overlayWindow
         }
+        HighRefreshKeeper.shared.configure(enabled: true)
         window?.isHidden = false
     }
 }
@@ -292,6 +296,15 @@ final class BeansRefreshRateMonitor: NSObject, ObservableObject {
         windowStart = 0
         frameCount = 0
         let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
+        if #available(iOS 15.0, *) {
+            let maximum = Float(min(120, max(60, UIScreen.main.maximumFramesPerSecond)))
+            let minimum: Float = maximum >= 120 ? 120 : 60
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: minimum,
+                maximum: maximum,
+                preferred: maximum
+            )
+        }
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
