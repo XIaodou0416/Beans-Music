@@ -62,6 +62,12 @@ struct PlaylistSquareView: View {
         return expanded ? playlists : Array(playlists.prefix(18))
     }
 
+    /// Keep the original adaptive catalogue layout on iPad. The later two-column
+    /// large-card treatment is retained for iPhone, where it was introduced.
+    private var usesIPadCatalogueLayout: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
     var body: some View {
         let _ = theme.accent
         BeansNavigationStack {
@@ -167,8 +173,11 @@ struct PlaylistSquareView: View {
         .beansHomeNavigationBarTransparent()
     }
 
-    private var largePlaylistColumns: [GridItem] {
-        [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+    private var playlistColumns: [GridItem] {
+        if usesIPadCatalogueLayout {
+            return [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 16)]
+        }
+        return [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
     }
 
     private var headerTitle: some View {
@@ -243,13 +252,17 @@ struct PlaylistSquareView: View {
 
     private var playlistGrid: some View {
         LazyVGrid(
-            columns: largePlaylistColumns,
+            columns: playlistColumns,
             alignment: .center,
-            spacing: 20
+            spacing: usesIPadCatalogueLayout ? 18 : 20
         ) {
             ForEach(visiblePlaylists) { playlist in
                 NavigationLink(destination: PlaylistView(playlist: playlist)) {
-                    largePlaylistCard(playlist)
+                    if usesIPadCatalogueLayout {
+                        playlistCard(playlist, showsContainer: false)
+                    } else {
+                        largePlaylistCard(playlist)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .buttonStyle(GlassPressButtonStyle(scale: 0.97))
@@ -269,17 +282,17 @@ struct PlaylistSquareView: View {
 
     private var playlistLoadingGrid: some View {
         LazyVGrid(
-            columns: largePlaylistColumns,
+            columns: playlistColumns,
             alignment: .center,
-            spacing: 20
+            spacing: usesIPadCatalogueLayout ? 18 : 20
         ) {
             ForEach(0..<6, id: \.self) { index in
-                VStack(alignment: .center, spacing: 8) {
+                VStack(alignment: usesIPadCatalogueLayout ? .leading : .center, spacing: usesIPadCatalogueLayout ? 7 : 8) {
                     BeansShimmerSkeleton(cornerRadius: isNativeClean ? 14 : 16)
                         .aspectRatio(1, contentMode: .fit)
                     BeansShimmerSkeleton(cornerRadius: 5)
                         .frame(height: 12)
-                        .frame(maxWidth: index.isMultiple(of: 3) ? 112 : 138, alignment: .center)
+                        .frame(maxWidth: index.isMultiple(of: 3) ? 112 : 138, alignment: usesIPadCatalogueLayout ? .leading : .center)
                     BeansShimmerSkeleton(cornerRadius: 5)
                         .frame(width: 86, height: 10)
                 }
@@ -386,13 +399,17 @@ struct PlaylistSquareView: View {
                 EmptyStateView(icon: "magnifyingglass", text: beansLocalized("没有找到相关歌单", "No matching playlists found"))
             } else {
                 LazyVGrid(
-                    columns: largePlaylistColumns,
+                    columns: playlistColumns,
                     alignment: .center,
-                    spacing: 20
+                    spacing: usesIPadCatalogueLayout ? 18 : 20
                 ) {
                     ForEach(searchResults) { playlist in
                         NavigationLink(destination: PlaylistView(playlist: playlist)) {
-                            largePlaylistCard(playlist)
+                            if usesIPadCatalogueLayout {
+                                playlistCard(playlist)
+                            } else {
+                                largePlaylistCard(playlist)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
                         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
