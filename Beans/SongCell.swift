@@ -15,6 +15,9 @@ struct SongCell: View {
     var glassRow = false
     /// 需要整体玻璃容器时，单行保持纯净背景
     var suppressNativeCleanRowGlass = false
+    /// 专辑详情使用紧凑的编号曲目行，保留原有点击、菜单及下载能力。
+    var leadingIndex: Int?
+    var compactAlbumRow = false
     var playbackContext: [Song] = []
     var playbackIndex: Int?
     var onTap: (() -> Void)?
@@ -33,6 +36,19 @@ struct SongCell: View {
 
     private var rowContent: some View {
         HStack(spacing: 12) {
+            if let leadingIndex {
+                Group {
+                    if isCurrent && player.isPlaying {
+                        NowPlayingIndicator()
+                    } else {
+                        Text("\(leadingIndex)")
+                            .font(BeansFont.appFont(12, .regular, .monospaced))
+                            .foregroundStyle(Color.beansComment)
+                            .monospacedDigit()
+                    }
+                }
+                .frame(width: 28, alignment: .trailing)
+            }
             if showCover {
                 CoverImage(url: song.coverURL, song: song, size: 46, cornerRadius: 10)
             }
@@ -72,7 +88,9 @@ struct SongCell: View {
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, leadingIndex == nil ? 0 : 16)
         .padding(.vertical, 6)
+        .frame(height: compactAlbumRow ? 54 : nil)
         .contentShape(Rectangle())
         .scaleEffect(isCurrent ? 1.012 : 1)
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isCurrent)

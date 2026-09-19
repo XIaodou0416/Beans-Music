@@ -1825,7 +1825,15 @@ struct AlbumDetailView: View {
                         albumHeader
 
                         ForEach(Array(tracks.enumerated()), id: \.element.identityKey) { index, song in
-                            SongCell(song: song, glassRow: true, playbackContext: tracks, playbackIndex: index) {
+                            SongCell(
+                                song: song,
+                                showCover: false,
+                                leadingIndex: index + 1,
+                                compactAlbumRow: true,
+                                suppressNativeCleanRowGlass: true,
+                                playbackContext: tracks,
+                                playbackIndex: index
+                            ) {
                                 player.play(songs: tracks, startAt: index)
                             }
                         }
