@@ -380,7 +380,7 @@ struct BeansGlass<S: Shape>: View {
                     GlassEffectContainer {
                         shape
                             .fill(.clear)
-                            .glassEffect(.clear, in: shape)
+                            .glassEffect(.regular, in: shape)
                     }
                 } else {
                     shape
@@ -467,7 +467,7 @@ struct GlassCard<Content: View>: View {
                 GlassEffectContainer {
                     content()
                         .padding(resolvedPadding)
-                        .glassEffect(.clear, in: .rect(cornerRadius: resolvedCornerRadius))
+                        .glassEffect(.regular, in: .rect(cornerRadius: resolvedCornerRadius))
                 }
                 .beansCardShadow(radius: 9, y: 3)
             } else {

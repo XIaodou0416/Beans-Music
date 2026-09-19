@@ -244,7 +244,8 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showSettings) {
             settingsScreen(SettingsView(onClose: { showSettings = false }))
-                .modifier(BeansSheetModifier(detents: [.fraction(0.62)], dragIndicator: true))
+                .modifier(BeansSheetModifier(detents: [.fraction(0.62), .large], dragIndicator: true))
+                .modifier(SettingsLiquidSheetPresentation())
         }
         .sheet(item: $updateShareFile, onDismiss: cleanupUpdateShareFile) { item in
             ShareSheet(items: [item.url])
@@ -1936,7 +1937,7 @@ struct SettingsView: View {
         .padding(.horizontal, 16)
         .frame(height: 48)
         .background {
-            BeansGlass(shape: Capsule())
+            BeansGlass(shape: Capsule(), forceLiquid: true)
         }
         .overlay {
             Capsule()
@@ -3849,13 +3850,7 @@ struct SettingsView: View {
 // MARK: - 均衡器
 
 private struct SettingsCatalogGroup<Content: View>: View {
-    @EnvironmentObject private var theme: ThemeStore
-    @Environment(\.colorScheme) private var colorScheme
     private let content: Content
-
-    private var usesCustomWallpaper: Bool {
-        theme.backgroundSyncAll && theme.customBackgroundImage(for: colorScheme) != nil
-    }
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -3868,13 +3863,26 @@ private struct SettingsCatalogGroup<Content: View>: View {
             .padding(.horizontal, 16)
             .background {
                 let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
-                BeansGlass(shape: shape, forceLiquid: usesCustomWallpaper)
+                BeansGlass(shape: shape, forceLiquid: true)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1)
                     .allowsHitTesting(false)
             }
+    }
+}
+
+private struct SettingsLiquidSheetPresentation: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content
+                .presentationBackground(.clear)
+                .presentationCornerRadius(28)
+        } else {
+            content
+        }
     }
 }
 
