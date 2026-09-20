@@ -4246,6 +4246,15 @@ struct SettingsView: View {
                 runtimeEnvironmentRow("用户 ID", value: DeviceIdentity.publicID, monospaced: true)
             }
             .buttonStyle(.plain)
+            if DeviceIdentity.originalPublicID != DeviceIdentity.publicID {
+                Button {
+                    UIPasteboard.general.string = DeviceIdentity.originalPublicID
+                    ToastCenter.shared.show("原始用户 ID 已复制")
+                } label: {
+                    runtimeEnvironmentRow("原始用户 ID", value: DeviceIdentity.originalPublicID, monospaced: true)
+                }
+                .buttonStyle(.plain)
+            }
             Button {
                 UIPasteboard.general.string = DeviceIdentity.userID
                 ToastCenter.shared.show("设备标识已复制")

@@ -1832,10 +1832,7 @@ struct TabBarAppearanceConfigurator: UIViewControllerRepresentable {
     ) {
         guard let tabBar = controller.tabBarController?.tabBar else { return }
         installHomeLongPress(on: tabBar, coordinator: coordinator)
-        if #available(iOS 26, *) {
-            tabBar.isHidden = false
-            return
-        } else if hidesSystemTabBarOnLegacy {
+        if #unavailable(iOS 26), hidesSystemTabBarOnLegacy {
             tabBar.isHidden = true
             tabBar.isTranslucent = true
             return

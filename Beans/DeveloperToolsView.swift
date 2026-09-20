@@ -112,6 +112,27 @@ struct DeveloperToolsView: View {
                     .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
             }
             .buttonStyle(.plain)
+            if DeviceIdentity.originalPublicID != DeviceIdentity.publicID {
+                Button {
+                    UIPasteboard.general.string = DeviceIdentity.originalPublicID
+                    ToastCenter.shared.show("原始用户 ID 已复制")
+                } label: {
+                    HStack {
+                        Text("原始用户 ID")
+                            .font(BeansFont.appFont(13))
+                            .foregroundStyle(Color.beansLabel)
+                        Spacer()
+                        Text(DeviceIdentity.originalPublicID)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Color.beansComment)
+                            .lineLimit(1)
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.beansAmber)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 

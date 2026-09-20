@@ -79,11 +79,10 @@ struct PlaylistSquareView: View {
 
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
-                            if #available(iOS 26, *) {
-                                EmptyView()
-                            } else {
-                                playlistSearchField
-                            }
+                            // Keep this page-owned field on every OS. The native
+                            // navigation search container can paint an opaque
+                            // backdrop over the artwork on iOS 26.
+                            playlistSearchField
 
                             if categories.count > 1 {
                                 categoryChips
@@ -139,13 +138,6 @@ struct PlaylistSquareView: View {
                 }
             }
         }
-        .modifier(
-            BeansSystemSearchModifier(
-                text: $searchText,
-                prompt: beansLocalized("搜索歌单", "Search playlists"),
-                onSubmit: { _ in submitSearch() }
-            )
-        )
         .confirmationDialog("精选平台", isPresented: $showPlaylistPlatformMenu, titleVisibility: .visible) {
             ForEach(providers) { provider in
                 Button {

@@ -477,7 +477,23 @@ final class NetEaseAPI {
 
     /// 歌手专辑
     func artistAlbums(artistID: Int, limit: Int = 50) async throws -> [Album] {
-        let json = try await request("/api/artist/albums", payload: ["id": artistID, "limit": limit, "offset": 0], crypto: "weapi")
+        let json: [String: Any]
+        do {
+            // This is the same artist-album endpoint used by the reference
+            // client. The older payload form intermittently returns an empty
+            // list for albums that are otherwise visible on the artist page.
+            json = try await request(
+                "/api/artist/albums/\(artistID)",
+                payload: ["limit": limit, "offset": 0, "total": true],
+                crypto: "weapi"
+            )
+        } catch {
+            json = try await request(
+                "/api/artist/albums",
+                payload: ["id": artistID, "limit": limit, "offset": 0],
+                crypto: "weapi"
+            )
+        }
         let list = json["hotAlbums"] as? [[String: Any]] ?? []
         var albums: [Album] = []
         for item in list {
@@ -492,7 +508,8 @@ final class NetEaseAPI {
                 source: .netease,
                 trackCount: item["size"] as? Int,
                 releaseType: item["subType"] as? String ?? item["type"] as? String,
-                releaseDate: Album.releaseDateText(from: item["publishTime"] ?? item["publishDate"])
+                releaseDate: Album.releaseDateText(from: item["publishTime"] ?? item["publishDate"]),
+                albumDescription: item["description"] as? String
             ))
         }
         return albums
@@ -505,11 +522,37 @@ final class NetEaseAPI {
 
     /// 专辑详情同时包含歌曲和简介，避免详情页为这两项重复请求。
     func albumDetails(albumID: Int) async throws -> AlbumDetails {
-        let json = try await request("/api/album", payload: ["id": albumID], crypto: "weapi")
-        let list = json["songs"] as? [[String: Any]] ?? []
+        // Some albums return a successful but incomplete response from the
+        // versioned endpoint. In that case, retry the legacy route before the
+        // UI concludes that the album has no tracks.
+        let primary = try? await request("/api/v1/album/\(albumID)", payload: [:], crypto: "weapi")
+        let primaryList = (primary?["songs"] as? [[String: Any]])
+            ?? (primary?["album"] as? [String: Any])?["songs"] as? [[String: Any]]
+            ?? []
+        let legacy: [String: Any]?
+        if primaryList.isEmpty {
+            legacy = try? await request("/api/album", payload: ["id": albumID], crypto: "weapi")
+        } else {
+            legacy = nil
+        }
+        let json = primaryList.isEmpty ? (legacy ?? primary ?? [:]) : (primary ?? [:])
+        let list = primaryList.isEmpty
+            ? ((json["songs"] as? [[String: Any]])
+                ?? (json["album"] as? [String: Any])?["songs"] as? [[String: Any]]
+                ?? [])
+            : primaryList
         let detail = json["album"] as? [String: Any] ?? [:]
-        let description = (detail["description"] as? String ?? detail["briefDesc"] as? String ?? "")
+        let primaryDetail = primary?["album"] as? [String: Any] ?? [:]
+        let description = (detail["description"] as? String
+            ?? detail["briefDesc"] as? String
+            ?? detail["desc"] as? String
+            ?? primaryDetail["description"] as? String
+            ?? primary?["description"] as? String
+            ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        if primary == nil && legacy == nil {
+            throw NetEaseError.unknown("专辑详情加载失败")
+        }
         return AlbumDetails(
             songs: list.compactMap { Song(json: $0) },
             description: description.isEmpty ? nil : description
@@ -524,7 +567,12 @@ final class NetEaseAPI {
     /// 读取专辑所属歌手，再加载该歌手的其它专辑。
     /// 专辑详情接口本身返回 artist 信息，因此不需要额外的歌手搜索请求。
     func artistAlbumsForAlbum(albumID: Int, limit: Int = 12) async throws -> [Album] {
-        let json = try await request("/api/album", payload: ["id": albumID], crypto: "weapi")
+        let json: [String: Any]
+        do {
+            json = try await request("/api/v1/album/\(albumID)", payload: [:], crypto: "weapi")
+        } catch {
+            json = try await request("/api/album", payload: ["id": albumID], crypto: "weapi")
+        }
         let album = json["album"] as? [String: Any] ?? [:]
         var artistID: Int?
         if let artist = album["artist"] as? [String: Any] {

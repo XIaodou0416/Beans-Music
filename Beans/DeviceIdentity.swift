@@ -8,6 +8,7 @@ enum DeviceIdentity {
     private static let service = "com.beans.music.device"
     private static let account = "anonymous-user-id"
     private static let publicIDAccount = "public-user-id"
+    private static let originalPublicIDAccount = "original-public-user-id"
     private static let developerIdentifierHash = "f6073926d77dd0947338f5f27f133201a484a2d2b28f68f7fbd95cb168526d36"
 
     static let userID: String = {
@@ -25,11 +26,27 @@ enum DeviceIdentity {
     static var publicID: String {
         if let value = loadFromKeychain(account: publicIDAccount),
            isValidPublicID(value) {
+            if loadFromKeychain(account: originalPublicIDAccount) == nil {
+                saveToKeychain(value, account: originalPublicIDAccount)
+            }
             return value
         }
         let generated = isDeveloperInstallation ? "5201314" : String(Int.random(in: 100000...500000))
         saveToKeychain(generated, account: publicIDAccount)
+        saveToKeychain(generated, account: originalPublicIDAccount)
         return generated
+    }
+
+    /// The first public ID assigned to this installation, retained when the
+    /// developer later renames the visible ID.
+    static var originalPublicID: String {
+        if let value = loadFromKeychain(account: originalPublicIDAccount),
+           isValidPublicID(value) {
+            return value
+        }
+        let value = publicID
+        saveToKeychain(value, account: originalPublicIDAccount)
+        return value
     }
 
     /// The backend may assign a new, unique public ID from the developer
