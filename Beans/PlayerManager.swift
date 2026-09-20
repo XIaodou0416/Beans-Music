@@ -115,6 +115,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var equalizerSettingsObserver: NSObjectProtocol?
     private var backendBlockObserver: NSObjectProtocol?
     private var customCoverObserver: NSObjectProtocol?
+    private var listeningStatsObserver: NSObjectProtocol?
     private var playbackConfirmed = false
     private var pendingThirdPartyVIPNotice: ThirdPartyVIPNotice?
     private var sessionConfigured = false
@@ -180,6 +181,7 @@ final class PlayerManager: NSObject, ObservableObject {
     static let autoCrossPlatformFallbackKey = "beans.playback.autoCrossPlatformFallback"
     static let playbackSourcePreferenceKey = PlaybackSourcePreference.storageKey
     static let listeningDurationKey = "beans.playback.listeningDuration.v1"
+    private static let listeningPlayCountOffsetKey = "beans.playback.listeningPlayCountOffset.v1"
     private let autoResumeLastPlaybackKey = "beans.playback.autoResumeLast"
     private let thirdPartyVIPNoticeKey = "beans.showThirdPartyVIPNotice"
     private let defaults = UserDefaults.standard
@@ -191,6 +193,35 @@ final class PlayerManager: NSObject, ObservableObject {
 
     static var storedListeningDuration: TimeInterval {
         max(0, UserDefaults.standard.double(forKey: listeningDurationKey))
+    }
+
+    static var storedPlayCount: Int {
+        storedLocalPlayCount + max(0, UserDefaults.standard.integer(forKey: listeningPlayCountOffsetKey))
+    }
+
+    private static var storedLocalPlayCount: Int {
+        guard let data = UserDefaults.standard.data(forKey: "beans.playcounts"),
+              let counts = try? JSONDecoder().decode([String: Int].self, from: data) else {
+            return 0
+        }
+        return counts.values.reduce(0, +)
+    }
+
+    static func mergeServerListeningStats(seconds: Int?, playCount: Int?) {
+        let defaults = UserDefaults.standard
+        if let seconds, seconds > Int(storedListeningDuration.rounded(.down)) {
+            defaults.set(Double(seconds), forKey: listeningDurationKey)
+        }
+        if let playCount, playCount > storedPlayCount {
+            let increase = playCount - storedPlayCount
+            let offset = max(0, defaults.integer(forKey: listeningPlayCountOffsetKey))
+            defaults.set(offset + increase, forKey: listeningPlayCountOffsetKey)
+        }
+    }
+
+    var totalPlayCount: Int {
+        playCounts.values.reduce(0, +)
+            + max(0, defaults.integer(forKey: Self.listeningPlayCountOffsetKey))
     }
 
     var formattedListeningDuration: String {
@@ -290,6 +321,15 @@ final class PlayerManager: NSObject, ObservableObject {
         ) { [weak self] _ in
             self?.updateNowPlaying()
         }
+        listeningStatsObserver = NotificationCenter.default.addObserver(
+            forName: .beansListeningStatsDidSync,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.listeningDuration = max(self.listeningDuration, Self.storedListeningDuration)
+            self.objectWillChange.send()
+        }
     }
 
     deinit {
@@ -305,6 +345,9 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         if let customCoverObserver {
             NotificationCenter.default.removeObserver(customCoverObserver)
+        }
+        if let listeningStatsObserver {
+            NotificationCenter.default.removeObserver(listeningStatsObserver)
         }
     }
 

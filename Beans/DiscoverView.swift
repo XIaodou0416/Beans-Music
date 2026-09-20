@@ -2434,6 +2434,8 @@ private enum BeansDailyRecommendError: LocalizedError {
 
 private struct ChartPlatformBadge: View {
     let provider: SearchProvider
+    var creatorName: String? = nil
+    var creatorAvatarURL: URL? = nil
 
     private var imageName: String {
         switch provider {
@@ -2446,13 +2448,18 @@ private struct ChartPlatformBadge: View {
 
     var body: some View {
         HStack(spacing: 7) {
-            if !imageName.isEmpty {
+            if let creatorAvatarURL {
+                CoverImage(url: creatorAvatarURL, size: 22, cornerRadius: 11)
+            } else if !imageName.isEmpty {
                 Image(imageName)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 26, height: 26)
+                    .frame(width: 22, height: 22)
+                    .clipShape(Circle())
             }
-            Text(beansPlatformName(provider))
+            Text(creatorName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? creatorName!
+                : beansPlatformName(provider))
                 .font(BeansFont.appFont(14, .medium))
                 .foregroundStyle(Color.beansComment)
                 .lineLimit(1)
@@ -2469,6 +2476,8 @@ private struct ChartDetailHeader: View {
     let chartDescription: String?
     let filteredCount: Int
     let downloadEnabled: Bool
+    var creatorName: String? = nil
+    var creatorAvatarURL: URL? = nil
     var downloadAccessibilityLabel = "批量下载排行榜"
     let onPlay: () -> Void
     let onDownload: () -> Void
@@ -2482,7 +2491,11 @@ private struct ChartDetailHeader: View {
                         .font(BeansFont.appFont(18, .bold))
                         .foregroundStyle(Color.beansLabel)
                         .lineLimit(3)
-                    ChartPlatformBadge(provider: provider)
+                    ChartPlatformBadge(
+                        provider: provider,
+                        creatorName: creatorName,
+                        creatorAvatarURL: creatorAvatarURL
+                    )
                     Text(beansChartStatsText(trackCount: trackCount, playCount: playCount))
                         .font(BeansFont.appFont(13, .medium))
                         .foregroundStyle(Color.beansComment)
@@ -2502,18 +2515,38 @@ private struct ChartDetailHeader: View {
             }
 
             if filteredCount > 0 {
-                HStack(spacing: 10) {
-                    GlassButton(
-                        title: "播放全部（\(filteredCount)）",
-                        systemName: "play.fill",
-                        prominent: true,
-                        expandsHorizontally: true,
-                        action: onPlay
+                Button(action: onPlay) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "play.fill")
+                        Text("播放全部（\(filteredCount)）")
+                    }
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.beansAmber, Color.beansAmber.opacity(0.78)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        in: Capsule()
                     )
-                    if downloadEnabled, filteredCount > 1 {
-                        GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true, action: onDownload)
-                            .accessibilityLabel(downloadAccessibilityLabel)
-                            .help("批量下载")
+                    .shadow(color: Color.beansAmber.opacity(0.26), radius: 6, y: 2)
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+
+                if downloadEnabled, filteredCount > 1 {
+                    HStack {
+                        Spacer()
+                        Button(action: onDownload) {
+                            Label("批量下载", systemImage: "arrow.down.to.line.compact")
+                                .font(BeansFont.appFont(12, .semibold))
+                                .foregroundStyle(Color.beansAmber)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(downloadAccessibilityLabel)
+                        .help("批量下载")
                     }
                 }
             }
@@ -2577,6 +2610,7 @@ struct TopListDetailView: View {
     @State private var errorMessage: String?
     @State private var searchText = ""
     @State private var showBatchDownload = false
+    @State private var resolvedPlaylistInfo: Playlist?
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     init(topList: TopList) {
@@ -2635,12 +2669,14 @@ struct TopListDetailView: View {
         ChartDetailHeader(
             title: topList.name,
             provider: .netease,
-            coverURL: topList.coverURL,
-            trackCount: topList.trackCount ?? tracks.count,
-            playCount: topList.playCount,
-            chartDescription: topList.chartDescription,
+            coverURL: resolvedPlaylistInfo?.coverURL ?? topList.coverURL,
+            trackCount: resolvedPlaylistInfo?.trackCount ?? topList.trackCount ?? tracks.count,
+            playCount: resolvedPlaylistInfo?.playCount ?? topList.playCount,
+            chartDescription: resolvedPlaylistInfo?.playlistDescription ?? topList.chartDescription,
             filteredCount: filteredTracks.count,
             downloadEnabled: downloadFeatureUnlocked,
+            creatorName: resolvedPlaylistInfo?.creatorName ?? topList.creatorName,
+            creatorAvatarURL: resolvedPlaylistInfo?.creatorAvatarURL ?? topList.creatorAvatarURL,
             onPlay: {
                 BeansHaptics.tap()
                 player.play(songs: filteredTracks, startAt: 0)
@@ -2683,6 +2719,7 @@ struct TopListDetailView: View {
                 tracks = songs
                 cache.save(songs, for: cacheKey)
             }
+            resolvedPlaylistInfo = try? await NetEaseAPI.shared.playlistInfo(id: topList.id)
             loading = false
         } catch {
             if tracks.isEmpty {

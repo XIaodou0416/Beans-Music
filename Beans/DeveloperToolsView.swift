@@ -437,8 +437,8 @@ private struct DeveloperDownloadGrantSheet: View {
 
     private var isValidTargetID: Bool {
         let value = targetDeviceID.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil
-            || value.count >= 16
+        return DeviceIdentity.isValidPublicID(value)
+            || value.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
     }
 
     private func reloadRecords(showError: Bool = true) async {
@@ -463,6 +463,7 @@ private struct DeveloperExclusiveIDSheet: View {
     @State private var targetUserID = ""
     @State private var assignedPublicID = ""
     @State private var enabled = true
+    @State private var badgeStyle: BeansExclusiveIDBadgeStyle = .blackPurpleGold
     @State private var isSubmitting = false
     @State private var isLoadingRecords = false
     @State private var records: [BeansExclusiveAccessRecord] = []
@@ -477,13 +478,28 @@ private struct DeveloperExclusiveIDSheet: View {
                         Text("专属 ID")
                             .font(BeansFont.appFont(24, .bold))
                             .foregroundStyle(Color.beansLabel)
-                        Text("输入对方当前用户 ID。可保留原 ID，也可以分配一个未被占用的 6 至 7 位新 ID。5201314 始终保留给开发者设备。")
+                        Text("输入对方当前用户 ID。可保留原 ID，也可以改为任意未被占用的新 ID；最多 24 个字符，不能包含空格。")
                             .font(BeansFont.appFont(13))
                             .foregroundStyle(Color.beansComment)
                             .fixedSize(horizontal: false, vertical: true)
                         inputField("当前用户 ID", text: $targetUserID)
+                        HStack {
+                            Spacer()
+                            Button("编辑当前设备 ID") {
+                                targetUserID = DeviceIdentity.publicID
+                            }
+                            .font(BeansFont.appFont(12, .semibold))
+                            .foregroundStyle(Color.beansAmber)
+                            .buttonStyle(.plain)
+                        }
                         inputField("新用户 ID（可不填）", text: $assignedPublicID)
-                        Toggle("启用黑紫金专属铭牌", isOn: $enabled)
+                        Picker("专属铭牌样式", selection: $badgeStyle) {
+                            ForEach(BeansExclusiveIDBadgeStyle.allCases, id: \.self) { style in
+                                Text(style.displayName).tag(style)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        Toggle("启用专属铭牌", isOn: $enabled)
                             .tint(Color.beansAmber)
                         if !errorMessage.isEmpty {
                             Text(errorMessage)
@@ -523,7 +539,8 @@ private struct DeveloperExclusiveIDSheet: View {
 
     private func inputField(_ title: String, text: Binding<String>) -> some View {
         TextField(title, text: text)
-            .keyboardType(.numberPad)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
             .font(.system(size: 13, design: .monospaced))
             .padding(.horizontal, 14)
             .frame(height: 48)
@@ -564,7 +581,7 @@ private struct DeveloperExclusiveIDSheet: View {
                                 Text(record.deviceName.isEmpty ? record.deviceModel : record.deviceName)
                                     .font(BeansFont.appFont(13, .semibold))
                                     .foregroundStyle(Color.beansLabel)
-                                Text("用户 ID \(record.publicUserID ?? record.userID)")
+                                Text("用户 ID \(record.publicUserID ?? record.userID) · \(record.badgeStyle?.displayName ?? BeansExclusiveIDBadgeStyle.blackPurpleGold.displayName)")
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundStyle(Color.beansComment)
                             }
@@ -583,6 +600,7 @@ private struct DeveloperExclusiveIDSheet: View {
                                 targetUserID = record.publicUserID ?? record.userID
                                 assignedPublicID = ""
                                 enabled = !record.enabled
+                                badgeStyle = record.badgeStyle ?? .blackPurpleGold
                                 submit()
                             } label: {
                                 Text(record.enabled ? "取消专属" : "恢复专属")
@@ -602,12 +620,13 @@ private struct DeveloperExclusiveIDSheet: View {
 
     private var isValidTargetID: Bool {
         let value = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil || value.count >= 16
+        return DeviceIdentity.isValidPublicID(value)
+            || value.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
     }
 
     private var isValidAssignedID: Bool {
         let value = assignedPublicID.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty || value.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil
+        return value.isEmpty || DeviceIdentity.isValidPublicID(value)
     }
 
     private func submit() {
@@ -619,7 +638,8 @@ private struct DeveloperExclusiveIDSheet: View {
                 try await DeviceReporter.shared.grantExclusiveID(
                     to: targetUserID,
                     assignedPublicID: assignedPublicID,
-                    enabled: enabled
+                    enabled: enabled,
+                    badgeStyle: badgeStyle
                 )
                 ToastCenter.shared.show(enabled ? "已授权专属 ID" : "已取消专属 ID")
                 await reloadRecords(showError: false)

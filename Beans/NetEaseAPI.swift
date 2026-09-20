@@ -266,6 +266,13 @@ final class NetEaseAPI {
         return tracks.compactMap(Song.init(json:))
     }
 
+    /// 榜单本质上也是网易云歌单。保留创建者资料，以便详情页显示官方头像。
+    func playlistInfo(id: Int) async throws -> Playlist? {
+        let json = try await request("/api/v6/playlist/detail", payload: ["id": id, "n": 0, "s": 8], crypto: "eapi")
+        guard let playlist = json["playlist"] as? [String: Any] else { return nil }
+        return Playlist(json: playlist)
+    }
+
     func songURLs(ids: [Int], level: String = "standard") async throws -> [Int: String] {
         let idsString = "[" + ids.map(String.init).joined(separator: ",") + "]"
         let json = try await request("/api/song/enhance/player/url/v1", payload: ["ids": idsString, "level": level, "encodeType": "flac"], crypto: "eapi")

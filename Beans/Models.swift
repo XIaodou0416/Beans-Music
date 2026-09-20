@@ -542,6 +542,8 @@ struct TopList: Identifiable, Hashable, Codable {
     let trackCount: Int?
     let playCount: Int?
     let chartDescription: String?
+    let creatorName: String?
+    let creatorAvatarURL: URL?
 
     init(
         id: Int,
@@ -550,7 +552,9 @@ struct TopList: Identifiable, Hashable, Codable {
         updateFrequency: String,
         trackCount: Int? = nil,
         playCount: Int? = nil,
-        chartDescription: String? = nil
+        chartDescription: String? = nil,
+        creatorName: String? = nil,
+        creatorAvatarURL: URL? = nil
     ) {
         self.id = id
         self.name = name
@@ -559,6 +563,8 @@ struct TopList: Identifiable, Hashable, Codable {
         self.trackCount = trackCount
         self.playCount = playCount
         self.chartDescription = chartDescription
+        self.creatorName = creatorName
+        self.creatorAvatarURL = creatorAvatarURL
     }
 
     init?(json: [String: Any]) {
@@ -580,6 +586,13 @@ struct TopList: Identifiable, Hashable, Codable {
             ?? (json["briefDesc"] as? String)
             ?? (json["desc"] as? String)
         self.chartDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let creator = json["creator"] as? [String: Any] ?? [:]
+        self.creatorName = creator["nickname"] as? String
+        let avatar = creator["avatarUrl"] as? String
+            ?? creator["avatarURL"] as? String
+            ?? creator["avatar"] as? String
+            ?? ""
+        self.creatorAvatarURL = avatar.isEmpty ? nil : URL(string: avatar)
     }
 }
 

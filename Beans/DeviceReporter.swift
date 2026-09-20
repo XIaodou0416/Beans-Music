@@ -48,6 +48,7 @@ struct BeansExclusiveAccessRecord: Decodable, Identifiable, Equatable {
     let appBuild: String
     let lastSeenAt: String
     let enabled: Bool
+    let badgeStyle: BeansExclusiveIDBadgeStyle?
     let changedAt: String
 
     var id: String { "exclusive-\(userID)-\(changedAt)-\(enabled)" }
@@ -63,7 +64,20 @@ struct BeansExclusiveAccessRecord: Decodable, Identifiable, Equatable {
         case appBuild = "app_build"
         case lastSeenAt = "last_seen_at"
         case enabled
+        case badgeStyle = "exclusive_badge_style"
         case changedAt = "changed_at"
+    }
+}
+
+enum BeansExclusiveIDBadgeStyle: String, CaseIterable, Codable {
+    case blackPurpleGold = "black_purple_gold"
+    case classicGold = "classic_gold"
+
+    var displayName: String {
+        switch self {
+        case .blackPurpleGold: return "黑紫金"
+        case .classicGold: return "经典金色"
+        }
     }
 }
 
@@ -71,6 +85,7 @@ enum BeansBackendSettings {
     static let downloadUnlockKey = "beans.downloadFeatureUnlocked"
     static let blockedKey = "beans.backend.userBlocked"
     static let exclusiveIDKey = "beans.backend.exclusiveID"
+    static let exclusiveIDBadgeStyleKey = "beans.backend.exclusiveIDBadgeStyle"
     static let publicIDRevisionKey = "beans.backend.publicIDRevision"
 }
 
@@ -243,7 +258,8 @@ final class DeviceReporter {
             "system_version": device.systemVersion,
             "app_version": UpdateChecker.currentVersion,
             "app_build": build,
-            "listening_seconds": String(Int(PlayerManager.storedListeningDuration.rounded(.down)))
+            "listening_seconds": String(Int(PlayerManager.storedListeningDuration.rounded(.down))),
+            "listening_play_count": String(PlayerManager.storedPlayCount)
         ]
     }
 
@@ -325,9 +341,9 @@ final class DeviceReporter {
         guard BeansDeveloperAccess.isAuthorized else {
             throw BackendRequestError.server("当前设备没有开发者权限")
         }
-        let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let isPublicID = normalizedTarget.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil
-        guard isPublicID || normalizedTarget.count >= 16 else {
+        let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isInternalID = normalizedTarget.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
+        guard isInternalID || DeviceIdentity.isValidPublicID(normalizedTarget) else {
             throw BackendRequestError.server("用户 ID 格式不正确")
         }
 
@@ -341,8 +357,8 @@ final class DeviceReporter {
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "developer_user_id": DeviceIdentity.userID,
             "developer_public_user_id": DeviceIdentity.publicID,
-            "target_user_id": isPublicID ? "" : normalizedTarget,
-            "target_public_user_id": isPublicID ? normalizedTarget : "",
+            "target_user_id": isInternalID ? normalizedTarget : "",
+            "target_public_user_id": isInternalID ? "" : normalizedTarget,
             "download_unlocked": enabled
         ])
 
@@ -353,6 +369,7 @@ final class DeviceReporter {
             guard result.ok != false else {
                 throw BackendRequestError.server(result.message ?? "下载权限操作失败")
             }
+            applyServerState(result)
         } catch {
             // The backend writes the permission before its response reaches the
             // device. Confirm the resulting state before showing a failure;
@@ -370,20 +387,21 @@ final class DeviceReporter {
     func grantExclusiveID(
         to targetUserID: String,
         assignedPublicID: String,
-        enabled: Bool
+        enabled: Bool,
+        badgeStyle: BeansExclusiveIDBadgeStyle
     ) async throws {
         guard BeansDeveloperAccess.isAuthorized else {
             throw BackendRequestError.server("当前设备没有开发者权限")
         }
-        let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedAssignedID = assignedPublicID.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isPublicID = normalizedTarget.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil
-        guard isPublicID || normalizedTarget.count >= 16 else {
+        let isInternalID = normalizedTarget.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
+        guard isInternalID || DeviceIdentity.isValidPublicID(normalizedTarget) else {
             throw BackendRequestError.server("用户 ID 格式不正确")
         }
         guard normalizedAssignedID.isEmpty
-            || normalizedAssignedID.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil else {
-            throw BackendRequestError.server("专属 ID 必须是 6 至 7 位数字")
+            || DeviceIdentity.isValidPublicID(normalizedAssignedID) else {
+            throw BackendRequestError.server("用户 ID 最多 24 个字符，不能包含空格")
         }
 
         var request = URLRequest(url: endpoint(for: "developer/grant-exclusive-id"))
@@ -396,10 +414,11 @@ final class DeviceReporter {
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "developer_user_id": DeviceIdentity.userID,
             "developer_public_user_id": DeviceIdentity.publicID,
-            "target_user_id": isPublicID ? "" : normalizedTarget,
-            "target_public_user_id": isPublicID ? normalizedTarget : "",
+            "target_user_id": isInternalID ? normalizedTarget : "",
+            "target_public_user_id": isInternalID ? "" : normalizedTarget,
             "assigned_public_user_id": normalizedAssignedID,
-            "exclusive_id": enabled
+            "exclusive_id": enabled,
+            "exclusive_badge_style": badgeStyle.rawValue
         ])
 
         do {
@@ -409,6 +428,7 @@ final class DeviceReporter {
             guard result.ok != false else {
                 throw BackendRequestError.server(result.message ?? "专属 ID 操作失败")
             }
+            applyServerState(result)
         } catch {
             if isRecoverableGrantError(error),
                await serverConfirmsExclusiveAccess(target: normalizedTarget, enabled: enabled) {
@@ -551,9 +571,7 @@ final class DeviceReporter {
         case "developer_unauthorized":
             return beansLocalized("当前设备没有开发者权限。", "This device does not have developer access.")
         case "invalid_public_user_id":
-            return beansLocalized("专属 ID 必须是 6 至 7 位数字。", "The public ID must contain 6 to 7 digits.")
-        case "reserved_public_user_id":
-            return beansLocalized("5201314 仅保留给开发者设备。", "5201314 is reserved for the developer device.")
+            return beansLocalized("用户 ID 最多 24 个字符，不能包含空格。", "The public ID can contain up to 24 non-space characters.")
         case "public_user_id_taken":
             return beansLocalized("这个用户 ID 已被其他设备使用。", "That public ID is already assigned to another device.")
         case "user_not_found":
@@ -581,6 +599,16 @@ final class DeviceReporter {
         }
         if let exclusiveID = response.exclusiveID {
             UserDefaults.standard.set(exclusiveID, forKey: BeansBackendSettings.exclusiveIDKey)
+        }
+        if let badgeStyle = response.exclusiveBadgeStyle {
+            UserDefaults.standard.set(badgeStyle.rawValue, forKey: BeansBackendSettings.exclusiveIDBadgeStyleKey)
+        }
+        if response.listeningSeconds != nil || response.listeningPlayCount != nil {
+            PlayerManager.mergeServerListeningStats(
+                seconds: response.listeningSeconds,
+                playCount: response.listeningPlayCount
+            )
+            NotificationCenter.default.post(name: .beansListeningStatsDidSync, object: nil)
         }
         if let blocked = response.blocked {
             let previous = UserDefaults.standard.bool(forKey: BeansBackendSettings.blockedKey)
@@ -612,6 +640,9 @@ private struct BackendResponse: Decodable {
     let message: String?
     let publicUserID: String?
     let exclusiveID: Bool?
+    let exclusiveBadgeStyle: BeansExclusiveIDBadgeStyle?
+    let listeningSeconds: Int?
+    let listeningPlayCount: Int?
     let blocked: Bool?
     let downloadUnlocked: Bool?
     let feedbackID: String?
@@ -622,6 +653,9 @@ private struct BackendResponse: Decodable {
         case ok, message, blocked
         case publicUserID = "public_user_id"
         case exclusiveID = "exclusive_id"
+        case exclusiveBadgeStyle = "exclusive_badge_style"
+        case listeningSeconds = "listening_seconds"
+        case listeningPlayCount = "listening_play_count"
         case downloadUnlocked = "download_unlocked"
         case feedbackID = "feedback_id"
         case submittedAt = "submitted_at"
@@ -634,6 +668,9 @@ private struct BackendResponse: Decodable {
         message = try container.decodeIfPresent(String.self, forKey: .message)
         publicUserID = try container.decodeIfPresent(String.self, forKey: .publicUserID)
         exclusiveID = try container.decodeIfPresent(Bool.self, forKey: .exclusiveID)
+        exclusiveBadgeStyle = try container.decodeIfPresent(BeansExclusiveIDBadgeStyle.self, forKey: .exclusiveBadgeStyle)
+        listeningSeconds = try container.decodeIfPresent(Int.self, forKey: .listeningSeconds)
+        listeningPlayCount = try container.decodeIfPresent(Int.self, forKey: .listeningPlayCount)
         blocked = try container.decodeIfPresent(Bool.self, forKey: .blocked)
         downloadUnlocked = try container.decodeIfPresent(Bool.self, forKey: .downloadUnlocked)
         feedbackID = try container.decodeIfPresent(String.self, forKey: .feedbackID)
@@ -649,6 +686,9 @@ private struct BackendResponse: Decodable {
         message = nil
         publicUserID = nil
         exclusiveID = nil
+        exclusiveBadgeStyle = nil
+        listeningSeconds = nil
+        listeningPlayCount = nil
         blocked = nil
         downloadUnlocked = nil
         feedbackID = nil

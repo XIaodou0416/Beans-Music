@@ -54,8 +54,24 @@ private struct BeansProfileThemeRevealOverlay: View {
 }
 
 private struct BeansExclusiveIDBadgeSurface: View {
+    let style: BeansExclusiveIDBadgeStyle
+
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { timeline in
+        if style == .classicGold {
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0.42, green: 0.23, blue: 0.03), Color(red: 0.96, green: 0.66, blue: 0.12), Color(red: 0.50, green: 0.29, blue: 0.04)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    Capsule().strokeBorder(Color(red: 1, green: 0.90, blue: 0.55).opacity(0.9), lineWidth: 1)
+                }
+                .shadow(color: Color(red: 0.94, green: 0.59, blue: 0.06).opacity(0.36), radius: 5, y: 1)
+        } else {
+            TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { timeline in
             let phase = Angle.degrees((timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 12)) * 30)
             Capsule()
                 .fill(
@@ -92,6 +108,7 @@ private struct BeansExclusiveIDBadgeSurface: View {
                 }
                 .shadow(color: Color(red: 0.52, green: 0.26, blue: 0.90).opacity(0.42), radius: 5, y: 1)
                 .shadow(color: Color(red: 1.0, green: 0.72, blue: 0.16).opacity(0.24), radius: 3, y: 1)
+            }
         }
         .allowsHitTesting(false)
     }
@@ -111,6 +128,7 @@ struct ProfileView: View {
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage(BeansBackendSettings.exclusiveIDKey) private var hasExclusiveID = false
+    @AppStorage(BeansBackendSettings.exclusiveIDBadgeStyleKey) private var exclusiveBadgeStyleRaw = BeansExclusiveIDBadgeStyle.blackPurpleGold.rawValue
     @AppStorage(BeansBackendSettings.publicIDRevisionKey) private var publicIDRevision = 0
 
     @State private var showHistory = false
@@ -172,6 +190,10 @@ struct ProfileView: View {
 
     private var usesExclusiveIDBadge: Bool {
         DeviceIdentity.isDeveloperInstallation || hasExclusiveID
+    }
+
+    private var exclusiveBadgeStyle: BeansExclusiveIDBadgeStyle {
+        BeansExclusiveIDBadgeStyle(rawValue: exclusiveBadgeStyleRaw) ?? .blackPurpleGold
     }
 
     private var isEnglish: Bool { languageRaw == AppLanguage.english.rawValue }
@@ -578,7 +600,7 @@ struct ProfileView: View {
     }
 
     private var totalPlayCount: Int {
-        player.playCounts.values.reduce(0, +)
+        player.totalPlayCount
     }
 
     private var customAvatarCard: some View {
@@ -645,12 +667,12 @@ struct ProfileView: View {
         }
         .padding(16)
         .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.beansCard)
+            Group {
                 if let backgroundURL = profileNameBackgroundStore.url {
+                    ZStack {
                     BeansProfileNameBackgroundView(url: backgroundURL)
                         .opacity(0.72)
+                        .allowsHitTesting(false)
                     LinearGradient(
                         colors: [
                             Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08),
@@ -660,6 +682,9 @@ struct ProfileView: View {
                         endPoint: .bottomTrailing
                     )
                     .allowsHitTesting(false)
+                    }
+                } else {
+                    BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
             }
         }
@@ -690,7 +715,7 @@ struct ProfileView: View {
             .padding(.vertical, 4)
             .background {
                 if isExclusive {
-                    BeansExclusiveIDBadgeSurface()
+                    BeansExclusiveIDBadgeSurface(style: exclusiveBadgeStyle)
                 } else {
                     Capsule()
                         .fill(

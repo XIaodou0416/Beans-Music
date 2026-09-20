@@ -19,18 +19,15 @@ enum DeviceIdentity {
         return generated
     }()
 
-    /// A short, user-facing identifier that survives app updates and reinstalls
-    /// through the device keychain. The developer installation keeps its
-    /// reserved identifier so it can be recognized by the backend.
+    /// A user-facing identifier that survives app updates and reinstalls
+    /// through the device keychain. The developer device starts with its
+    /// familiar ID, but it can be changed through developer tools as well.
     static var publicID: String {
-        if isDeveloperInstallation {
-            return "5201314"
-        }
         if let value = loadFromKeychain(account: publicIDAccount),
-           value.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil {
+           isValidPublicID(value) {
             return value
         }
-        let generated = String(Int.random(in: 100000...500000))
+        let generated = isDeveloperInstallation ? "5201314" : String(Int.random(in: 100000...500000))
         saveToKeychain(generated, account: publicIDAccount)
         return generated
     }
@@ -38,11 +35,19 @@ enum DeviceIdentity {
     /// The backend may assign a new, unique public ID from the developer
     /// tools. Keep the value in the keychain so it survives app updates.
     static func updatePublicID(_ value: String) {
-        guard !isDeveloperInstallation,
-              value.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil else {
+        guard isValidPublicID(value) else {
             return
         }
         saveToKeychain(value, account: publicIDAccount)
+    }
+
+    static func isValidPublicID(_ value: String) -> Bool {
+        let scalars = value.unicodeScalars
+        guard !scalars.isEmpty, scalars.count <= 24 else { return false }
+        return scalars.allSatisfy {
+            !CharacterSet.whitespacesAndNewlines.contains($0)
+                && !CharacterSet.controlCharacters.contains($0)
+        }
     }
 
     static var isDeveloperInstallation: Bool {

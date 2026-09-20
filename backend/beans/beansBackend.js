@@ -10,10 +10,9 @@ const LOCATION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const ONLINE_WINDOW_MS = 3 * 60 * 1000;
 const INACTIVE_USER_WINDOW_MS = 10 * 24 * 60 * 60 * 1000;
 const USER_ID_PATTERN = /^[a-f0-9-]{16,80}$/i;
-const PUBLIC_USER_ID_PATTERN = /^\d{6,7}$/;
 const PUBLIC_USER_ID_MIN = 100000;
 const PUBLIC_USER_ID_MAX = 500000;
-const DEVELOPER_PUBLIC_USER_ID = '5201314';
+const DEVELOPER_INITIAL_PUBLIC_USER_ID = '5201314';
 const DEVELOPER_DEVICE_ID_HASH = process.env.BEANS_DEVELOPER_DEVICE_ID_HASH
   || 'f6073926d77dd0947338f5f27f133201a484a2d2b28f68f7fbd95cb168526d36';
 const locationCache = new Map();
@@ -99,21 +98,19 @@ function createBeansRouter(options = {}) {
     const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
     const targetUserID = text(payload.target_user_id, 80).toLowerCase();
     const requestedTargetPublicUserID = text(
-      payload.target_public_user_id || (PUBLIC_USER_ID_PATTERN.test(targetUserID) ? targetUserID : ''),
-      16
+      payload.target_public_user_id || (!USER_ID_PATTERN.test(targetUserID) ? targetUserID : ''),
+      24
     );
     if (!isDeveloperDeviceID(developerUserID)) {
       return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
     }
-    if (!USER_ID_PATTERN.test(targetUserID) && !PUBLIC_USER_ID_PATTERN.test(requestedTargetPublicUserID)) {
+    if (!USER_ID_PATTERN.test(targetUserID) && !isValidPublicUserID(requestedTargetPublicUserID)) {
       return response.status(422).json({ ok: false, message: 'invalid_user_id' });
     }
 
     let updatedUser;
     mutateDatabase((database) => {
-      const userKey = PUBLIC_USER_ID_PATTERN.test(requestedTargetPublicUserID)
-        ? Object.keys(database.users).find((key) => database.users[key]?.public_user_id === requestedTargetPublicUserID)
-        : Object.keys(database.users).find((key) => key.toLowerCase() === targetUserID);
+      const userKey = findUserKey(database, targetUserID, requestedTargetPublicUserID);
       const user = userKey ? database.users[userKey] : null;
       if (!user) return;
       const enabled = Boolean(payload.download_unlocked);
@@ -135,26 +132,27 @@ function createBeansRouter(options = {}) {
     return response.json(publicUserState(updatedUser));
   });
 
-  // The developer can grant the premium ID badge and optionally assign a
-  // unique public ID without ever reusing the developer's reserved ID.
+  // The developer can grant a badge, select its visual style, and assign an
+  // unused user-facing ID for any registered device.
   router.post('/developer/grant-exclusive-id', (request, response) => {
     const payload = request.body || {};
     const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
     const targetUserID = text(payload.target_user_id, 80).toLowerCase();
     const requestedTargetPublicUserID = text(
-      payload.target_public_user_id || (PUBLIC_USER_ID_PATTERN.test(targetUserID) ? targetUserID : ''),
-      16
+      payload.target_public_user_id || (!USER_ID_PATTERN.test(targetUserID) ? targetUserID : ''),
+      24
     );
-    const assignedPublicUserID = text(payload.assigned_public_user_id, 16);
+    const assignedPublicUserID = text(payload.assigned_public_user_id, 24);
     const enabled = payload.exclusive_id !== false;
+    const badgeStyle = normalizeExclusiveBadgeStyle(payload.exclusive_badge_style);
 
     if (!isDeveloperDeviceID(developerUserID)) {
       return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
     }
-    if (!USER_ID_PATTERN.test(targetUserID) && !PUBLIC_USER_ID_PATTERN.test(requestedTargetPublicUserID)) {
+    if (!USER_ID_PATTERN.test(targetUserID) && !isValidPublicUserID(requestedTargetPublicUserID)) {
       return response.status(422).json({ ok: false, message: 'invalid_user_id' });
     }
-    if (assignedPublicUserID && !PUBLIC_USER_ID_PATTERN.test(assignedPublicUserID)) {
+    if (assignedPublicUserID && !isValidPublicUserID(assignedPublicUserID)) {
       return response.status(422).json({ ok: false, message: 'invalid_public_user_id' });
     }
 
@@ -164,9 +162,6 @@ function createBeansRouter(options = {}) {
     if (!targetUser) {
       return response.status(404).json({ ok: false, message: 'user_not_found' });
     }
-    if (assignedPublicUserID === DEVELOPER_PUBLIC_USER_ID && !isDeveloperDeviceID(targetUser.user_id)) {
-      return response.status(409).json({ ok: false, message: 'reserved_public_user_id' });
-    }
     if (assignedPublicUserID && publicIDBelongsToAnotherUser(database, assignedPublicUserID, targetUser.user_id)) {
       return response.status(409).json({ ok: false, message: 'public_user_id_taken' });
     }
@@ -175,22 +170,16 @@ function createBeansRouter(options = {}) {
     mutateDatabase((nextDatabase) => {
       const user = nextDatabase.users[userKey];
       if (!user) return;
-      const isDeveloper = isDeveloperDeviceID(user.user_id);
-      if (isDeveloper) {
-        user.public_user_id = DEVELOPER_PUBLIC_USER_ID;
-        user.exclusive_id = true;
-      } else {
-        if (assignedPublicUserID) {
-          user.public_user_id = assignedPublicUserID;
-        }
-        user.exclusive_id = enabled;
-      }
+      if (assignedPublicUserID) user.public_user_id = assignedPublicUserID;
+      user.exclusive_id = enabled;
+      user.exclusive_badge_style = badgeStyle;
       if (!Array.isArray(user.exclusive_id_history)) {
         user.exclusive_id_history = [];
       }
       user.exclusive_id_history.unshift({
         enabled: Boolean(user.exclusive_id),
         public_user_id: user.public_user_id,
+        exclusive_badge_style: user.exclusive_badge_style,
         changed_at: now(),
         changed_by: developerUserID,
       });
@@ -223,6 +212,7 @@ function createBeansRouter(options = {}) {
           app_build: user.app_build,
           last_seen_at: user.last_seen_at,
           enabled: Boolean(user.exclusive_id),
+          exclusive_badge_style: normalizeExclusiveBadgeStyle(user.exclusive_badge_style),
           changed_at: text(latest.changed_at || user.last_seen_at, 64),
         };
       })
@@ -390,19 +380,14 @@ function createBeansRouter(options = {}) {
   router.post('/user-action', requireApiAdmin(adminPassword), (request, response) => {
     const payload = request.body || {};
     const userID = text(payload.user_id, 80);
-    const requestedPublicUserID = text(payload.public_user_id, 16);
+    const requestedPublicUserID = text(payload.public_user_id, 24);
     if (!USER_ID_PATTERN.test(userID)) {
       return response.status(422).json({ ok: false, message: 'invalid_user_id' });
     }
-    if (requestedPublicUserID && !PUBLIC_USER_ID_PATTERN.test(requestedPublicUserID)) {
+    if (requestedPublicUserID && !isValidPublicUserID(requestedPublicUserID)) {
       return response.status(422).json({ ok: false, message: 'invalid_public_user_id' });
     }
     const database = loadDatabase();
-    if (requestedPublicUserID
-      && requestedPublicUserID === DEVELOPER_PUBLIC_USER_ID
-      && !isDeveloperDeviceID(userID)) {
-      return response.status(409).json({ ok: false, message: 'reserved_public_user_id' });
-    }
     if (requestedPublicUserID && publicIDBelongsToAnotherUser(database, requestedPublicUserID, userID)) {
       return response.status(409).json({ ok: false, message: 'public_user_id_taken' });
     }
@@ -414,13 +399,9 @@ function createBeansRouter(options = {}) {
       }
       user.is_blacklisted = Boolean(payload.is_blacklisted);
       user.download_unlocked = Boolean(payload.download_unlocked);
-      if (isDeveloperDeviceID(user.user_id)) {
-        user.public_user_id = DEVELOPER_PUBLIC_USER_ID;
-        user.exclusive_id = true;
-      } else {
-        if (requestedPublicUserID) user.public_user_id = requestedPublicUserID;
-        user.exclusive_id = Boolean(payload.exclusive_id);
-      }
+      if (requestedPublicUserID) user.public_user_id = requestedPublicUserID;
+      user.exclusive_id = Boolean(payload.exclusive_id);
+      user.exclusive_badge_style = normalizeExclusiveBadgeStyle(payload.exclusive_badge_style || user.exclusive_badge_style);
       user.action_note = text(payload.action_note, 500);
       updatedUser = user;
     });
@@ -491,20 +472,15 @@ function createBeansRouter(options = {}) {
     express.urlencoded({ extended: false }),
     (request, response) => {
       const userID = text(request.body.user_id, 80);
-      const requestedPublicUserID = text(request.body.public_user_id, 16);
+      const requestedPublicUserID = text(request.body.public_user_id, 24);
       const requestedExclusive = request.body.exclusive_id === 'on';
-      if (requestedPublicUserID && !PUBLIC_USER_ID_PATTERN.test(requestedPublicUserID)) {
-        return response.status(422).send('专属 ID 必须是 6 至 7 位数字。');
+      if (requestedPublicUserID && !isValidPublicUserID(requestedPublicUserID)) {
+        return response.status(422).send('用户 ID 最多 24 个字符，不能包含空格。');
       }
       const database = loadDatabase();
       const existingUser = database.users[userID];
       if (!existingUser) {
         return response.redirect('/beans/admin/users');
-      }
-      if (requestedPublicUserID
-        && requestedPublicUserID === DEVELOPER_PUBLIC_USER_ID
-        && !isDeveloperDeviceID(existingUser.user_id)) {
-        return response.status(409).send('5201314 只能保留给开发者设备。');
       }
       if (requestedPublicUserID && publicIDBelongsToAnotherUser(database, requestedPublicUserID, userID)) {
         return response.status(409).send('这个用户 ID 已被其他设备使用。');
@@ -516,13 +492,9 @@ function createBeansRouter(options = {}) {
         }
         user.is_blacklisted = request.body.is_blacklisted === 'on';
         user.download_unlocked = request.body.download_unlocked === 'on';
-        if (isDeveloperDeviceID(user.user_id)) {
-          user.public_user_id = DEVELOPER_PUBLIC_USER_ID;
-          user.exclusive_id = true;
-        } else {
-          if (requestedPublicUserID) user.public_user_id = requestedPublicUserID;
-          user.exclusive_id = requestedExclusive;
-        }
+        if (requestedPublicUserID) user.public_user_id = requestedPublicUserID;
+        user.exclusive_id = requestedExclusive;
+        user.exclusive_badge_style = normalizeExclusiveBadgeStyle(request.body.exclusive_badge_style || user.exclusive_badge_style);
         user.action_note = text(request.body.action_note, 500);
       });
       response.redirect('/beans/admin/users');
@@ -583,6 +555,7 @@ function createBeansRouter(options = {}) {
       const existing = database.users[userID];
       const timestamp = now();
       const reportedListeningSeconds = listeningSeconds(payload?.listening_seconds);
+      const reportedListeningPlayCount = listeningPlayCount(payload?.listening_play_count);
       const publicUserID = resolvePublicUserID(database, userID, payload?.public_user_id, existing?.public_user_id);
       if (options.countAccess) {
         database.stats.access_count += 1;
@@ -598,6 +571,7 @@ function createBeansRouter(options = {}) {
         app_version: text(payload.app_version, 64) || existing?.app_version || '',
         app_build: text(payload.app_build, 64) || existing?.app_build || '',
         listening_seconds: Math.max(listeningSeconds(existing?.listening_seconds), reportedListeningSeconds),
+        listening_play_count: Math.max(listeningPlayCount(existing?.listening_play_count), reportedListeningPlayCount),
         first_seen_at: existing?.first_seen_at || timestamp,
         last_seen_at: timestamp,
         last_ip: text(ip, 64),
@@ -609,6 +583,7 @@ function createBeansRouter(options = {}) {
           ? existing.download_access_history
           : [],
         exclusive_id: Boolean(existing?.exclusive_id),
+        exclusive_badge_style: normalizeExclusiveBadgeStyle(existing?.exclusive_badge_style),
         exclusive_id_history: Array.isArray(existing?.exclusive_id_history)
           ? existing.exclusive_id_history
           : [],
@@ -731,8 +706,11 @@ function publicUserState(user, database = null) {
     ok: true,
     public_user_id: user?.public_user_id || null,
     exclusive_id: Boolean(user?.exclusive_id),
+    exclusive_badge_style: normalizeExclusiveBadgeStyle(user?.exclusive_badge_style),
     blocked: Boolean(user?.is_blacklisted),
     download_unlocked: Boolean(user?.download_unlocked),
+    listening_seconds: listeningSeconds(user?.listening_seconds),
+    listening_play_count: listeningPlayCount(user?.listening_play_count),
     feedback_replies: database
       ? database.feedback
         .filter((item) => item.user_id === user?.user_id)
@@ -784,11 +762,14 @@ function isDeveloperDeviceID(value) {
 }
 
 function resolvePublicUserID(database, internalUserID, requestedValue, existingValue) {
-  if (isDeveloperDeviceID(internalUserID)) return DEVELOPER_PUBLIC_USER_ID;
-
-  const existing = text(existingValue || requestedValue, 16);
-  if (PUBLIC_USER_ID_PATTERN.test(existing) && !publicIDBelongsToAnotherUser(database, existing, internalUserID)) {
+  const existing = text(existingValue || requestedValue, 24);
+  if (isValidPublicUserID(existing) && !publicIDBelongsToAnotherUser(database, existing, internalUserID)) {
     return existing;
+  }
+
+  if (isDeveloperDeviceID(internalUserID)
+    && !publicIDBelongsToAnotherUser(database, DEVELOPER_INITIAL_PUBLIC_USER_ID, internalUserID)) {
+    return DEVELOPER_INITIAL_PUBLIC_USER_ID;
   }
 
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -811,10 +792,22 @@ function publicIDBelongsToAnotherUser(database, publicUserID, internalUserID) {
 }
 
 function findUserKey(database, targetUserID, targetPublicUserID) {
-  if (PUBLIC_USER_ID_PATTERN.test(targetPublicUserID)) {
-    return Object.keys(database.users).find((key) => database.users[key]?.public_user_id === targetPublicUserID);
+  if (isValidPublicUserID(targetPublicUserID)) {
+    const publicMatch = Object.keys(database.users).find((key) => database.users[key]?.public_user_id === targetPublicUserID);
+    if (publicMatch) return publicMatch;
   }
   return Object.keys(database.users).find((key) => key.toLowerCase() === targetUserID);
+}
+
+function isValidPublicUserID(value) {
+  const candidate = String(value || '').trim();
+  return candidate.length >= 1
+    && candidate.length <= 24
+    && !/[\s\x00-\x1f\x7f]/.test(candidate);
+}
+
+function normalizeExclusiveBadgeStyle(value) {
+  return value === 'classic_gold' ? 'classic_gold' : 'black_purple_gold';
 }
 
 function listeningSeconds(value) {
@@ -822,6 +815,12 @@ function listeningSeconds(value) {
   if (!Number.isFinite(seconds)) return 0;
   // 客户端只会在真实播放时累积；这里限制上报值，避免异常数据污染统计。
   return Math.max(0, Math.min(Math.floor(seconds), 100 * 365 * 24 * 60 * 60));
+}
+
+function listeningPlayCount(value) {
+  const count = Number(value);
+  if (!Number.isFinite(count)) return 0;
+  return Math.max(0, Math.min(Math.floor(count), 1_000_000_000));
 }
 
 function formatListeningDuration(value) {
@@ -974,7 +973,7 @@ function renderAdminPage(database, section = 'overview') {
       <td><span class="status ${isUserOnline(user) ? 'online' : 'offline'}">${isUserOnline(user) ? '在线' : '离线'}</span>${isUserInactive(user) ? '<br><small>超过 10 天未使用</small>' : ''}<br><small>${escapeHtml(user.last_seen_at)}</small></td>
       <td>${escapeHtml(`${user.app_version} (${user.app_build})`)}<br><small>首次：${escapeHtml(user.first_seen_at)}</small></td>
       <td><strong>${formatListeningDuration(user.listening_seconds)}</strong><br><small>${listeningSeconds(user.listening_seconds).toLocaleString('zh-CN')} 秒</small></td>
-      <td><form method="post" action="/beans/admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> 拉黑</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> 下载已解锁</label><br><label><input type="checkbox" name="exclusive_id" ${user.exclusive_id ? 'checked' : ''}> 专属 ID（金色）</label><br><input name="public_user_id" value="${escapeHtml(user.public_user_id || '')}" inputmode="numeric" pattern="[0-9]{6,7}" placeholder="改用户 ID（6-7 位数字）"><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>
+      <td><form method="post" action="/beans/admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> 拉黑</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> 下载已解锁</label><br><label><input type="checkbox" name="exclusive_id" ${user.exclusive_id ? 'checked' : ''}> 专属 ID</label><br><select name="exclusive_badge_style"><option value="black_purple_gold" ${normalizeExclusiveBadgeStyle(user.exclusive_badge_style) === 'black_purple_gold' ? 'selected' : ''}>黑紫金</option><option value="classic_gold" ${normalizeExclusiveBadgeStyle(user.exclusive_badge_style) === 'classic_gold' ? 'selected' : ''}>经典金色</option></select><br><input name="public_user_id" value="${escapeHtml(user.public_user_id || '')}" maxlength="24" placeholder="改用户 ID（最多 24 字符）"><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>
     </tr>
   `).join('');
   const versionRows = stats.version_usage.map((item) => `
