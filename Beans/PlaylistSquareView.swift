@@ -74,9 +74,8 @@ struct PlaylistSquareView: View {
                 VStack(spacing: 0) {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
-                            // Keep this page-owned field on every OS. The native
-                            // navigation search container can paint an opaque
-                            // backdrop over the artwork on iOS 26.
+                            // Older systems keep the original in-page field;
+                            // iOS 26+ uses the system navigation search field.
                             playlistSearchField
 
                             if categories.count > 1 {
@@ -132,6 +131,13 @@ struct PlaylistSquareView: View {
                     clearSearch()
                 }
             }
+            .modifier(
+                PlaylistNativeSearchModifier(
+                    text: $searchText,
+                    prompt: beansLocalized("搜索歌单", "Search playlists"),
+                    onSubmit: { submitSearch() }
+                )
+            )
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     playlistNavigationTitle
@@ -258,14 +264,19 @@ struct PlaylistSquareView: View {
         }
     }
 
+    @ViewBuilder
     private var playlistSearchField: some View {
-        BeansUnifiedSearchField(
-            text: $searchText,
-            placeholder: beansLocalized("搜索歌单", "Search playlists"),
-            isSearching: isSearchLoading,
-            onClear: { clearSearch() },
-            onSubmit: { _ in submitSearch() }
-        )
+        if #available(iOS 26, *) {
+            EmptyView()
+        } else {
+            BeansUnifiedSearchField(
+                text: $searchText,
+                placeholder: beansLocalized("搜索歌单", "Search playlists"),
+                isSearching: isSearchLoading,
+                onClear: { clearSearch() },
+                onSubmit: { _ in submitSearch() }
+            )
+        }
     }
 
     private var playlistLoadingGrid: some View {
@@ -666,5 +677,29 @@ struct PlaylistSquareView: View {
         searchResults = []
         isSearching = false
         isSearchLoading = false
+    }
+}
+
+/// 精选页在 iOS 26+ 使用系统导航栏搜索，低系统保留原有页面内搜索框。
+private struct PlaylistNativeSearchModifier: ViewModifier {
+    @Binding var text: String
+    let prompt: String
+    let onSubmit: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .searchable(
+                    text: $text,
+                    placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: prompt
+                )
+                .onSubmit(of: .search) {
+                    onSubmit()
+                }
+        } else {
+            content
+        }
     }
 }
