@@ -840,7 +840,11 @@ struct CoverImage: View {
         // Do not synchronously decode disk cache entries from body. A scroll can
         // create many CoverImage values in one frame, so body only reads the
         // loader's in-memory result while disk rehydration runs off the main thread.
+        // Keep already decoded covers visible while a recycled row rebinds its
+        // loader. This avoids a skeleton/white frame when a cached detail page
+        // is reopened or scrolled back into view.
         let cachedImage = imageLoader.image(for: resolvedURL)
+            ?? BeansCoverImageStore.memoryImage(for: resolvedURL)
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(Color.beansGlassFill)
             .frame(width: size * max(aspectRatio, 0.1), height: size)
@@ -855,7 +859,9 @@ struct CoverImage: View {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
-                            .transition(.opacity.animation(.easeIn(duration: 0.22)))
+                            .transaction { transaction in
+                                transaction.animation = nil
+                            }
                     } else if url == nil || imageLoader.didFail {
                         placeholderIcon
                     } else {
@@ -954,6 +960,14 @@ final class BeansCoverImageStore {
         persist(data: response.data, for: url)
         memoryCache.setObject(image, forKey: url as NSURL)
         return image
+    }
+
+    /// Return only the decoded in-memory image. This is intentionally cheap
+    /// enough to use during SwiftUI body evaluation; disk rehydration remains
+    /// asynchronous in `loadCachedImage`.
+    static func memoryImage(for url: URL?) -> UIImage? {
+        guard let url, !url.isFileURL else { return nil }
+        return memoryCache.object(forKey: url as NSURL)
     }
 
     /// Rehydrate persisted covers away from SwiftUI's rendering path. The
@@ -1099,6 +1113,7 @@ private final class BeansCoverImageLoader: ObservableObject {
     @Published private(set) var didFail = false
     private var task: Task<Void, Never>?
     private var loadedURL: URL?
+    private var cacheLookupURL: URL?
 
     /// SwiftUI may keep this StateObject alive while a row changes songs. Never
     /// render the previous request's bitmap during that handoff.
@@ -1107,16 +1122,35 @@ private final class BeansCoverImageLoader: ObservableObject {
     }
 
     func load(url: URL?) {
-        task?.cancel()
-        didFail = false
-        loadedURL = url
+        if loadedURL == url {
+            // `onAppear` can fire repeatedly for a recycled LazyVStack row.
+            // Never clear a valid bitmap or start a second request for the
+            // same URL in that case.
+            if image != nil || task != nil || cacheLookupURL == url || didFail {
+                return
+            }
+        } else {
+            task?.cancel()
+            cacheLookupURL = nil
+            loadedURL = url
+            image = nil
+            didFail = false
+        }
+
         guard let url else {
             image = nil
             return
         }
-        image = nil
+
+        if let cachedImage = BeansCoverImageStore.memoryImage(for: url) {
+            image = cachedImage
+            return
+        }
+
+        cacheLookupURL = url
         BeansCoverImageStore.loadCachedImage(for: url) { [weak self] cachedImage in
             guard let self, self.loadedURL == url else { return }
+            self.cacheLookupURL = nil
             if let cachedImage {
                 self.image = cachedImage
                 return
@@ -1144,9 +1178,11 @@ private final class BeansCoverImageLoader: ObservableObject {
                     BeansCoverImageStore.persist(data: data, for: url)
                     BeansCoverImageStore.memoryCache.setObject(image, forKey: url as NSURL)
                     self.image = image
+                    self.task = nil
                 } catch {
                     guard !Task.isCancelled, let self, self.loadedURL == url else { return }
                     self.didFail = true
+                    self.task = nil
                 }
             }
         }

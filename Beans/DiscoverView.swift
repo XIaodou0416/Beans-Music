@@ -2702,7 +2702,10 @@ struct TopListDetailView: View {
             filteredCount: filteredTracks.count,
             downloadEnabled: downloadFeatureUnlocked,
             creatorName: resolvedPlaylistInfo?.creatorName ?? topList.creatorName,
-            creatorAvatarURL: resolvedPlaylistInfo?.creatorAvatarURL ?? topList.creatorAvatarURL,
+            // Keep the avatar URL from the first chart snapshot stable while
+            // the richer playlist metadata arrives. Replacing it mid-render
+            // makes the native cover loader briefly show an empty frame.
+            creatorAvatarURL: topList.creatorAvatarURL ?? resolvedPlaylistInfo?.creatorAvatarURL,
             onPlay: {
                 BeansHaptics.tap()
                 player.play(songs: filteredTracks, startAt: 0)
