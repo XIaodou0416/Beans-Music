@@ -168,6 +168,95 @@ struct ProfileView: View {
             || (platformPrefs.isEnabled(SearchProvider.kugou) && kugouAuth.isLoggedIn)
     }
 
+    private var resolvedThemeToggleTarget: BeansThemeMode {
+        if themeMode == .dark { return .light }
+        if themeMode == .light { return .dark }
+        return colorScheme == .dark ? .light : .dark
+    }
+
+    @ViewBuilder
+    private var profileThemeToggleButton: some View {
+        if forceHomeBackdrop {
+            BeansThemeToggleButton(colorScheme: colorScheme, onToggle: {
+                beginProfileThemeReveal(from: nil)
+            })
+        } else {
+            BeansThemeToggleButton(colorScheme: colorScheme)
+        }
+    }
+
+    private func beginProfileThemeReveal(from globalLocation: CGPoint?) {
+        let target = resolvedThemeToggleTarget
+        guard themeRevealSnapshot == nil else { return }
+
+        if reduceMotion {
+            themeModeRaw = target.rawValue
+            return
+        }
+
+        guard let captured = currentProfileWindowSnapshot() else {
+            themeModeRaw = target.rawValue
+            return
+        }
+
+        let frame = profileGlobalFrame == .zero
+            ? CGRect(origin: .zero, size: captured.size)
+            : profileGlobalFrame
+        let requested = globalLocation ?? CGPoint(x: frame.midX, y: frame.midY)
+        themeRevealOrigin = CGPoint(
+            x: min(max(requested.x - frame.minX, 0), frame.width),
+            y: min(max(requested.y - frame.minY, 0), frame.height)
+        )
+        themeRevealSnapshot = captured.image
+        themeRevealProgress = 0
+
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            themeModeRaw = target.rawValue
+        }
+
+        DispatchQueue.main.async {
+            withAnimation(.timingCurve(0.16, 0.82, 0.22, 1.0, duration: 1.12)) {
+                themeRevealProgress = 1
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.22) {
+            themeRevealSnapshot = nil
+            themeRevealProgress = 0
+        }
+    }
+
+    private func currentProfileWindowSnapshot() -> (image: UIImage, size: CGSize)? {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter { $0.windowLevel == .normal && !$0.isHidden }
+        guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return nil }
+
+        // Render the visible profile region into a same-sized image so a sheet
+        // presentation does not misalign the reveal overlay on older iOS.
+        let globalFrame = profileGlobalFrame == .zero
+            ? window.convert(window.bounds, to: nil)
+            : profileGlobalFrame
+        let windowFrame = window.convert(globalFrame, from: nil)
+        guard windowFrame.width > 1, windowFrame.height > 1 else { return nil }
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = min(window.screen.scale, 1.5)
+        format.opaque = false
+        let image = UIGraphicsImageRenderer(
+            size: windowFrame.size,
+            format: format
+        ).image { context in
+            context.cgContext.translateBy(x: -windowFrame.minX, y: -windowFrame.minY)
+            if !window.drawHierarchy(in: window.bounds, afterScreenUpdates: false) {
+                window.layer.render(in: context.cgContext)
+            }
+        }
+        return (image, windowFrame.size)
+    }
+
     /// Delay presentation by one main-queue turn so the active profile tab
     /// finishes its update before the settings controller is created.
     private func openSettings() {
@@ -3785,91 +3874,6 @@ struct SettingsView: View {
             catalogDivider
             runtimeEnvironmentFooter
         }
-    }
-
-    private var resolvedThemeToggleTarget: BeansThemeMode {
-        if themeMode == .dark { return .light }
-        if themeMode == .light { return .dark }
-        return colorScheme == .dark ? .light : .dark
-    }
-
-    @ViewBuilder
-    private var profileThemeToggleButton: some View {
-        if forceHomeBackdrop {
-            BeansThemeToggleButton(colorScheme: colorScheme, onToggle: {
-                beginProfileThemeReveal(from: nil)
-            })
-        } else {
-            BeansThemeToggleButton(colorScheme: colorScheme)
-        }
-    }
-
-    private func beginProfileThemeReveal(from globalLocation: CGPoint?) {
-        let target = resolvedThemeToggleTarget
-        guard themeRevealSnapshot == nil else { return }
-
-        if reduceMotion {
-            themeModeRaw = target.rawValue
-            return
-        }
-
-        guard let captured = currentProfileWindowSnapshot() else {
-            themeModeRaw = target.rawValue
-            return
-        }
-
-        let frame = profileGlobalFrame == .zero
-            ? CGRect(origin: .zero, size: captured.size)
-            : profileGlobalFrame
-        let requested = globalLocation ?? CGPoint(x: frame.midX, y: frame.midY)
-        themeRevealOrigin = CGPoint(
-            x: min(max(requested.x - frame.minX, 0), frame.width),
-            y: min(max(requested.y - frame.minY, 0), frame.height)
-        )
-        themeRevealSnapshot = captured.image
-        themeRevealProgress = 0
-
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            themeModeRaw = target.rawValue
-        }
-
-        DispatchQueue.main.async {
-            withAnimation(.timingCurve(0.16, 0.82, 0.22, 1.0, duration: 1.12)) {
-                themeRevealProgress = 1
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.22) {
-            themeRevealSnapshot = nil
-            themeRevealProgress = 0
-        }
-    }
-
-    private func currentProfileWindowSnapshot() -> (image: UIImage, size: CGSize)? {
-        let windows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .filter { $0.windowLevel == .normal && !$0.isHidden }
-        guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return nil }
-
-        let globalFrame = profileGlobalFrame == .zero ? window.bounds : profileGlobalFrame
-        let windowFrame = window.convert(globalFrame, from: nil)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = min(window.screen.scale, 1.5)
-        format.opaque = false
-        let fullImage = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
-            window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
-        }
-        guard let cgImage = fullImage.cgImage else { return nil }
-        let crop = CGRect(
-            x: windowFrame.minX * fullImage.scale,
-            y: windowFrame.minY * fullImage.scale,
-            width: windowFrame.width * fullImage.scale,
-            height: windowFrame.height * fullImage.scale
-        ).integral
-        guard let cropped = cgImage.cropping(to: crop) else { return nil }
-        return (UIImage(cgImage: cropped, scale: fullImage.scale, orientation: fullImage.imageOrientation), windowFrame.size)
     }
 
     private var userIdentityCard: some View {
