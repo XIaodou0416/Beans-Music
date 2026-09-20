@@ -63,7 +63,7 @@ struct MiniPlayerView: View {
                     Capsule()
                         .strokeBorder(.primary.opacity(isIPadLandscape ? 0.06 : 0.08), lineWidth: 0.5)
                 }
-                .shadow(color: .black.opacity(isIPadLandscape ? 0.08 : 0.12), radius: 10, y: 4)
+                .modifier(MiniPlayerPlatformShadow(isIPadLandscape: isIPadLandscape))
         } else {
             content
         }
@@ -181,6 +181,18 @@ struct MiniPlayerView: View {
         guard !Task.isCancelled, let raw else { return }
         guard player.currentSong?.identityKey == identity else { return }
         miniLyrics = LyricParser.parse(raw)
+    }
+}
+
+private struct MiniPlayerPlatformShadow: ViewModifier {
+    let isIPadLandscape: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 27.0, *) {
+            content.shadow(color: .black.opacity(isIPadLandscape ? 0.08 : 0.12), radius: 10, y: 4)
+        } else {
+            content
+        }
     }
 }
 

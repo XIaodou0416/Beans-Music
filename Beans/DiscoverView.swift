@@ -2076,38 +2076,27 @@ struct QQTopListDetailView: View {
                         Task { await load() }
                     }
                 } else {
-                    List {
-                        Section {
-                            HStack(spacing: 12) {
-                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, expandsHorizontally: true) {
-                                    guard !filteredTracks.isEmpty else { return }
-                                    BeansHaptics.tap()
-                                    player.play(songs: filteredTracks, startAt: 0)
-                                }
-                                if downloadFeatureUnlocked, filteredTracks.count > 1 {
-                                    GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
-                                        BeansHaptics.tap()
-                                        showBatchDownload = true
-                                    }
-                                    .accessibilityLabel("批量下载排行榜")
-                                    .help("批量下载")
-                                }
-                            }
-                            .listRowBackground(Color.clear)
-                            .padding(.vertical, 8)
-                        }
-                        Section {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            header
                             ForEach(Array(filteredTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true) {
+                                SongCell(
+                                    song: song,
+                                    showCover: false,
+                                    suppressNativeCleanRowGlass: true,
+                                    leadingIndex: index + 1,
+                                    compactAlbumRow: true,
+                                    playbackContext: filteredTracks,
+                                    playbackIndex: index
+                                ) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
                             }
                         }
+                        .padding(.top, 12)
+                        .padding(.bottom, 118)
                     }
-                    .beansScrollContentBackgroundHidden()
-                    .listStyle(.plain)
+                    .beansScrollIndicatorsHidden()
                 }
             }
             }
@@ -2120,6 +2109,47 @@ struct QQTopListDetailView: View {
             BatchDownloadSheet(songs: filteredTracks, title: "下载排行榜")
                 .environmentObject(theme)
         }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                CoverImage(url: qqTopListCoverURL, size: 120, cornerRadius: 12)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(beansChartName(name))
+                        .font(BeansFont.appFont(16, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                        .lineLimit(3)
+                    Text(beansSongCountText(tracks.count))
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer(minLength: 0)
+            }
+            if !filteredTracks.isEmpty {
+                HStack(spacing: 10) {
+                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                        BeansHaptics.tap()
+                        player.play(songs: filteredTracks, startAt: 0)
+                    }
+                    if downloadFeatureUnlocked, filteredTracks.count > 1 {
+                        GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
+                            BeansHaptics.tap()
+                            showBatchDownload = true
+                        }
+                        .accessibilityLabel("批量下载排行榜")
+                        .help("批量下载")
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
+    }
+
+    private var qqTopListCoverURL: URL? {
+        // QQ 榜单接口只返回榜单名称和歌曲，优先使用首曲封面作为详情页封面。
+        tracks.first?.coverURL
     }
 
     private var filteredTracks: [Song] {
@@ -2478,29 +2508,42 @@ struct TopListDetailView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
-            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 6)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(beansChartName(topList.name))
-                    .font(BeansFont.appFont(18, .bold))
-                    .foregroundStyle(Color.beansLabel)
-                Text(beansChartSubtitle(topList.updateFrequency))
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansComment)
-                Text(beansSongCountText(tracks.count))
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansComment)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                CoverImage(url: topList.coverURL, size: 120, cornerRadius: 12)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(beansChartName(topList.name))
+                        .font(BeansFont.appFont(16, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                        .lineLimit(3)
+                    Text(beansChartSubtitle(topList.updateFrequency))
+                        .font(BeansFont.appFont(13, .medium))
+                        .foregroundStyle(Color.beansComment)
+                    Text(beansSongCountText(tracks.count))
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer()
+            if !filteredTracks.isEmpty {
+                HStack(spacing: 10) {
+                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                        BeansHaptics.tap()
+                        player.play(songs: filteredTracks, startAt: 0)
+                    }
+                    if downloadFeatureUnlocked, filteredTracks.count > 1 {
+                        GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
+                            BeansHaptics.tap()
+                            showBatchDownload = true
+                        }
+                        .accessibilityLabel("批量下载排行榜")
+                        .help("批量下载")
+                    }
+                }
+            }
         }
-        .padding(14)
-        .background {
-            BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        }
-        .beansCardShadow(radius: 8, y: 3)
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
     }
 
     private var filteredTracks: [Song] {
@@ -2582,39 +2625,27 @@ struct KugouTopListDetailView: View {
                 } else if tracks.isEmpty {
                     EmptyStateView(icon: "music.note.list", text: beansLocalized("该排行榜暂无歌曲", "This chart has no songs yet"))
                 } else {
-                    List {
-                        header
-                        Section {
-                            HStack(spacing: 12) {
-                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, expandsHorizontally: true) {
-                                    guard !filteredTracks.isEmpty else { return }
-                                    BeansHaptics.tap()
-                                    player.play(songs: filteredTracks, startAt: 0)
-                                }
-                                if downloadFeatureUnlocked, filteredTracks.count > 1 {
-                                    GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
-                                        BeansHaptics.tap()
-                                        showBatchDownload = true
-                                    }
-                                    .accessibilityLabel("批量下载排行榜")
-                                    .help("批量下载")
-                                }
-                            }
-                            .listRowBackground(Color.clear)
-                            .padding(.vertical, 8)
-                        }
-                        Section {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            header
                             ForEach(Array(filteredTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true) {
+                                SongCell(
+                                    song: song,
+                                    showCover: false,
+                                    suppressNativeCleanRowGlass: true,
+                                    leadingIndex: index + 1,
+                                    compactAlbumRow: true,
+                                    playbackContext: filteredTracks,
+                                    playbackIndex: index
+                                ) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
                             }
                         }
+                        .padding(.top, 12)
+                        .padding(.bottom, 118)
                     }
-                    .beansScrollContentBackgroundHidden()
-                    .listStyle(.plain)
+                    .beansScrollIndicatorsHidden()
                 }
             }
             }
@@ -2630,32 +2661,44 @@ struct KugouTopListDetailView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
-            CoverImage(url: topList.coverURL, size: 88, cornerRadius: 6)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(beansChartName(topList.name))
-                    .font(BeansFont.appFont(18, .bold))
-                    .foregroundStyle(Color.beansLabel)
-                    .lineLimit(2)
-                if !topList.updateFrequency.isEmpty {
-                    Text(beansChartSubtitle(topList.updateFrequency))
-                        .font(BeansFont.appFont(12))
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                CoverImage(url: topList.coverURL, size: 120, cornerRadius: 12)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(beansChartName(topList.name))
+                        .font(BeansFont.appFont(16, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                        .lineLimit(3)
+                    if !topList.updateFrequency.isEmpty {
+                        Text(beansChartSubtitle(topList.updateFrequency))
+                            .font(BeansFont.appFont(13, .medium))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    Text(beansSongCountText(tracks.count))
+                        .font(BeansFont.appFont(11))
                         .foregroundStyle(Color.beansComment)
                 }
-                Text(beansSongCountText(tracks.count))
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansComment)
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            if !filteredTracks.isEmpty {
+                HStack(spacing: 10) {
+                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                        BeansHaptics.tap()
+                        player.play(songs: filteredTracks, startAt: 0)
+                    }
+                    if downloadFeatureUnlocked, filteredTracks.count > 1 {
+                        GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
+                            BeansHaptics.tap()
+                            showBatchDownload = true
+                        }
+                        .accessibilityLabel("批量下载排行榜")
+                        .help("批量下载")
+                    }
+                }
+            }
         }
-        .padding(14)
-        .background {
-            BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        }
-        .beansCardShadow(radius: 8, y: 3)
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
     }
 
     private var filteredTracks: [Song] {

@@ -1578,7 +1578,7 @@ private struct GlassTabBar: View {
                 .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.22), lineWidth: 0.5)
         }
         .clipShape(Capsule())
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.28 : 0.10), radius: 12, y: 4)
+        .modifier(LegacyTabBarPlatformShadow(colorScheme: colorScheme))
         .padding(.horizontal, 12)
     }
 
@@ -1882,6 +1882,18 @@ struct TabBarAppearanceConfigurator: UIViewControllerRepresentable {
             guard gesture.state == .began else { return }
             BeansHaptics.select()
             onHomeLongPress?()
+        }
+    }
+}
+
+private struct LegacyTabBarPlatformShadow: ViewModifier {
+    let colorScheme: ColorScheme
+
+    func body(content: Content) -> some View {
+        if #available(iOS 27.0, *) {
+            content.shadow(color: .black.opacity(colorScheme == .dark ? 0.28 : 0.10), radius: 12, y: 4)
+        } else {
+            content
         }
     }
 }
