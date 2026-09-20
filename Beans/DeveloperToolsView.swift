@@ -408,7 +408,10 @@ private struct DeveloperDownloadGrantSheet: View {
             do {
                 try await DeviceReporter.shared.grantDownloadAccess(to: targetDeviceID, enabled: enabled)
                 ToastCenter.shared.show(enabled ? "已开放该设备的下载功能" : "已关闭该设备的下载功能")
-                await reloadRecords()
+                // The permission mutation can succeed even when the follow-up
+                // history refresh loses its response. Do not turn that refresh
+                // failure into a false failure message for the completed action.
+                await reloadRecords(showError: false)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -422,15 +425,17 @@ private struct DeveloperDownloadGrantSheet: View {
             || value.count >= 16
     }
 
-    private func reloadRecords() async {
+    private func reloadRecords(showError: Bool = true) async {
         guard !isLoadingRecords else { return }
         isLoadingRecords = true
         defer { isLoadingRecords = false }
         do {
             accessRecords = try await DeviceReporter.shared.fetchDownloadAccessRecords()
         } catch {
-            if accessRecords.isEmpty {
+            if showError && accessRecords.isEmpty {
                 errorMessage = error.localizedDescription
+            } else {
+                BeansLogger.shared.log("下载权限记录刷新失败：\(error.localizedDescription)", level: .debug)
             }
         }
     }

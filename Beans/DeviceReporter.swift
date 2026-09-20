@@ -301,7 +301,9 @@ final class DeviceReporter {
 
         var request = URLRequest(url: endpoint(for: "developer/grant-download"))
         request.httpMethod = "POST"
-        request.timeoutInterval = 8
+        request.timeoutInterval = 15
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
@@ -312,12 +314,53 @@ final class DeviceReporter {
             "download_unlocked": enabled
         ])
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        try validate(response, body: data)
-        let result = try decodeResponse(data)
-        guard result.ok != false else {
-            throw BackendRequestError.server(result.message ?? "下载权限操作失败")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try validate(response, body: data)
+            let result = try decodeResponse(data)
+            guard result.ok != false else {
+                throw BackendRequestError.server(result.message ?? "下载权限操作失败")
+            }
+        } catch {
+            // The backend writes the permission before its response reaches the
+            // device. Confirm the resulting state before showing a failure;
+            // otherwise a slow or dropped response looks like a failed action
+            // even though authorization or revocation already succeeded.
+            if isRecoverableGrantError(error),
+               await serverConfirmsDownloadAccess(target: normalizedTarget, enabled: enabled) {
+                BeansLogger.shared.log("下载权限请求未收到完整响应，但后台状态已确认，按成功处理", level: .debug)
+                return
+            }
+            throw error
         }
+    }
+
+    private func isRecoverableGrantError(_ error: Error) -> Bool {
+        if error is URLError { return true }
+        if let backendError = error as? BackendRequestError,
+           case .invalidResponse = backendError {
+            return true
+        }
+        return false
+    }
+
+    private func serverConfirmsDownloadAccess(target: String, enabled: Bool) async -> Bool {
+        let normalizedTarget = target.lowercased()
+        for attempt in 0..<3 {
+            if let records = try? await fetchDownloadAccessRecords(),
+               let record = records.first(where: { record in
+                   record.userID.lowercased() == normalizedTarget
+                       || record.publicUserID?.lowercased() == normalizedTarget
+               }),
+               record.enabled == enabled {
+                return true
+            }
+
+            if attempt < 2 {
+                try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 250_000_000)
+            }
+        }
+        return false
     }
 
     func fetchDownloadAccessRecords() async throws -> [BeansDownloadAccessRecord] {
@@ -339,7 +382,9 @@ final class DeviceReporter {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 8
+        request.timeoutInterval = 15
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
         request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         try validate(response, body: data)
