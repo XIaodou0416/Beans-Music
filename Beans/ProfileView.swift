@@ -1862,6 +1862,7 @@ struct SettingsView: View {
     @AppStorage("beans.home.dailySongsListStyle") private var dailySongsListStyle = false
     @AppStorage("beans.profile.hideDonation") private var hideDonation = false
     @ObservedObject private var sourceStore = UnblockSourceStore.shared
+    @ObservedObject private var dynamicWallpaper = DynamicWallpaperStore.shared
     @ObservedObject private var equalizer = BeansEqualizer.shared
     @AppStorage(ThirdPartyAudioQuality.storageKey) private var thirdPartyAudioQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
     @AppStorage(NetworkAudioQuality.wifiThirdPartyKey) private var wifiThirdPartyAudioQualityRaw = ThirdPartyAudioQuality.flac.rawValue
@@ -2767,6 +2768,127 @@ struct SettingsView: View {
         }
     }
 
+    private var dynamicWallpaperSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("动态壁纸")
+                        .font(BeansFont.appFont(15))
+                        .foregroundStyle(Color.beansLabel)
+                    Text("内置 ShipSwift 的 Fractal Clouds、Ink Smoke 和 Liquid Chrome")
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer()
+            }
+
+            if #available(iOS 17.0, *) {
+                Picker("动态壁纸", selection: $dynamicWallpaper.kind) {
+                    ForEach(BeansDynamicWallpaperKind.allCases) { wallpaper in
+                        Label(wallpaper.title, systemImage: wallpaper.icon)
+                            .tag(wallpaper)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(Color.beansAmber)
+
+                Text(dynamicWallpaper.kind.subtitle)
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(Color.beansComment)
+
+                if dynamicWallpaper.kind != .off {
+                    dynamicWallpaperParameterSection
+
+                    HStack(spacing: 12) {
+                        Button {
+                            dynamicWallpaper.resetCurrent()
+                            BeansHaptics.select()
+                        } label: {
+                            Text("恢复当前默认参数")
+                                .font(BeansFont.appFont(13, .medium))
+                                .foregroundStyle(Color.beansAmber)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background { BeansSurface(shape: Capsule()) }
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                    }
+                }
+            } else {
+                Label("动态壁纸需要 iOS 17 或更高版本，低系统继续使用原有背景。", systemImage: "info.circle")
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    @ViewBuilder
+    private var dynamicWallpaperParameterSection: some View {
+        switch dynamicWallpaper.kind {
+        case .off:
+            EmptyView()
+        case .fractalClouds:
+            VStack(alignment: .leading, spacing: 10) {
+                dynamicColorRow("Sky", hex: $dynamicWallpaper.fractalSkyHex, fallback: Color(red: 0.102, green: 0.149, blue: 0.349))
+                dynamicColorRow("Cloud", hex: $dynamicWallpaper.fractalCloudHex, fallback: Color(red: 0.902, green: 0.902, blue: 1.0))
+                dynamicColorRow("Warm Tint", hex: $dynamicWallpaper.fractalWarmTintHex, fallback: Color(red: 0.102, green: 0.051, blue: 0.0))
+                layoutSettingSlider("Warmth", value: $dynamicWallpaper.fractalWarmth, range: 0...2, step: 0.01, format: "%.2f")
+                layoutSettingSlider("Speed", value: $dynamicWallpaper.fractalSpeed, range: 0...3, step: 0.01, format: "%.2f")
+                layoutSettingSlider("Zoom", value: $dynamicWallpaper.fractalZoom, range: 0.5...10, step: 0.1, format: "%.1f")
+                layoutSettingSlider("Drift X", value: $dynamicWallpaper.fractalDriftX, range: -0.5...0.5, step: 0.01, format: "%.2f")
+                layoutSettingSlider("Drift Y", value: $dynamicWallpaper.fractalDriftY, range: -0.5...0.5, step: 0.01, format: "%.2f")
+                layoutSettingSlider("Warp", value: $dynamicWallpaper.fractalWarp, range: 0...5, step: 0.05, format: "%.2f")
+                layoutSettingSlider("Coverage", value: $dynamicWallpaper.fractalCoverage, range: -1...1, step: 0.01, format: "%.2f")
+            }
+        case .inkSmoke:
+            VStack(alignment: .leading, spacing: 10) {
+                dynamicColorRow("Ink 1", hex: $dynamicWallpaper.ink1Hex, fallback: Color(red: 0.051, green: 0.0, blue: 0.102))
+                dynamicColorRow("Ink 2", hex: $dynamicWallpaper.ink2Hex, fallback: Color(red: 0.102, green: 0.2, blue: 0.502))
+                dynamicColorRow("Ink 3", hex: $dynamicWallpaper.ink3Hex, fallback: Color(red: 0.4, green: 0.102, blue: 0.302))
+                dynamicColorRow("Ink 4", hex: $dynamicWallpaper.ink4Hex, fallback: Color(red: 0.0, green: 0.302, blue: 0.4))
+                dynamicColorRow("Glow", hex: $dynamicWallpaper.inkGlowHex, fallback: Color(red: 0.302, green: 0.2, blue: 0.4))
+                layoutSettingSlider("Speed", value: $dynamicWallpaper.inkSpeed, range: 0...3, step: 0.01, format: "%.2f")
+                layoutSettingSlider("Scale", value: $dynamicWallpaper.inkScale, range: 0.2...5, step: 0.05, format: "%.2f")
+                layoutSettingSlider("Warp", value: $dynamicWallpaper.inkWarp, range: 0...10, step: 0.05, format: "%.2f")
+                layoutSettingSlider("Highlight", value: $dynamicWallpaper.inkHighlight, range: 0...3, step: 0.01, format: "%.2f")
+            }
+        case .liquidChrome:
+            VStack(alignment: .leading, spacing: 10) {
+                dynamicColorRow("Shadow", hex: $dynamicWallpaper.chromeShadowHex, fallback: Color(red: 0.020, green: 0.012, blue: 0.051))
+                dynamicColorRow("Silver", hex: $dynamicWallpaper.chromeSilverHex, fallback: Color(red: 0.2, green: 0.2, blue: 0.251))
+                dynamicColorRow("Highlight", hex: $dynamicWallpaper.chromeHighlightHex, fallback: Color(red: 0.502, green: 0.502, blue: 0.6))
+                dynamicColorRow("Tint", hex: $dynamicWallpaper.chromeTintHex, fallback: Color(red: 0.149, green: 0.2, blue: 0.4))
+                layoutSettingSlider("Speed", value: $dynamicWallpaper.chromeSpeed, range: 0...3, step: 0.01, format: "%.2f")
+                layoutSettingSlider("Scale", value: $dynamicWallpaper.chromeScale, range: 0.2...5, step: 0.05, format: "%.2f")
+                layoutSettingSlider("Warp", value: $dynamicWallpaper.chromeWarp, range: 0...5, step: 0.05, format: "%.2f")
+                layoutSettingSlider("Contrast", value: $dynamicWallpaper.chromeContrast, range: 0.1...3, step: 0.01, format: "%.2f")
+                layoutSettingSlider("Spec Power", value: $dynamicWallpaper.chromeSpecPower, range: 1...50, step: 0.5, format: "%.1f")
+                layoutSettingSlider("Spec Strength", value: $dynamicWallpaper.chromeSpecStrength, range: 0...2, step: 0.01, format: "%.2f")
+                layoutSettingSlider("Tint Strength", value: $dynamicWallpaper.chromeTintStrength, range: 0...2, step: 0.01, format: "%.2f")
+            }
+        }
+    }
+
+    private func dynamicColorRow(_ title: String, hex: Binding<String>, fallback: Color) -> some View {
+        HStack {
+            Text(title)
+                .font(BeansFont.appFont(13))
+                .foregroundStyle(Color.beansLabel)
+            Spacer()
+            ColorPicker("", selection: Binding(
+                get: { Color(hex: hex.wrappedValue) ?? fallback },
+                set: { hex.wrappedValue = $0.hexString }
+            ), supportsOpacity: false)
+            .labelsHidden()
+        }
+    }
+
     /// 外观设置（原「我的」页外观折叠内容）
     private var appearanceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2963,9 +3085,9 @@ struct SettingsView: View {
                     Divider().overlay(Color.beansComment.opacity(0.15))
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: "square.stack.3d.up.fill")
+                 VStack(alignment: .leading, spacing: 8) {
+                     HStack {
+                         Image(systemName: "square.stack.3d.up.fill")
                             .font(.system(size: 14))
                             .foregroundStyle(Color.beansAmber)
                             .frame(width: 28)
@@ -2982,11 +3104,13 @@ struct SettingsView: View {
                             Text(LocalizedStringKey(style.title)).tag(style)
                         }
                     }
-                    .pickerStyle(.segmented)
-                }
+                     .pickerStyle(.segmented)
+                 }
 
-                HStack {
-                    Image(systemName: "drop.fill")
+                 dynamicWallpaperSection
+
+                 HStack {
+                     Image(systemName: "drop.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(Color.beansAmber)
                         .frame(width: 28)
@@ -4001,6 +4125,7 @@ struct SettingsView: View {
         defaults.removeObject(forKey: "beans.wallpapers.deleted")
         // 恢复壁纸：写回 beans.wallpapers.* 后重建文件（沙盒路径变化也能恢复）
         theme.reloadWallpapersFromBackup()
+        DynamicWallpaperStore.shared.reloadFromDefaults()
         // 恢复歌词背景图片：路径变化时按备份的 base64 重建文件
         LyricBackgroundStore.restoreFromBackup()
         // 恢复字体文件

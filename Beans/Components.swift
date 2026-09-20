@@ -152,6 +152,7 @@ struct GlassBackdrop: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
+    @ObservedObject private var dynamicWallpaper = DynamicWallpaperStore.shared
     /// 自定义背景色（nil 使用默认氛围渐变）
     var customColor: Color? = nil
     /// 主页模式：即使“同步到全部页面”关闭，也始终显示壁纸/背景色（仅发现页传 true）
@@ -177,12 +178,69 @@ struct GlassBackdrop: View {
         theme.uiStyle
     }
 
+    private var isDynamicWallpaperActive: Bool {
+        showCustomBackground && dynamicWallpaper.renderableKind != .off
+    }
+
+    @ViewBuilder
+    private var dynamicWallpaperLayer: some View {
+        if #available(iOS 17.0, *), isDynamicWallpaperActive {
+            switch dynamicWallpaper.renderableKind {
+            case .fractalClouds:
+                SWFractalClouds(
+                    skyColor: dynamicWallpaper.color(dynamicWallpaper.fractalSkyHex, fallback: Color(red: 0.102, green: 0.149, blue: 0.349)),
+                    cloudColor: dynamicWallpaper.color(dynamicWallpaper.fractalCloudHex, fallback: Color(red: 0.902, green: 0.902, blue: 1.0)),
+                    warmTint: dynamicWallpaper.color(dynamicWallpaper.fractalWarmTintHex, fallback: Color(red: 0.102, green: 0.051, blue: 0.0)),
+                    warmth: Float(dynamicWallpaper.fractalWarmth),
+                    speed: Float(dynamicWallpaper.fractalSpeed),
+                    zoom: Float(dynamicWallpaper.fractalZoom),
+                    driftX: Float(dynamicWallpaper.fractalDriftX),
+                    driftY: Float(dynamicWallpaper.fractalDriftY),
+                    warp: Float(dynamicWallpaper.fractalWarp),
+                    coverage: Float(dynamicWallpaper.fractalCoverage)
+                )
+            case .inkSmoke:
+                SWInkSmoke(
+                    ink1: dynamicWallpaper.color(dynamicWallpaper.ink1Hex, fallback: Color(red: 0.051, green: 0.0, blue: 0.102)),
+                    ink2: dynamicWallpaper.color(dynamicWallpaper.ink2Hex, fallback: Color(red: 0.102, green: 0.2, blue: 0.502)),
+                    ink3: dynamicWallpaper.color(dynamicWallpaper.ink3Hex, fallback: Color(red: 0.4, green: 0.102, blue: 0.302)),
+                    ink4: dynamicWallpaper.color(dynamicWallpaper.ink4Hex, fallback: Color(red: 0.0, green: 0.302, blue: 0.4)),
+                    glow: dynamicWallpaper.color(dynamicWallpaper.inkGlowHex, fallback: Color(red: 0.302, green: 0.2, blue: 0.4)),
+                    speed: Float(dynamicWallpaper.inkSpeed),
+                    scale: Float(dynamicWallpaper.inkScale),
+                    warp: Float(dynamicWallpaper.inkWarp),
+                    highlight: Float(dynamicWallpaper.inkHighlight)
+                )
+            case .liquidChrome:
+                SWLiquidChrome(
+                    shadow: dynamicWallpaper.color(dynamicWallpaper.chromeShadowHex, fallback: Color(red: 0.020, green: 0.012, blue: 0.051)),
+                    silver: dynamicWallpaper.color(dynamicWallpaper.chromeSilverHex, fallback: Color(red: 0.2, green: 0.2, blue: 0.251)),
+                    highlight: dynamicWallpaper.color(dynamicWallpaper.chromeHighlightHex, fallback: Color(red: 0.502, green: 0.502, blue: 0.6)),
+                    tint: dynamicWallpaper.color(dynamicWallpaper.chromeTintHex, fallback: Color(red: 0.149, green: 0.2, blue: 0.4)),
+                    speed: Float(dynamicWallpaper.chromeSpeed),
+                    scale: Float(dynamicWallpaper.chromeScale),
+                    warp: Float(dynamicWallpaper.chromeWarp),
+                    contrast: Float(dynamicWallpaper.chromeContrast),
+                    specPower: Float(dynamicWallpaper.chromeSpecPower),
+                    specStrength: Float(dynamicWallpaper.chromeSpecStrength),
+                    tintStrength: Float(dynamicWallpaper.chromeTintStrength)
+                )
+            case .off:
+                Color.clear
+            }
+        } else {
+            Color.clear
+        }
+    }
+
     var body: some View {
         let _ = theme.accent
         let activeBackgroundColor = theme.customBackground(for: colorScheme) ?? customColor
         let activeBackgroundImage = theme.customBackgroundImage(for: colorScheme)
         ZStack {
-            if uiStyle == .nativeClean, !showCustomBackground || (activeBackgroundImage == nil && activeBackgroundColor == nil) {
+            if isDynamicWallpaperActive {
+                dynamicWallpaperLayer
+            } else if uiStyle == .nativeClean, !showCustomBackground || (activeBackgroundImage == nil && activeBackgroundColor == nil) {
                 Color(UIColor.systemBackground)
             } else if let image = activeBackgroundImage, showCustomBackground {
                 WallpaperImage(image: image, blurRadius: wallpaperBlur)
@@ -195,7 +253,7 @@ struct GlassBackdrop: View {
             } else {
                 LinearGradient.beansBackdrop
             }
-            if uiStyle != .nativeClean, !settingsPerformanceMode {
+            if uiStyle != .nativeClean, !settingsPerformanceMode, !isDynamicWallpaperActive {
                 Circle()
                     .fill(Color.beansAmber.opacity(0.14))
                     .frame(width: 340, height: 340)
