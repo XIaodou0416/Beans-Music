@@ -61,8 +61,9 @@ struct PlaylistView: View {
                             .listRowSeparator(.hidden)
                         Section {
                             ForEach(Array(displayedTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true, playbackContext: displayedTracks, playbackIndex: index) {
-                                    player.play(songs: displayedTracks, startAt: index)
+                                SongCell(song: song, glassRow: true, playbackContext: orderedTracks, playbackIndex: playbackIndex(for: song))
+                                {
+                                    player.play(songs: orderedTracks, startAt: playbackIndex(for: song))
                                 }
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
@@ -210,17 +211,9 @@ struct PlaylistView: View {
         return "\(count)"
     }
 
-    /// 歌单内搜索 + 排序后的列表
-    private var displayedTracks: [Song] {
+    /// The full playlist order remains the playback queue even when the list is filtered.
+    private var orderedTracks: [Song] {
         var list = tracks
-        let kw = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if !kw.isEmpty {
-            list = list.filter { song in
-                song.name.lowercased().contains(kw)
-                    || song.artists.lowercased().contains(kw)
-                    || song.album.lowercased().contains(kw)
-            }
-        }
         switch sortMode {
         case .original: break
         case .name:
@@ -231,6 +224,20 @@ struct PlaylistView: View {
         return list
     }
 
+    /// Search only changes what is visible, not the queue that follows the selected song.
+    private var displayedTracks: [Song] {
+        let kw = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !kw.isEmpty else { return orderedTracks }
+        return orderedTracks.filter { song in
+            song.name.lowercased().contains(kw)
+                || song.artists.lowercased().contains(kw)
+                || song.album.lowercased().contains(kw)
+        }
+    }
+
+    private func playbackIndex(for song: Song) -> Int {
+        orderedTracks.firstIndex { $0.identityKey == song.identityKey } ?? 0
+    }
     private func load(force: Bool = false) async {
         let cache = SyncedPlaylistCache.shared
         if let cached = cache.cachedSongs(playlist: playlist, accountID: cacheAccountID) {

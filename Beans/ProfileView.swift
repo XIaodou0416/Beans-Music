@@ -176,11 +176,9 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var profileThemeToggleButton: some View {
-        if forceHomeBackdrop {
-            BeansThemeToggleButton(colorScheme: colorScheme, onToggle: {
-                beginProfileThemeReveal(from: nil)
-            })
-        } else {
+        // The profile opened from a header avatar keeps the original profile
+        // layout, but does not expose a second theme control.
+        if !forceHomeBackdrop {
             BeansThemeToggleButton(colorScheme: colorScheme)
         }
     }
@@ -339,7 +337,6 @@ struct ProfileView: View {
                         header
                     }
                     customAvatarCard
-                    userIdentityCard
                     communityCard
                     if !hideDonation {
                         donationCard
@@ -535,6 +532,7 @@ struct ProfileView: View {
                         .foregroundStyle(Color.beansLabel)
                         .textFieldStyle(.plain)
                         .lineLimit(1)
+                    compactIdentityButton
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "waveform")
@@ -567,6 +565,31 @@ struct ProfileView: View {
         .beansCardShadow(radius: 8, y: 3)
     }
 
+    private var compactIdentityButton: some View {
+        let isDeveloper = DeviceIdentity.isDeveloperInstallation
+        return Button {
+            UIPasteboard.general.string = DeviceIdentity.publicID
+            BeansHaptics.tap()
+            ToastCenter.shared.show("用户 ID 已复制")
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isDeveloper ? "crown.fill" : "number.circle.fill")
+                    .font(.system(size: 9, weight: .bold))
+                Text(isDeveloper ? "Beans Creator · \(DeviceIdentity.publicID)" : "ID \(DeviceIdentity.publicID)")
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .foregroundStyle(isDeveloper ? Color.beansAmber : Color.beansComment)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.beansLabel.opacity(0.07), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("用户 ID \(DeviceIdentity.publicID)，点击复制")
+    }
     private func profileStat(title: String, value: String, icon: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
