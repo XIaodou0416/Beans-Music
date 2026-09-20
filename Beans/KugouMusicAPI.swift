@@ -919,7 +919,7 @@ final class KugouMusicAPI {
               let list = rank["list"] as? [[String: Any]] else {
             throw NetEaseError.decoding("酷狗排行榜数据格式异常")
         }
-        return list.prefix(limit).compactMap { item in
+        return list.prefix(limit).compactMap { item -> KugouTopInfo? in
             let id = Self.int(item["rankid"] ?? item["id"])
             guard id > 0 else { return nil }
             let name = Self.string(item["rankname"] ?? item["name"])
@@ -956,7 +956,7 @@ final class KugouMusicAPI {
         )
         let rows = Self.deepArrays(response.json, names: ["rank", "list", "ranklist", "data", "info"])
         var seen = Set<Int>()
-        return rows.compactMap { item in
+        return rows.compactMap { item -> KugouTopInfo? in
             let id = Self.int(item["rankid"] ?? item["rank_id"] ?? item["id"])
             let name = Self.clean(Self.string(item["rankname"] ?? item["rank_name"] ?? item["name"] ?? item["title"]))
             guard id > 0, !name.isEmpty, seen.insert(id).inserted else { return nil }

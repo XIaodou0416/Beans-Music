@@ -539,9 +539,27 @@ struct TopList: Identifiable, Hashable, Codable {
     let coverURL: URL?
     let updateFrequency: String
     /// 榜单接口可能不返回这些字段，详情页会在缺失时回退到实际加载的歌曲数量。
-    let trackCount: Int? = nil
-    let playCount: Int? = nil
-    let chartDescription: String? = nil
+    let trackCount: Int?
+    let playCount: Int?
+    let chartDescription: String?
+
+    init(
+        id: Int,
+        name: String,
+        coverURL: URL?,
+        updateFrequency: String,
+        trackCount: Int? = nil,
+        playCount: Int? = nil,
+        chartDescription: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.coverURL = coverURL
+        self.updateFrequency = updateFrequency
+        self.trackCount = trackCount
+        self.playCount = playCount
+        self.chartDescription = chartDescription
+    }
 
     init?(json: [String: Any]) {
         guard let id = json["id"] as? Int else { return nil }
@@ -572,9 +590,29 @@ struct QQTopInfo: Identifiable, Hashable, Codable {
     let subTitle: String
     let topSongNames: [String]
     let coverURL: URL?
-    let trackCount: Int? = nil
-    let playCount: Int? = nil
-    let chartDescription: String? = nil
+    let trackCount: Int?
+    let playCount: Int?
+    let chartDescription: String?
+
+    init(
+        id: Int,
+        name: String,
+        subTitle: String,
+        topSongNames: [String],
+        coverURL: URL?,
+        trackCount: Int? = nil,
+        playCount: Int? = nil,
+        chartDescription: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.subTitle = subTitle
+        self.topSongNames = topSongNames
+        self.coverURL = coverURL
+        self.trackCount = trackCount
+        self.playCount = playCount
+        self.chartDescription = chartDescription
+    }
 }
 
 /// 酷狗官方排行榜总览项
@@ -583,9 +621,27 @@ struct KugouTopInfo: Identifiable, Hashable, Codable {
     let name: String
     let updateFrequency: String
     let coverURL: URL?
-    let trackCount: Int? = nil
-    let playCount: Int? = nil
-    let chartDescription: String? = nil
+    let trackCount: Int?
+    let playCount: Int?
+    let chartDescription: String?
+
+    init(
+        id: Int,
+        name: String,
+        updateFrequency: String,
+        coverURL: URL?,
+        trackCount: Int? = nil,
+        playCount: Int? = nil,
+        chartDescription: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.updateFrequency = updateFrequency
+        self.coverURL = coverURL
+        self.trackCount = trackCount
+        self.playCount = playCount
+        self.chartDescription = chartDescription
+    }
 }
 
 struct LyricWord: Hashable, Codable {
