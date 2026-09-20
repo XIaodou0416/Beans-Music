@@ -202,11 +202,35 @@ struct BeansDetailProfileShortcut: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var theme: ThemeStore
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("beans.headerAccessoryMode") private var accessoryModeRaw = BeansHeaderAccessoryMode.avatar.rawValue
     @State private var showProfile = false
 
     var body: some View {
-        BeansProfileShortcutButton {
-            showProfile = true
+        Group {
+            if #available(iOS 26, *) {
+                switch BeansHeaderAccessoryMode(rawValue: accessoryModeRaw) ?? .avatar {
+                case .avatar:
+                    Button {
+                        BeansHaptics.tap()
+                        showProfile = true
+                    } label: {
+                        BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 30, useCustom: true)
+                            .frame(width: 30, height: 30)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(beansLocalized("我的", "Profile"))
+                case .themeToggle:
+                    BeansThemeToggleButton(colorScheme: colorScheme, usesGlassContainer: false)
+                case .hidden:
+                    EmptyView()
+                }
+            } else {
+                BeansProfileShortcutButton {
+                    showProfile = true
+                }
+            }
         }
         .sheet(isPresented: $showProfile) {
             ProfileView(forceHomeBackdrop: true)
@@ -229,6 +253,7 @@ extension View {
 
 struct BeansThemeToggleButton: View {
     let colorScheme: ColorScheme
+    var usesGlassContainer = true
 
     var body: some View {
         ZStack {
@@ -237,7 +262,9 @@ struct BeansThemeToggleButton: View {
                 .foregroundStyle(Color.beansLabel)
                 .frame(width: 38, height: 38)
                 .background {
-                    BeansGlass(shape: Circle(), forceLiquid: true)
+                    if usesGlassContainer {
+                        BeansGlass(shape: Circle(), forceLiquid: true)
+                    }
                 }
                 .contentShape(Circle())
         }

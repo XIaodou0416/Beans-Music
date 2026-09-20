@@ -107,9 +107,6 @@ struct ArtistHomeSheet: View {
             prompt: beansLocalized("搜索歌手歌曲", "Search artist songs")
         )
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("完成") { dismiss() }
-            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 BeansDetailProfileShortcut()
             }
