@@ -26,6 +26,34 @@ struct PlaylistView: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
+    init(playlist: Playlist) {
+        self.playlist = playlist
+        let cached = Self.initialCachedSongs(for: playlist)
+        _tracks = State(initialValue: cached?.songs ?? [])
+        _loading = State(initialValue: cached?.songs.isEmpty ?? true)
+    }
+
+    private static func initialCachedSongs(for playlist: Playlist) -> SyncedPlaylistCache.SongEntry? {
+        let accountID: String
+        switch playlist.source {
+        case .netease:
+            if let data = UserDefaults.standard.data(forKey: "beans.user"),
+               let user = try? JSONDecoder().decode(NetEaseUser.self, from: data) {
+                accountID = "\(user.uid)"
+            } else {
+                accountID = ""
+            }
+        case .qq:
+            let qqAuth = QQMusicAuth.shared
+            accountID = qqAuth.rawUin.isEmpty ? qqAuth.playlistUin : qqAuth.rawUin
+        case .kugou:
+            accountID = KugouMusicAuth.shared.userId
+        case .kuwo, .migu:
+            accountID = ""
+        }
+        return SyncedPlaylistCache.shared.cachedSongs(playlist: playlist, accountID: accountID)
+    }
+
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }

@@ -26,9 +26,26 @@ struct PlaylistSquareView: View {
     @State private var neteaseOffset = 0
     @State private var isLoadingMore = false
     @State private var showPlaylistPlatformMenu = false
-    @State private var showProfile = false
 
     private let neteasePageSize = 30
+
+    init() {
+        let savedRaw = UserDefaults.standard.string(forKey: "beans.playlistSquareSource")
+            ?? SearchProvider.netease.rawValue
+        let savedSource = SearchProvider(rawValue: savedRaw) ?? .netease
+        let cachedEntry: PlaylistSquareCache.Entry?
+        if savedSource == .netease {
+            cachedEntry = nil
+        } else {
+            cachedEntry = PlaylistSquareCache.shared.entry(
+                provider: savedSource,
+                category: .all,
+                loggedIn: false
+            )
+        }
+        _playlists = State(initialValue: cachedEntry?.playlists ?? [])
+        _isLoading = State(initialValue: cachedEntry == nil)
+    }
 
     // 分类请求通过 /playlist/list 的 cat 参数区分内容。
     private let neteaseCategories = [
@@ -143,9 +160,7 @@ struct PlaylistSquareView: View {
                     playlistNavigationTitle
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    BeansProfileShortcutButton {
-                        showProfile = true
-                    }
+                    BeansDetailProfileShortcut()
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -161,13 +176,6 @@ struct PlaylistSquareView: View {
                     )
                 }
             }
-        }
-        .sheet(isPresented: $showProfile) {
-            ProfileView(forceHomeBackdrop: true)
-                .environmentObject(theme)
-                .environmentObject(auth)
-                .environmentObject(player)
-                .modifier(BeansProfileSheetBackground())
         }
         // 保留系统搜索栏，但让顶部导航区域随滚动内容透明化，歌单封面可以自然透出。
         .beansHomeNavigationBarTransparent()

@@ -1799,6 +1799,21 @@ struct AlbumDetailView: View {
     @State private var showAlbumDescription = false
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
+    init(album: Album, embeddedInNavigation: Bool = false) {
+        self.album = album
+        self.embeddedInNavigation = embeddedInNavigation
+
+        let songs = DetailSongsCache.shared
+            .cachedSongs(for: "album-\(album.source.rawValue)-\(album.id)")
+        let related = RelatedAlbumsCache.shared
+            .cachedAlbums(for: "related-albums-\(album.source.rawValue)-\(album.id)")
+
+        _tracks = State(initialValue: songs?.songs ?? [])
+        _otherAlbums = State(initialValue: related?.albums.filter { $0.id != album.id } ?? [])
+        _albumDescription = State(initialValue: album.albumDescription)
+        _isLoading = State(initialValue: songs?.songs.isEmpty ?? true)
+    }
+
     var body: some View {
         Group {
             if embeddedInNavigation {

@@ -2065,6 +2065,9 @@ struct QQTopListDetailView: View {
 
     init(topList: QQTopInfo) {
         self.topList = topList
+        let cached = DetailSongsCache.shared.cachedSongs(for: "qq-top-\(topList.id)")
+        _tracks = State(initialValue: cached?.songs ?? [])
+        _loading = State(initialValue: cached?.songs.isEmpty ?? true)
     }
 
     var body: some View {
@@ -2635,6 +2638,9 @@ struct TopListDetailView: View {
 
     init(topList: TopList) {
         self.topList = topList
+        let cached = DetailSongsCache.shared.cachedSongs(for: "netease-top-\(topList.id)")
+        _tracks = State(initialValue: cached?.songs ?? [])
+        _loading = State(initialValue: cached?.songs.isEmpty ?? true)
     }
 
     var body: some View {
@@ -2772,6 +2778,9 @@ struct KugouTopListDetailView: View {
 
     init(topList: KugouTopInfo) {
         self.topList = topList
+        let cached = DetailSongsCache.shared.cachedSongs(for: "kugou-top-\(topList.id)")
+        _tracks = State(initialValue: cached?.songs ?? [])
+        _loading = State(initialValue: cached?.songs.isEmpty ?? true)
     }
 
     var body: some View {

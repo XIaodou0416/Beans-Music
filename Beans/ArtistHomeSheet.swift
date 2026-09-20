@@ -13,12 +13,26 @@ struct ArtistHomeSheet: View {
     /// 从已有导航栈推入时不再创建嵌套 NavigationStack，也不应用 sheet 专用修饰器。
     var embeddedInNavigation = false
 
+    private static func cachedEntry(
+        artistName: String,
+        source: SongSource,
+        artistID: String?
+    ) -> ArtistHomeCache.Entry? {
+        let identity = artistID?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? artistName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return ArtistHomeCache.shared.cached(for: "\(source.rawValue):\(identity)")
+    }
+
     init(artist: Artist, embeddedInNavigation: Bool = false) {
         self.artistName = artist.name
         self.artistSource = artist.source
         self.artistID = artist.id
         self.embeddedInNavigation = embeddedInNavigation
-        _artist = State(initialValue: artist)
+        let cached = Self.cachedEntry(artistName: artist.name, source: artist.source, artistID: artist.id)
+        _artist = State(initialValue: cached?.artist ?? artist)
+        _hotSongs = State(initialValue: cached?.songs ?? [])
+        _albums = State(initialValue: cached?.albums ?? [])
+        _loading = State(initialValue: cached == nil || (cached?.songs.isEmpty == true && cached?.albums.isEmpty == true))
     }
 
     init(artistName: String, artistSource: SongSource = .netease, embeddedInNavigation: Bool = false) {
@@ -26,7 +40,11 @@ struct ArtistHomeSheet: View {
         self.artistSource = artistSource
         self.artistID = nil
         self.embeddedInNavigation = embeddedInNavigation
-        _artist = State(initialValue: nil)
+        let cached = Self.cachedEntry(artistName: artistName, source: artistSource, artistID: nil)
+        _artist = State(initialValue: cached?.artist)
+        _hotSongs = State(initialValue: cached?.songs ?? [])
+        _albums = State(initialValue: cached?.albums ?? [])
+        _loading = State(initialValue: cached == nil || (cached?.songs.isEmpty == true && cached?.albums.isEmpty == true))
     }
 
     @State private var artist: Artist?
