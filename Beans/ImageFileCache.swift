@@ -254,6 +254,7 @@ extension View {
 struct BeansThemeToggleButton: View {
     let colorScheme: ColorScheme
     var usesGlassContainer = true
+    var onToggle: (() -> Void)? = nil
 
     var body: some View {
         ZStack {
@@ -273,22 +274,30 @@ struct BeansThemeToggleButton: View {
             DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onEnded { value in
                     BeansHaptics.tap()
-                    NotificationCenter.default.post(
-                        name: .beansThemeToggleRequested,
-                        object: BeansThemeToggleRequest(location: value.location)
-                    )
+                    if let onToggle {
+                        onToggle()
+                    } else {
+                        NotificationCenter.default.post(
+                            name: .beansThemeToggleRequested,
+                            object: BeansThemeToggleRequest(location: value.location)
+                        )
+                    }
                 }
         )
         .accessibilityLabel(beansLocalized("切换浅深色模式", "Toggle light and dark mode"))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction {
             BeansHaptics.tap()
-            NotificationCenter.default.post(
-                name: .beansThemeToggleRequested,
-                object: BeansThemeToggleRequest(
-                    location: CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY)
+            if let onToggle {
+                onToggle()
+            } else {
+                NotificationCenter.default.post(
+                    name: .beansThemeToggleRequested,
+                    object: BeansThemeToggleRequest(
+                        location: CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY)
+                    )
                 )
-            )
+            }
         }
     }
 }

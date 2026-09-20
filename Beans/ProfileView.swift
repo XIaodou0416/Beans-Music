@@ -9,6 +9,50 @@ enum DownloadOutcome {
     case failure(message: String)
 }
 
+private struct BeansProfileGlobalFrameKey: PreferenceKey {
+    static let defaultValue = CGRect.zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
+
+private struct BeansProfileThemeRevealOverlay: View {
+    let snapshot: UIImage
+    let origin: CGPoint
+    let progress: CGFloat
+
+    var body: some View {
+        GeometryReader { proxy in
+            let farthestX = max(origin.x, proxy.size.width - origin.x)
+            let farthestY = max(origin.y, proxy.size.height - origin.y)
+            let radius = hypot(farthestX, farthestY) + 4
+
+            Image(uiImage: snapshot)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
+                .mask {
+                    Rectangle()
+                        .fill(Color.white)
+                        .overlay {
+                            Circle()
+                                .fill(Color.black)
+                                .frame(width: radius * 2, height: radius * 2)
+                                .scaleEffect(max(progress, 0.001))
+                                .position(origin)
+                                .blendMode(.destinationOut)
+                        }
+                        .compositingGroup()
+                }
+                .allowsHitTesting(false)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+}
+
 struct ProfileView: View {
     /// 由主页头像以 sheet 打开时，使用主页同一套壁纸背景。
     var forceHomeBackdrop = false
@@ -17,6 +61,7 @@ struct ProfileView: View {
     @EnvironmentObject private var player: PlayerManager
     @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
@@ -28,6 +73,10 @@ struct ProfileView: View {
     @State private var showAccountHub = false
     /// 设置页（外观 + 歌词翻译等）
     @State private var showSettings = false
+    @State private var themeRevealSnapshot: UIImage?
+    @State private var themeRevealOrigin = CGPoint.zero
+    @State private var themeRevealProgress: CGFloat = 0
+    @State private var profileGlobalFrame = CGRect.zero
     /// 手动检查更新
     @State private var checkingUpdate = false
     @State private var updateResult: UpdateChecker.CheckResult?
@@ -153,7 +202,7 @@ struct ProfileView: View {
             }
             Spacer()
             HStack(spacing: 10) {
-                BeansThemeToggleButton(colorScheme: colorScheme)
+                profileThemeToggleButton
                 GlassIconButton(systemName: "gearshape.fill", forceLiquid: true) {
                     openSettings()
                 }
@@ -169,7 +218,7 @@ struct ProfileView: View {
                     .font(BeansFont.appFont(38, .bold))
                     .foregroundStyle(Color.beansLabel)
                 Spacer(minLength: 12)
-                BeansThemeToggleButton(colorScheme: colorScheme)
+                profileThemeToggleButton
                 GlassIconButton(systemName: "gearshape", forceLiquid: true) {
                     openSettings()
                 }
@@ -201,6 +250,7 @@ struct ProfileView: View {
                         header
                     }
                     customAvatarCard
+                    userIdentityCard
                     communityCard
                     if !hideDonation {
                         donationCard
@@ -214,6 +264,25 @@ struct ProfileView: View {
                 .beansAdaptiveContentWidth()
             }
             .beansScrollIndicatorsHidden()
+
+            if let themeRevealSnapshot {
+                BeansProfileThemeRevealOverlay(
+                    snapshot: themeRevealSnapshot,
+                    origin: themeRevealOrigin,
+                    progress: themeRevealProgress
+                )
+            }
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: BeansProfileGlobalFrameKey.self,
+                    value: proxy.frame(in: .global)
+                )
+            }
+        }
+        .onPreferenceChange(BeansProfileGlobalFrameKey.self) { frame in
+            profileGlobalFrame = frame
         }
         .task {
             guard !didRefreshProfileAccount else { return }
@@ -3718,6 +3787,196 @@ struct SettingsView: View {
         }
     }
 
+    private var resolvedThemeToggleTarget: BeansThemeMode {
+        if themeMode == .dark { return .light }
+        if themeMode == .light { return .dark }
+        return colorScheme == .dark ? .light : .dark
+    }
+
+    @ViewBuilder
+    private var profileThemeToggleButton: some View {
+        if forceHomeBackdrop {
+            BeansThemeToggleButton(colorScheme: colorScheme, onToggle: {
+                beginProfileThemeReveal(from: nil)
+            })
+        } else {
+            BeansThemeToggleButton(colorScheme: colorScheme)
+        }
+    }
+
+    private func beginProfileThemeReveal(from globalLocation: CGPoint?) {
+        let target = resolvedThemeToggleTarget
+        guard themeRevealSnapshot == nil else { return }
+
+        if reduceMotion {
+            themeModeRaw = target.rawValue
+            return
+        }
+
+        guard let captured = currentProfileWindowSnapshot() else {
+            themeModeRaw = target.rawValue
+            return
+        }
+
+        let frame = profileGlobalFrame == .zero
+            ? CGRect(origin: .zero, size: captured.size)
+            : profileGlobalFrame
+        let requested = globalLocation ?? CGPoint(x: frame.midX, y: frame.midY)
+        themeRevealOrigin = CGPoint(
+            x: min(max(requested.x - frame.minX, 0), frame.width),
+            y: min(max(requested.y - frame.minY, 0), frame.height)
+        )
+        themeRevealSnapshot = captured.image
+        themeRevealProgress = 0
+
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            themeModeRaw = target.rawValue
+        }
+
+        DispatchQueue.main.async {
+            withAnimation(.timingCurve(0.16, 0.82, 0.22, 1.0, duration: 1.12)) {
+                themeRevealProgress = 1
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.22) {
+            themeRevealSnapshot = nil
+            themeRevealProgress = 0
+        }
+    }
+
+    private func currentProfileWindowSnapshot() -> (image: UIImage, size: CGSize)? {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter { $0.windowLevel == .normal && !$0.isHidden }
+        guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return nil }
+
+        let globalFrame = profileGlobalFrame == .zero ? window.bounds : profileGlobalFrame
+        let windowFrame = window.convert(globalFrame, from: nil)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = min(window.screen.scale, 1.5)
+        format.opaque = false
+        let fullImage = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
+        }
+        guard let cgImage = fullImage.cgImage else { return nil }
+        let crop = CGRect(
+            x: windowFrame.minX * fullImage.scale,
+            y: windowFrame.minY * fullImage.scale,
+            width: windowFrame.width * fullImage.scale,
+            height: windowFrame.height * fullImage.scale
+        ).integral
+        guard let cropped = cgImage.cropping(to: crop) else { return nil }
+        return (UIImage(cgImage: cropped, scale: fullImage.scale, orientation: fullImage.imageOrientation), windowFrame.size)
+    }
+
+    private var userIdentityCard: some View {
+        let isDeveloper = DeviceIdentity.isDeveloperInstallation
+        return Button {
+            UIPasteboard.general.string = DeviceIdentity.publicID
+            BeansHaptics.tap()
+            ToastCenter.shared.show("用户 ID 已复制")
+        } label: {
+            VStack(alignment: .leading, spacing: 11) {
+                HStack(spacing: 9) {
+                    Image(systemName: isDeveloper ? "crown.fill" : "number.circle.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(isDeveloper ? Color.white : Color.beansAmber)
+                        .frame(width: 30, height: 30)
+                        .background {
+                            if isDeveloper {
+                                Circle().fill(
+                                    LinearGradient(
+                                        colors: [Color(red: 0.98, green: 0.33, blue: 0.57), Color(red: 0.34, green: 0.29, blue: 0.96)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                            } else {
+                                Circle().fill(Color.beansGlassFill)
+                            }
+                        }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(isDeveloper ? "Beans Creator" : "用户 ID")
+                            .font(BeansFont.appFont(14, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                        Text(isDeveloper ? "专属开发者铭牌" : "绑定当前设备，永久保留")
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isDeveloper ? Color.white.opacity(0.86) : Color.beansComment)
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if isDeveloper {
+                        Text(DeviceIdentity.publicID)
+                            .font(.system(size: 25, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(red: 0.98, green: 0.42, blue: 0.67), Color(red: 0.42, green: 0.48, blue: 1.0)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .monospacedDigit()
+                    } else {
+                        Text(DeviceIdentity.publicID)
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.beansLabel)
+                            .monospacedDigit()
+                    }
+                    if isDeveloper {
+                        Text("5201314")
+                            .font(BeansFont.appFont(10, .bold))
+                            .foregroundStyle(Color.beansLabel.opacity(0.7))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.16), in: Capsule())
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(15)
+            .background {
+                if isDeveloper {
+                    ZStack {
+                        BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous), forceLiquid: true)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.95, green: 0.25, blue: 0.55).opacity(0.12),
+                                        Color(red: 0.26, green: 0.35, blue: 0.98).opacity(0.12)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.55), Color.white.opacity(0.08)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    }
+                } else {
+                    BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+        .accessibilityLabel("用户 ID \(DeviceIdentity.publicID)，点击复制")
+    }
+
     private var runtimeEnvironmentFooter: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
@@ -3746,6 +4005,13 @@ struct SettingsView: View {
                 "界面尺寸",
                 value: runtimeScreenDimensions
             )
+            Button {
+                UIPasteboard.general.string = DeviceIdentity.publicID
+                ToastCenter.shared.show("用户 ID 已复制")
+            } label: {
+                runtimeEnvironmentRow("用户 ID", value: DeviceIdentity.publicID, monospaced: true)
+            }
+            .buttonStyle(.plain)
             Button {
                 UIPasteboard.general.string = DeviceIdentity.userID
                 ToastCenter.shared.show("设备标识已复制")

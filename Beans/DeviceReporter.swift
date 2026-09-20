@@ -9,6 +9,7 @@ struct FeedbackSubmissionResult: Sendable {
 
 struct BeansDownloadAccessRecord: Decodable, Identifiable, Equatable {
     let userID: String
+    let publicUserID: String?
     let deviceModel: String
     let deviceName: String
     let systemName: String
@@ -23,6 +24,7 @@ struct BeansDownloadAccessRecord: Decodable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
+        case publicUserID = "public_user_id"
         case deviceModel = "device_model"
         case deviceName = "device_name"
         case systemName = "system_name"
@@ -202,6 +204,7 @@ final class DeviceReporter {
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
         return [
             "user_id": DeviceIdentity.userID,
+            "public_user_id": DeviceIdentity.publicID,
             "model": DeviceIdentity.hardwareModel,
             "device_name": device.model,
             "system": "\(device.systemName) \(device.systemVersion)",
@@ -291,8 +294,9 @@ final class DeviceReporter {
             throw BackendRequestError.server("当前设备没有开发者权限")
         }
         let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard normalizedTarget.count >= 16 else {
-            throw BackendRequestError.server("设备标识格式不正确")
+        let isPublicID = normalizedTarget.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil
+        guard isPublicID || normalizedTarget.count >= 16 else {
+            throw BackendRequestError.server("用户 ID 格式不正确")
         }
 
         var request = URLRequest(url: endpoint(for: "developer/grant-download"))
@@ -302,7 +306,9 @@ final class DeviceReporter {
         request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "developer_user_id": DeviceIdentity.userID,
-            "target_user_id": normalizedTarget,
+            "developer_public_user_id": DeviceIdentity.publicID,
+            "target_user_id": isPublicID ? "" : normalizedTarget,
+            "target_public_user_id": isPublicID ? normalizedTarget : "",
             "download_unlocked": enabled
         ])
 

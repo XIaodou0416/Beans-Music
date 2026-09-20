@@ -117,15 +117,15 @@ struct DeveloperToolsView: View {
             developerRow("版本", value: appVersion)
             developerRow("界面尺寸", value: "\(Int(UIScreen.main.bounds.width)) × \(Int(UIScreen.main.bounds.height)) @\(String(format: "%.0f", UIScreen.main.scale))x")
             Button {
-                UIPasteboard.general.string = DeviceIdentity.userID
-                ToastCenter.shared.show("设备标识已复制")
+                UIPasteboard.general.string = DeviceIdentity.publicID
+                ToastCenter.shared.show("用户 ID 已复制")
             } label: {
                 HStack {
-                    Text("设备标识")
+                    Text("用户 ID")
                         .font(BeansFont.appFont(13))
                         .foregroundStyle(Color.beansLabel)
                     Spacer()
-                    Text(DeviceIdentity.userID)
+                    Text(DeviceIdentity.publicID)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(Color.beansComment)
                         .lineLimit(1)
@@ -265,11 +265,11 @@ private struct DeveloperDownloadGrantSheet: View {
                         Text("下载权限")
                             .font(BeansFont.appFont(24, .bold))
                             .foregroundStyle(Color.beansLabel)
-                        Text("输入对方设备的设备标识。设备需要先启动过 Beans，才能被找到并更新权限。")
+                        Text("输入对方的用户 ID。对方需要先启动过 Beans，才能被找到并更新权限。")
                             .font(BeansFont.appFont(13))
                             .foregroundStyle(Color.beansComment)
                             .fixedSize(horizontal: false, vertical: true)
-                        TextField("设备标识", text: $targetDeviceID)
+                        TextField("用户 ID", text: $targetDeviceID)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(size: 13, design: .monospaced))
@@ -297,7 +297,7 @@ private struct DeveloperDownloadGrantSheet: View {
                             .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
                         }
                         .buttonStyle(.plain)
-                        .disabled(isSubmitting || targetDeviceID.trimmingCharacters(in: .whitespacesAndNewlines).count < 16)
+                        .disabled(isSubmitting || !isValidTargetID)
                         accessRecordsSection
                     }
                     .padding(20)
@@ -368,7 +368,7 @@ private struct DeveloperDownloadGrantSheet: View {
                     Text(record.deviceName.isEmpty ? record.deviceModel : record.deviceName)
                         .font(BeansFont.appFont(13, .semibold))
                         .foregroundStyle(Color.beansLabel)
-                    Text("\(record.systemName) \(record.systemVersion) · \(record.userID)")
+                    Text("用户 ID \(record.publicUserID ?? record.userID) · \(record.systemName) \(record.systemVersion)")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(Color.beansComment)
                         .lineLimit(2)
@@ -386,7 +386,7 @@ private struct DeveloperDownloadGrantSheet: View {
                     .lineLimit(1)
                 Spacer()
                 Button {
-                    targetDeviceID = record.userID
+                    targetDeviceID = record.publicUserID ?? record.userID
                     enabled = !record.enabled
                     submit()
                 } label: {
@@ -414,6 +414,12 @@ private struct DeveloperDownloadGrantSheet: View {
             }
             isSubmitting = false
         }
+    }
+
+    private var isValidTargetID: Bool {
+        let value = targetDeviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil
+            || value.count >= 16
     }
 
     private func reloadRecords() async {

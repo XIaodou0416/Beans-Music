@@ -2,10 +2,13 @@ import Foundation
 import Security
 import UIKit
 import Darwin
+import CryptoKit
 
 enum DeviceIdentity {
     private static let service = "com.beans.music.device"
     private static let account = "anonymous-user-id"
+    private static let publicIDAccount = "public-user-id"
+    private static let developerIdentifierHash = "f6073926d77dd0947338f5f27f133201a484a2d2b28f68f7fbd95cb168526d36"
 
     static let userID: String = {
         if let value = loadFromKeychain(), !value.isEmpty {
@@ -15,6 +18,28 @@ enum DeviceIdentity {
         saveToKeychain(generated)
         return generated
     }()
+
+    /// A short, user-facing identifier that survives app updates and reinstalls
+    /// through the device keychain. The developer installation keeps its
+    /// reserved identifier so it can be recognized by the backend.
+    static let publicID: String = {
+        if isDeveloperInstallation {
+            return "5201314"
+        }
+        if let value = loadFromKeychain(account: publicIDAccount),
+           value.range(of: #"^[0-9]{6}$"#, options: .regularExpression) != nil {
+            return value
+        }
+        let generated = String(Int.random(in: 100000...500000))
+        saveToKeychain(generated, account: publicIDAccount)
+        return generated
+    }()
+
+    static var isDeveloperInstallation: Bool {
+        let data = Data(userID.lowercased().utf8)
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        return digest == developerIdentifierHash
+    }
 
     static var hardwareModel: String {
         var systemInfo = utsname()
@@ -46,7 +71,7 @@ enum DeviceIdentity {
         }
     }
 
-    private static func loadFromKeychain() -> String? {
+    private static func loadFromKeychain(account: String = account) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -63,7 +88,7 @@ enum DeviceIdentity {
         return value
     }
 
-    private static func saveToKeychain(_ value: String) {
+    private static func saveToKeychain(_ value: String, account: String = account) {
         let data = Data(value.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

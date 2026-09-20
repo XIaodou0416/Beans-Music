@@ -1258,6 +1258,7 @@ struct DiscoverView: View {
             ZStack(alignment: .bottomLeading) {
                 if let coverURL {
                     CoverImage(url: coverURL, size: cardHeight, aspectRatio: cardWidth / cardHeight, cornerRadius: 6)
+                        .frame(width: cardWidth, height: cardHeight)
                         .overlay {
                             LinearGradient(
                                 colors: [.black.opacity(0.05), .black.opacity(0.62)],
@@ -2093,7 +2094,7 @@ struct QQTopListDetailView: View {
                                 ) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, beansDetailContentInset)
                             }
                         }
                         .padding(.top, 12)
@@ -2300,48 +2301,39 @@ struct DailySongsSheet: View {
                 if displayedSongs.isEmpty {
                     EmptyStateView(icon: "sparkles", text: "今日推荐加载中，请稍后重试")
                 } else {
-                    List {
-                    if let refreshError {
-                        Text(refreshError)
-                            .font(BeansFont.appFont(12, .medium))
-                            .foregroundStyle(.red)
-                            .listRowBackground(Color.clear)
-                    }
-                    Section {
-                        HStack(spacing: 12) {
-                            GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, expandsHorizontally: true) {
-                                guard !filteredSongs.isEmpty else { return }
-                                BeansHaptics.tap()
-                                player.play(songs: filteredSongs, startAt: 0)
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            if let refreshError {
+                                Text(refreshError)
+                                    .font(BeansFont.appFont(12, .medium))
+                                    .foregroundStyle(.red)
+                                    .padding(.horizontal, beansDetailContentInset)
+                                    .padding(.bottom, 8)
                             }
-                            if downloadFeatureUnlocked, filteredSongs.count > 1 {
-                                GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
+                            dailyHeader
+                            ForEach(Array(filteredSongs.enumerated()), id: \.element.identityKey) { index, song in
+                                SongCell(
+                                    song: song,
+                                    showCover: true,
+                                    suppressNativeCleanRowGlass: true,
+                                    coverSize: 46,
+                                    fixedRowHeight: 64,
+                                    playbackContext: filteredSongs,
+                                    playbackIndex: index
+                                ) {
                                     BeansHaptics.tap()
-                                    showBatchDownload = true
+                                    player.play(songs: filteredSongs, startAt: index)
                                 }
-                                .accessibilityLabel("批量下载每日推荐")
-                                .help("批量下载")
+                                .padding(.horizontal, beansDetailContentInset)
                             }
                         }
-                        .listRowBackground(Color.clear)
-                        .padding(.vertical, 8)
+                        .padding(.top, 12)
+                        .padding(.bottom, 118)
                     }
-                    Section {
-                        ForEach(Array(filteredSongs.enumerated()), id: \.element.identityKey) { index, song in
-                            SongCell(song: song, glassRow: true) {
-                                BeansHaptics.tap()
-                                player.play(songs: filteredSongs, startAt: index)
-                            }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        }
+                    .beansScrollIndicatorsHidden()
+                    .refreshable {
+                        await refreshDailySongs()
                     }
-                }
-                .beansScrollContentBackgroundHidden()
-                .listStyle(.plain)
-                .refreshable {
-                    await refreshDailySongs()
-                }
                 }
             }
             }
@@ -2356,6 +2348,29 @@ struct DailySongsSheet: View {
                 BatchDownloadSheet(songs: filteredSongs, title: "下载每日推荐")
                     .environmentObject(theme)
             }
+    }
+
+    private var dailyHeader: some View {
+        ChartDetailHeader(
+            title: "今日推荐",
+            provider: source,
+            coverURL: displayedSongs.first?.coverURL,
+            trackCount: filteredSongs.count,
+            playCount: nil,
+            chartDescription: nil,
+            filteredCount: filteredSongs.count,
+            downloadEnabled: downloadFeatureUnlocked,
+            downloadAccessibilityLabel: "批量下载每日推荐",
+            onPlay: {
+                guard !filteredSongs.isEmpty else { return }
+                BeansHaptics.tap()
+                player.play(songs: filteredSongs, startAt: 0)
+            },
+            onDownload: {
+                BeansHaptics.tap()
+                showBatchDownload = true
+            }
+        )
     }
 
     private var filteredSongs: [Song] {
@@ -2454,6 +2469,7 @@ private struct ChartDetailHeader: View {
     let chartDescription: String?
     let filteredCount: Int
     let downloadEnabled: Bool
+    var downloadAccessibilityLabel = "批量下载排行榜"
     let onPlay: () -> Void
     let onDownload: () -> Void
 
@@ -2496,16 +2512,18 @@ private struct ChartDetailHeader: View {
                     )
                     if downloadEnabled, filteredCount > 1 {
                         GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true, action: onDownload)
-                            .accessibilityLabel("批量下载排行榜")
+                            .accessibilityLabel(downloadAccessibilityLabel)
                             .help("批量下载")
                     }
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, beansDetailContentInset)
         .padding(.bottom, 14)
     }
 }
+
+private let beansDetailContentInset: CGFloat = 22
 
 private func beansChartStatsText(trackCount: Int, playCount: Int?) -> String {
     var parts = [beansLocalized("\(trackCount) 首", "\(trackCount) songs")]
@@ -2592,7 +2610,7 @@ struct TopListDetailView: View {
                                 ) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, beansDetailContentInset)
                             }
                         }
                         .padding(.top, 12)
@@ -2728,7 +2746,7 @@ struct KugouTopListDetailView: View {
                                 ) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, beansDetailContentInset)
                             }
                         }
                         .padding(.top, 12)

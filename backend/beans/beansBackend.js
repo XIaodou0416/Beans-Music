@@ -10,6 +10,10 @@ const LOCATION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const ONLINE_WINDOW_MS = 3 * 60 * 1000;
 const INACTIVE_USER_WINDOW_MS = 10 * 24 * 60 * 60 * 1000;
 const USER_ID_PATTERN = /^[a-f0-9-]{16,80}$/i;
+const PUBLIC_USER_ID_PATTERN = /^\d{6,7}$/;
+const PUBLIC_USER_ID_MIN = 100000;
+const PUBLIC_USER_ID_MAX = 500000;
+const DEVELOPER_PUBLIC_USER_ID = '5201314';
 const DEVELOPER_DEVICE_ID_HASH = process.env.BEANS_DEVELOPER_DEVICE_ID_HASH
   || 'f6073926d77dd0947338f5f27f133201a484a2d2b28f68f7fbd95cb168526d36';
 const locationCache = new Map();
@@ -94,16 +98,19 @@ function createBeansRouter(options = {}) {
     const payload = request.body || {};
     const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
     const targetUserID = text(payload.target_user_id, 80).toLowerCase();
+    const targetPublicUserID = text(payload.target_public_user_id, 16);
     if (!isDeveloperDeviceID(developerUserID)) {
       return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
     }
-    if (!USER_ID_PATTERN.test(targetUserID)) {
+    if (!USER_ID_PATTERN.test(targetUserID) && !PUBLIC_USER_ID_PATTERN.test(targetPublicUserID)) {
       return response.status(422).json({ ok: false, message: 'invalid_user_id' });
     }
 
     let updatedUser;
     mutateDatabase((database) => {
-      const userKey = Object.keys(database.users).find((key) => key.toLowerCase() === targetUserID);
+      const userKey = PUBLIC_USER_ID_PATTERN.test(targetPublicUserID)
+        ? Object.keys(database.users).find((key) => database.users[key]?.public_user_id === targetPublicUserID)
+        : Object.keys(database.users).find((key) => key.toLowerCase() === targetUserID);
       const user = userKey ? database.users[userKey] : null;
       if (!user) return;
       const enabled = Boolean(payload.download_unlocked);
@@ -139,6 +146,7 @@ function createBeansRouter(options = {}) {
           : (user.download_unlocked ? [{ enabled: true, changed_at: user.last_seen_at || '' }] : []);
         return history.map((entry) => ({
           user_id: user.user_id,
+          public_user_id: user.public_user_id || '',
           device_model: user.device_model,
           device_name: user.device_name,
           system_name: user.system_name,
@@ -431,12 +439,14 @@ function createBeansRouter(options = {}) {
       const existing = database.users[userID];
       const timestamp = now();
       const reportedListeningSeconds = listeningSeconds(payload?.listening_seconds);
+      const publicUserID = resolvePublicUserID(database, userID, payload?.public_user_id, existing?.public_user_id);
       if (options.countAccess) {
         database.stats.access_count += 1;
         database.stats.last_access_at = timestamp;
       }
       record = {
         user_id: userID,
+        public_user_id: publicUserID,
         device_model: text(payload.model, 128),
         device_name: text(payload.device_name, 128),
         system_name: text(payload.system, 128),
@@ -568,9 +578,10 @@ function createBeansRouter(options = {}) {
   }
 }
 
-  function publicUserState(user, database = null) {
+function publicUserState(user, database = null) {
   return {
     ok: true,
+    public_user_id: user?.public_user_id || null,
     blocked: Boolean(user?.is_blacklisted),
     download_unlocked: Boolean(user?.download_unlocked),
     feedback_replies: database
@@ -621,6 +632,33 @@ function text(value, maxLength) {
 function isDeveloperDeviceID(value) {
   const digest = crypto.createHash('sha256').update(String(value).toLowerCase()).digest('hex');
   return secureEqual(digest, DEVELOPER_DEVICE_ID_HASH);
+}
+
+function resolvePublicUserID(database, internalUserID, requestedValue, existingValue) {
+  if (isDeveloperDeviceID(internalUserID)) return DEVELOPER_PUBLIC_USER_ID;
+
+  const existing = text(existingValue || requestedValue, 16);
+  if (PUBLIC_USER_ID_PATTERN.test(existing) && !publicIDBelongsToAnotherUser(database, existing, internalUserID)) {
+    return existing;
+  }
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const candidate = String(Math.floor(Math.random() * (PUBLIC_USER_ID_MAX - PUBLIC_USER_ID_MIN + 1)) + PUBLIC_USER_ID_MIN);
+    if (!publicIDBelongsToAnotherUser(database, candidate, internalUserID)) return candidate;
+  }
+
+  for (let candidate = PUBLIC_USER_ID_MIN; candidate <= PUBLIC_USER_ID_MAX; candidate += 1) {
+    const value = String(candidate);
+    if (!publicIDBelongsToAnotherUser(database, value, internalUserID)) return value;
+  }
+
+  throw new Error('public_user_id_exhausted');
+}
+
+function publicIDBelongsToAnotherUser(database, publicUserID, internalUserID) {
+  return Object.values(database.users).some((user) =>
+    user?.public_user_id === publicUserID && user.user_id !== internalUserID
+  );
 }
 
 function listeningSeconds(value) {
@@ -775,7 +813,7 @@ function renderAdminPage(database, section = 'overview') {
     .slice(0, 500);
   const userRows = users.map((user) => `
     <tr>
-      <td class="id">${escapeHtml(user.user_id)}<br><small>${escapeHtml(user.location || '位置获取中')}</small></td>
+      <td class="id"><strong>${escapeHtml(user.public_user_id || '未分配')}</strong><br><small>设备：${escapeHtml(user.user_id)}</small><br><small>${escapeHtml(user.location || '位置获取中')}</small></td>
       <td>${escapeHtml(user.device_model || user.device_name)}<br><small>${escapeHtml(`${user.system_name} ${user.system_version}`)}</small></td>
       <td><span class="status ${isUserOnline(user) ? 'online' : 'offline'}">${isUserOnline(user) ? '在线' : '离线'}</span>${isUserInactive(user) ? '<br><small>超过 10 天未使用</small>' : ''}<br><small>${escapeHtml(user.last_seen_at)}</small></td>
       <td>${escapeHtml(`${user.app_version} (${user.app_build})`)}<br><small>首次：${escapeHtml(user.first_seen_at)}</small></td>
@@ -823,7 +861,7 @@ function renderAdminPage(database, section = 'overview') {
   }).join('');
 
   const body = section === 'users'
-    ? `<section class="panel"><h2>用户列表 <small>在线状态按最近 ${ONLINE_WINDOW_MS / 60000} 分钟心跳计算</small></h2><table><thead><tr><th>设备 ID / 位置</th><th>设备 / 系统</th><th>在线状态</th><th>版本 / 时间</th><th>Beans 听歌时长</th><th>管理</th></tr></thead><tbody>${userRows || emptyRow('暂无用户')}</tbody></table></section>`
+    ? `<section class="panel"><h2>用户列表 <small>用户 ID 绑定设备，在线状态按最近 ${ONLINE_WINDOW_MS / 60000} 分钟心跳计算</small></h2><table><thead><tr><th>用户 ID / 设备标识 / 位置</th><th>设备 / 系统</th><th>在线状态</th><th>版本 / 时间</th><th>Beans 听歌时长</th><th>管理</th></tr></thead><tbody>${userRows || emptyRow('暂无用户')}</tbody></table></section>`
     : section === 'feedback'
       ? `<section class="panel"><h2>反馈列表</h2><table><thead><tr><th>时间</th><th>用户</th><th>填写设备</th><th>反馈内容与附件</th><th>操作</th></tr></thead><tbody>${feedbackRows || emptyRow('暂无反馈')}</tbody></table></section>`
       : `<section class="metrics"><article class="metric"><small>总用户</small><b>${stats.total_users}</b></article><article class="metric"><small>软件访问量</small><b>${stats.access_count}</b></article><article class="metric"><small>Beans 总听歌时长</small><b>${formatListeningDuration(stats.total_listening_seconds)}</b></article><article class="metric"><small>当前在线</small><b>${stats.online_users}</b><small>最近 ${ONLINE_WINDOW_MS / 60000} 分钟有心跳</small></article><article class="metric"><small>超过 ${stats.inactive_window_days} 天未使用</small><b>${stats.inactive_users_10_days}</b></article><article class="metric"><small>反馈数量</small><b>${stats.total_feedback}</b></article></section><section class="panel"><h2>版本使用统计</h2><table><thead><tr><th>版本 / Build</th><th>用户数</th><th>在线</th><th>${stats.inactive_window_days} 天内活跃</th><th>超过 ${stats.inactive_window_days} 天未使用</th><th>最近活跃</th></tr></thead><tbody>${versionRows || emptyRow('暂无版本数据')}</tbody></table></section><section class="panel overview"><h2>使用情况</h2><p>最近一次访问：${escapeHtml(stats.last_access_at || '暂无记录')}</p><p>在线用户通过应用每分钟心跳更新，离开超过 ${ONLINE_WINDOW_MS / 60000} 分钟后自动视为离线；超过 ${stats.inactive_window_days} 天没有心跳的用户会计入未使用统计。</p></section>`;
