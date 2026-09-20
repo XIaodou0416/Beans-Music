@@ -1192,6 +1192,113 @@ struct ProfileView: View {
     ]
 }
 
+private extension ProfileView {
+    var userIdentityCard: some View {
+        let isDeveloper = DeviceIdentity.isDeveloperInstallation
+        return Button {
+            UIPasteboard.general.string = DeviceIdentity.publicID
+            BeansHaptics.tap()
+            ToastCenter.shared.show("用户 ID 已复制")
+        } label: {
+            VStack(alignment: .leading, spacing: 11) {
+                HStack(spacing: 9) {
+                    Image(systemName: isDeveloper ? "crown.fill" : "number.circle.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(isDeveloper ? Color.white : Color.beansAmber)
+                        .frame(width: 30, height: 30)
+                        .background {
+                            if isDeveloper {
+                                Circle().fill(
+                                    LinearGradient(
+                                        colors: [Color(red: 0.98, green: 0.33, blue: 0.57), Color(red: 0.34, green: 0.29, blue: 0.96)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                            } else {
+                                Circle().fill(Color.beansGlassFill)
+                            }
+                        }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(isDeveloper ? "Beans Creator" : "用户 ID")
+                            .font(BeansFont.appFont(14, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                        Text(isDeveloper ? "专属开发者铭牌" : "绑定当前设备，永久保留")
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isDeveloper ? Color.white.opacity(0.86) : Color.beansComment)
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if isDeveloper {
+                        Text(DeviceIdentity.publicID)
+                            .font(.system(size: 25, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(red: 0.98, green: 0.42, blue: 0.67), Color(red: 0.42, green: 0.48, blue: 1.0)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .monospacedDigit()
+                    } else {
+                        Text(DeviceIdentity.publicID)
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.beansLabel)
+                            .monospacedDigit()
+                    }
+                    if isDeveloper {
+                        Text("5201314")
+                            .font(BeansFont.appFont(10, .bold))
+                            .foregroundStyle(Color.beansLabel.opacity(0.7))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.16), in: Capsule())
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(15)
+            .background {
+                if isDeveloper {
+                    ZStack {
+                        BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous), forceLiquid: true)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.95, green: 0.25, blue: 0.55).opacity(0.12),
+                                        Color(red: 0.26, green: 0.35, blue: 0.98).opacity(0.12)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.55), Color.white.opacity(0.08)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    }
+                } else {
+                    BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+        .accessibilityLabel("用户 ID \(DeviceIdentity.publicID)，点击复制")
+    }
+}
+
 // MARK: - 交流群二维码
 
 struct CommunityQRSheet: View {
@@ -3874,111 +3981,6 @@ struct SettingsView: View {
             catalogDivider
             runtimeEnvironmentFooter
         }
-    }
-
-    private var userIdentityCard: some View {
-        let isDeveloper = DeviceIdentity.isDeveloperInstallation
-        return Button {
-            UIPasteboard.general.string = DeviceIdentity.publicID
-            BeansHaptics.tap()
-            ToastCenter.shared.show("用户 ID 已复制")
-        } label: {
-            VStack(alignment: .leading, spacing: 11) {
-                HStack(spacing: 9) {
-                    Image(systemName: isDeveloper ? "crown.fill" : "number.circle.fill")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(isDeveloper ? Color.white : Color.beansAmber)
-                        .frame(width: 30, height: 30)
-                        .background {
-                            if isDeveloper {
-                                Circle().fill(
-                                    LinearGradient(
-                                        colors: [Color(red: 0.98, green: 0.33, blue: 0.57), Color(red: 0.34, green: 0.29, blue: 0.96)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                            } else {
-                                Circle().fill(Color.beansGlassFill)
-                            }
-                        }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(isDeveloper ? "Beans Creator" : "用户 ID")
-                            .font(BeansFont.appFont(14, .semibold))
-                            .foregroundStyle(Color.beansLabel)
-                        Text(isDeveloper ? "专属开发者铭牌" : "绑定当前设备，永久保留")
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
-                    }
-                    Spacer(minLength: 8)
-                    Image(systemName: "doc.on.doc")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isDeveloper ? Color.white.opacity(0.86) : Color.beansComment)
-                }
-
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if isDeveloper {
-                        Text(DeviceIdentity.publicID)
-                            .font(.system(size: 25, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Color(red: 0.98, green: 0.42, blue: 0.67), Color(red: 0.42, green: 0.48, blue: 1.0)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .monospacedDigit()
-                    } else {
-                        Text(DeviceIdentity.publicID)
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.beansLabel)
-                            .monospacedDigit()
-                    }
-                    if isDeveloper {
-                        Text("5201314")
-                            .font(BeansFont.appFont(10, .bold))
-                            .foregroundStyle(Color.beansLabel.opacity(0.7))
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(Color.white.opacity(0.16), in: Capsule())
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-            .padding(15)
-            .background {
-                if isDeveloper {
-                    ZStack {
-                        BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous), forceLiquid: true)
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.95, green: 0.25, blue: 0.55).opacity(0.12),
-                                        Color(red: 0.26, green: 0.35, blue: 0.98).opacity(0.12)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.55), Color.white.opacity(0.08)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
-                } else {
-                    BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
-        .accessibilityLabel("用户 ID \(DeviceIdentity.publicID)，点击复制")
     }
 
     private var runtimeEnvironmentFooter: some View {
