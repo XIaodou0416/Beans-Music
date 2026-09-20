@@ -53,6 +53,50 @@ private struct BeansProfileThemeRevealOverlay: View {
     }
 }
 
+private struct BeansExclusiveIDBadgeSurface: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { timeline in
+            let phase = Angle.degrees((timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 12)) * 30)
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.035, green: 0.025, blue: 0.075),
+                            Color(red: 0.16, green: 0.055, blue: 0.25),
+                            Color(red: 0.055, green: 0.03, blue: 0.10)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    Capsule()
+                        .strokeBorder(
+                            AngularGradient(
+                                colors: [
+                                    Color(red: 0.43, green: 0.24, blue: 0.74),
+                                    Color(red: 1.0, green: 0.84, blue: 0.36),
+                                    Color(red: 0.68, green: 0.43, blue: 0.10),
+                                    Color(red: 0.43, green: 0.24, blue: 0.74)
+                                ],
+                                center: .center,
+                                angle: phase
+                            ),
+                            lineWidth: 1
+                        )
+                }
+                .overlay {
+                    Capsule()
+                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.45)
+                        .padding(1.2)
+                }
+                .shadow(color: Color(red: 0.52, green: 0.26, blue: 0.90).opacity(0.42), radius: 5, y: 1)
+                .shadow(color: Color(red: 1.0, green: 0.72, blue: 0.16).opacity(0.24), radius: 3, y: 1)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 struct ProfileView: View {
     /// 由主页头像以 sheet 打开时，使用主页同一套壁纸背景。
     var forceHomeBackdrop = false
@@ -66,6 +110,8 @@ struct ProfileView: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
+    @AppStorage(BeansBackendSettings.exclusiveIDKey) private var hasExclusiveID = false
+    @AppStorage(BeansBackendSettings.publicIDRevisionKey) private var publicIDRevision = 0
 
     @State private var showHistory = false
 
@@ -122,6 +168,10 @@ struct ProfileView: View {
 
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
+
+    private var usesExclusiveIDBadge: Bool {
+        DeviceIdentity.isDeveloperInstallation || hasExclusiveID
     }
 
     private var isEnglish: Bool { languageRaw == AppLanguage.english.rawValue }
@@ -281,6 +331,27 @@ struct ProfileView: View {
             }
     }
 
+    private var profileSettingsButton: some View {
+        Button {
+            openSettings()
+        } label: {
+            Image(systemName: isNativeClean ? "gearshape" : "gearshape.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.beansLabel)
+                .frame(width: 44, height: 44)
+                .background {
+                    BeansGlass(shape: Circle(), forceLiquid: true)
+                }
+                .clipShape(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(GlassPressButtonStyle())
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
+        .zIndex(10)
+        .accessibilityLabel("设置")
+    }
+
     /// 顶部标题 + 右上角设置齿轮
     private var header: some View {
         HStack(alignment: .center) {
@@ -292,9 +363,7 @@ struct ProfileView: View {
             Spacer()
             HStack(spacing: 10) {
                 profileThemeToggleButton
-                GlassIconButton(systemName: "gearshape.fill", forceLiquid: true) {
-                    openSettings()
-                }
+                profileSettingsButton
             }
         }
         .padding(.top, 8)
@@ -308,9 +377,7 @@ struct ProfileView: View {
                     .foregroundStyle(Color.beansLabel)
                 Spacer(minLength: 12)
                 profileThemeToggleButton
-                GlassIconButton(systemName: "gearshape", forceLiquid: true) {
-                    openSettings()
-                }
+                profileSettingsButton
             }
             Rectangle()
                 .fill(Color.beansLabel.opacity(0.10))
@@ -601,42 +668,43 @@ struct ProfileView: View {
     }
 
     private var compactIdentityButton: some View {
-        let isDeveloper = DeviceIdentity.isDeveloperInstallation
+        let _ = publicIDRevision
+        let isExclusive = usesExclusiveIDBadge
         return Button {
             UIPasteboard.general.string = DeviceIdentity.publicID
             BeansHaptics.tap()
             ToastCenter.shared.show("用户 ID 已复制")
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: isDeveloper ? "crown.fill" : "number.circle.fill")
+                Image(systemName: isExclusive ? "crown.fill" : "number.circle.fill")
                     .font(.system(size: 9, weight: .bold))
-                Text(isDeveloper ? "专属 ID · \(DeviceIdentity.publicID)" : "ID · \(DeviceIdentity.publicID)")
+                Text(isExclusive ? "专属 ID · \(DeviceIdentity.publicID)" : "ID · \(DeviceIdentity.publicID)")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 8, weight: .semibold))
             }
-            .foregroundStyle(Color(red: 0.27, green: 0.17, blue: 0.055))
+            .foregroundStyle(isExclusive ? Color(red: 1.0, green: 0.89, blue: 0.52) : Color(red: 0.30, green: 0.34, blue: 0.40))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background {
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 1.0, green: 0.91, blue: 0.55),
-                                Color(red: 0.86, green: 0.60, blue: 0.18),
-                                Color(red: 1.0, green: 0.82, blue: 0.34)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                if isExclusive {
+                    BeansExclusiveIDBadgeSurface()
+                } else {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.82), Color(red: 0.62, green: 0.66, blue: 0.73).opacity(0.72)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .overlay {
-                        Capsule().strokeBorder(Color.white.opacity(0.62), lineWidth: 0.7)
-                    }
-                    .shadow(color: Color(red: 0.82, green: 0.52, blue: 0.12).opacity(0.28), radius: 5, y: 2)
+                        .overlay {
+                            Capsule().strokeBorder(Color.white.opacity(0.72), lineWidth: 0.7)
+                        }
+                        .shadow(color: Color.black.opacity(0.10), radius: 4, y: 2)
+                }
             }
         }
         .buttonStyle(.plain)
@@ -2235,6 +2303,7 @@ struct SettingsView: View {
         }
         .onDisappear {
             homeRenderingPaused = false
+            onClose?()
             if #unavailable(iOS 26) {
                 HighRefreshKeeper.shared.resumeAfterTemporaryPause()
             }

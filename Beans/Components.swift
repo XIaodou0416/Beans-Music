@@ -1443,9 +1443,6 @@ struct BeansDetailSongsLoadingState: View {
                     Spacer(minLength: 0)
                 }
                 .padding(14)
-                .background {
-                    BeansSurface(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                }
                 .padding(.horizontal, 16)
 
                 HStack(spacing: 12) {

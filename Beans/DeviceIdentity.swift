@@ -22,18 +22,28 @@ enum DeviceIdentity {
     /// A short, user-facing identifier that survives app updates and reinstalls
     /// through the device keychain. The developer installation keeps its
     /// reserved identifier so it can be recognized by the backend.
-    static let publicID: String = {
+    static var publicID: String {
         if isDeveloperInstallation {
             return "5201314"
         }
         if let value = loadFromKeychain(account: publicIDAccount),
-           value.range(of: #"^[0-9]{6}$"#, options: .regularExpression) != nil {
+           value.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil {
             return value
         }
         let generated = String(Int.random(in: 100000...500000))
         saveToKeychain(generated, account: publicIDAccount)
         return generated
-    }()
+    }
+
+    /// The backend may assign a new, unique public ID from the developer
+    /// tools. Keep the value in the keychain so it survives app updates.
+    static func updatePublicID(_ value: String) {
+        guard !isDeveloperInstallation,
+              value.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil else {
+            return
+        }
+        saveToKeychain(value, account: publicIDAccount)
+    }
 
     static var isDeveloperInstallation: Bool {
         let data = Data(userID.lowercased().utf8)

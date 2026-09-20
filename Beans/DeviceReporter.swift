@@ -37,9 +37,41 @@ struct BeansDownloadAccessRecord: Decodable, Identifiable, Equatable {
     }
 }
 
+struct BeansExclusiveAccessRecord: Decodable, Identifiable, Equatable {
+    let userID: String
+    let publicUserID: String?
+    let deviceModel: String
+    let deviceName: String
+    let systemName: String
+    let systemVersion: String
+    let appVersion: String
+    let appBuild: String
+    let lastSeenAt: String
+    let enabled: Bool
+    let changedAt: String
+
+    var id: String { "exclusive-\(userID)-\(changedAt)-\(enabled)" }
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case publicUserID = "public_user_id"
+        case deviceModel = "device_model"
+        case deviceName = "device_name"
+        case systemName = "system_name"
+        case systemVersion = "system_version"
+        case appVersion = "app_version"
+        case appBuild = "app_build"
+        case lastSeenAt = "last_seen_at"
+        case enabled
+        case changedAt = "changed_at"
+    }
+}
+
 enum BeansBackendSettings {
     static let downloadUnlockKey = "beans.downloadFeatureUnlocked"
     static let blockedKey = "beans.backend.userBlocked"
+    static let exclusiveIDKey = "beans.backend.exclusiveID"
+    static let publicIDRevisionKey = "beans.backend.publicIDRevision"
 }
 
 /// 启动时向后台上报基础设备信息；IP 由后台从请求中获取。
@@ -335,6 +367,58 @@ final class DeviceReporter {
         }
     }
 
+    func grantExclusiveID(
+        to targetUserID: String,
+        assignedPublicID: String,
+        enabled: Bool
+    ) async throws {
+        guard BeansDeveloperAccess.isAuthorized else {
+            throw BackendRequestError.server("当前设备没有开发者权限")
+        }
+        let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedAssignedID = assignedPublicID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isPublicID = normalizedTarget.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil
+        guard isPublicID || normalizedTarget.count >= 16 else {
+            throw BackendRequestError.server("用户 ID 格式不正确")
+        }
+        guard normalizedAssignedID.isEmpty
+            || normalizedAssignedID.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil else {
+            throw BackendRequestError.server("专属 ID 必须是 6 至 7 位数字")
+        }
+
+        var request = URLRequest(url: endpoint(for: "developer/grant-exclusive-id"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "developer_user_id": DeviceIdentity.userID,
+            "developer_public_user_id": DeviceIdentity.publicID,
+            "target_user_id": isPublicID ? "" : normalizedTarget,
+            "target_public_user_id": isPublicID ? normalizedTarget : "",
+            "assigned_public_user_id": normalizedAssignedID,
+            "exclusive_id": enabled
+        ])
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try validate(response, body: data)
+            let result = try decodeResponse(data)
+            guard result.ok != false else {
+                throw BackendRequestError.server(result.message ?? "专属 ID 操作失败")
+            }
+        } catch {
+            if isRecoverableGrantError(error),
+               await serverConfirmsExclusiveAccess(target: normalizedTarget, enabled: enabled) {
+                BeansLogger.shared.log("专属 ID 请求未收到完整响应，但后台状态已确认，按成功处理", level: .debug)
+                return
+            }
+            throw error
+        }
+    }
+
     private func isRecoverableGrantError(_ error: Error) -> Bool {
         if error is URLError { return true }
         if let backendError = error as? BackendRequestError,
@@ -356,6 +440,24 @@ final class DeviceReporter {
                 return true
             }
 
+            if attempt < 2 {
+                try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 250_000_000)
+            }
+        }
+        return false
+    }
+
+    private func serverConfirmsExclusiveAccess(target: String, enabled: Bool) async -> Bool {
+        let normalizedTarget = target.lowercased()
+        for attempt in 0..<3 {
+            if let records = try? await fetchExclusiveAccessRecords(),
+               let record = records.first(where: { record in
+                   record.userID.lowercased() == normalizedTarget
+                       || record.publicUserID?.lowercased() == normalizedTarget
+               }),
+               record.enabled == enabled {
+                return true
+            }
             if attempt < 2 {
                 try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 250_000_000)
             }
@@ -395,6 +497,37 @@ final class DeviceReporter {
         return result.records
     }
 
+    func fetchExclusiveAccessRecords() async throws -> [BeansExclusiveAccessRecord] {
+        guard BeansDeveloperAccess.isAuthorized else {
+            throw BackendRequestError.server("当前设备没有开发者权限")
+        }
+        guard var components = URLComponents(
+            url: endpoint(for: "developer/exclusive-access"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw BackendRequestError.invalidResponse
+        }
+        components.queryItems = [
+            URLQueryItem(name: "developer_user_id", value: DeviceIdentity.userID)
+        ]
+        guard let url = components.url else {
+            throw BackendRequestError.invalidResponse
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
+        request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response, body: data)
+        let result = try JSONDecoder().decode(BeansExclusiveAccessResponse.self, from: data)
+        guard result.ok != false else {
+            throw BackendRequestError.server(result.message ?? "获取专属 ID 记录失败")
+        }
+        return result.records
+    }
+
     private func backendMessage(from data: Data) -> String? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let rawMessage = object["message"] as? String,
@@ -417,6 +550,12 @@ final class DeviceReporter {
             return beansLocalized("设备标识无效，请重启应用后重试。", "The device identifier is invalid. Restart the app and try again.")
         case "developer_unauthorized":
             return beansLocalized("当前设备没有开发者权限。", "This device does not have developer access.")
+        case "invalid_public_user_id":
+            return beansLocalized("专属 ID 必须是 6 至 7 位数字。", "The public ID must contain 6 to 7 digits.")
+        case "reserved_public_user_id":
+            return beansLocalized("5201314 仅保留给开发者设备。", "5201314 is reserved for the developer device.")
+        case "public_user_id_taken":
+            return beansLocalized("这个用户 ID 已被其他设备使用。", "That public ID is already assigned to another device.")
         case "user_not_found":
             return beansLocalized("没有找到这个设备，请确认对方已经启动过软件。", "That device was not found. Ask the user to launch the app first.")
         case "server_error":
@@ -432,6 +571,17 @@ final class DeviceReporter {
     }
 
     private func applyServerState(_ response: BackendResponse) {
+        if let publicUserID = response.publicUserID {
+            let previous = DeviceIdentity.publicID
+            DeviceIdentity.updatePublicID(publicUserID)
+            if previous != DeviceIdentity.publicID {
+                let revision = UserDefaults.standard.integer(forKey: BeansBackendSettings.publicIDRevisionKey)
+                UserDefaults.standard.set(revision &+ 1, forKey: BeansBackendSettings.publicIDRevisionKey)
+            }
+        }
+        if let exclusiveID = response.exclusiveID {
+            UserDefaults.standard.set(exclusiveID, forKey: BeansBackendSettings.exclusiveIDKey)
+        }
         if let blocked = response.blocked {
             let previous = UserDefaults.standard.bool(forKey: BeansBackendSettings.blockedKey)
             UserDefaults.standard.set(blocked, forKey: BeansBackendSettings.blockedKey)
@@ -460,6 +610,8 @@ final class DeviceReporter {
 private struct BackendResponse: Decodable {
     let ok: Bool?
     let message: String?
+    let publicUserID: String?
+    let exclusiveID: Bool?
     let blocked: Bool?
     let downloadUnlocked: Bool?
     let feedbackID: String?
@@ -468,6 +620,8 @@ private struct BackendResponse: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case ok, message, blocked
+        case publicUserID = "public_user_id"
+        case exclusiveID = "exclusive_id"
         case downloadUnlocked = "download_unlocked"
         case feedbackID = "feedback_id"
         case submittedAt = "submitted_at"
@@ -478,6 +632,8 @@ private struct BackendResponse: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         ok = try container.decodeIfPresent(Bool.self, forKey: .ok)
         message = try container.decodeIfPresent(String.self, forKey: .message)
+        publicUserID = try container.decodeIfPresent(String.self, forKey: .publicUserID)
+        exclusiveID = try container.decodeIfPresent(Bool.self, forKey: .exclusiveID)
         blocked = try container.decodeIfPresent(Bool.self, forKey: .blocked)
         downloadUnlocked = try container.decodeIfPresent(Bool.self, forKey: .downloadUnlocked)
         feedbackID = try container.decodeIfPresent(String.self, forKey: .feedbackID)
@@ -491,11 +647,30 @@ private struct BackendResponse: Decodable {
     init() {
         ok = nil
         message = nil
+        publicUserID = nil
+        exclusiveID = nil
         blocked = nil
         downloadUnlocked = nil
         feedbackID = nil
         submittedAt = nil
         feedbackReplies = []
+    }
+}
+
+private struct BeansExclusiveAccessResponse: Decodable {
+    let ok: Bool?
+    let message: String?
+    let records: [BeansExclusiveAccessRecord]
+
+    enum CodingKeys: String, CodingKey {
+        case ok, message, records
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try container.decodeIfPresent(Bool.self, forKey: .ok)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        records = try container.decodeIfPresent([BeansExclusiveAccessRecord].self, forKey: .records) ?? []
     }
 }
 

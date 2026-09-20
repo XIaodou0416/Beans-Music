@@ -135,6 +135,102 @@ function createBeansRouter(options = {}) {
     return response.json(publicUserState(updatedUser));
   });
 
+  // The developer can grant the premium ID badge and optionally assign a
+  // unique public ID without ever reusing the developer's reserved ID.
+  router.post('/developer/grant-exclusive-id', (request, response) => {
+    const payload = request.body || {};
+    const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
+    const targetUserID = text(payload.target_user_id, 80).toLowerCase();
+    const requestedTargetPublicUserID = text(
+      payload.target_public_user_id || (PUBLIC_USER_ID_PATTERN.test(targetUserID) ? targetUserID : ''),
+      16
+    );
+    const assignedPublicUserID = text(payload.assigned_public_user_id, 16);
+    const enabled = payload.exclusive_id !== false;
+
+    if (!isDeveloperDeviceID(developerUserID)) {
+      return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
+    }
+    if (!USER_ID_PATTERN.test(targetUserID) && !PUBLIC_USER_ID_PATTERN.test(requestedTargetPublicUserID)) {
+      return response.status(422).json({ ok: false, message: 'invalid_user_id' });
+    }
+    if (assignedPublicUserID && !PUBLIC_USER_ID_PATTERN.test(assignedPublicUserID)) {
+      return response.status(422).json({ ok: false, message: 'invalid_public_user_id' });
+    }
+
+    const database = loadDatabase();
+    const userKey = findUserKey(database, targetUserID, requestedTargetPublicUserID);
+    const targetUser = userKey ? database.users[userKey] : null;
+    if (!targetUser) {
+      return response.status(404).json({ ok: false, message: 'user_not_found' });
+    }
+    if (assignedPublicUserID === DEVELOPER_PUBLIC_USER_ID && !isDeveloperDeviceID(targetUser.user_id)) {
+      return response.status(409).json({ ok: false, message: 'reserved_public_user_id' });
+    }
+    if (assignedPublicUserID && publicIDBelongsToAnotherUser(database, assignedPublicUserID, targetUser.user_id)) {
+      return response.status(409).json({ ok: false, message: 'public_user_id_taken' });
+    }
+
+    let updatedUser;
+    mutateDatabase((nextDatabase) => {
+      const user = nextDatabase.users[userKey];
+      if (!user) return;
+      const isDeveloper = isDeveloperDeviceID(user.user_id);
+      if (isDeveloper) {
+        user.public_user_id = DEVELOPER_PUBLIC_USER_ID;
+        user.exclusive_id = true;
+      } else {
+        if (assignedPublicUserID) {
+          user.public_user_id = assignedPublicUserID;
+        }
+        user.exclusive_id = enabled;
+      }
+      if (!Array.isArray(user.exclusive_id_history)) {
+        user.exclusive_id_history = [];
+      }
+      user.exclusive_id_history.unshift({
+        enabled: Boolean(user.exclusive_id),
+        public_user_id: user.public_user_id,
+        changed_at: now(),
+        changed_by: developerUserID,
+      });
+      user.exclusive_id_history = user.exclusive_id_history.slice(0, 100);
+      updatedUser = user;
+    });
+    return response.json(publicUserState(updatedUser));
+  });
+
+  router.get('/developer/exclusive-access', (request, response) => {
+    const developerUserID = text(request.query.developer_user_id, 80).toLowerCase();
+    if (!isDeveloperDeviceID(developerUserID)) {
+      return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
+    }
+
+    const database = loadDatabase();
+    const records = Object.values(database.users)
+      .filter((user) => Boolean(user.exclusive_id) || Array.isArray(user.exclusive_id_history) && user.exclusive_id_history.length > 0)
+      .map((user) => {
+        const history = Array.isArray(user.exclusive_id_history) ? user.exclusive_id_history : [];
+        const latest = history[0] || {};
+        return {
+          user_id: user.user_id,
+          public_user_id: user.public_user_id || '',
+          device_model: user.device_model,
+          device_name: user.device_name,
+          system_name: user.system_name,
+          system_version: user.system_version,
+          app_version: user.app_version,
+          app_build: user.app_build,
+          last_seen_at: user.last_seen_at,
+          enabled: Boolean(user.exclusive_id),
+          changed_at: text(latest.changed_at || user.last_seen_at, 64),
+        };
+      })
+      .sort((left, right) => right.changed_at.localeCompare(left.changed_at))
+      .slice(0, 500);
+    return response.json({ ok: true, records });
+  });
+
   router.get('/developer/download-access', (request, response) => {
     const developerUserID = text(request.query.developer_user_id, 80).toLowerCase();
     if (!isDeveloperDeviceID(developerUserID)) {
@@ -294,8 +390,21 @@ function createBeansRouter(options = {}) {
   router.post('/user-action', requireApiAdmin(adminPassword), (request, response) => {
     const payload = request.body || {};
     const userID = text(payload.user_id, 80);
+    const requestedPublicUserID = text(payload.public_user_id, 16);
     if (!USER_ID_PATTERN.test(userID)) {
       return response.status(422).json({ ok: false, message: 'invalid_user_id' });
+    }
+    if (requestedPublicUserID && !PUBLIC_USER_ID_PATTERN.test(requestedPublicUserID)) {
+      return response.status(422).json({ ok: false, message: 'invalid_public_user_id' });
+    }
+    const database = loadDatabase();
+    if (requestedPublicUserID
+      && requestedPublicUserID === DEVELOPER_PUBLIC_USER_ID
+      && !isDeveloperDeviceID(userID)) {
+      return response.status(409).json({ ok: false, message: 'reserved_public_user_id' });
+    }
+    if (requestedPublicUserID && publicIDBelongsToAnotherUser(database, requestedPublicUserID, userID)) {
+      return response.status(409).json({ ok: false, message: 'public_user_id_taken' });
     }
     let updatedUser;
     mutateDatabase((database) => {
@@ -305,6 +414,13 @@ function createBeansRouter(options = {}) {
       }
       user.is_blacklisted = Boolean(payload.is_blacklisted);
       user.download_unlocked = Boolean(payload.download_unlocked);
+      if (isDeveloperDeviceID(user.user_id)) {
+        user.public_user_id = DEVELOPER_PUBLIC_USER_ID;
+        user.exclusive_id = true;
+      } else {
+        if (requestedPublicUserID) user.public_user_id = requestedPublicUserID;
+        user.exclusive_id = Boolean(payload.exclusive_id);
+      }
       user.action_note = text(payload.action_note, 500);
       updatedUser = user;
     });
@@ -375,6 +491,24 @@ function createBeansRouter(options = {}) {
     express.urlencoded({ extended: false }),
     (request, response) => {
       const userID = text(request.body.user_id, 80);
+      const requestedPublicUserID = text(request.body.public_user_id, 16);
+      const requestedExclusive = request.body.exclusive_id === 'on';
+      if (requestedPublicUserID && !PUBLIC_USER_ID_PATTERN.test(requestedPublicUserID)) {
+        return response.status(422).send('专属 ID 必须是 6 至 7 位数字。');
+      }
+      const database = loadDatabase();
+      const existingUser = database.users[userID];
+      if (!existingUser) {
+        return response.redirect('/beans/admin/users');
+      }
+      if (requestedPublicUserID
+        && requestedPublicUserID === DEVELOPER_PUBLIC_USER_ID
+        && !isDeveloperDeviceID(existingUser.user_id)) {
+        return response.status(409).send('5201314 只能保留给开发者设备。');
+      }
+      if (requestedPublicUserID && publicIDBelongsToAnotherUser(database, requestedPublicUserID, userID)) {
+        return response.status(409).send('这个用户 ID 已被其他设备使用。');
+      }
       mutateDatabase((database) => {
         const user = database.users[userID];
         if (!user) {
@@ -382,6 +516,13 @@ function createBeansRouter(options = {}) {
         }
         user.is_blacklisted = request.body.is_blacklisted === 'on';
         user.download_unlocked = request.body.download_unlocked === 'on';
+        if (isDeveloperDeviceID(user.user_id)) {
+          user.public_user_id = DEVELOPER_PUBLIC_USER_ID;
+          user.exclusive_id = true;
+        } else {
+          if (requestedPublicUserID) user.public_user_id = requestedPublicUserID;
+          user.exclusive_id = requestedExclusive;
+        }
         user.action_note = text(request.body.action_note, 500);
       });
       response.redirect('/beans/admin/users');
@@ -466,6 +607,10 @@ function createBeansRouter(options = {}) {
         download_unlocked: Boolean(existing?.download_unlocked),
         download_access_history: Array.isArray(existing?.download_access_history)
           ? existing.download_access_history
+          : [],
+        exclusive_id: Boolean(existing?.exclusive_id),
+        exclusive_id_history: Array.isArray(existing?.exclusive_id_history)
+          ? existing.exclusive_id_history
           : [],
         action_note: existing?.action_note || '',
       };
@@ -585,6 +730,7 @@ function publicUserState(user, database = null) {
   return {
     ok: true,
     public_user_id: user?.public_user_id || null,
+    exclusive_id: Boolean(user?.exclusive_id),
     blocked: Boolean(user?.is_blacklisted),
     download_unlocked: Boolean(user?.download_unlocked),
     feedback_replies: database
@@ -662,6 +808,13 @@ function publicIDBelongsToAnotherUser(database, publicUserID, internalUserID) {
   return Object.values(database.users).some((user) =>
     user?.public_user_id === publicUserID && user.user_id !== internalUserID
   );
+}
+
+function findUserKey(database, targetUserID, targetPublicUserID) {
+  if (PUBLIC_USER_ID_PATTERN.test(targetPublicUserID)) {
+    return Object.keys(database.users).find((key) => database.users[key]?.public_user_id === targetPublicUserID);
+  }
+  return Object.keys(database.users).find((key) => key.toLowerCase() === targetUserID);
 }
 
 function listeningSeconds(value) {
@@ -816,12 +969,12 @@ function renderAdminPage(database, section = 'overview') {
     .slice(0, 500);
   const userRows = users.map((user) => `
     <tr>
-      <td class="id"><strong>${escapeHtml(user.public_user_id || '未分配')}</strong><br><small>设备：${escapeHtml(user.user_id)}</small><br><small>${escapeHtml(user.location || '位置获取中')}</small></td>
+      <td class="id"><strong>${escapeHtml(user.public_user_id || '未分配')}</strong>${user.exclusive_id ? '<br><small style="color:#8a5a00;font-weight:700">专属 ID</small>' : ''}<br><small>设备：${escapeHtml(user.user_id)}</small><br><small>${escapeHtml(user.location || '位置获取中')}</small></td>
       <td>${escapeHtml(user.device_model || user.device_name)}<br><small>${escapeHtml(`${user.system_name} ${user.system_version}`)}</small></td>
       <td><span class="status ${isUserOnline(user) ? 'online' : 'offline'}">${isUserOnline(user) ? '在线' : '离线'}</span>${isUserInactive(user) ? '<br><small>超过 10 天未使用</small>' : ''}<br><small>${escapeHtml(user.last_seen_at)}</small></td>
       <td>${escapeHtml(`${user.app_version} (${user.app_build})`)}<br><small>首次：${escapeHtml(user.first_seen_at)}</small></td>
       <td><strong>${formatListeningDuration(user.listening_seconds)}</strong><br><small>${listeningSeconds(user.listening_seconds).toLocaleString('zh-CN')} 秒</small></td>
-      <td><form method="post" action="/beans/admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> 拉黑</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> 下载已解锁</label><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>
+      <td><form method="post" action="/beans/admin/user"><input type="hidden" name="user_id" value="${escapeHtml(user.user_id)}"><label><input type="checkbox" name="is_blacklisted" ${user.is_blacklisted ? 'checked' : ''}> 拉黑</label><br><label><input type="checkbox" name="download_unlocked" ${user.download_unlocked ? 'checked' : ''}> 下载已解锁</label><br><label><input type="checkbox" name="exclusive_id" ${user.exclusive_id ? 'checked' : ''}> 专属 ID（金色）</label><br><input name="public_user_id" value="${escapeHtml(user.public_user_id || '')}" inputmode="numeric" pattern="[0-9]{6,7}" placeholder="改用户 ID（6-7 位数字）"><br><input name="action_note" value="${escapeHtml(user.action_note)}" placeholder="后台备注"><button>保存</button></form></td>
     </tr>
   `).join('');
   const versionRows = stats.version_usage.map((item) => `

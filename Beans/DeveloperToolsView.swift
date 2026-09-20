@@ -21,6 +21,7 @@ struct DeveloperToolsView: View {
     @StateObject private var refreshMonitor = BeansRefreshRateMonitor()
     @State private var showLogShare = false
     @State private var showDownloadGrant = false
+    @State private var showExclusiveIDGrant = false
     @AppStorage("beans.developer.homeFrameMeter") private var homeFrameMeterEnabled = true
 
     private var appVersion: String {
@@ -75,6 +76,10 @@ struct DeveloperToolsView: View {
         }
         .sheet(isPresented: $showDownloadGrant) {
             DeveloperDownloadGrantSheet()
+                .environmentObject(theme)
+        }
+        .sheet(isPresented: $showExclusiveIDGrant) {
+            DeveloperExclusiveIDSheet()
                 .environmentObject(theme)
         }
     }
@@ -159,6 +164,17 @@ struct DeveloperToolsView: View {
                 showDownloadGrant = true
             } label: {
                 Label("管理其他设备", systemImage: "person.badge.key")
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 38)
+                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
+            }
+            .buttonStyle(.plain)
+            Button {
+                showExclusiveIDGrant = true
+            } label: {
+                Label("管理专属 ID", systemImage: "crown")
                     .font(BeansFont.appFont(13, .semibold))
                     .foregroundStyle(Color.beansLabel)
                     .frame(maxWidth: .infinity)
@@ -436,6 +452,195 @@ private struct DeveloperDownloadGrantSheet: View {
                 errorMessage = error.localizedDescription
             } else {
                 BeansLogger.shared.log("下载权限记录刷新失败：\(error.localizedDescription)", level: .debug)
+            }
+        }
+    }
+}
+
+private struct DeveloperExclusiveIDSheet: View {
+    @EnvironmentObject private var theme: ThemeStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var targetUserID = ""
+    @State private var assignedPublicID = ""
+    @State private var enabled = true
+    @State private var isSubmitting = false
+    @State private var isLoadingRecords = false
+    @State private var records: [BeansExclusiveAccessRecord] = []
+    @State private var errorMessage = ""
+
+    var body: some View {
+        BeansNavigationStack {
+            ZStack {
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("专属 ID")
+                            .font(BeansFont.appFont(24, .bold))
+                            .foregroundStyle(Color.beansLabel)
+                        Text("输入对方当前用户 ID。可保留原 ID，也可以分配一个未被占用的 6 至 7 位新 ID。5201314 始终保留给开发者设备。")
+                            .font(BeansFont.appFont(13))
+                            .foregroundStyle(Color.beansComment)
+                            .fixedSize(horizontal: false, vertical: true)
+                        inputField("当前用户 ID", text: $targetUserID)
+                        inputField("新用户 ID（可不填）", text: $assignedPublicID)
+                        Toggle("启用黑紫金专属铭牌", isOn: $enabled)
+                            .tint(Color.beansAmber)
+                        if !errorMessage.isEmpty {
+                            Text(errorMessage)
+                                .font(BeansFont.appFont(12, .medium))
+                                .foregroundStyle(.red)
+                        }
+                        Button(action: submit) {
+                            HStack(spacing: 8) {
+                                if isSubmitting { ProgressView().tint(Color.beansLabel) }
+                                Text(isSubmitting ? "正在保存" : "保存专属 ID")
+                            }
+                            .font(BeansFont.appFont(14, .semibold))
+                            .foregroundStyle(Color.beansLabel)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                            .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSubmitting || !isValidTargetID || !isValidAssignedID)
+                        recordsSection
+                    }
+                    .padding(20)
+                    .beansAdaptiveContentWidth()
+                }
+                .beansScrollIndicatorsHidden()
+            }
+            .navigationTitle("开发者权限")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+        .task { await reloadRecords() }
+    }
+
+    private func inputField(_ title: String, text: Binding<String>) -> some View {
+        TextField(title, text: text)
+            .keyboardType(.numberPad)
+            .font(.system(size: 13, design: .monospaced))
+            .padding(.horizontal, 14)
+            .frame(height: 48)
+            .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), forceLiquid: true) }
+    }
+
+    private var recordsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("专属 ID 记录")
+                    .font(BeansFont.appFont(16, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                Spacer()
+                if isLoadingRecords {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button {
+                        Task { await reloadRecords() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if records.isEmpty && !isLoadingRecords {
+                Text("暂无专属 ID 记录")
+                    .font(BeansFont.appFont(13))
+                    .foregroundStyle(Color.beansComment)
+            } else {
+                ForEach(records.prefix(50)) { record in
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(record.deviceName.isEmpty ? record.deviceModel : record.deviceName)
+                                    .font(BeansFont.appFont(13, .semibold))
+                                    .foregroundStyle(Color.beansLabel)
+                                Text("用户 ID \(record.publicUserID ?? record.userID)")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(Color.beansComment)
+                            }
+                            Spacer(minLength: 8)
+                            Text(record.enabled ? "已授权" : "已取消")
+                                .font(BeansFont.appFont(11, .semibold))
+                                .foregroundStyle(record.enabled ? Color.beansAmber : Color.beansComment)
+                        }
+                        HStack {
+                            Text(record.changedAt.isEmpty ? "" : "最后操作：\(record.changedAt)")
+                                .font(BeansFont.appFont(10))
+                                .foregroundStyle(Color.beansComment)
+                                .lineLimit(1)
+                            Spacer()
+                            Button {
+                                targetUserID = record.publicUserID ?? record.userID
+                                assignedPublicID = ""
+                                enabled = !record.enabled
+                                submit()
+                            } label: {
+                                Text(record.enabled ? "取消专属" : "恢复专属")
+                                    .font(BeansFont.appFont(11, .semibold))
+                                    .foregroundStyle(record.enabled ? .red : Color.beansAmber)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .padding(14)
+        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous), forceLiquid: true) }
+    }
+
+    private var isValidTargetID: Bool {
+        let value = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil || value.count >= 16
+    }
+
+    private var isValidAssignedID: Bool {
+        let value = assignedPublicID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty || value.range(of: #"^[0-9]{6,7}$"#, options: .regularExpression) != nil
+    }
+
+    private func submit() {
+        guard !isSubmitting else { return }
+        isSubmitting = true
+        errorMessage = ""
+        Task { @MainActor in
+            do {
+                try await DeviceReporter.shared.grantExclusiveID(
+                    to: targetUserID,
+                    assignedPublicID: assignedPublicID,
+                    enabled: enabled
+                )
+                ToastCenter.shared.show(enabled ? "已授权专属 ID" : "已取消专属 ID")
+                await reloadRecords(showError: false)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isSubmitting = false
+        }
+    }
+
+    private func reloadRecords(showError: Bool = true) async {
+        guard !isLoadingRecords else { return }
+        isLoadingRecords = true
+        defer { isLoadingRecords = false }
+        do {
+            records = try await DeviceReporter.shared.fetchExclusiveAccessRecords()
+        } catch {
+            if showError && records.isEmpty {
+                errorMessage = error.localizedDescription
+            } else {
+                BeansLogger.shared.log("专属 ID 记录刷新失败：\(error.localizedDescription)", level: .debug)
             }
         }
     }
