@@ -1991,6 +1991,17 @@ struct AlbumDetailView: View {
     private func load() async {
         let cache = DetailSongsCache.shared
         let cacheKey = "album-\(album.source.rawValue)-\(album.id)"
+        let relatedCache = RelatedAlbumsCache.shared
+        let relatedCacheKey = "related-albums-\(album.source.rawValue)-\(album.id)"
+        let cachedRelatedAlbums = relatedCache.cachedAlbums(for: relatedCacheKey)
+
+        if let cachedRelatedAlbums {
+            let cachedItems = cachedRelatedAlbums.albums.filter { $0.id != album.id }
+            await MainActor.run {
+                otherAlbums = cachedItems
+            }
+        }
+
         if let cached = cache.cachedSongs(for: cacheKey) {
             await MainActor.run {
                 tracks = cached.songs
@@ -2078,8 +2089,12 @@ struct AlbumDetailView: View {
                 if result.isEmpty { errorMessage = "未找到专辑歌曲" }
             }
             let relatedAlbums = await relatedAlbumsTask
-            await MainActor.run {
-                otherAlbums = relatedAlbums.filter { $0.id != album.id }
+            let filteredRelatedAlbums = relatedAlbums.filter { $0.id != album.id }
+            if !filteredRelatedAlbums.isEmpty {
+                relatedCache.save(filteredRelatedAlbums, for: relatedCacheKey)
+                await MainActor.run {
+                    otherAlbums = filteredRelatedAlbums
+                }
             }
         } catch {
             await MainActor.run {
