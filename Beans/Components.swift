@@ -152,7 +152,6 @@ struct GlassBackdrop: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
-    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     /// 自定义背景色（nil 使用默认氛围渐变）
     var customColor: Color? = nil
     /// 主页模式：即使“同步到全部页面”关闭，也始终显示壁纸/背景色（仅发现页传 true）
@@ -175,7 +174,7 @@ struct GlassBackdrop: View {
     }
 
     private var uiStyle: BeansUIStyle {
-        uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
+        theme.uiStyle
     }
 
     var body: some View {
@@ -352,7 +351,6 @@ struct WallpaperImage: View {
 // MARK: - 全局容器（跟随全局 UI 样式）
 
 struct BeansGlass<S: Shape>: View {
-    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
     @ObservedObject private var theme = ThemeStore.shared
     @Environment(\.colorScheme) private var colorScheme
@@ -362,7 +360,10 @@ struct BeansGlass<S: Shape>: View {
     var forceLiquid = false
 
     private var uiStyle: BeansUIStyle {
-        uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
+        // ThemeStore is the single source of truth. Reading UserDefaults
+        // directly here could leave a sheet-created view on the old liquid
+        // branch for one render after the style picker changes.
+        theme.uiStyle
     }
 
     private var isLiquid: Bool {
@@ -439,13 +440,7 @@ struct BeansGlass<S: Shape>: View {
 /// 统一表面容器：Apple 简洁样式使用低存在感的平面底色，
 /// 其他样式继续沿用原有的玻璃材质，避免页面局部出现不同质感。
 struct BeansSurface<S: Shape>: View {
-    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
-
     let shape: S
-
-    private var uiStyle: BeansUIStyle {
-        uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
-    }
 
     var body: some View {
         BeansGlass(shape: shape)
@@ -456,12 +451,12 @@ struct BeansSurface<S: Shape>: View {
 
 struct GlassCard<Content: View>: View {
     var cornerRadius: CGFloat = 24
-    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
+    @ObservedObject private var theme = ThemeStore.shared
     @ViewBuilder var content: () -> Content
 
     private var uiStyle: BeansUIStyle {
-        uiStyleRaw == "outline" ? .clear : (BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid)
+        theme.uiStyle
     }
 
     private var isLiquid: Bool {

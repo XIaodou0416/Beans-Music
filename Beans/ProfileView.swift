@@ -4474,13 +4474,12 @@ private struct SettingsLiquidSheetPresentation: ViewModifier {
 /// detent. Keep a single transparent glass surface only while compact, rather
 /// than stacking another glass layer after the sheet has expanded.
 private struct SettingsCompactGlassSurface: View {
-    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
+    @ObservedObject private var theme = ThemeStore.shared
 
     private var usesNativeLiquidSurface: Bool {
         guard !disableLiquidGlass else { return false }
-        let style = BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid
-        return style == .liquid || style == .nativeClean
+        return theme.uiStyle == .liquid || theme.uiStyle == .nativeClean
     }
 
     var body: some View {

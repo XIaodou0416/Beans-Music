@@ -62,7 +62,7 @@ struct PlaylistImportSheet: View {
                             .foregroundStyle(Color.beansComment)
                     }
                 }
-                .formStyle(.grouped)
+                .modifier(GroupedFormStyleCompatibility())
                 .beansScrollContentBackgroundHidden()
             }
             .navigationTitle("导入歌单")
@@ -121,6 +121,17 @@ struct PlaylistImportSheet: View {
                 isImporting = false
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+}
+
+private struct GroupedFormStyleCompatibility: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 16, *) {
+            content.formStyle(.grouped)
+        } else {
+            content
         }
     }
 }
