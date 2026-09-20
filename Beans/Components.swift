@@ -1414,9 +1414,6 @@ struct BeansSongRowsLoadingState: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background {
-                    BeansSurface(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
             }
         }
         .padding(.horizontal, horizontalPadding)

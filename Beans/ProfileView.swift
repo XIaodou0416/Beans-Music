@@ -542,9 +542,18 @@ struct ProfileView: View {
                     compactIdentityButton
                 }
                 Spacer(minLength: 8)
-                Image(systemName: "waveform")
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(Color.beansAmber)
+                Button {
+                    BeansHaptics.tap()
+                    showProfileNameBackgroundPicker = true
+                } label: {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+                .accessibilityLabel("更换昵称区域背景")
             }
 
             Rectangle()
@@ -568,28 +577,13 @@ struct ProfileView: View {
             }
         }
         .padding(16)
-        .overlay(alignment: .topTrailing) {
-            Button {
-                BeansHaptics.tap()
-                showProfileNameBackgroundPicker = true
-            } label: {
-                Image(systemName: profileNameBackgroundStore.url == nil ? "photo.badge.plus" : "photo.badge.arrow.down")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.beansLabel.opacity(0.86))
-                    .frame(width: 30, height: 30)
-                    .background(Color.white.opacity(0.18), in: Circle())
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.34), lineWidth: 0.7))
-            }
-            .buttonStyle(GlassPressButtonStyle(scale: 0.9))
-            .padding(10)
-            .accessibilityLabel("上传昵称区域背景")
-        }
         .background {
             ZStack {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.beansCard)
                 if let backgroundURL = profileNameBackgroundStore.url {
                     BeansProfileNameBackgroundView(url: backgroundURL)
-                        .opacity(0.42)
+                        .opacity(0.72)
                     LinearGradient(
                         colors: [
                             Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08),
