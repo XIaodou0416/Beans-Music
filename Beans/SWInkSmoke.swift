@@ -310,6 +310,7 @@ private struct SliderRow: View {
 
 // MARK: - Preview
 
+@available(iOS 17.0, *)
 #Preview {
     // ToolbarItem requires an enclosing NavigationStack to render.
     NavigationStack {
