@@ -92,8 +92,9 @@ SOFTWARE.
 
 ## Dynamic wallpaper shaders
 
-The optional Fractal Clouds, Ink Smoke, and Liquid Chrome animated wallpaper
-renderers are adapted from the ShipSwift project by SignerLabs.
+The optional Fractal Clouds, Ink Smoke, Liquid Chrome, Neuro Noise, Simplex
+Noise, Metaballs, and Water animated wallpaper renderers are adapted from the
+ShipSwift project by SignerLabs.
 
 Source: https://github.com/signerlabs/ShipSwift
 

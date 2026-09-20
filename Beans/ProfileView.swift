@@ -1877,6 +1877,7 @@ struct SettingsView: View {
     @State private var playbackExpanded = false
     @State private var audioQualityExpanded = false
     @State private var showWallpaperPicker = false
+    @State private var showWaterWallpaperPicker = false
     @State private var wallpaperAppearanceTarget: BeansWallpaperAppearance = .light
     @State private var showFontImporter = false
     @State private var showGreetingFontImporter = false
@@ -2244,6 +2245,14 @@ struct SettingsView: View {
             }
             .ignoresSafeArea()
         }
+        .sheet(isPresented: $showWaterWallpaperPicker) {
+            WallpaperPhotoPicker(allowsMultiple: false) { data in
+                dynamicWallpaper.setWaterImage(data)
+                BeansHaptics.success()
+                ToastCenter.shared.show("Water 壁纸已更新")
+            }
+            .ignoresSafeArea()
+        }
         .sheet(isPresented: $showFloatingImagePicker) {
             WallpaperPhotoPicker(allowsMultiple: false) { data in
                 if let base64 = normalizedFloatingImageBase64(from: data) {
@@ -2356,6 +2365,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 AnyView(settingsSearchField)
                 AnyView(coreSettingsGroup)
+                AnyView(dynamicWallpaperSettingsGroup)
                 AnyView(playbackSettingsGroup)
                 AnyView(utilitySettingsGroup)
                 if !hasSettingsSearchResults {
@@ -2416,6 +2426,9 @@ struct SettingsView: View {
     }
 
     private var showAppearanceSettings: Bool { settingsMatches("主题 外观 背景 壁纸 字体 底栏 颜色 赞助") }
+    private var showDynamicWallpaperSettings: Bool {
+        settingsMatches("动态壁纸 Fractal Clouds Ink Smoke Liquid Chrome Neuro Noise Simplex Noise Metaballs Water 分形云层 墨水扩散 液态金属 神经噪声 单纯形噪声 融合球 水面")
+    }
     private var showPlatformSettings: Bool { settingsMatches("平台 显示 网易云 QQ 酷狗") }
     private var showAudioSettings: Bool { settingsMatches("音源 音质 网络 Wi-Fi 蜂窝 导入") }
     private var showPlaybackSettings: Bool { settingsMatches("播放 触感 锁屏 灵动岛 收藏") }
@@ -2427,7 +2440,7 @@ struct SettingsView: View {
 
     private var hasSettingsSearchResults: Bool {
         showAccountSettings || showAppearanceSettings || showPlatformSettings
-            || showAudioSettings || showPlaybackSettings || showEqualizerSettings
+            || showDynamicWallpaperSettings || showAudioSettings || showPlaybackSettings || showEqualizerSettings
             || showBackupSettings || showChangelogSettings || showSupportSettings || showDeveloperSettings
     }
 
@@ -2768,6 +2781,15 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private var dynamicWallpaperSettingsGroup: some View {
+        if showDynamicWallpaperSettings {
+            SettingsCatalogGroup {
+                dynamicWallpaperSection
+            }
+        }
+    }
+
     private var dynamicWallpaperSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
@@ -2779,7 +2801,7 @@ struct SettingsView: View {
                     Text("动态壁纸")
                         .font(BeansFont.appFont(15))
                         .foregroundStyle(Color.beansLabel)
-                    Text("内置 ShipSwift 的 Fractal Clouds、Ink Smoke 和 Liquid Chrome")
+                    Text("内置 ShipSwift 动态效果，支持单独同步到播放器")
                         .font(BeansFont.appFont(11))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -2800,7 +2822,14 @@ struct SettingsView: View {
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
 
+                Toggle("同步到播放器界面", isOn: $dynamicWallpaper.syncToPlayer)
+                    .font(BeansFont.appFont(14))
+                    .tint(Color.beansAmber)
+
                 if dynamicWallpaper.kind != .off {
+                    if dynamicWallpaper.kind == .water {
+                        waterWallpaperSourceSection
+                    }
                     dynamicWallpaperParameterSection
 
                     HStack(spacing: 12) {
@@ -2828,6 +2857,62 @@ struct SettingsView: View {
         .padding(.horizontal, 4)
     }
 
+    private var waterWallpaperSourceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .foregroundStyle(Color.beansAmber)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Water 壁纸源图片")
+                        .font(BeansFont.appFont(13, .medium))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(dynamicWallpaper.waterImageDataBase64.isEmpty ? "上传一张图片作为水面内容" : "已使用自定义图片")
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer(minLength: 8)
+            }
+
+            if let image = dynamicWallpaper.waterImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 120)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.beansLabel.opacity(0.12), lineWidth: 1)
+                    }
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    showWaterWallpaperPicker = true
+                } label: {
+                    Label(
+                        dynamicWallpaper.waterImageDataBase64.isEmpty ? "上传图片" : "更换图片",
+                        systemImage: "photo.badge.plus"
+                    )
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(Color.beansAmber)
+                }
+                .buttonStyle(.plain)
+
+                if !dynamicWallpaper.waterImageDataBase64.isEmpty {
+                    Button("清除图片") {
+                        dynamicWallpaper.setWaterImage(nil)
+                    }
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+        }
+        .padding(.top, 2)
+    }
+
     @ViewBuilder
     private var dynamicWallpaperParameterSection: some View {
         switch dynamicWallpaper.kind {
@@ -2835,42 +2920,98 @@ struct SettingsView: View {
             EmptyView()
         case .fractalClouds:
             VStack(alignment: .leading, spacing: 10) {
-                dynamicColorRow("Sky", hex: $dynamicWallpaper.fractalSkyHex, fallback: Color(red: 0.102, green: 0.149, blue: 0.349))
-                dynamicColorRow("Cloud", hex: $dynamicWallpaper.fractalCloudHex, fallback: Color(red: 0.902, green: 0.902, blue: 1.0))
-                dynamicColorRow("Warm Tint", hex: $dynamicWallpaper.fractalWarmTintHex, fallback: Color(red: 0.102, green: 0.051, blue: 0.0))
-                layoutSettingSlider("Warmth", value: $dynamicWallpaper.fractalWarmth, range: 0...2, step: 0.01, format: "%.2f")
-                layoutSettingSlider("Speed", value: $dynamicWallpaper.fractalSpeed, range: 0...3, step: 0.01, format: "%.2f")
-                layoutSettingSlider("Zoom", value: $dynamicWallpaper.fractalZoom, range: 0.5...10, step: 0.1, format: "%.1f")
-                layoutSettingSlider("Drift X", value: $dynamicWallpaper.fractalDriftX, range: -0.5...0.5, step: 0.01, format: "%.2f")
-                layoutSettingSlider("Drift Y", value: $dynamicWallpaper.fractalDriftY, range: -0.5...0.5, step: 0.01, format: "%.2f")
-                layoutSettingSlider("Warp", value: $dynamicWallpaper.fractalWarp, range: 0...5, step: 0.05, format: "%.2f")
-                layoutSettingSlider("Coverage", value: $dynamicWallpaper.fractalCoverage, range: -1...1, step: 0.01, format: "%.2f")
+                dynamicColorRow("天空色", hex: $dynamicWallpaper.fractalSkyHex, fallback: Color(red: 0.102, green: 0.149, blue: 0.349))
+                dynamicColorRow("云层色", hex: $dynamicWallpaper.fractalCloudHex, fallback: Color(red: 0.902, green: 0.902, blue: 1.0))
+                dynamicColorRow("暖色调", hex: $dynamicWallpaper.fractalWarmTintHex, fallback: Color(red: 0.102, green: 0.051, blue: 0.0))
+                layoutSettingSlider("温暖程度", value: $dynamicWallpaper.fractalWarmth, range: 0...2, step: 0.01, format: "%.2f")
+                layoutSettingSlider("速度", value: $dynamicWallpaper.fractalSpeed, range: 0...3, step: 0.01, format: "%.2f")
+                layoutSettingSlider("缩放", value: $dynamicWallpaper.fractalZoom, range: 0.5...10, step: 0.1, format: "%.1f")
+                layoutSettingSlider("水平漂移", value: $dynamicWallpaper.fractalDriftX, range: -0.5...0.5, step: 0.01, format: "%.2f")
+                layoutSettingSlider("垂直漂移", value: $dynamicWallpaper.fractalDriftY, range: -0.5...0.5, step: 0.01, format: "%.2f")
+                layoutSettingSlider("扭曲", value: $dynamicWallpaper.fractalWarp, range: 0...5, step: 0.05, format: "%.2f")
+                layoutSettingSlider("云层覆盖", value: $dynamicWallpaper.fractalCoverage, range: -1...1, step: 0.01, format: "%.2f")
             }
         case .inkSmoke:
             VStack(alignment: .leading, spacing: 10) {
-                dynamicColorRow("Ink 1", hex: $dynamicWallpaper.ink1Hex, fallback: Color(red: 0.051, green: 0.0, blue: 0.102))
-                dynamicColorRow("Ink 2", hex: $dynamicWallpaper.ink2Hex, fallback: Color(red: 0.102, green: 0.2, blue: 0.502))
-                dynamicColorRow("Ink 3", hex: $dynamicWallpaper.ink3Hex, fallback: Color(red: 0.4, green: 0.102, blue: 0.302))
-                dynamicColorRow("Ink 4", hex: $dynamicWallpaper.ink4Hex, fallback: Color(red: 0.0, green: 0.302, blue: 0.4))
-                dynamicColorRow("Glow", hex: $dynamicWallpaper.inkGlowHex, fallback: Color(red: 0.302, green: 0.2, blue: 0.4))
-                layoutSettingSlider("Speed", value: $dynamicWallpaper.inkSpeed, range: 0...3, step: 0.01, format: "%.2f")
-                layoutSettingSlider("Scale", value: $dynamicWallpaper.inkScale, range: 0.2...5, step: 0.05, format: "%.2f")
-                layoutSettingSlider("Warp", value: $dynamicWallpaper.inkWarp, range: 0...10, step: 0.05, format: "%.2f")
-                layoutSettingSlider("Highlight", value: $dynamicWallpaper.inkHighlight, range: 0...3, step: 0.01, format: "%.2f")
+                dynamicColorRow("墨水色 1", hex: $dynamicWallpaper.ink1Hex, fallback: Color(red: 0.051, green: 0.0, blue: 0.102))
+                dynamicColorRow("墨水色 2", hex: $dynamicWallpaper.ink2Hex, fallback: Color(red: 0.102, green: 0.2, blue: 0.502))
+                dynamicColorRow("墨水色 3", hex: $dynamicWallpaper.ink3Hex, fallback: Color(red: 0.4, green: 0.102, blue: 0.302))
+                dynamicColorRow("墨水色 4", hex: $dynamicWallpaper.ink4Hex, fallback: Color(red: 0.0, green: 0.302, blue: 0.4))
+                dynamicColorRow("光晕色", hex: $dynamicWallpaper.inkGlowHex, fallback: Color(red: 0.302, green: 0.2, blue: 0.4))
+                layoutSettingSlider("速度", value: $dynamicWallpaper.inkSpeed, range: 0...3, step: 0.01, format: "%.2f")
+                layoutSettingSlider("缩放", value: $dynamicWallpaper.inkScale, range: 0.2...5, step: 0.05, format: "%.2f")
+                layoutSettingSlider("扭曲", value: $dynamicWallpaper.inkWarp, range: 0...10, step: 0.05, format: "%.2f")
+                layoutSettingSlider("高光强度", value: $dynamicWallpaper.inkHighlight, range: 0...3, step: 0.01, format: "%.2f")
             }
         case .liquidChrome:
             VStack(alignment: .leading, spacing: 10) {
-                dynamicColorRow("Shadow", hex: $dynamicWallpaper.chromeShadowHex, fallback: Color(red: 0.020, green: 0.012, blue: 0.051))
-                dynamicColorRow("Silver", hex: $dynamicWallpaper.chromeSilverHex, fallback: Color(red: 0.2, green: 0.2, blue: 0.251))
-                dynamicColorRow("Highlight", hex: $dynamicWallpaper.chromeHighlightHex, fallback: Color(red: 0.502, green: 0.502, blue: 0.6))
-                dynamicColorRow("Tint", hex: $dynamicWallpaper.chromeTintHex, fallback: Color(red: 0.149, green: 0.2, blue: 0.4))
-                layoutSettingSlider("Speed", value: $dynamicWallpaper.chromeSpeed, range: 0...3, step: 0.01, format: "%.2f")
-                layoutSettingSlider("Scale", value: $dynamicWallpaper.chromeScale, range: 0.2...5, step: 0.05, format: "%.2f")
-                layoutSettingSlider("Warp", value: $dynamicWallpaper.chromeWarp, range: 0...5, step: 0.05, format: "%.2f")
-                layoutSettingSlider("Contrast", value: $dynamicWallpaper.chromeContrast, range: 0.1...3, step: 0.01, format: "%.2f")
-                layoutSettingSlider("Spec Power", value: $dynamicWallpaper.chromeSpecPower, range: 1...50, step: 0.5, format: "%.1f")
-                layoutSettingSlider("Spec Strength", value: $dynamicWallpaper.chromeSpecStrength, range: 0...2, step: 0.01, format: "%.2f")
-                layoutSettingSlider("Tint Strength", value: $dynamicWallpaper.chromeTintStrength, range: 0...2, step: 0.01, format: "%.2f")
+                dynamicColorRow("阴影色", hex: $dynamicWallpaper.chromeShadowHex, fallback: Color(red: 0.020, green: 0.012, blue: 0.051))
+                dynamicColorRow("银色色", hex: $dynamicWallpaper.chromeSilverHex, fallback: Color(red: 0.2, green: 0.2, blue: 0.251))
+                dynamicColorRow("高光色", hex: $dynamicWallpaper.chromeHighlightHex, fallback: Color(red: 0.502, green: 0.502, blue: 0.6))
+                dynamicColorRow("色调", hex: $dynamicWallpaper.chromeTintHex, fallback: Color(red: 0.149, green: 0.2, blue: 0.4))
+                layoutSettingSlider("速度", value: $dynamicWallpaper.chromeSpeed, range: 0...3, step: 0.01, format: "%.2f")
+                layoutSettingSlider("缩放", value: $dynamicWallpaper.chromeScale, range: 0.2...5, step: 0.05, format: "%.2f")
+                layoutSettingSlider("扭曲", value: $dynamicWallpaper.chromeWarp, range: 0...5, step: 0.05, format: "%.2f")
+                layoutSettingSlider("对比度", value: $dynamicWallpaper.chromeContrast, range: 0.1...3, step: 0.01, format: "%.2f")
+                layoutSettingSlider("高光锐度", value: $dynamicWallpaper.chromeSpecPower, range: 1...50, step: 0.5, format: "%.1f")
+                layoutSettingSlider("高光强度", value: $dynamicWallpaper.chromeSpecStrength, range: 0...2, step: 0.01, format: "%.2f")
+                layoutSettingSlider("色调强度", value: $dynamicWallpaper.chromeTintStrength, range: 0...2, step: 0.01, format: "%.2f")
+            }
+        case .neuroNoise:
+            VStack(alignment: .leading, spacing: 10) {
+                dynamicColorRow("前景高光色", hex: $dynamicWallpaper.neuroFrontHex, fallback: .white)
+                dynamicColorRow("主体线条色", hex: $dynamicWallpaper.neuroMidHex, fallback: Color(red: 0.337, green: 0.804, blue: 0.890))
+                dynamicColorRow("背景色", hex: $dynamicWallpaper.neuroBackHex, fallback: Color(red: 0.02, green: 0.02, blue: 0.10))
+                layoutSettingSlider("速度", value: $dynamicWallpaper.neuroSpeed, range: 0...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("亮度", value: $dynamicWallpaper.neuroBrightness, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("对比度", value: $dynamicWallpaper.neuroContrast, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("图案缩放", value: $dynamicWallpaper.neuroScale, range: 0.05...1, step: 0.01, format: "%.2f")
+            }
+        case .simplexNoise:
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(dynamicWallpaper.simplexColorsHex.indices, id: \.self) { index in
+                    dynamicColorRow("渐变色 \(index + 1)", hex: Binding(
+                        get: { dynamicWallpaper.simplexColorsHex[index] },
+                        set: { dynamicWallpaper.simplexColorsHex[index] = $0 }
+                    ), fallback: .white)
+                }
+                layoutSettingSlider("图案缩放", value: $dynamicWallpaper.simplexScale, range: 0.05...4, step: 0.05, format: "%.2f")
+                layoutSettingSlider("每种颜色的层数", value: $dynamicWallpaper.simplexStepsPerColor, range: 1...10, step: 1, format: "%.0f")
+                layoutSettingSlider("过渡柔和度", value: $dynamicWallpaper.simplexSoftness, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("速度", value: $dynamicWallpaper.simplexSpeed, range: 0...3, step: 0.05, format: "%.2f")
+            }
+        case .metaballs:
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("形态", selection: $dynamicWallpaper.metaballsStyleRaw) {
+                    Text("聚合").tag(SWMetaballsStyle.cluster.rawValue)
+                    Text("喷泉").tag(SWMetaballsStyle.fountain.rawValue)
+                }
+                .pickerStyle(.segmented)
+                ForEach(dynamicWallpaper.metaballsColorsHex.indices, id: \.self) { index in
+                    dynamicColorRow("球体色 \(index + 1)", hex: Binding(
+                        get: { dynamicWallpaper.metaballsColorsHex[index] },
+                        set: { dynamicWallpaper.metaballsColorsHex[index] = $0 }
+                    ), fallback: .white)
+                }
+                dynamicColorRow("背景色", hex: $dynamicWallpaper.metaballsBackgroundHex, fallback: .black)
+                layoutSettingSlider("速度", value: $dynamicWallpaper.metaballsSpeed, range: 0...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("球体数量", value: $dynamicWallpaper.metaballsCount, range: 1...8, step: 1, format: "%.0f")
+                layoutSettingSlider("球体大小", value: $dynamicWallpaper.metaballsSize, range: 0...1, step: 0.01, format: "%.2f")
+                if dynamicWallpaper.metaballsStyleRaw == SWMetaballsStyle.fountain.rawValue {
+                    layoutSettingSlider("中心球大小", value: $dynamicWallpaper.metaballsBigSize, range: 0...1, step: 0.01, format: "%.2f")
+                }
+            }
+        case .water:
+            VStack(alignment: .leading, spacing: 10) {
+                dynamicColorRow("底色", hex: $dynamicWallpaper.waterBackHex, fallback: .black)
+                dynamicColorRow("高光色", hex: $dynamicWallpaper.waterHighlightHex, fallback: .white)
+                layoutSettingSlider("速度", value: $dynamicWallpaper.waterSpeed, range: 0...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("纹理大小", value: $dynamicWallpaper.waterSize, range: 0.01...7, step: 0.01, format: "%.2f")
+                layoutSettingSlider("焦散强度", value: $dynamicWallpaper.waterCaustic, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("波浪强度", value: $dynamicWallpaper.waterWaves, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("纹理叠加", value: $dynamicWallpaper.waterLayering, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("边缘变形", value: $dynamicWallpaper.waterEdges, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("高光强度", value: $dynamicWallpaper.waterHighlights, range: 0...1, step: 0.01, format: "%.2f")
             }
         }
     }
@@ -3106,8 +3247,6 @@ struct SettingsView: View {
                     }
                      .pickerStyle(.segmented)
                  }
-
-                 dynamicWallpaperSection
 
                  HStack {
                      Image(systemName: "drop.fill")

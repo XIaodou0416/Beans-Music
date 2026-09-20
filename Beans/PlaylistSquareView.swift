@@ -84,6 +84,11 @@ struct PlaylistSquareView: View {
         let _ = theme.accent
         BeansNavigationStack {
             ZStack {
+                // Keep an opaque, theme-aware first frame behind the transparent
+                // navigation surface. This prevents the native transition from
+                // briefly exposing a white layer before the backdrop is ready.
+                Color.beansBackground
+                    .ignoresSafeArea()
                 if !usesSharedRootBackdrop {
                     GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 }
@@ -281,25 +286,15 @@ struct PlaylistSquareView: View {
     }
 
     private var playlistLoadingGrid: some View {
-        LazyVGrid(
-            columns: playlistColumns,
-            alignment: .center,
-            spacing: usesIPadCatalogueLayout ? 18 : 20
-        ) {
-            ForEach(0..<6, id: \.self) { index in
-                VStack(alignment: usesIPadCatalogueLayout ? .leading : .center, spacing: usesIPadCatalogueLayout ? 7 : 8) {
-                    BeansShimmerSkeleton(cornerRadius: isNativeClean ? 14 : 16)
-                        .aspectRatio(1, contentMode: .fit)
-                    BeansShimmerSkeleton(cornerRadius: 5)
-                        .frame(height: 12)
-                        .frame(maxWidth: index.isMultiple(of: 3) ? 112 : 138, alignment: usesIPadCatalogueLayout ? .leading : .center)
-                    BeansShimmerSkeleton(cornerRadius: 5)
-                        .frame(width: 86, height: 10)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.regular)
+                .tint(Color.beansAmber)
+            Text(beansLocalized("正在加载歌单", "Loading playlists"))
+                .font(BeansFont.appFont(12))
+                .foregroundStyle(Color.beansComment)
         }
-        .frame(minHeight: 220)
+        .frame(maxWidth: .infinity, minHeight: 220)
     }
 
     private func playlistCard(_ playlist: Playlist, showsContainer: Bool = true) -> some View {

@@ -8,6 +8,7 @@ struct RecordPlayerView: View {
     @EnvironmentObject private var clock: PlaybackClock
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var customCovers = CustomSongCoverStore.shared
+    @ObservedObject private var dynamicWallpaper = DynamicWallpaperStore.shared
 
     let song: Song?
     let lyrics: [LyricLine]
@@ -114,18 +115,23 @@ struct RecordPlayerView: View {
 
     private var backdrop: some View {
         ZStack {
-            CoverBlurBackground(url: displayCoverURL, scheme: colorScheme, animationsEnabled: visualsActive)
-            RadialGradient(
-                colors: [.white.opacity(0.12), .clear],
-                center: .topLeading,
-                startRadius: 0,
-                endRadius: 700
-            )
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.35)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            if dynamicWallpaper.syncsDynamicWallpaperToPlayer {
+                BeansDynamicWallpaperView(forPlayer: true)
+                    .ignoresSafeArea()
+            } else {
+                CoverBlurBackground(url: displayCoverURL, scheme: colorScheme, animationsEnabled: visualsActive)
+                RadialGradient(
+                    colors: [.white.opacity(0.12), .clear],
+                    center: .topLeading,
+                    startRadius: 0,
+                    endRadius: 700
+                )
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.35)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
         }
         .ignoresSafeArea()
     }

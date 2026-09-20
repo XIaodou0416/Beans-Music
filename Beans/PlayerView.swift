@@ -10,6 +10,7 @@ struct PlayerView: View {
     @EnvironmentObject private var favorites: FavoritesStore
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @ObservedObject private var customCovers = CustomSongCoverStore.shared
+    @ObservedObject private var dynamicWallpaper = DynamicWallpaperStore.shared
     @Environment(\.colorScheme) private var colorScheme
     @Binding var isPresented: Bool
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
@@ -1078,25 +1079,30 @@ struct PlayerView: View {
 
     private var background: some View {
         ZStack {
-            // 静态渐变：随封面主色取色，不流动（用户要求封面外液态 UI 飘动效果暂停，保持静止）
-            LinearGradient(
-                colors: [palette.backgroundTop, palette.backgroundBottom],
-                startPoint: .top, endPoint: .bottom
-            )
-            if !lyricBackgroundImagePath.isEmpty && (layoutRenderingShowLyrics || lyricBackgroundSyncCover) {
-                lyricPlayerBackgroundLayer
-            } else if theme.backgroundSyncAll, let image = theme.customBackgroundImage(for: colorScheme) {
-                WallpaperImage(image: image)
-                LinearGradient(
-                    colors: colorScheme == .dark
-                        ? [.black.opacity(0.40), .black.opacity(0.58)]
-                        : [.white.opacity(0.12), .black.opacity(0.24)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+            if dynamicWallpaper.syncsDynamicWallpaperToPlayer {
+                BeansDynamicWallpaperView(forPlayer: true)
+                    .ignoresSafeArea()
             } else {
-                CoverBlurBackground(url: displayCoverURL, scheme: colorScheme)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // 静态渐变：随封面主色取色，不流动（用户要求封面外液态 UI 飘动效果暂停，保持静止）
+                LinearGradient(
+                    colors: [palette.backgroundTop, palette.backgroundBottom],
+                    startPoint: .top, endPoint: .bottom
+                )
+                if !lyricBackgroundImagePath.isEmpty && (layoutRenderingShowLyrics || lyricBackgroundSyncCover) {
+                    lyricPlayerBackgroundLayer
+                } else if theme.backgroundSyncAll, let image = theme.customBackgroundImage(for: colorScheme) {
+                    WallpaperImage(image: image)
+                    LinearGradient(
+                        colors: colorScheme == .dark
+                            ? [.black.opacity(0.40), .black.opacity(0.58)]
+                            : [.white.opacity(0.12), .black.opacity(0.24)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                } else {
+                    CoverBlurBackground(url: displayCoverURL, scheme: colorScheme)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
             if classicPlayerFeaturesAvailable {
                 AmbientGlowView(

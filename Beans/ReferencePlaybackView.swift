@@ -23,6 +23,7 @@ struct ReferencePlaybackView: View {
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
     @ObservedObject private var customCovers = CustomSongCoverStore.shared
+    @ObservedObject private var dynamicWallpaper = DynamicWallpaperStore.shared
 
     let song: Song?
     let lyrics: [LyricLine]
@@ -157,7 +158,10 @@ struct ReferencePlaybackView: View {
             Color(uiColor: .systemBackground)
                 .ignoresSafeArea()
 
-            if syncWallpaper, let image = theme.customBackgroundImage(for: colorScheme) {
+            if dynamicWallpaper.syncsDynamicWallpaperToPlayer {
+                BeansDynamicWallpaperView(forPlayer: true)
+                    .ignoresSafeArea()
+            } else if syncWallpaper, let image = theme.customBackgroundImage(for: colorScheme) {
                 WallpaperImage(image: image)
                     .blur(radius: CGFloat(wallpaperBlur))
                     .scaleEffect(wallpaperBlur > 0 ? 1.08 : 1)
