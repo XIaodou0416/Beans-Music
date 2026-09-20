@@ -380,6 +380,8 @@ final class ThemeStore: ObservableObject {
     @Published var accent: BeansAccent
     /// 自定义全局强调色（色盘任选，nil 表示使用预设主题）
     @Published var customAccentHex: String?
+    /// 自定义 Beans 液态容器的着色。系统原生 `.glassEffect` 本身不读取此值。
+    @Published private(set) var liquidGlassColorHex: String?
     /// 自定义背景色（浅色/深色分别保存，未设置的一侧回退到另一侧）
     @Published private(set) var backgroundHexLight: String = ""
     @Published private(set) var backgroundHexDark: String = ""
@@ -398,6 +400,7 @@ final class ThemeStore: ObservableObject {
     @Published var uiStyle: BeansUIStyle = .liquid
 
     private let customAccentKey = "beans.accent.custom"
+    private let liquidGlassColorKey = "beans.glass.customColor"
     private let backgroundKey = "beans.background.custom"
     private let backgroundLightKey = "beans.background.custom.light"
     private let backgroundDarkKey = "beans.background.custom.dark"
@@ -415,6 +418,8 @@ final class ThemeStore: ObservableObject {
         accent = BeansAccent(rawValue: UserDefaults.standard.string(forKey: AccentTheme.key) ?? "") ?? .red
         let savedAccent = UserDefaults.standard.string(forKey: customAccentKey)
         customAccentHex = (savedAccent?.isEmpty ?? true) ? nil : savedAccent
+        let savedGlassColor = UserDefaults.standard.string(forKey: liquidGlassColorKey)
+        liquidGlassColorHex = (savedGlassColor?.isEmpty ?? true) ? nil : savedGlassColor
         let legacyBackground = UserDefaults.standard.string(forKey: backgroundKey) ?? ""
         let hasSplitBackground = UserDefaults.standard.object(forKey: backgroundLightKey) != nil
             || UserDefaults.standard.object(forKey: backgroundDarkKey) != nil
@@ -546,6 +551,23 @@ final class ThemeStore: ObservableObject {
 
     func clearCustomAccent() {
         setCustomAccent(nil)
+    }
+
+    /// 自定义 Beans 容器的颜色。这里只影响自定义容器叠加层，
+    /// 不会改变 iOS 原生玻璃材质或系统控制本身的颜色。
+    func setLiquidGlassColor(_ hex: String?) {
+        let normalized = hex?.isEmpty == true ? nil : hex
+        liquidGlassColorHex = normalized
+        UserDefaults.standard.set(normalized ?? "", forKey: liquidGlassColorKey)
+    }
+
+    func clearLiquidGlassColor() {
+        setLiquidGlassColor(nil)
+    }
+
+    var liquidGlassColor: Color? {
+        guard let liquidGlassColorHex else { return nil }
+        return Color(hex: liquidGlassColorHex)
     }
 
     /// 自定义背景色（兼容旧调用：写入当前系统外观）

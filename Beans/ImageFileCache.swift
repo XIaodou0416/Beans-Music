@@ -123,6 +123,106 @@ final class BeansAvatarStore: ObservableObject {
     }
 }
 
+/// 本地“我的”昵称区域背景，独立于主页壁纸，支持图片、GIF 和视频并在覆盖安装后保留。
+@MainActor
+final class BeansProfileNameBackgroundStore: ObservableObject {
+    static let shared = BeansProfileNameBackgroundStore()
+
+    @Published private(set) var path: String
+    @Published private(set) var revision = 0
+
+    private let pathKey = "beans.profile.nameBackgroundPath"
+    private let filenameKey = "beans.profile.nameBackgroundFilename"
+
+    private static var storageDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    }
+
+    private init() {
+        let defaults = UserDefaults.standard
+        let storedPath = defaults.string(forKey: pathKey) ?? ""
+        let storedFilename = defaults.string(forKey: filenameKey) ?? ""
+        let candidates = [storedFilename, storedPath.isEmpty ? "" : URL(fileURLWithPath: storedPath).lastPathComponent]
+            .filter { !$0.isEmpty }
+
+        if let stableURL = candidates
+            .map({ Self.storageDirectory.appendingPathComponent($0) })
+            .first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
+            path = stableURL.path
+            defaults.set(stableURL.path, forKey: pathKey)
+            defaults.set(stableURL.lastPathComponent, forKey: filenameKey)
+        } else if !storedPath.isEmpty, FileManager.default.fileExists(atPath: storedPath) {
+            path = storedPath
+            defaults.set(URL(fileURLWithPath: storedPath).lastPathComponent, forKey: filenameKey)
+        } else {
+            path = ""
+        }
+    }
+
+    var url: URL? {
+        guard !path.isEmpty, FileManager.default.fileExists(atPath: path) else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
+    func save(data: Data, fileExtension: String) {
+        guard !data.isEmpty else { return }
+        let ext = fileExtension.isEmpty ? "jpg" : fileExtension.lowercased()
+        let fileURL = Self.storageDirectory
+            .appendingPathComponent("BeansProfileNameBackground")
+            .appendingPathExtension(ext)
+        do {
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            if !path.isEmpty, path != fileURL.path {
+                try? FileManager.default.removeItem(atPath: path)
+                BeansImageFileCache.remove(path)
+            }
+            try data.write(to: fileURL, options: .atomic)
+            path = fileURL.path
+            UserDefaults.standard.set(path, forKey: pathKey)
+            UserDefaults.standard.set(fileURL.lastPathComponent, forKey: filenameKey)
+            BeansImageFileCache.remove(path)
+            revision &+= 1
+        } catch {
+            BeansLogger.shared.log("昵称背景保存失败：\(error.localizedDescription)", level: .warn)
+        }
+    }
+
+    func clear() {
+        if !path.isEmpty {
+            try? FileManager.default.removeItem(atPath: path)
+            BeansImageFileCache.remove(path)
+        }
+        path = ""
+        UserDefaults.standard.removeObject(forKey: pathKey)
+        UserDefaults.standard.removeObject(forKey: filenameKey)
+        revision &+= 1
+    }
+}
+
+struct BeansProfileNameBackgroundView: View {
+    let url: URL
+    var isMuted = true
+
+    var body: some View {
+        Group {
+            if CustomCoverMedia.usesAnimatedRenderer(for: url) {
+                CustomCoverMediaView(url: url, isMuted: isMuted)
+            } else if let image = BeansImageFileCache.image(at: url.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.clear
+            }
+        }
+        .clipped()
+        .allowsHitTesting(false)
+    }
+}
+
 struct BeansAvatarView: View {
     let remoteURL: URL?
     var size: CGFloat = 40

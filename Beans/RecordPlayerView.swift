@@ -738,7 +738,6 @@ private struct RecordModeTurntableView: View {
     var onPreviousTrack: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var rotationState = RecordModeRotationState()
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
     @State private var isTransitioningTrack = false
@@ -746,17 +745,15 @@ private struct RecordModeTurntableView: View {
     var body: some View {
         let armHeight = size * 0.68
         ZStack(alignment: .top) {
-            TimelineView(.animation(
-                minimumInterval: 1.0 / 30.0,
-                paused: !isPlaying || isDragging || isTransitioningTrack || reduceMotion
-            )) { timeline in
-                RecordModeDiscView(
-                    coverURL: coverURL,
-                    size: size,
-                    playsCoverVideoAudio: playsCoverVideoAudio
-                )
-                    .rotationEffect(.degrees(rotationState.currentAngle(at: timeline.date)))
-            }
+            // The disc is rendered once and rotated by its backing CALayer.
+            // Updating the whole SwiftUI tree every frame made the rings,
+            // gradients and cover view participate in every animation tick.
+            SmoothRecordDiscView(
+                coverURL: coverURL,
+                isPlaying: isPlaying && !isDragging && !isTransitioningTrack && !reduceMotion,
+                size: size,
+                playsCoverVideoAudio: playsCoverVideoAudio
+            )
             .offset(x: dragOffset)
             .padding(.top, armHeight * 0.36)
             .contentShape(Circle())
@@ -774,12 +771,6 @@ private struct RecordModeTurntableView: View {
             .zIndex(2)
         }
         .frame(width: size + 48, height: size + armHeight * 0.38, alignment: .top)
-        .onAppear {
-            if isPlaying { rotationState.start() }
-        }
-        .onChange(of: isPlaying) { playing in
-            if playing { rotationState.start() } else { rotationState.stop() }
-        }
         .onChange(of: trackId) { _ in
             isTransitioningTrack = true
             Task { @MainActor in
@@ -822,6 +813,109 @@ private struct RecordModeTurntableView: View {
                 isDragging = false
             }
         }
+    }
+}
+
+/// A hosted static disc whose rotation is a compositing-only layer animation.
+/// This follows the same principle as Moumusic's smooth playing indicator:
+/// animation frames do not invalidate the surrounding SwiftUI layout tree.
+private struct SmoothRecordDiscView: UIViewRepresentable {
+    let coverURL: URL?
+    let isPlaying: Bool
+    let size: CGFloat
+    let playsCoverVideoAudio: Bool
+
+    func makeUIView(context: Context) -> SmoothRecordDiscUIView {
+        SmoothRecordDiscUIView()
+    }
+
+    func updateUIView(_ uiView: SmoothRecordDiscUIView, context: Context) {
+        uiView.update(
+            coverURL: coverURL,
+            isPlaying: isPlaying,
+            size: size,
+            playsCoverVideoAudio: playsCoverVideoAudio
+        )
+    }
+
+    static func dismantleUIView(_ uiView: SmoothRecordDiscUIView, coordinator: ()) {
+        uiView.stopRotation()
+    }
+}
+
+private final class SmoothRecordDiscUIView: UIView {
+    private var hostController: UIHostingController<AnyView>?
+    private var rotationIsRunning = false
+    private var currentAngle: CGFloat = 0
+    private let rotationKey = "beans.recordDiscRotation"
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isOpaque = false
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(coverURL: URL?, isPlaying: Bool, size: CGFloat, playsCoverVideoAudio: Bool) {
+        let root = AnyView(
+            RecordModeDiscView(
+                coverURL: coverURL,
+                size: size,
+                playsCoverVideoAudio: playsCoverVideoAudio
+            )
+        )
+        if let hostController {
+            hostController.rootView = root
+        } else {
+            let controller = UIHostingController(rootView: root)
+            controller.view.backgroundColor = .clear
+            controller.view.isOpaque = false
+            controller.view.isUserInteractionEnabled = false
+            hostController = controller
+            addSubview(controller.view)
+        }
+        setNeedsLayout()
+        if isPlaying {
+            startRotation()
+        } else {
+            stopRotation()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        hostController?.view.frame = bounds
+    }
+
+    func stopRotation() {
+        guard rotationIsRunning else { return }
+        syncAngleFromPresentation()
+        layer.removeAnimation(forKey: rotationKey)
+        layer.setValue(currentAngle, forKeyPath: "transform.rotation.z")
+        rotationIsRunning = false
+    }
+
+    private func startRotation() {
+        guard !rotationIsRunning else { return }
+        syncAngleFromPresentation()
+        let animation = CABasicAnimation(keyPath: "transform.rotation.z")
+        animation.fromValue = currentAngle
+        animation.toValue = currentAngle + 2 * .pi
+        animation.duration = 360.0 / 24.0
+        animation.repeatCount = .infinity
+        animation.timingFunction = CAMediaTimingFunction(name: .linear)
+        animation.isRemovedOnCompletion = false
+        layer.add(animation, forKey: rotationKey)
+        rotationIsRunning = true
+    }
+
+    private func syncAngleFromPresentation() {
+        guard let presentation = layer.presentation(),
+              let value = presentation.value(forKeyPath: "transform.rotation.z") as? NSNumber else { return }
+        currentAngle = CGFloat(value.doubleValue)
     }
 }
 

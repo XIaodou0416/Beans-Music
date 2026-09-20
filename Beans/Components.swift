@@ -354,6 +354,8 @@ struct WallpaperImage: View {
 struct BeansGlass<S: Shape>: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
+    @ObservedObject private var theme = ThemeStore.shared
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.beansSettingsPerformanceMode) private var settingsPerformanceMode
 
     let shape: S
@@ -367,6 +369,10 @@ struct BeansGlass<S: Shape>: View {
         !disableLiquidGlass && (forceLiquid || uiStyle == .liquid || uiStyle == .nativeClean)
     }
 
+    private var liquidTintOpacity: Double {
+        colorScheme == .dark ? 0.16 : 0.10
+    }
+
     @ViewBuilder
     private var regularBody: some View {
         Group {
@@ -378,26 +384,26 @@ struct BeansGlass<S: Shape>: View {
             } else if isLiquid {
                 if #available(iOS 26, *) {
                     GlassEffectContainer {
-                        if #available(iOS 27, *) {
+                        ZStack {
                             shape
                                 .fill(.clear)
                                 .glassEffect(.clear, in: shape)
-                        } else if forceLiquid {
-                            // Match the same transparent native glass used by the
-                            // home cards. The sheet itself stays transparent, so
-                            // wallpaper remains visible through the settings UI.
-                            shape
-                                .fill(.clear)
-                                .glassEffect(.clear, in: shape)
-                        } else {
-                            shape
-                                .fill(.clear)
-                                .glassEffect(.clear, in: shape)
+                            if let liquidGlassColor = theme.liquidGlassColor {
+                                shape
+                                    .fill(liquidGlassColor.opacity(liquidTintOpacity))
+                                    .allowsHitTesting(false)
+                            }
                         }
                     }
                 } else {
-                    shape
-                        .fill(.ultraThinMaterial)
+                    ZStack {
+                        shape.fill(.ultraThinMaterial)
+                        if let liquidGlassColor = theme.liquidGlassColor {
+                            shape
+                                .fill(liquidGlassColor.opacity(liquidTintOpacity))
+                                .allowsHitTesting(false)
+                        }
+                    }
                 }
             } else {
                 switch uiStyle {

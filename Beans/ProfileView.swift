@@ -96,12 +96,14 @@ struct ProfileView: View {
     @State private var showWeChatOpenError = false
     @State private var showFeedback = false
     @State private var showAvatarPicker = false
+    @State private var showProfileNameBackgroundPicker = false
     @State private var easterEggStep = 0
     @State private var easterEggPrompt = "点我有惊喜"
     @AppStorage("beans.profile.customNickname") private var customNickname = ""
     @AppStorage("beans.profile.hideDonation") private var hideDonation = false
     @ObservedObject private var feedbackHistory = FeedbackHistoryStore.shared
     @ObservedObject private var avatarStore = BeansAvatarStore.shared
+    @ObservedObject private var profileNameBackgroundStore = BeansProfileNameBackgroundStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
@@ -410,6 +412,11 @@ struct ProfileView: View {
                 }
             }
         }
+        .sheet(isPresented: $showProfileNameBackgroundPicker) {
+            AvatarMediaPicker { selection in
+                profileNameBackgroundStore.save(data: selection.data, fileExtension: selection.fileExtension)
+            }
+        }
         .sheet(isPresented: $showSettings) {
             settingsScreen(SettingsView(onClose: { showSettings = false }))
                 .modifier(BeansSheetModifier(detents: [.fraction(0.62), .large], dragIndicator: true))
@@ -561,7 +568,41 @@ struct ProfileView: View {
             }
         }
         .padding(16)
-        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)) }
+        .overlay(alignment: .topTrailing) {
+            Button {
+                BeansHaptics.tap()
+                showProfileNameBackgroundPicker = true
+            } label: {
+                Image(systemName: profileNameBackgroundStore.url == nil ? "photo.badge.plus" : "photo.badge.arrow.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.beansLabel.opacity(0.86))
+                    .frame(width: 30, height: 30)
+                    .background(Color.white.opacity(0.18), in: Circle())
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.34), lineWidth: 0.7))
+            }
+            .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+            .padding(10)
+            .accessibilityLabel("上传昵称区域背景")
+        }
+        .background {
+            ZStack {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                if let backgroundURL = profileNameBackgroundStore.url {
+                    BeansProfileNameBackgroundView(url: backgroundURL)
+                        .opacity(0.42)
+                    LinearGradient(
+                        colors: [
+                            Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08),
+                            Color.black.opacity(colorScheme == .dark ? 0.12 : 0.02)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .beansCardShadow(radius: 8, y: 3)
     }
 
@@ -575,17 +616,34 @@ struct ProfileView: View {
             HStack(spacing: 4) {
                 Image(systemName: isDeveloper ? "crown.fill" : "number.circle.fill")
                     .font(.system(size: 9, weight: .bold))
-                Text(isDeveloper ? "Beans Creator · \(DeviceIdentity.publicID)" : "ID \(DeviceIdentity.publicID)")
+                Text(isDeveloper ? "专属 ID · \(DeviceIdentity.publicID)" : "ID · \(DeviceIdentity.publicID)")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 8, weight: .semibold))
             }
-            .foregroundStyle(isDeveloper ? Color.beansAmber : Color.beansComment)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Color.beansLabel.opacity(0.07), in: Capsule())
+            .foregroundStyle(Color(red: 0.27, green: 0.17, blue: 0.055))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 1.0, green: 0.91, blue: 0.55),
+                                Color(red: 0.86, green: 0.60, blue: 0.18),
+                                Color(red: 1.0, green: 0.82, blue: 0.34)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay {
+                        Capsule().strokeBorder(Color.white.opacity(0.62), lineWidth: 0.7)
+                    }
+                    .shadow(color: Color(red: 0.82, green: 0.52, blue: 0.12).opacity(0.28), radius: 5, y: 2)
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("用户 ID \(DeviceIdentity.publicID)，点击复制")
@@ -2824,6 +2882,47 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
+                HStack {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("液态容器颜色")
+                            .font(BeansFont.appFont(15))
+                            .foregroundStyle(Color.beansLabel)
+                        Text("只影响 Beans 自定义液态容器，系统原生玻璃不变")
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    Spacer(minLength: 10)
+                    ColorPicker("", selection: Binding(
+                        get: {
+                            theme.liquidGlassColor ?? Color(red: 0.86, green: 0.91, blue: 1.0)
+                        },
+                        set: { theme.setLiquidGlassColor($0.hexString) }
+                    ), supportsOpacity: false)
+                    .labelsHidden()
+                }
+                HStack(spacing: 12) {
+                    Button {
+                        theme.clearLiquidGlassColor()
+                        BeansHaptics.select()
+                    } label: {
+                        Text("恢复默认")
+                            .font(BeansFont.appFont(13, .medium))
+                            .foregroundStyle(Color.beansAmber)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background { BeansSurface(shape: Capsule()) }
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                    Text(theme.liquidGlassColorHex == nil ? "默认清透" : "已自定义")
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                }
+
                 Divider().overlay(Color.beansComment.opacity(0.15))
 
                 HStack {
@@ -4852,8 +4951,11 @@ struct AvatarMediaPicker: UIViewControllerRepresentable {
             } else {
                 provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
                     guard let data, !data.isEmpty else { return }
+                    let imageExtension = provider.registeredTypeIdentifiers
+                        .compactMap { UTType(identifier: $0)?.preferredFilenameExtension }
+                        .first ?? "jpg"
                     DispatchQueue.main.async {
-                        self.parent.onPicked(AvatarMediaSelection(data: data, fileExtension: "jpg", isVideo: false))
+                        self.parent.onPicked(AvatarMediaSelection(data: data, fileExtension: imageExtension, isVideo: false))
                     }
                 }
             }
