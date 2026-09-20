@@ -2082,9 +2082,8 @@ struct QQTopListDetailView: View {
                             ForEach(Array(filteredTracks.enumerated()), id: \.element.identityKey) { index, song in
                                 SongCell(
                                     song: song,
-                                    showCover: false,
+                                    showCover: true,
                                     suppressNativeCleanRowGlass: true,
-                                    leadingIndex: index + 1,
                                     compactAlbumRow: true,
                                     playbackContext: filteredTracks,
                                     playbackIndex: index
@@ -2128,7 +2127,12 @@ struct QQTopListDetailView: View {
             }
             if !filteredTracks.isEmpty {
                 HStack(spacing: 10) {
-                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                    GlassButton(
+                        title: "播放全部（\(filteredTracks.count)）",
+                        systemName: "play.fill",
+                        prominent: true,
+                        expandsHorizontally: true
+                    ) {
                         BeansHaptics.tap()
                         player.play(songs: filteredTracks, startAt: 0)
                     }
@@ -2460,39 +2464,26 @@ struct TopListDetailView: View {
                         Task { await load() }
                     }
                 } else {
-                    List {
-                        header
-                        Section {
-                            HStack(spacing: 12) {
-                                GlassButton(title: "播放全部", systemName: "play.fill", prominent: true, expandsHorizontally: true) {
-                                    guard !filteredTracks.isEmpty else { return }
-                                    BeansHaptics.tap()
-                                    player.play(songs: filteredTracks, startAt: 0)
-                                }
-                                if downloadFeatureUnlocked, filteredTracks.count > 1 {
-                                    GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
-                                        BeansHaptics.tap()
-                                        showBatchDownload = true
-                                    }
-                                    .accessibilityLabel("批量下载排行榜")
-                                    .help("批量下载")
-                                }
-                            }
-                            .listRowBackground(Color.clear)
-                            .padding(.vertical, 8)
-                        }
-                        Section {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            header
                             ForEach(Array(filteredTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true) {
+                                SongCell(
+                                    song: song,
+                                    showCover: true,
+                                    suppressNativeCleanRowGlass: true,
+                                    compactAlbumRow: true,
+                                    playbackContext: filteredTracks,
+                                    playbackIndex: index
+                                ) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
                             }
                         }
+                        .padding(.top, 12)
+                        .padding(.bottom, 118)
                     }
-                    .beansScrollContentBackgroundHidden()
-                    .listStyle(.plain)
+                    .beansScrollIndicatorsHidden()
                 }
             }
             }
@@ -2527,7 +2518,12 @@ struct TopListDetailView: View {
             }
             if !filteredTracks.isEmpty {
                 HStack(spacing: 10) {
-                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                    GlassButton(
+                        title: "播放全部（\(filteredTracks.count)）",
+                        systemName: "play.fill",
+                        prominent: true,
+                        expandsHorizontally: true
+                    ) {
                         BeansHaptics.tap()
                         player.play(songs: filteredTracks, startAt: 0)
                     }
@@ -2631,9 +2627,8 @@ struct KugouTopListDetailView: View {
                             ForEach(Array(filteredTracks.enumerated()), id: \.element.identityKey) { index, song in
                                 SongCell(
                                     song: song,
-                                    showCover: false,
+                                    showCover: true,
                                     suppressNativeCleanRowGlass: true,
-                                    leadingIndex: index + 1,
                                     compactAlbumRow: true,
                                     playbackContext: filteredTracks,
                                     playbackIndex: index
@@ -2682,7 +2677,12 @@ struct KugouTopListDetailView: View {
             }
             if !filteredTracks.isEmpty {
                 HStack(spacing: 10) {
-                    GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
+                    GlassButton(
+                        title: "播放全部（\(filteredTracks.count)）",
+                        systemName: "play.fill",
+                        prominent: true,
+                        expandsHorizontally: true
+                    ) {
                         BeansHaptics.tap()
                         player.play(songs: filteredTracks, startAt: 0)
                     }

@@ -70,7 +70,7 @@ struct SongCell: View {
                     }
                 }
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                Text(song.artists.isEmpty ? song.album : song.artists)
+                Text(song.artists.isEmpty ? "未知歌手" : song.artists)
                     .font(BeansFont.appFont(12))
                     .foregroundStyle(Color.beansComment)
                     .lineLimit(1)

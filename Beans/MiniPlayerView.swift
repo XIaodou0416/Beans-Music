@@ -188,7 +188,7 @@ private struct MiniPlayerPlatformShadow: ViewModifier {
     let isIPadLandscape: Bool
 
     func body(content: Content) -> some View {
-        if #available(iOS 27.0, *) {
+        if #available(iOS 26.0, *) {
             content.shadow(color: .black.opacity(isIPadLandscape ? 0.08 : 0.12), radius: 10, y: 4)
         } else {
             content

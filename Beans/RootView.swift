@@ -1890,7 +1890,7 @@ private struct LegacyTabBarPlatformShadow: ViewModifier {
     let colorScheme: ColorScheme
 
     func body(content: Content) -> some View {
-        if #available(iOS 27.0, *) {
+        if #available(iOS 26.0, *) {
             content.shadow(color: .black.opacity(colorScheme == .dark ? 0.28 : 0.10), radius: 12, y: 4)
         } else {
             content
