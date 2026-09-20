@@ -159,8 +159,14 @@ struct PlaylistSquareView: View {
                 ToolbarItem(placement: .principal) {
                     playlistNavigationTitle
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    BeansDetailProfileShortcut()
+                if #available(iOS 26, *) {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        BeansDetailProfileShortcut()
+                    }
+                } else {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        BeansDetailProfileShortcut()
+                    }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
