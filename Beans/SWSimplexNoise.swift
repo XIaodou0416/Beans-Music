@@ -290,12 +290,20 @@ private struct SliderRow: View {
 // MARK: - Preview
 
 #Preview("Default") {
-    NavigationStack {
-        SWSimplexNoise(showsControls: true)
+    if #available(iOS 17.0, *) {
+        NavigationView {
+            SWSimplexNoise(showsControls: true)
+        }
+    } else {
+        Color.black
     }
 }
 
 #Preview("Indigo / purple / pink") {
-    SWSimplexNoise(colors: [.indigo, .purple, .pink, .orange])
-        .ignoresSafeArea()
+    if #available(iOS 17.0, *) {
+        SWSimplexNoise(colors: [.indigo, .purple, .pink, .orange])
+            .ignoresSafeArea()
+    } else {
+        Color.black
+    }
 }

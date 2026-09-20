@@ -370,8 +370,12 @@ private struct SliderRow: View {
 // MARK: - Preview
 
 #Preview {
-    // ToolbarItem requires an enclosing NavigationStack to render.
-    NavigationStack {
-        SWMetaballs(showsControls: true)
+    if #available(iOS 17.0, *) {
+        // ToolbarItem requires an enclosing navigation container to render.
+        NavigationView {
+            SWMetaballs(showsControls: true)
+        }
+    } else {
+        Color.black
     }
 }

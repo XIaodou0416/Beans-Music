@@ -313,19 +313,27 @@ private struct SliderRow: View {
 // MARK: - Preview
 
 #Preview("Default") {
-    NavigationStack {
-        SWWater(showsControls: true) {
-            Color.blue
+    if #available(iOS 17.0, *) {
+        NavigationView {
+            SWWater(showsControls: true) {
+                Color.blue
+            }
         }
+    } else {
+        Color.black
     }
 }
 
 #Preview("Pool blue") {
-    SWWater(
-        highlights: 0.8,
-        colorBack: .black,
-        colorHighlight: Color(red: 0.4, green: 0.85, blue: 1.0)
-    ) {
-        Color.blue
+    if #available(iOS 17.0, *) {
+        SWWater(
+            highlights: 0.8,
+            colorBack: .black,
+            colorHighlight: Color(red: 0.4, green: 0.85, blue: 1.0)
+        ) {
+            Color.blue
+        }
+    } else {
+        Color.black
     }
 }

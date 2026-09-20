@@ -262,16 +262,24 @@ private struct SliderRow: View {
 // MARK: - Preview
 
 #Preview("Default") {
-    NavigationStack {
-        SWNeuroNoise(showsControls: true)
+    if #available(iOS 17.0, *) {
+        NavigationView {
+            SWNeuroNoise(showsControls: true)
+        }
+    } else {
+        Color.black
     }
 }
 
 #Preview("Magenta web") {
-    SWNeuroNoise(
-        colorFront: .white,
-        colorMid: .purple,
-        colorBack: .black
-    )
-    .ignoresSafeArea()
+    if #available(iOS 17.0, *) {
+        SWNeuroNoise(
+            colorFront: .white,
+            colorMid: .purple,
+            colorBack: .black
+        )
+        .ignoresSafeArea()
+    } else {
+        Color.black
+    }
 }

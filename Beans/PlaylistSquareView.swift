@@ -82,13 +82,18 @@ struct PlaylistSquareView: View {
 
     var body: some View {
         let _ = theme.accent
-        BeansNavigationStack {
-            ZStack {
-                // Keep an opaque, theme-aware first frame behind the transparent
-                // navigation surface. This prevents the native transition from
-                // briefly exposing a white layer before the backdrop is ready.
+        ZStack {
+            // Paint the transition host before NavigationStack is mounted. The
+            // navigation controller is deliberately transparent so the page can
+            // show the shared wallpaper; without this first-frame underlay,
+            // iOS can briefly reveal the window's white default background.
+            if !usesSharedRootBackdrop {
                 Color.beansBackground
                     .ignoresSafeArea()
+            }
+
+            BeansNavigationStack {
+                ZStack {
                 if !usesSharedRootBackdrop {
                     GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 }
@@ -135,33 +140,36 @@ struct PlaylistSquareView: View {
                     .beansScrollIndicatorsHidden()
                     .background(Color.clear)
                 }
-            }
-            .task(id: "\(source.rawValue)-\(selectedCategory)") {
-                await load(force: false)
-            }
-            .task(id: source.rawValue) {
-                await loadCategories()
-            }
-            .onReceive(platformPrefs.changes) { _ in
-                if !providers.contains(source) {
-                    playlistSourceRaw = (providers.first ?? .netease).rawValue
-                    playlists = []
                 }
-            }
-            .onChange(of: searchText) { value in
-                if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, isSearching {
-                    clearSearch()
+                .task(id: "\(source.rawValue)-\(selectedCategory)") {
+                    await load(force: false)
                 }
-            }
-            .modifier(
-                PlaylistNativeSearchModifier(
-                    text: $searchText,
-                    prompt: beansLocalized("搜索歌单", "Search playlists"),
-                    onSubmit: { submitSearch() }
+                .task(id: source.rawValue) {
+                    await loadCategories()
+                }
+                .onReceive(platformPrefs.changes) { _ in
+                    if !providers.contains(source) {
+                        playlistSourceRaw = (providers.first ?? .netease).rawValue
+                        playlists = []
+                    }
+                }
+                .onChange(of: searchText) { value in
+                    if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, isSearching {
+                        clearSearch()
+                    }
+                }
+                .modifier(
+                    PlaylistNativeSearchModifier(
+                        text: $searchText,
+                        prompt: beansLocalized("搜索歌单", "Search playlists"),
+                        onSubmit: { submitSearch() }
+                    )
                 )
-            )
-            .modifier(PlaylistSquareToolbarModifier(title: { playlistNavigationTitle }))
-            .navigationBarTitleDisplayMode(.inline)
+                .modifier(PlaylistSquareToolbarModifier(title: { playlistNavigationTitle }))
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .beansHomeNavigationBarTransparent()
+            .background(Color.clear)
         }
         .confirmationDialog("精选平台", isPresented: $showPlaylistPlatformMenu, titleVisibility: .visible) {
             ForEach(providers) { provider in
@@ -175,8 +183,6 @@ struct PlaylistSquareView: View {
                 }
             }
         }
-        // 保留系统搜索栏，但让顶部导航区域随滚动内容透明化，歌单封面可以自然透出。
-        .beansHomeNavigationBarTransparent()
         .background(Color.clear)
     }
 
