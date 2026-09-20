@@ -2357,7 +2357,7 @@ struct DailySongsSheet: View {
             coverURL: displayedSongs.first?.coverURL,
             trackCount: filteredSongs.count,
             playCount: nil,
-            chartDescription: nil,
+            chartDescription: dailyRecommendationDescription,
             filteredCount: filteredSongs.count,
             downloadEnabled: downloadFeatureUnlocked,
             downloadAccessibilityLabel: "批量下载每日推荐",
@@ -2371,6 +2371,26 @@ struct DailySongsSheet: View {
                 showBatchDownload = true
             }
         )
+    }
+
+    private var dailyRecommendationDescription: String {
+        switch source {
+        case .netease:
+            return beansLocalized(
+                "根据你的听歌偏好，每天为你整理一组推荐歌曲。",
+                "A fresh set of songs is curated for you every day based on your listening preferences."
+            )
+        case .qq:
+            return beansLocalized(
+                "根据你的音乐口味，为你推荐适合今天聆听的歌曲。",
+                "Songs selected for today based on your music taste."
+            )
+        case .kugou:
+            return beansLocalized(
+                "为你整理的每日推荐歌曲，随时发现新的喜欢。",
+                "Daily recommendations picked to help you discover your next favorite songs."
+            )
+        }
     }
 
     private var filteredSongs: [Song] {

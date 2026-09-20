@@ -689,6 +689,8 @@ struct RootView: View {
         }
         .tint(Color.beansAmber)
         .tabBarMinimizeBehavior(isPadLandscape || player.currentSong == nil ? .never : .onScrollDown)
+        .toolbarBackground(.hidden, for: .tabBar)
+        .background(Color.clear)
     }
 
     @available(iOS 26.0, *)
@@ -737,6 +739,8 @@ struct RootView: View {
         }
         .tint(Color.beansAmber)
         .tabBarMinimizeBehavior(isPadLandscape || player.currentSong == nil ? .never : .onScrollDown)
+        .toolbarBackground(.hidden, for: .tabBar)
+        .background(Color.clear)
     }
 
     private func nativeTabTitle(_ tab: RootTab) -> LocalizedStringKey {

@@ -210,6 +210,13 @@ struct BeansUnifiedSearchField: View {
         .padding(.horizontal, 15)
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
+        // The text field does not cover the icon and vertical padding. Make
+        // the whole search surface a single, predictable focus target.
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                (controller ?? fallbackController).focus()
+            }
+        )
         .allowsHitTesting(true)
         .zIndex(20)
     }
@@ -2272,6 +2279,14 @@ final class SearchFieldController {
     func dismissKeyboard() {
         textField?.resignFirstResponder()
         searchBar?.searchTextField.resignFirstResponder()
+    }
+
+    func focus() {
+        if let searchBar {
+            searchBar.searchTextField.becomeFirstResponder()
+        } else {
+            textField?.becomeFirstResponder()
+        }
     }
 }
 

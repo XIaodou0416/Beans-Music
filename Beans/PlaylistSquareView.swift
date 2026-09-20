@@ -118,6 +118,7 @@ struct PlaylistSquareView: View {
                         .padding(.top, 2)
                     }
                     .beansScrollIndicatorsHidden()
+                    .background(Color.clear)
                 }
             }
             .task(id: "\(source.rawValue)-\(selectedCategory)") {
@@ -166,6 +167,7 @@ struct PlaylistSquareView: View {
         }
         // 保留系统搜索栏，但让顶部导航区域随滚动内容透明化，歌单封面可以自然透出。
         .beansHomeNavigationBarTransparent()
+        .background(Color.clear)
     }
 
     private var playlistColumns: [GridItem] {
