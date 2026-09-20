@@ -72,11 +72,6 @@ struct PlaylistSquareView: View {
                 }
 
                 VStack(spacing: 0) {
-                    headerTitle
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .padding(.bottom, 10)
-
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
                             // Keep this page-owned field on every OS. The native
@@ -137,6 +132,17 @@ struct PlaylistSquareView: View {
                     clearSearch()
                 }
             }
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    playlistNavigationTitle
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    BeansProfileShortcutButton {
+                        showProfile = true
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
         }
         .confirmationDialog("精选平台", isPresented: $showPlaylistPlatformMenu, titleVisibility: .visible) {
             ForEach(providers) { provider in
@@ -169,28 +175,21 @@ struct PlaylistSquareView: View {
         return [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
     }
 
-    private var headerTitle: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Text(source == .netease
-                 ? beansLocalized("精选", "Curated")
-                 : beansLocalized("歌单广场", "Playlist Square"))
-                .font(BeansFont.appFont(32, .bold))
-                .foregroundStyle(Color.beansLabel)
-                .contentShape(Rectangle())
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.55)
-                        .onEnded { _ in
-                            guard providers.count > 1 else { return }
-                            BeansHaptics.select()
-                            showPlaylistPlatformMenu = true
-                        }
-                )
-
-            Spacer(minLength: 0)
-            BeansProfileShortcutButton {
-                showProfile = true
-            }
-        }
+    private var playlistNavigationTitle: some View {
+        Text(source == .netease
+             ? beansLocalized("精选", "Curated")
+             : beansLocalized("歌单广场", "Playlist Square"))
+            .font(.headline)
+            .foregroundStyle(Color.beansLabel)
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.55)
+                    .onEnded { _ in
+                        guard providers.count > 1 else { return }
+                        BeansHaptics.select()
+                        showPlaylistPlatformMenu = true
+                    }
+            )
     }
 
     private func selectSource(_ provider: SearchProvider) {
