@@ -57,60 +57,63 @@ private struct BeansExclusiveIDBadgeSurface: View {
     let style: BeansExclusiveIDBadgeStyle
 
     var body: some View {
-        if style == .classicGold {
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [Color(red: 0.42, green: 0.23, blue: 0.03), Color(red: 0.96, green: 0.66, blue: 0.12), Color(red: 0.50, green: 0.29, blue: 0.04)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay {
-                    Capsule().strokeBorder(Color(red: 1, green: 0.90, blue: 0.55).opacity(0.9), lineWidth: 1)
-                }
-                .shadow(color: Color(red: 0.94, green: 0.59, blue: 0.06).opacity(0.36), radius: 5, y: 1)
-        } else {
-            TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { timeline in
-            let phase = Angle.degrees((timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 12)) * 30)
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.035, green: 0.025, blue: 0.075),
-                            Color(red: 0.16, green: 0.055, blue: 0.25),
-                            Color(red: 0.055, green: 0.03, blue: 0.10)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay {
-                    Capsule()
-                        .strokeBorder(
-                            AngularGradient(
-                                colors: [
-                                    Color(red: 0.43, green: 0.24, blue: 0.74),
-                                    Color(red: 1.0, green: 0.84, blue: 0.36),
-                                    Color(red: 0.68, green: 0.43, blue: 0.10),
-                                    Color(red: 0.43, green: 0.24, blue: 0.74)
-                                ],
-                                center: .center,
-                                angle: phase
-                            ),
-                            lineWidth: 1
+        Group {
+            if style == .classicGold {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(red: 0.42, green: 0.23, blue: 0.03), Color(red: 0.96, green: 0.66, blue: 0.12), Color(red: 0.50, green: 0.29, blue: 0.04)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                }
-                .overlay {
+                    )
+                    .overlay {
+                        Capsule().strokeBorder(Color(red: 1, green: 0.90, blue: 0.55).opacity(0.9), lineWidth: 1)
+                    }
+                    .shadow(color: Color(red: 0.94, green: 0.59, blue: 0.06).opacity(0.36), radius: 5, y: 1)
+            } else {
+                TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { timeline in
+                    let phase = Angle.degrees((timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 12)) * 30)
                     Capsule()
-                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.45)
-                        .padding(1.2)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.035, green: 0.025, blue: 0.075),
+                                    Color(red: 0.16, green: 0.055, blue: 0.25),
+                                    Color(red: 0.055, green: 0.03, blue: 0.10)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(
+                                    AngularGradient(
+                                        colors: [
+                                            Color(red: 0.43, green: 0.24, blue: 0.74),
+                                            Color(red: 1.0, green: 0.84, blue: 0.36),
+                                            Color(red: 0.68, green: 0.43, blue: 0.10),
+                                            Color(red: 0.43, green: 0.24, blue: 0.74)
+                                        ],
+                                        center: .center,
+                                        angle: phase
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.45)
+                                .padding(1.2)
+                        }
+                        .shadow(color: Color(red: 0.52, green: 0.26, blue: 0.90).opacity(0.42), radius: 5, y: 1)
+                        .shadow(color: Color(red: 1.0, green: 0.72, blue: 0.16).opacity(0.24), radius: 3, y: 1)
                 }
-                .shadow(color: Color(red: 0.52, green: 0.26, blue: 0.90).opacity(0.42), radius: 5, y: 1)
-                .shadow(color: Color(red: 1.0, green: 0.72, blue: 0.16).opacity(0.24), radius: 3, y: 1)
             }
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -670,23 +673,25 @@ struct ProfileView: View {
             Group {
                 if let backgroundURL = profileNameBackgroundStore.url {
                     ZStack {
-                    BeansProfileNameBackgroundView(url: backgroundURL)
-                        .opacity(0.72)
-                        .allowsHitTesting(false)
-                    LinearGradient(
-                        colors: [
-                            Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08),
-                            Color.black.opacity(colorScheme == .dark ? 0.12 : 0.02)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    .allowsHitTesting(false)
+                        BeansProfileNameBackgroundView(url: backgroundURL)
+                            .opacity(0.72)
+                        LinearGradient(
+                            colors: [
+                                Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08),
+                                Color.black.opacity(colorScheme == .dark ? 0.12 : 0.02)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     }
                 } else {
                     BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
             }
+            // Animated media hosts can otherwise retain a UIKit hit-test view
+            // above the profile header after a name-background upload.
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .beansCardShadow(radius: 8, y: 3)
