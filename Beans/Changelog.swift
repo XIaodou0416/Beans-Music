@@ -75,6 +75,19 @@ enum ChangelogStore {
 
     static let logs: [VersionLog] = [
         VersionLog(
+            id: "1.8",
+            version: "1.8",
+            title: "专辑浏览体验优化",
+            features: [
+                "新增“该歌手的其他专辑”加载预览动效",
+                "继续复用专辑与封面缓存，减少重复加载时的空白闪烁"
+            ],
+            fixes: [
+                "修复详情页封面缓存刷新时短暂发白的问题",
+                "修复排行榜作者头像刷新时短暂消失的问题"
+            ]
+        ),
+        VersionLog(
             id: "1.7.01",
             version: "1.7.01",
             title: "流畅性与稳定性优化",

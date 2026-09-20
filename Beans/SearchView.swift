@@ -1792,6 +1792,7 @@ struct AlbumDetailView: View {
     @State private var otherAlbums: [Album] = []
     @State private var albumDescription: String?
     @State private var isLoading = true
+    @State private var isLoadingOtherAlbums = true
     @State private var errorMessage: String?
     @State private var showBatchDownload = false
     @State private var selectedOtherAlbum: Album?
@@ -1807,11 +1808,13 @@ struct AlbumDetailView: View {
             .cachedSongs(for: "album-\(album.source.rawValue)-\(album.id)")
         let related = RelatedAlbumsCache.shared
             .cachedAlbums(for: "related-albums-\(album.source.rawValue)-\(album.id)")
+        let cachedOtherAlbums = related?.albums.filter { $0.id != album.id } ?? []
 
         _tracks = State(initialValue: songs?.songs ?? [])
-        _otherAlbums = State(initialValue: related?.albums.filter { $0.id != album.id } ?? [])
+        _otherAlbums = State(initialValue: cachedOtherAlbums)
         _albumDescription = State(initialValue: album.albumDescription)
         _isLoading = State(initialValue: songs?.songs.isEmpty ?? true)
+        _isLoadingOtherAlbums = State(initialValue: cachedOtherAlbums.isEmpty)
     }
 
     var body: some View {
@@ -1868,6 +1871,9 @@ struct AlbumDetailView: View {
 
                         if !otherAlbums.isEmpty {
                             otherAlbumsShelf
+                                .padding(.top, 20)
+                        } else if isLoadingOtherAlbums {
+                            otherAlbumsLoadingShelf
                                 .padding(.top, 20)
                         }
                     }
@@ -2003,6 +2009,32 @@ struct AlbumDetailView: View {
         }
     }
 
+    private var otherAlbumsLoadingShelf: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("该歌手的其他专辑")
+                .font(BeansFont.appFont(17, .bold))
+                .foregroundStyle(Color.beansLabel)
+                .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 16) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        VStack(alignment: .leading, spacing: 8) {
+                            BeansShimmerSkeleton(cornerRadius: 12)
+                                .frame(width: 160, height: 160)
+                            BeansShimmerSkeleton(cornerRadius: 5)
+                                .frame(width: 140, height: 13)
+                            BeansShimmerSkeleton(cornerRadius: 4)
+                                .frame(width: 86, height: 11)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
     private func load() async {
         let cache = DetailSongsCache.shared
         let cacheKey = "album-\(album.source.rawValue)-\(album.id)"
@@ -2014,6 +2046,7 @@ struct AlbumDetailView: View {
             let cachedItems = cachedRelatedAlbums.albums.filter { $0.id != album.id }
             await MainActor.run {
                 otherAlbums = cachedItems
+                isLoadingOtherAlbums = false
             }
         }
 
@@ -2111,6 +2144,9 @@ struct AlbumDetailView: View {
                     otherAlbums = filteredRelatedAlbums
                 }
             }
+            await MainActor.run {
+                isLoadingOtherAlbums = false
+            }
         } catch {
             await MainActor.run {
                 if tracks.isEmpty {
@@ -2122,6 +2158,7 @@ struct AlbumDetailView: View {
                     )
                 }
                 isLoading = false
+                isLoadingOtherAlbums = false
             }
         }
     }
