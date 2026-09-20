@@ -1967,7 +1967,7 @@ struct SettingsView: View {
     @ViewBuilder
     private func liquidQualityOptionBackground(selected: Bool) -> some View {
         ZStack {
-            BeansGlass(shape: Capsule(), forceLiquid: true)
+            BeansGlass(shape: Capsule())
             if selected {
                 Capsule()
                     .fill(Color.beansAmber.opacity(0.16))
@@ -2405,7 +2405,7 @@ struct SettingsView: View {
         .padding(.horizontal, 16)
         .frame(height: 48)
         .background {
-            BeansGlass(shape: Capsule(), forceLiquid: true)
+            BeansGlass(shape: Capsule())
         }
         .overlay {
             Capsule()
@@ -4447,7 +4447,7 @@ private struct SettingsCatalogGroup<Content: View>: View {
             .padding(.horizontal, 16)
             .background {
                 let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
-                BeansGlass(shape: shape, forceLiquid: true)
+                BeansGlass(shape: shape)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
@@ -4474,9 +4474,19 @@ private struct SettingsLiquidSheetPresentation: ViewModifier {
 /// detent. Keep a single transparent glass surface only while compact, rather
 /// than stacking another glass layer after the sheet has expanded.
 private struct SettingsCompactGlassSurface: View {
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
+
+    private var usesNativeLiquidSurface: Bool {
+        guard !disableLiquidGlass else { return false }
+        let style = BeansUIStyle(rawValue: uiStyleRaw) ?? .liquid
+        return style == .liquid || style == .nativeClean
+    }
+
     var body: some View {
         GeometryReader { proxy in
-            if #available(iOS 26, *), proxy.size.height < UIScreen.main.bounds.height * 0.82 {
+            if #available(iOS 26, *), usesNativeLiquidSurface,
+               proxy.size.height < UIScreen.main.bounds.height * 0.82 {
                 GlassEffectContainer {
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .fill(.clear)

@@ -31,6 +31,20 @@ Reference revision: v1.0.14 (ddfb8f742b56df949c9afb657ae2b9eb72f69c10).
 The upstream copyright and GNU Lesser General Public License version 3.0 notices
 remain applicable to the adapted code.
 
+## Local playlist import
+
+The local playlist import flow, including NetEase public-link resolution,
+complete track-id expansion, recursive exported-JSON parsing, and the import
+sheet interaction, is adapted from the iOS implementation in Moumusic by
+jiajia2222.
+
+Source: https://github.com/jiajia2222/Moumusic
+
+Reference revision: v1.0.14 (ddfb8f742b56df949c9afb657ae2b9eb72f69c10).
+
+The upstream copyright and GNU Lesser General Public License version 3.0 notices
+remain applicable.
+
 ## Record player mode
 
 The record player mode, including its turntable, tonearm, continuous rotation,

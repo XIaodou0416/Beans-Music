@@ -289,7 +289,6 @@ struct RootView: View {
             ZStack {
                 if isPadLandscape {
                     iPadSidebarRoot
-                        .transition(.opacity.combined(with: .scale(scale: 0.985)))
                 } else if #available(iOS 26.0, *) {
                     nativeTabs(isPadLandscape: false)
                         .modifier(
@@ -301,10 +300,8 @@ struct RootView: View {
                                 transitionNamespace: nowPlayingTransition
                             )
                         )
-                        .transition(.opacity.combined(with: .scale(scale: 0.985)))
                 } else {
                     legacyRootTabs
-                        .transition(.opacity.combined(with: .scale(scale: 0.985)))
                 }
 
                 if let themeRevealSnapshot {

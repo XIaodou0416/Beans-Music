@@ -6,14 +6,26 @@ struct LocalPlaylist: Identifiable, Codable, Hashable {
     var name: String
     var songs: [Song] = []
     var createdAt = Date()
+    /// Optional metadata for playlists imported from another music app.
+    var coverURL: URL?
+    var sourceName: String?
 
-    enum CodingKeys: String, CodingKey { case id, name, songs, createdAt }
+    enum CodingKeys: String, CodingKey { case id, name, songs, createdAt, coverURL, sourceName }
 
-    init(id: UUID = UUID(), name: String, songs: [Song] = [], createdAt: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        songs: [Song] = [],
+        createdAt: Date = Date(),
+        coverURL: URL? = nil,
+        sourceName: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.songs = songs
         self.createdAt = createdAt
+        self.coverURL = coverURL
+        self.sourceName = sourceName
     }
 
     init(from decoder: Decoder) throws {
@@ -22,6 +34,8 @@ struct LocalPlaylist: Identifiable, Codable, Hashable {
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? "未命名歌单"
         songs = try c.decodeIfPresent([Song].self, forKey: .songs) ?? []
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? .distantPast
+        coverURL = try c.decodeIfPresent(URL.self, forKey: .coverURL)
+        sourceName = try c.decodeIfPresent(String.self, forKey: .sourceName)
     }
 }
 
@@ -50,6 +64,37 @@ final class LocalLibraryStore: ObservableObject {
         let playlist = LocalPlaylist(name: name)
         playlists.append(playlist)
         return playlist
+    }
+
+    /// Creates a local playlist with imported metadata while keeping the old
+    /// createPlaylist(name:) behavior unchanged for existing callers.
+    @discardableResult
+    func createPlaylist(
+        name: String,
+        songs: [Song],
+        coverURL: URL? = nil,
+        sourceName: String? = nil
+    ) -> LocalPlaylist {
+        let playlist = LocalPlaylist(
+            name: name,
+            songs: songs,
+            coverURL: coverURL,
+            sourceName: sourceName
+        )
+        playlists.insert(playlist, at: 0)
+        return playlist
+    }
+
+    /// Imports a playlist from the same link / JSON formats used by Moumusic.
+    @discardableResult
+    func importPlaylist(from input: String) async throws -> LocalPlaylist {
+        let imported = try await BeansPlaylistImportService.importPlaylist(from: input)
+        return createPlaylist(
+            name: imported.name,
+            songs: imported.songs,
+            coverURL: imported.coverURL,
+            sourceName: imported.sourceName
+        )
     }
 
     func deletePlaylist(id: UUID) {

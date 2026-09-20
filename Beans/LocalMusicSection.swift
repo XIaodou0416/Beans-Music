@@ -20,6 +20,7 @@ struct LocalMusicSection: View {
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
 
     @State private var showCreate = false
+    @State private var showImportPlaylist = false
     @State private var showPlaylistOrder = false
     @State private var newName = ""
     @State private var selected: LocalPlaylist?
@@ -42,6 +43,16 @@ struct LocalMusicSection: View {
                     .font(BeansFont.appFont(21, .bold))
                     .foregroundStyle(Color.beansLabel)
                 Spacer(minLength: 8)
+                Button {
+                    showImportPlaylist = true
+                } label: {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.beansAmber)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("粘贴或导入歌单")
+                .help("粘贴或导入歌单")
                 Button {
                     newName = ""
                     showCreate = true
@@ -83,10 +94,15 @@ struct LocalMusicSection: View {
                     .foregroundStyle(Color.beansSage)
             }
             if store.playlists.isEmpty {
-                EmptyStateView(
-                    icon: "internaldrive",
-                    text: emptyLocalPlaylistText
-                )
+                VStack(spacing: 12) {
+                    EmptyStateView(
+                        icon: "internaldrive",
+                        text: emptyLocalPlaylistText
+                    )
+                    GlassButton(title: "粘贴歌单", systemName: "doc.on.clipboard") {
+                        showImportPlaylist = true
+                    }
+                }
             } else {
                 VStack(spacing: 0) {
                     ForEach(store.playlists) { playlist in
@@ -95,19 +111,26 @@ struct LocalMusicSection: View {
                         } label: {
                             HStack(spacing: 12) {
                                 ZStack {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(LinearGradient(colors: [Color.beansAmber.opacity(0.75), Color.beansAmber.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                        .frame(width: 56, height: 56)
-                                    Image(systemName: "music.note.list")
-                                        .font(.system(size: 20, weight: .semibold))
-                                        .foregroundStyle(.white)
+                                    if let coverURL = playlist.coverURL {
+                                        CoverImage(url: coverURL, size: 56, cornerRadius: 12)
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(LinearGradient(colors: [Color.beansAmber.opacity(0.75), Color.beansAmber.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                            .frame(width: 56, height: 56)
+                                        Image(systemName: "music.note.list")
+                                            .font(.system(size: 20, weight: .semibold))
+                                            .foregroundStyle(.white)
+                                    }
                                 }
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(playlist.name)
                                         .font(BeansFont.appFont(15, .medium))
                                         .foregroundStyle(Color.beansLabel)
                                         .lineLimit(1)
-                                    Text(beansLocalSongCountText(playlist.songs.count))
+                                    Text([
+                                        beansLocalSongCountText(playlist.songs.count),
+                                        playlist.sourceName
+                                    ].compactMap { $0 }.joined(separator: " · "))
                                         .font(BeansFont.appFont(12))
                                         .foregroundStyle(Color.beansComment)
                                 }
@@ -174,6 +197,10 @@ struct LocalMusicSection: View {
                     Task { await sync(targets: targets) }
                 }
             )
+        }
+        .sheet(isPresented: $showImportPlaylist) {
+            PlaylistImportSheet()
+                .environmentObject(theme)
         }
         .sheet(isPresented: $showPlaylistOrder) {
             LocalPlaylistOrderSheet()
