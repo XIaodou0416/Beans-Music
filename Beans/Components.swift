@@ -1462,6 +1462,37 @@ struct BeansDetailSongsLoadingState: View {
     }
 }
 
+struct BeansLongDescriptionSheet: View {
+    let title: String
+    let text: String
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        BeansNavigationStack {
+            ScrollView {
+                Text(text)
+                    .font(BeansFont.appFont(15))
+                    .foregroundStyle(Color.beansLabel)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 18)
+            }
+            .beansScrollIndicatorsHidden()
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                    .font(BeansFont.appFont(15, .semibold))
+                }
+            }
+        }
+    }
+}
+
 // MARK: - 二维码
 
 struct QRCodeView: View {

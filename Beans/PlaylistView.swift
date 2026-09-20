@@ -21,6 +21,7 @@ struct PlaylistView: View {
     @State private var searchText = ""
     @State private var sortMode: PlaylistSortMode = .original
     @State private var showBatchDownload = false
+    @State private var showPlaylistDescription = false
     @AppStorage("beans.homeHeaderHideSort") private var hideSortButton = false
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
@@ -55,23 +56,28 @@ struct PlaylistView: View {
                         Task { await load(force: true) }
                     }
                 } else {
-                    List {
-                        header
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        Section {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            header
                             ForEach(Array(displayedTracks.enumerated()), id: \.element.identityKey) { index, song in
-                                SongCell(song: song, glassRow: true, playbackContext: orderedTracks, playbackIndex: playbackIndex(for: song))
-                                {
+                                SongCell(
+                                    song: song,
+                                    showCover: true,
+                                    suppressNativeCleanRowGlass: true,
+                                    coverSize: 46,
+                                    fixedRowHeight: 64,
+                                    playbackContext: orderedTracks,
+                                    playbackIndex: playbackIndex(for: song)
+                                ) {
                                     player.play(songs: orderedTracks, startAt: playbackIndex(for: song))
                                 }
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
+                                .padding(.horizontal, 22)
                             }
                         }
+                        .padding(.top, 12)
+                        .padding(.bottom, 118)
                     }
-                    .beansScrollContentBackgroundHidden()
-                    .listStyle(.plain)
+                    .beansScrollIndicatorsHidden()
                 }
             }
             }
@@ -113,12 +119,26 @@ struct PlaylistView: View {
                 }
                 Spacer(minLength: 0)
             }
-            if !playlist.playlistDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(playlist.playlistDescription)
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansComment)
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
+            if let description = playlistDescription {
+                Button {
+                    BeansHaptics.tap()
+                    showPlaylistDescription = true
+                } label: {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text(description.replacingOccurrences(of: "\n", with: " "))
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansComment)
+                            .lineLimit(3)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color.beansComment.opacity(0.72))
+                            .padding(.top, 2)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
             HStack(spacing: 10) {
                 GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
@@ -201,8 +221,16 @@ struct PlaylistView: View {
                 }
             }
         }
-        .padding(14)
-        .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 24, style: .continuous)) }
+        .padding(.horizontal, 22)
+        .padding(.bottom, 14)
+        .sheet(isPresented: $showPlaylistDescription) {
+            BeansLongDescriptionSheet(title: "歌单简介", text: playlistDescription ?? "")
+        }
+    }
+
+    private var playlistDescription: String? {
+        let value = playlist.playlistDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 
     private func formatPlaylistPlayCount(_ count: Int) -> String {

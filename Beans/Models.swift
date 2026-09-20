@@ -412,6 +412,8 @@ struct Album: Identifiable, Hashable, Codable {
     var releaseType: String? = nil
     /// 统一为 `yyyy-MM-dd` 的发行日期，供歌手页及专辑详情的专辑卡片展示。
     var releaseDate: String? = nil
+    /// 专辑详情接口返回的简介；搜索结果通常不带该字段。
+    var albumDescription: String? = nil
 
     var isEPOrSingle: Bool {
         let normalized = releaseType?

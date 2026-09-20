@@ -498,11 +498,27 @@ final class NetEaseAPI {
         return albums
     }
 
-    /// 专辑内歌曲
-    func albumSongs(albumID: Int) async throws -> [Song] {
+    struct AlbumDetails {
+        let songs: [Song]
+        let description: String?
+    }
+
+    /// 专辑详情同时包含歌曲和简介，避免详情页为这两项重复请求。
+    func albumDetails(albumID: Int) async throws -> AlbumDetails {
         let json = try await request("/api/album", payload: ["id": albumID], crypto: "weapi")
         let list = json["songs"] as? [[String: Any]] ?? []
-        return list.compactMap { Song(json: $0) }
+        let detail = json["album"] as? [String: Any] ?? [:]
+        let description = (detail["description"] as? String ?? detail["briefDesc"] as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return AlbumDetails(
+            songs: list.compactMap { Song(json: $0) },
+            description: description.isEmpty ? nil : description
+        )
+    }
+
+    /// 专辑内歌曲。
+    func albumSongs(albumID: Int) async throws -> [Song] {
+        try await albumDetails(albumID: albumID).songs
     }
 
     /// 读取专辑所属歌手，再加载该歌手的其它专辑。

@@ -221,6 +221,43 @@ function createBeansRouter(options = {}) {
     return response.json({ ok: true, records });
   });
 
+  // A single-record read is used after a mutation whose HTTP response was
+  // interrupted. It avoids making a full history request keep the action UI
+  // in a loading state even though the write already reached the server.
+  router.get('/developer/exclusive-access/status', (request, response) => {
+    const developerUserID = text(request.query.developer_user_id, 80).toLowerCase();
+    const targetUserID = text(request.query.target_user_id, 80).toLowerCase();
+    const targetPublicUserID = text(request.query.target_public_user_id, 24);
+    if (!isDeveloperDeviceID(developerUserID)) {
+      return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
+    }
+    const database = loadDatabase();
+    const userKey = findUserKey(database, targetUserID, targetPublicUserID);
+    const user = userKey ? database.users[userKey] : null;
+    if (!user) {
+      return response.status(404).json({ ok: false, message: 'user_not_found' });
+    }
+    const history = Array.isArray(user.exclusive_id_history) ? user.exclusive_id_history : [];
+    const latest = history[0] || {};
+    return response.json({
+      ok: true,
+      record: {
+        user_id: user.user_id,
+        public_user_id: user.public_user_id || '',
+        device_model: user.device_model || '',
+        device_name: user.device_name || '',
+        system_name: user.system_name || '',
+        system_version: user.system_version || '',
+        app_version: user.app_version || '',
+        app_build: user.app_build || '',
+        last_seen_at: user.last_seen_at || '',
+        enabled: Boolean(user.exclusive_id),
+        exclusive_badge_style: normalizeExclusiveBadgeStyle(user.exclusive_badge_style),
+        changed_at: text(latest.changed_at || user.last_seen_at, 64),
+      },
+    });
+  });
+
   router.get('/developer/download-access', (request, response) => {
     const developerUserID = text(request.query.developer_user_id, 80).toLowerCase();
     if (!isDeveloperDeviceID(developerUserID)) {

@@ -1783,11 +1783,13 @@ struct AlbumDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var tracks: [Song] = []
     @State private var otherAlbums: [Album] = []
+    @State private var albumDescription: String?
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showBatchDownload = false
     @State private var selectedOtherAlbum: Album?
     @State private var showArtistHome = false
+    @State private var showAlbumDescription = false
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
     var body: some View {
@@ -1892,6 +1894,27 @@ struct AlbumDetailView: View {
                 }
                 Spacer(minLength: 0)
             }
+            if let description = resolvedAlbumDescription {
+                Button {
+                    BeansHaptics.tap()
+                    showAlbumDescription = true
+                } label: {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text(description.replacingOccurrences(of: "\n", with: " "))
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansComment)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color.beansComment.opacity(0.72))
+                            .padding(.top, 2)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
             if !tracks.isEmpty {
                 HStack(spacing: 10) {
                     GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
@@ -1908,6 +1931,15 @@ struct AlbumDetailView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 14)
+        .sheet(isPresented: $showAlbumDescription) {
+            BeansLongDescriptionSheet(title: "专辑简介", text: resolvedAlbumDescription ?? "")
+        }
+    }
+
+    private var resolvedAlbumDescription: String? {
+        let value = (albumDescription ?? album.albumDescription ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 
     private var otherAlbumsShelf: some View {
@@ -1976,7 +2008,11 @@ struct AlbumDetailView: View {
                 guard let id = Int(album.id.replacingOccurrences(of: "netease-", with: "")) else {
                     throw NSError(domain: "BeansAlbum", code: 1, userInfo: [NSLocalizedDescriptionKey: "专辑 ID 无效"])
                 }
-                let direct = (try? await NetEaseAPI.shared.albumSongs(albumID: id)) ?? []
+                let details = try? await NetEaseAPI.shared.albumDetails(albumID: id)
+                let direct = details?.songs ?? []
+                if let description = details?.description {
+                    await MainActor.run { albumDescription = description }
+                }
                 if !direct.isEmpty {
                     result = direct
                 } else {

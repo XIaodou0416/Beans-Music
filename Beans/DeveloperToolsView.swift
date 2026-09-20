@@ -493,12 +493,7 @@ private struct DeveloperExclusiveIDSheet: View {
                             .buttonStyle(.plain)
                         }
                         inputField("新用户 ID（可不填）", text: $assignedPublicID)
-                        Picker("专属铭牌样式", selection: $badgeStyle) {
-                            ForEach(BeansExclusiveIDBadgeStyle.allCases, id: \.self) { style in
-                                Text(style.displayName).tag(style)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                        badgeStyleSelector
                         Toggle("启用专属铭牌", isOn: $enabled)
                             .tint(Color.beansAmber)
                         if !errorMessage.isEmpty {
@@ -545,6 +540,44 @@ private struct DeveloperExclusiveIDSheet: View {
             .padding(.horizontal, 14)
             .frame(height: 48)
             .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), forceLiquid: true) }
+    }
+
+    private var badgeStyleSelector: some View {
+        HStack(spacing: 8) {
+            ForEach(BeansExclusiveIDBadgeStyle.allCases, id: \.self) { style in
+                Button {
+                    guard badgeStyle != style else { return }
+                    BeansHaptics.tap()
+                    badgeStyle = style
+                } label: {
+                    Text(style.displayName)
+                        .font(BeansFont.appFont(13, .semibold))
+                        .foregroundStyle(badgeStyle == style ? Color.beansLabel : Color.beansComment)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background {
+                            if badgeStyle == style {
+                                BeansGlass(shape: Capsule(), forceLiquid: true)
+                            } else {
+                                Capsule().fill(Color.beansLabel.opacity(0.06))
+                            }
+                        }
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(
+                                    badgeStyle == style ? Color.beansAmber.opacity(0.72) : Color.clear,
+                                    lineWidth: 1
+                                )
+                        }
+                }
+                .buttonStyle(.plain)
+                .contentShape(Capsule())
+            }
+        }
+        .padding(4)
+        .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), forceLiquid: true) }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("专属铭牌样式")
     }
 
     private var recordsSection: some View {
@@ -642,12 +675,36 @@ private struct DeveloperExclusiveIDSheet: View {
                     badgeStyle: badgeStyle
                 )
                 ToastCenter.shared.show(enabled ? "已授权专属 ID" : "已取消专属 ID")
-                await reloadRecords(showError: false)
+                applyOptimisticRecordState()
+                isSubmitting = false
+                Task { await reloadRecords(showError: false) }
             } catch {
                 errorMessage = error.localizedDescription
+                isSubmitting = false
             }
-            isSubmitting = false
         }
+    }
+
+    private func applyOptimisticRecordState() {
+        let target = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let index = records.firstIndex(where: {
+            $0.userID.lowercased() == target || $0.publicUserID?.lowercased() == target
+        }) else { return }
+        let current = records[index]
+        records[index] = BeansExclusiveAccessRecord(
+            userID: current.userID,
+            publicUserID: current.publicUserID,
+            deviceModel: current.deviceModel,
+            deviceName: current.deviceName,
+            systemName: current.systemName,
+            systemVersion: current.systemVersion,
+            appVersion: current.appVersion,
+            appBuild: current.appBuild,
+            lastSeenAt: current.lastSeenAt,
+            enabled: enabled,
+            badgeStyle: badgeStyle,
+            changedAt: ISO8601DateFormatter().string(from: Date())
+        )
     }
 
     private func reloadRecords(showError: Bool = true) async {

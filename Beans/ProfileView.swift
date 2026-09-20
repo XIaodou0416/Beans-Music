@@ -645,7 +645,17 @@ struct ProfileView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(GlassPressButtonStyle(scale: 0.9))
+                .onLongPressGesture(minimumDuration: 0.55) {
+                    guard profileNameBackgroundStore.url != nil else {
+                        ToastCenter.shared.show("当前没有名片背景")
+                        return
+                    }
+                    BeansHaptics.medium()
+                    profileNameBackgroundStore.clear()
+                    ToastCenter.shared.show("已清除名片背景")
+                }
                 .accessibilityLabel("更换昵称区域背景")
+                .accessibilityHint("长按可清除当前名片背景")
             }
 
             Rectangle()

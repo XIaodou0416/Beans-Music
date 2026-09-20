@@ -406,7 +406,10 @@ final class DeviceReporter {
 
         var request = URLRequest(url: endpoint(for: "developer/grant-exclusive-id"))
         request.httpMethod = "POST"
-        request.timeoutInterval = 15
+        // Permission changes are small writes. Do not leave the developer UI
+        // spinning behind a long transport timeout when the server has already
+        // committed the change but its response was dropped.
+        request.timeoutInterval = 8
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("close", forHTTPHeaderField: "Connection")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -469,20 +472,46 @@ final class DeviceReporter {
 
     private func serverConfirmsExclusiveAccess(target: String, enabled: Bool) async -> Bool {
         let normalizedTarget = target.lowercased()
-        for attempt in 0..<3 {
-            if let records = try? await fetchExclusiveAccessRecords(),
-               let record = records.first(where: { record in
-                   record.userID.lowercased() == normalizedTarget
-                       || record.publicUserID?.lowercased() == normalizedTarget
-               }),
+        for attempt in 0..<2 {
+            if let record = try? await fetchExclusiveAccessStatus(for: normalizedTarget),
                record.enabled == enabled {
                 return true
             }
-            if attempt < 2 {
-                try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 250_000_000)
+            if attempt == 0 {
+                try? await Task.sleep(nanoseconds: 300_000_000)
             }
         }
         return false
+    }
+
+    private func fetchExclusiveAccessStatus(for target: String) async throws -> BeansExclusiveAccessRecord {
+        guard var components = URLComponents(
+            url: endpoint(for: "developer/exclusive-access/status"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw BackendRequestError.invalidResponse
+        }
+        let isInternalID = target.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
+        components.queryItems = [
+            URLQueryItem(name: "developer_user_id", value: DeviceIdentity.userID),
+            URLQueryItem(name: "target_user_id", value: isInternalID ? target : ""),
+            URLQueryItem(name: "target_public_user_id", value: isInternalID ? "" : target)
+        ]
+        guard let url = components.url else { throw BackendRequestError.invalidResponse }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 4
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
+        request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response, body: data)
+        let result = try JSONDecoder().decode(BeansExclusiveAccessStatusResponse.self, from: data)
+        guard result.ok != false, let record = result.record else {
+            throw BackendRequestError.server(result.message ?? "未找到专属 ID 记录")
+        }
+        return record
     }
 
     func fetchDownloadAccessRecords() async throws -> [BeansDownloadAccessRecord] {
@@ -712,6 +741,12 @@ private struct BeansExclusiveAccessResponse: Decodable {
         message = try container.decodeIfPresent(String.self, forKey: .message)
         records = try container.decodeIfPresent([BeansExclusiveAccessRecord].self, forKey: .records) ?? []
     }
+}
+
+private struct BeansExclusiveAccessStatusResponse: Decodable {
+    let ok: Bool?
+    let message: String?
+    let record: BeansExclusiveAccessRecord?
 }
 
 private struct BeansDownloadAccessResponse: Decodable {
