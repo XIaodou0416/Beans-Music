@@ -4952,7 +4952,7 @@ struct AvatarMediaPicker: UIViewControllerRepresentable {
                 provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
                     guard let data, !data.isEmpty else { return }
                     let imageExtension = provider.registeredTypeIdentifiers
-                        .compactMap { UTType(identifier: $0)?.preferredFilenameExtension }
+                        .compactMap { UTType($0)?.preferredFilenameExtension }
                         .first ?? "jpg"
                     DispatchQueue.main.async {
                         self.parent.onPicked(AvatarMediaSelection(data: data, fileExtension: imageExtension, isVideo: false))

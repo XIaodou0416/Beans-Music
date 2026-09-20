@@ -98,18 +98,21 @@ function createBeansRouter(options = {}) {
     const payload = request.body || {};
     const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
     const targetUserID = text(payload.target_user_id, 80).toLowerCase();
-    const targetPublicUserID = text(payload.target_public_user_id, 16);
+    const requestedTargetPublicUserID = text(
+      payload.target_public_user_id || (PUBLIC_USER_ID_PATTERN.test(targetUserID) ? targetUserID : ''),
+      16
+    );
     if (!isDeveloperDeviceID(developerUserID)) {
       return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
     }
-    if (!USER_ID_PATTERN.test(targetUserID) && !PUBLIC_USER_ID_PATTERN.test(targetPublicUserID)) {
+    if (!USER_ID_PATTERN.test(targetUserID) && !PUBLIC_USER_ID_PATTERN.test(requestedTargetPublicUserID)) {
       return response.status(422).json({ ok: false, message: 'invalid_user_id' });
     }
 
     let updatedUser;
     mutateDatabase((database) => {
-      const userKey = PUBLIC_USER_ID_PATTERN.test(targetPublicUserID)
-        ? Object.keys(database.users).find((key) => database.users[key]?.public_user_id === targetPublicUserID)
+      const userKey = PUBLIC_USER_ID_PATTERN.test(requestedTargetPublicUserID)
+        ? Object.keys(database.users).find((key) => database.users[key]?.public_user_id === requestedTargetPublicUserID)
         : Object.keys(database.users).find((key) => key.toLowerCase() === targetUserID);
       const user = userKey ? database.users[userKey] : null;
       if (!user) return;
