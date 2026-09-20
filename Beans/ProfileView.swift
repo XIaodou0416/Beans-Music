@@ -386,6 +386,9 @@ struct ProfileView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
+        // The avatar-presented profile is its own sheet, so its content must
+        // receive the selected color scheme instead of only the backdrop.
+        .preferredColorScheme(themeMode.colorScheme)
         .alert("无法打开微信", isPresented: $showWeChatOpenError) {
             Button("知道了", role: .cancel) {}
         } message: {
