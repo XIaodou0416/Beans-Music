@@ -308,7 +308,7 @@ struct DiscoverView: View {
             ArtistHomeSheet(artist: artist, embeddedInNavigation: true)
                 .environmentObject(player)
         case .qqTopList(let info):
-            QQTopListDetailView(topID: info.id, name: info.name)
+            QQTopListDetailView(topList: info)
                 .environmentObject(player)
                 .environmentObject(auth)
         case .kugouTopList(let info):
@@ -2050,18 +2050,20 @@ struct QQTopListDetailView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var theme: ThemeStore
 
-    let topID: Int
-    let name: String
+    let topList: QQTopInfo
     @State private var tracks: [Song] = []
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var searchText = ""
     @State private var showBatchDownload = false
+    @State private var resolvedTrackCount: Int?
+    @State private var resolvedPlayCount: Int?
+    @State private var resolvedDescription: String?
+    @State private var resolvedCoverURL: URL?
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
 
-    init(topID: Int, name: String) {
-        self.topID = topID
-        self.name = name
+    init(topList: QQTopInfo) {
+        self.topList = topList
     }
 
     var body: some View {
@@ -2084,12 +2086,14 @@ struct QQTopListDetailView: View {
                                     song: song,
                                     showCover: true,
                                     suppressNativeCleanRowGlass: true,
-                                    compactAlbumRow: true,
+                                    coverSize: 46,
+                                    fixedRowHeight: 64,
                                     playbackContext: filteredTracks,
                                     playbackIndex: index
                                 ) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
+                                .padding(.horizontal, 16)
                             }
                         }
                         .padding(.top, 12)
@@ -2099,7 +2103,7 @@ struct QQTopListDetailView: View {
                 }
             }
             }
-            .navigationTitle(beansChartName(name))
+            .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
             .beansDetailProfileToolbar()
@@ -2111,49 +2115,24 @@ struct QQTopListDetailView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                CoverImage(url: qqTopListCoverURL, size: 120, cornerRadius: 12)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(beansChartName(name))
-                        .font(BeansFont.appFont(16, .bold))
-                        .foregroundStyle(Color.beansLabel)
-                        .lineLimit(3)
-                    Text(beansSongCountText(tracks.count))
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
-                }
-                Spacer(minLength: 0)
+        ChartDetailHeader(
+            title: topList.name,
+            provider: .qq,
+            coverURL: resolvedCoverURL ?? topList.coverURL ?? tracks.first?.coverURL,
+            trackCount: resolvedTrackCount ?? topList.trackCount ?? tracks.count,
+            playCount: resolvedPlayCount ?? topList.playCount,
+            chartDescription: resolvedDescription ?? topList.chartDescription,
+            filteredCount: filteredTracks.count,
+            downloadEnabled: downloadFeatureUnlocked,
+            onPlay: {
+                BeansHaptics.tap()
+                player.play(songs: filteredTracks, startAt: 0)
+            },
+            onDownload: {
+                BeansHaptics.tap()
+                showBatchDownload = true
             }
-            if !filteredTracks.isEmpty {
-                HStack(spacing: 10) {
-                    GlassButton(
-                        title: "播放全部（\(filteredTracks.count)）",
-                        systemName: "play.fill",
-                        prominent: true,
-                        expandsHorizontally: true
-                    ) {
-                        BeansHaptics.tap()
-                        player.play(songs: filteredTracks, startAt: 0)
-                    }
-                    if downloadFeatureUnlocked, filteredTracks.count > 1 {
-                        GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
-                            BeansHaptics.tap()
-                            showBatchDownload = true
-                        }
-                        .accessibilityLabel("批量下载排行榜")
-                        .help("批量下载")
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 14)
-    }
-
-    private var qqTopListCoverURL: URL? {
-        // QQ 榜单接口只返回榜单名称和歌曲，优先使用首曲封面作为详情页封面。
-        tracks.first?.coverURL
+        )
     }
 
     private var filteredTracks: [Song] {
@@ -2169,7 +2148,7 @@ struct QQTopListDetailView: View {
     @MainActor
     private func load() async {
         let cache = DetailSongsCache.shared
-        let cacheKey = "qq-top-\(topID)"
+        let cacheKey = "qq-top-\(topList.id)"
         if let cached = cache.cachedSongs(for: cacheKey) {
             tracks = cached.songs
             loading = false
@@ -2182,18 +2161,22 @@ struct QQTopListDetailView: View {
             errorMessage = nil
         }
         do {
-            let songs = try await QQMusicAPI.shared.topListSongs(topid: topID)
-            if !songs.isEmpty {
-                tracks = songs
-                cache.save(songs, for: cacheKey)
+            let detail = try await QQMusicAPI.shared.topListDetail(topid: topList.id, limit: 100)
+            if !detail.songs.isEmpty {
+                tracks = detail.songs
+                cache.save(detail.songs, for: cacheKey)
             }
+            resolvedTrackCount = detail.trackCount
+            resolvedPlayCount = detail.playCount
+            resolvedDescription = detail.chartDescription
+            resolvedCoverURL = detail.coverURL
             loading = false
         } catch {
             if tracks.isEmpty {
                 errorMessage = error.localizedDescription
             } else {
                 BeansLogger.shared.log(
-                    "QQ 排行榜详情后台刷新失败，继续使用缓存 topID=\(topID) error=\(error.localizedDescription)",
+                    "QQ 排行榜详情后台刷新失败，继续使用缓存 topID=\(topList.id) error=\(error.localizedDescription)",
                     level: .warn
                 )
             }
@@ -2433,6 +2416,136 @@ private enum BeansDailyRecommendError: LocalizedError {
         "当前账号没有返回新的每日推荐内容"
     }
 }
+
+private struct ChartPlatformBadge: View {
+    let provider: SearchProvider
+
+    private var imageName: String {
+        switch provider {
+        case .netease: return "BrandNetease"
+        case .qq: return "BrandQQ"
+        case .kugou: return "BrandKugou"
+        default: return ""
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 7) {
+            if !imageName.isEmpty {
+                Image(imageName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 26, height: 26)
+            }
+            Text(beansPlatformName(provider))
+                .font(BeansFont.appFont(14, .medium))
+                .foregroundStyle(Color.beansComment)
+                .lineLimit(1)
+        }
+    }
+}
+
+private struct ChartDetailHeader: View {
+    let title: String
+    let provider: SearchProvider
+    let coverURL: URL?
+    let trackCount: Int
+    let playCount: Int?
+    let chartDescription: String?
+    let filteredCount: Int
+    let downloadEnabled: Bool
+    let onPlay: () -> Void
+    let onDownload: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 14) {
+                CoverImage(url: coverURL, size: 120, cornerRadius: 12)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(beansChartName(title))
+                        .font(BeansFont.appFont(18, .bold))
+                        .foregroundStyle(Color.beansLabel)
+                        .lineLimit(3)
+                    ChartPlatformBadge(provider: provider)
+                    Text(beansChartStatsText(trackCount: trackCount, playCount: playCount))
+                        .font(BeansFont.appFont(13, .medium))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if let chartDescription,
+               !chartDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(beansCleanChartDescription(chartDescription))
+                    .font(BeansFont.appFont(14))
+                    .foregroundStyle(Color.beansComment)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if filteredCount > 0 {
+                HStack(spacing: 10) {
+                    GlassButton(
+                        title: "播放全部（\(filteredCount)）",
+                        systemName: "play.fill",
+                        prominent: true,
+                        expandsHorizontally: true,
+                        action: onPlay
+                    )
+                    if downloadEnabled, filteredCount > 1 {
+                        GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true, action: onDownload)
+                            .accessibilityLabel("批量下载排行榜")
+                            .help("批量下载")
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
+    }
+}
+
+private func beansChartStatsText(trackCount: Int, playCount: Int?) -> String {
+    var parts = [beansLocalized("\(trackCount) 首", "\(trackCount) songs")]
+    if let playCount, playCount > 0 {
+        parts.append(beansLocalized("\(beansCompactChartNumber(playCount)) 次播放", "\(beansCompactChartNumber(playCount)) plays"))
+    }
+    return parts.joined(separator: " · ")
+}
+
+private func beansCompactChartNumber(_ value: Int) -> String {
+    let number = Double(max(0, value))
+    let divisor: Double
+    let suffix: String
+    switch number {
+    case 1_000_000_000...:
+        divisor = 1_000_000_000
+        suffix = "B"
+    case 1_000_000...:
+        divisor = 1_000_000
+        suffix = "M"
+    case 1_000...:
+        divisor = 1_000
+        suffix = "K"
+    default:
+        return String(value)
+    }
+    let text = String(format: "%.1f", number / divisor)
+    return "\(text.hasSuffix(".0") ? String(text.dropLast(2)) : text)\(suffix)"
+}
+
+private func beansCleanChartDescription(_ value: String) -> String {
+    value
+        .replacingOccurrences(of: "<br>", with: " ", options: .caseInsensitive)
+        .replacingOccurrences(of: "<br/>", with: " ", options: .caseInsensitive)
+        .replacingOccurrences(of: "<br />", with: " ", options: .caseInsensitive)
+        .replacingOccurrences(of: "\\n", with: " ")
+        .replacingOccurrences(of: "\n", with: " ")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
 // MARK: - 排行榜详情
 
 struct TopListDetailView: View {
@@ -2472,12 +2585,14 @@ struct TopListDetailView: View {
                                     song: song,
                                     showCover: true,
                                     suppressNativeCleanRowGlass: true,
-                                    compactAlbumRow: true,
+                                    coverSize: 46,
+                                    fixedRowHeight: 64,
                                     playbackContext: filteredTracks,
                                     playbackIndex: index
                                 ) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
+                                .padding(.horizontal, 16)
                             }
                         }
                         .padding(.top, 12)
@@ -2499,47 +2614,24 @@ struct TopListDetailView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                CoverImage(url: topList.coverURL, size: 120, cornerRadius: 12)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(beansChartName(topList.name))
-                        .font(BeansFont.appFont(16, .bold))
-                        .foregroundStyle(Color.beansLabel)
-                        .lineLimit(3)
-                    Text(beansChartSubtitle(topList.updateFrequency))
-                        .font(BeansFont.appFont(13, .medium))
-                        .foregroundStyle(Color.beansComment)
-                    Text(beansSongCountText(tracks.count))
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
-                }
-                Spacer(minLength: 0)
+        ChartDetailHeader(
+            title: topList.name,
+            provider: .netease,
+            coverURL: topList.coverURL,
+            trackCount: topList.trackCount ?? tracks.count,
+            playCount: topList.playCount,
+            chartDescription: topList.chartDescription,
+            filteredCount: filteredTracks.count,
+            downloadEnabled: downloadFeatureUnlocked,
+            onPlay: {
+                BeansHaptics.tap()
+                player.play(songs: filteredTracks, startAt: 0)
+            },
+            onDownload: {
+                BeansHaptics.tap()
+                showBatchDownload = true
             }
-            if !filteredTracks.isEmpty {
-                HStack(spacing: 10) {
-                    GlassButton(
-                        title: "播放全部（\(filteredTracks.count)）",
-                        systemName: "play.fill",
-                        prominent: true,
-                        expandsHorizontally: true
-                    ) {
-                        BeansHaptics.tap()
-                        player.play(songs: filteredTracks, startAt: 0)
-                    }
-                    if downloadFeatureUnlocked, filteredTracks.count > 1 {
-                        GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
-                            BeansHaptics.tap()
-                            showBatchDownload = true
-                        }
-                        .accessibilityLabel("批量下载排行榜")
-                        .help("批量下载")
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 14)
+        )
     }
 
     private var filteredTracks: [Song] {
@@ -2629,12 +2721,14 @@ struct KugouTopListDetailView: View {
                                     song: song,
                                     showCover: true,
                                     suppressNativeCleanRowGlass: true,
-                                    compactAlbumRow: true,
+                                    coverSize: 46,
+                                    fixedRowHeight: 64,
                                     playbackContext: filteredTracks,
                                     playbackIndex: index
                                 ) {
                                     player.play(songs: filteredTracks, startAt: index)
                                 }
+                                .padding(.horizontal, 16)
                             }
                         }
                         .padding(.top, 12)
@@ -2656,49 +2750,24 @@ struct KugouTopListDetailView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                CoverImage(url: topList.coverURL, size: 120, cornerRadius: 12)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(beansChartName(topList.name))
-                        .font(BeansFont.appFont(16, .bold))
-                        .foregroundStyle(Color.beansLabel)
-                        .lineLimit(3)
-                    if !topList.updateFrequency.isEmpty {
-                        Text(beansChartSubtitle(topList.updateFrequency))
-                            .font(BeansFont.appFont(13, .medium))
-                            .foregroundStyle(Color.beansComment)
-                    }
-                    Text(beansSongCountText(tracks.count))
-                        .font(BeansFont.appFont(11))
-                        .foregroundStyle(Color.beansComment)
-                }
-                Spacer(minLength: 0)
+        ChartDetailHeader(
+            title: topList.name,
+            provider: .kugou,
+            coverURL: topList.coverURL,
+            trackCount: topList.trackCount ?? tracks.count,
+            playCount: topList.playCount,
+            chartDescription: topList.chartDescription,
+            filteredCount: filteredTracks.count,
+            downloadEnabled: downloadFeatureUnlocked,
+            onPlay: {
+                BeansHaptics.tap()
+                player.play(songs: filteredTracks, startAt: 0)
+            },
+            onDownload: {
+                BeansHaptics.tap()
+                showBatchDownload = true
             }
-            if !filteredTracks.isEmpty {
-                HStack(spacing: 10) {
-                    GlassButton(
-                        title: "播放全部（\(filteredTracks.count)）",
-                        systemName: "play.fill",
-                        prominent: true,
-                        expandsHorizontally: true
-                    ) {
-                        BeansHaptics.tap()
-                        player.play(songs: filteredTracks, startAt: 0)
-                    }
-                    if downloadFeatureUnlocked, filteredTracks.count > 1 {
-                        GlassIconButton(systemName: "arrow.down.to.line.compact", size: 44, forceLiquid: true) {
-                            BeansHaptics.tap()
-                            showBatchDownload = true
-                        }
-                        .accessibilityLabel("批量下载排行榜")
-                        .help("批量下载")
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 14)
+        )
     }
 
     private var filteredTracks: [Song] {

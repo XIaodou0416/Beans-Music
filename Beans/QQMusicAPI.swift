@@ -8,6 +8,14 @@ enum QQSearchType: Int {
     case playlist = 3
 }
 
+struct QQTopListDetailResult {
+    let songs: [Song]
+    let trackCount: Int?
+    let playCount: Int?
+    let chartDescription: String?
+    let coverURL: URL?
+}
+
 /// QQ 音乐接口（搜索 / 播放地址 / 歌词 / 热搜）
 /// 参考 wp_MusicApi（https://github.com/GitHub-ZC/wp_MusicApi）逆向结论：
 /// - 歌曲搜索改用 client_search_cp（t=0），该接口对家庭/移动/数据中心网络均可用；
@@ -1278,12 +1286,17 @@ final class QQMusicAPI {
             guard !Self.isNonSongTopList(id: id, name: name) else { continue }
             let songs = (item["songList"] as? [[String: Any]]) ?? []
             let topNames = songs.compactMap { $0["songname"] as? String }.prefix(3).map { $0 }
+            let listenCount = Self.integerValue(item["listenCount"] ?? item["listen_count"] ?? item["playCount"])
+            let trackCount = Self.integerValue(item["songCount"] ?? item["song_count"] ?? item["total_song_num"])
             result.append(QQTopInfo(
                 id: id,
                 name: name,
                 subTitle: item["subTitle"] as? String ?? "",
                 topSongNames: topNames,
-                coverURL: Self.normalizedQQImageURL(item["picUrl"])
+                coverURL: Self.normalizedQQImageURL(item["picUrl"]),
+                trackCount: trackCount > 0 ? trackCount : nil,
+                playCount: listenCount > 0 ? listenCount : nil,
+                chartDescription: (item["description"] as? String ?? item["desc"] as? String)
             ))
         }
         return result
@@ -1299,15 +1312,37 @@ final class QQMusicAPI {
 
     /// 某个峰尖榜的歌曲列表
     func topListSongs(topid: Int, limit: Int = 30) async throws -> [Song] {
+        try await topListDetail(topid: topid, limit: limit).songs
+    }
+
+    /// 某个峰尖榜的歌曲和详情元数据。
+    func topListDetail(topid: Int, limit: Int = 30) async throws -> QQTopListDetailResult {
         let url = "https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg?format=json&page=detail&type=top&topid=\(topid)&song_begin=0&song_num=\(limit)"
         let json = try await get(url)
         let list = json["songlist"] as? [[String: Any]] ?? []
-        return list.compactMap { item -> Song? in
+        let songs = list.compactMap { item -> Song? in
             if let data = item["data"] as? [String: Any] {
                 return song(from: data)
             }
             return song(from: item)
         }
+        let topInfo = json["topinfo"] as? [String: Any] ?? [:]
+        let trackCount = Self.integerValue(json["total_song_num"] ?? topInfo["total_song_num"] ?? topInfo["songnum"])
+        let playCount = Self.integerValue(topInfo["listennum"] ?? topInfo["listenCount"] ?? topInfo["playCount"])
+        let rawDescription = (topInfo["info"] as? String)
+            ?? (topInfo["description"] as? String)
+            ?? (topInfo["desc"] as? String)
+        let description = rawDescription?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let coverURL = Self.normalizedQQImageURL(
+            topInfo["pic_v12"] ?? topInfo["pic"] ?? topInfo["picDetail"] ?? topInfo["picUrl"]
+        )
+        return QQTopListDetailResult(
+            songs: songs,
+            trackCount: trackCount > 0 ? trackCount : nil,
+            playCount: playCount > 0 ? playCount : nil,
+            chartDescription: description?.isEmpty == false ? description : nil,
+            coverURL: coverURL
+        )
     }
 
     /// QQ 每日推荐：登录账号优先使用 QQ 个性化猜你喜欢接口。

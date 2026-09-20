@@ -18,6 +18,9 @@ struct SongCell: View {
     /// 专辑详情使用紧凑的编号曲目行，保留原有点击、菜单及下载能力。
     var leadingIndex: Int?
     var compactAlbumRow = false
+    /// 覆盖默认封面与行高，用于排行榜等紧凑但需要大封面的列表。
+    var coverSize: CGFloat = 46
+    var fixedRowHeight: CGFloat?
     var playbackContext: [Song] = []
     var playbackIndex: Int?
     var onTap: (() -> Void)?
@@ -50,7 +53,7 @@ struct SongCell: View {
                 .frame(width: 28, alignment: .trailing)
             }
             if showCover {
-                CoverImage(url: song.coverURL, song: song, size: 46, cornerRadius: 10)
+                CoverImage(url: song.coverURL, song: song, size: coverSize, cornerRadius: 10)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -90,7 +93,7 @@ struct SongCell: View {
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, leadingIndex == nil ? 0 : 16)
         .padding(.vertical, 6)
-        .frame(height: compactAlbumRow ? 54 : nil)
+        .frame(height: fixedRowHeight ?? (compactAlbumRow ? 54 : nil))
         .contentShape(Rectangle())
         .scaleEffect(isCurrent ? 1.012 : 1)
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isCurrent)

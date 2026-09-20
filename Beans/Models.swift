@@ -538,6 +538,10 @@ struct TopList: Identifiable, Hashable, Codable {
     let name: String
     let coverURL: URL?
     let updateFrequency: String
+    /// 榜单接口可能不返回这些字段，详情页会在缺失时回退到实际加载的歌曲数量。
+    let trackCount: Int? = nil
+    let playCount: Int? = nil
+    let chartDescription: String? = nil
 
     init?(json: [String: Any]) {
         guard let id = json["id"] as? Int else { return nil }
@@ -546,6 +550,18 @@ struct TopList: Identifiable, Hashable, Codable {
         let pic = json["coverImgUrl"] as? String ?? ""
         coverURL = pic.isEmpty ? nil : URL(string: pic)
         updateFrequency = json["updateFrequency"] as? String ?? ""
+        let trackCount = (json["trackCount"] as? Int)
+            ?? (json["trackCount"] as? NSNumber)?.intValue
+            ?? (json["trackCount"] as? String).flatMap(Int.init)
+        let playCount = (json["playCount"] as? Int)
+            ?? (json["playCount"] as? NSNumber)?.intValue
+            ?? (json["playCount"] as? String).flatMap(Int.init)
+        self.trackCount = trackCount.flatMap { $0 > 0 ? $0 : nil }
+        self.playCount = playCount.flatMap { $0 > 0 ? $0 : nil }
+        let description = (json["description"] as? String)
+            ?? (json["briefDesc"] as? String)
+            ?? (json["desc"] as? String)
+        self.chartDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -556,6 +572,9 @@ struct QQTopInfo: Identifiable, Hashable, Codable {
     let subTitle: String
     let topSongNames: [String]
     let coverURL: URL?
+    let trackCount: Int? = nil
+    let playCount: Int? = nil
+    let chartDescription: String? = nil
 }
 
 /// 酷狗官方排行榜总览项
@@ -564,6 +583,9 @@ struct KugouTopInfo: Identifiable, Hashable, Codable {
     let name: String
     let updateFrequency: String
     let coverURL: URL?
+    let trackCount: Int? = nil
+    let playCount: Int? = nil
+    let chartDescription: String? = nil
 }
 
 struct LyricWord: Hashable, Codable {

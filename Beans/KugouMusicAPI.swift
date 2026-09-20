@@ -924,6 +924,12 @@ final class KugouMusicAPI {
             guard id > 0 else { return nil }
             let name = Self.string(item["rankname"] ?? item["name"])
             guard !name.isEmpty else { return nil }
+            let extra = item["extra"] as? [String: Any] ?? [:]
+            let extraResponse = extra["resp"] as? [String: Any] ?? [:]
+            let trackCount = Self.int(item["songcount"] ?? item["song_count"] ?? item["song_num"]
+                ?? item["total"] ?? extra["all_total"] ?? extraResponse["all_total"])
+            let playCount = Self.int(item["play_times"] ?? item["playcount"] ?? item["listen_num"] ?? item["listennum"])
+            let description = Self.clean(Self.string(item["intro"] ?? item["description"] ?? item["desc"]))
             let cover = Self.normalizeURL(Self.string(item["album_img_9"] ?? item["img_9"] ?? item["imgurl"])
                 .replacingOccurrences(of: "{size}", with: "400")
             )
@@ -931,7 +937,10 @@ final class KugouMusicAPI {
                 id: id,
                 name: name,
                 updateFrequency: Self.string(item["update_frequency"] ?? item["updateFrequency"]),
-                coverURL: URL(string: cover)
+                coverURL: URL(string: cover),
+                trackCount: trackCount > 0 ? trackCount : nil,
+                playCount: playCount > 0 ? playCount : nil,
+                chartDescription: description.isEmpty ? nil : description
             )
         }
     }
@@ -951,6 +960,12 @@ final class KugouMusicAPI {
             let id = Self.int(item["rankid"] ?? item["rank_id"] ?? item["id"])
             let name = Self.clean(Self.string(item["rankname"] ?? item["rank_name"] ?? item["name"] ?? item["title"]))
             guard id > 0, !name.isEmpty, seen.insert(id).inserted else { return nil }
+            let extra = item["extra"] as? [String: Any] ?? [:]
+            let extraResponse = extra["resp"] as? [String: Any] ?? [:]
+            let trackCount = Self.int(item["songcount"] ?? item["song_count"] ?? item["song_num"]
+                ?? item["total"] ?? extra["all_total"] ?? extraResponse["all_total"])
+            let playCount = Self.int(item["play_times"] ?? item["playcount"] ?? item["listen_num"] ?? item["listennum"])
+            let description = Self.clean(Self.string(item["intro"] ?? item["description"] ?? item["desc"]))
             let cover = Self.normalizeURL(
                 Self.string(item["imgurl"] ?? item["img_url"] ?? item["img_9"] ?? item["album_img_9"] ?? item["cover"])
                     .replacingOccurrences(of: "{size}", with: "400")
@@ -959,7 +974,10 @@ final class KugouMusicAPI {
                 id: id,
                 name: name,
                 updateFrequency: Self.clean(Self.string(item["update_frequency"] ?? item["updateFrequency"])),
-                coverURL: URL(string: cover)
+                coverURL: URL(string: cover),
+                trackCount: trackCount > 0 ? trackCount : nil,
+                playCount: playCount > 0 ? playCount : nil,
+                chartDescription: description.isEmpty ? nil : description
             )
         }.prefix(max(limit, 1)).map { $0 }
     }
