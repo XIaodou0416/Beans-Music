@@ -206,6 +206,9 @@ struct RootView: View {
     @State private var themeRevealOrigin = CGPoint.zero
     @State private var themeRevealProgress: CGFloat = 0
     @State private var themeRevealCanvasSize = CGSize.zero
+    /// Prevent launch-time geometry/state restoration from animating the root
+    /// surface. Page and tab animations are enabled after the first frame.
+    @State private var rootLayoutSettled = false
 
     private var tabIconStyle: BeansTabIconStyle {
         BeansTabIconStyle(rawValue: tabIconStyleRaw) ?? .sfSymbols
@@ -313,7 +316,9 @@ struct RootView: View {
                 }
             }
             .animation(
-                .spring(response: 0.42, dampingFraction: 0.86, blendDuration: 0.08),
+                rootLayoutSettled
+                    ? .spring(response: 0.42, dampingFraction: 0.86, blendDuration: 0.08)
+                    : nil,
                 value: isPadLandscape
             )
         }
@@ -347,8 +352,14 @@ struct RootView: View {
                 playerPresentation
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.86), value: player.currentSong?.id)
-        .animation(.easeInOut(duration: 0.22), value: selection)
+        .animation(
+            rootLayoutSettled ? .spring(response: 0.4, dampingFraction: 0.86) : nil,
+            value: player.currentSong?.id
+        )
+        .animation(
+            rootLayoutSettled ? .easeInOut(duration: 0.22) : nil,
+            value: selection
+        )
         .overlay(alignment: .bottom) {
             ToastView(center: ToastCenter.shared)
         }
@@ -362,6 +373,14 @@ struct RootView: View {
             HighRefreshKeeper.shared.configure(enabled: true)
             DeveloperFPSOverlayWindow.shared.setVisible(homeFrameMeterEnabled)
             normalizeTabSelection()
+            guard !rootLayoutSettled else { return }
+            DispatchQueue.main.async {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    rootLayoutSettled = true
+                }
+            }
         }
         .onChange(of: enableHighRefresh) { _ in
             if !enableHighRefresh {
@@ -807,8 +826,14 @@ struct RootView: View {
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: selection)
-        .animation(.easeInOut(duration: 0.25), value: player.currentSong?.identityKey)
+        .animation(
+            rootLayoutSettled ? .easeInOut(duration: 0.25) : nil,
+            value: selection
+        )
+        .animation(
+            rootLayoutSettled ? .easeInOut(duration: 0.25) : nil,
+            value: player.currentSong?.identityKey
+        )
     }
 
     private func iPadSidebar(
@@ -1217,8 +1242,14 @@ struct RootView: View {
             legacyFloatingTabBar
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
-        .animation(.easeInOut(duration: 0.25), value: selection)
-        .animation(.easeInOut(duration: 0.25), value: player.currentSong?.identityKey)
+        .animation(
+            rootLayoutSettled ? .easeInOut(duration: 0.25) : nil,
+            value: selection
+        )
+        .animation(
+            rootLayoutSettled ? .easeInOut(duration: 0.25) : nil,
+            value: player.currentSong?.identityKey
+        )
     }
 
     @ViewBuilder

@@ -72,24 +72,25 @@ enum BeansPlaylistImportService {
             throw BeansPlaylistImportError.invalidFormat
         }
 
-        var songs = collectSongs(from: playlist["tracks"] ?? [], defaultSource: .netease)
+        let previewSongs = collectSongs(from: playlist["tracks"] ?? [], defaultSource: .netease)
         let ids = (playlist["trackIds"] as? [[String: Any]])?
             .compactMap { firstString($0["id"]) }
             .filter { !$0.isEmpty } ?? []
 
         // The detail endpoint can return only a preview in `tracks`; resolve all
-        // trackIds so a shared playlist is not silently truncated.
+        // trackIds so a shared playlist is not silently truncated. NetEase's
+        // detail endpoint is unreliable when hundreds of IDs are packed into a
+        // single URL; resolve bounded batches and merge the successful batches
+        // back into the original playlist order.
+        var songs = previewSongs
         if songs.count < ids.count, !ids.isEmpty {
-            var detailComponents = URLComponents(string: "https://music.163.com/api/song/detail")!
-            detailComponents.queryItems = [
-                URLQueryItem(name: "ids", value: "[\(ids.joined(separator: ","))]"),
-            ]
-            if let details = try? await fetchJSONObject(detailComponents.url!) {
-                let detailedSongs = collectSongs(
-                    from: details["songs"] ?? details["data"] ?? details,
-                    defaultSource: .netease
+            let detailedSongs = await fetchNetEaseSongs(for: ids)
+            if !detailedSongs.isEmpty {
+                songs = orderedNetEaseSongs(
+                    previewSongs: previewSongs,
+                    detailedSongs: detailedSongs,
+                    ids: ids
                 )
-                if !detailedSongs.isEmpty { songs = detailedSongs }
             }
         }
 
@@ -106,6 +107,68 @@ enum BeansPlaylistImportService {
             sourceName: "网易云音乐",
             songs: deduplicated(songs)
         )
+    }
+
+    /// Resolve large public playlists without exceeding the detail endpoint's
+    /// practical URL/request limit. A failed batch is ignored so the songs
+    /// already returned by the playlist endpoint remain importable.
+    private static func fetchNetEaseSongs(for ids: [String]) async -> [Song] {
+        var uniqueIDs: [String] = []
+        var seen = Set<String>()
+        for id in ids where seen.insert(id).inserted {
+            uniqueIDs.append(id)
+        }
+
+        let batchSize = 100
+        var songs: [Song] = []
+        for start in stride(from: 0, to: uniqueIDs.count, by: batchSize) {
+            guard !Task.isCancelled else { break }
+            let end = min(start + batchSize, uniqueIDs.count)
+            let batch = Array(uniqueIDs[start..<end])
+            guard !batch.isEmpty else { continue }
+
+            var components = URLComponents(string: "https://music.163.com/api/song/detail")!
+            components.queryItems = [
+                URLQueryItem(name: "ids", value: "[\(batch.joined(separator: ","))]"),
+            ]
+
+            do {
+                let details = try await fetchJSONObject(components.url!)
+                let batchSongs = collectSongs(
+                    from: details["songs"] ?? details["data"] ?? details,
+                    defaultSource: .netease
+                )
+                songs.append(contentsOf: batchSongs)
+            } catch {
+                // Keep the preview and any other successful batches. One bad
+                // request must not reduce a 600-song import back to 201 songs.
+                continue
+            }
+        }
+        return songs
+    }
+
+    private static func orderedNetEaseSongs(
+        previewSongs: [Song],
+        detailedSongs: [Song],
+        ids: [String]
+    ) -> [Song] {
+        var songsByID: [String: Song] = [:]
+        for song in previewSongs {
+            songsByID[String(song.id)] = song
+        }
+        for song in detailedSongs {
+            // Detailed responses contain the most complete metadata, so they
+            // replace the preview entry for the same NetEase ID.
+            songsByID[String(song.id)] = song
+        }
+
+        var ordered = ids.compactMap { songsByID[$0] }
+        let orderedKeys = Set(ordered.map(\.identityKey))
+        ordered.append(contentsOf: previewSongs.filter { !orderedKeys.contains($0.identityKey) })
+        let finalKeys = Set(ordered.map(\.identityKey))
+        ordered.append(contentsOf: detailedSongs.filter { !finalKeys.contains($0.identityKey) })
+        return ordered
     }
 
     private static func resolveRedirect(from url: URL) async throws -> URL {

@@ -36,6 +36,12 @@ struct BeansApp: App {
             "beans.playback.autoSkipOnFailure": true,
             "beans.nowPlaying.enabled.v1": true
         ])
+
+        // Restore wallpaper files before the first SwiftUI frame is created.
+        // Doing this in the launch task made the root view render once with a
+        // fallback background and then switch to the restored wallpaper,
+        // which was visible as a brief flash on every launch.
+        ThemeStore.shared.restoreWallpapersIfNeeded()
     }
 
     var body: some Scene {
@@ -74,7 +80,6 @@ struct BeansApp: App {
                 player.restorePersistedPlayMode()
                 player.resumePersistedPlaybackIfEnabled()
                 FontManager.reinstallIfNeeded()
-                theme.restoreWallpapersIfNeeded()
                 await DeviceReporter.shared.reportLaunch()
                 await RemoteControlStore.shared.refreshIfNeeded(force: true)
             }
