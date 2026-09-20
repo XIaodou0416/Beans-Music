@@ -110,6 +110,9 @@ struct ArtistHomeSheet: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("完成") { dismiss() }
             }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                BeansDetailProfileShortcut()
+            }
         }
     }
 

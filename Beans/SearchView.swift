@@ -1855,6 +1855,7 @@ struct AlbumDetailView: View {
         }
         .navigationTitle(album.name)
         .navigationBarTitleDisplayMode(.inline)
+        .beansDetailProfileToolbar()
     }
 
     private var albumHeader: some View {

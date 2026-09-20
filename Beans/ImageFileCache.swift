@@ -196,7 +196,38 @@ struct BeansProfileShortcutButton: View {
     }
 }
 
-private struct BeansThemeToggleButton: View {
+/// Reusable right-side accessory for detail pages. It follows the same avatar,
+/// theme toggle, and hidden states as the main page header.
+struct BeansDetailProfileShortcut: View {
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var theme: ThemeStore
+    @State private var showProfile = false
+
+    var body: some View {
+        BeansProfileShortcutButton {
+            showProfile = true
+        }
+        .sheet(isPresented: $showProfile) {
+            ProfileView(forceHomeBackdrop: true)
+                .environmentObject(auth)
+                .environmentObject(player)
+                .environmentObject(theme)
+        }
+    }
+}
+
+extension View {
+    func beansDetailProfileToolbar() -> some View {
+        toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                BeansDetailProfileShortcut()
+            }
+        }
+    }
+}
+
+struct BeansThemeToggleButton: View {
     let colorScheme: ColorScheme
 
     var body: some View {

@@ -2114,6 +2114,7 @@ struct QQTopListDetailView: View {
             .navigationTitle(beansChartName(name))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
+            .beansDetailProfileToolbar()
         .task { await load() }
         .sheet(isPresented: $showBatchDownload) {
             BatchDownloadSheet(songs: filteredTracks, title: "下载排行榜")
@@ -2222,6 +2223,7 @@ struct QQPlaylistSongsSheet: View {
             .navigationTitle(playlist.name)
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索歌单内歌曲", "Search playlist songs"))
+            .beansDetailProfileToolbar()
         .task { await load() }
     }
 
@@ -2329,17 +2331,7 @@ struct DailySongsSheet: View {
             .navigationTitle("今日推荐")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索每日推荐", "Search daily recommendations"))
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        Task { await refreshDailySongs() }
-                    } label: {
-                        Image(systemName: isRefreshing ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
-                    }
-                    .disabled(isRefreshing)
-                    .accessibilityLabel(Text("刷新每日推荐"))
-                }
-            }
+            .beansDetailProfileToolbar()
             .task {
                 await refreshDailySongs()
             }
@@ -2477,6 +2469,7 @@ struct TopListDetailView: View {
             .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
+            .beansDetailProfileToolbar()
         .task { await load() }
         .sheet(isPresented: $showBatchDownload) {
             BatchDownloadSheet(songs: filteredTracks, title: "下载排行榜")
@@ -2628,6 +2621,7 @@ struct KugouTopListDetailView: View {
             .navigationTitle(beansChartName(topList.name))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: beansLocalized("搜索榜单歌曲", "Search chart songs"))
+            .beansDetailProfileToolbar()
         .task { await load() }
         .sheet(isPresented: $showBatchDownload) {
             BatchDownloadSheet(songs: filteredTracks, title: "下载排行榜")

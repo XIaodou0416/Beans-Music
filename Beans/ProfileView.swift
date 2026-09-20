@@ -153,6 +153,7 @@ struct ProfileView: View {
             }
             Spacer()
             HStack(spacing: 10) {
+                BeansThemeToggleButton(colorScheme: colorScheme)
                 GlassIconButton(systemName: "gearshape.fill", forceLiquid: true) {
                     openSettings()
                 }
@@ -168,6 +169,7 @@ struct ProfileView: View {
                     .font(BeansFont.appFont(38, .bold))
                     .foregroundStyle(Color.beansLabel)
                 Spacer(minLength: 12)
+                BeansThemeToggleButton(colorScheme: colorScheme)
                 GlassIconButton(systemName: "gearshape", forceLiquid: true) {
                     openSettings()
                 }

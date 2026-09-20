@@ -1175,11 +1175,14 @@ struct RootView: View {
             themeModeRaw = target.rawValue
         }
         DispatchQueue.main.async {
-            withAnimation(.timingCurve(0.18, 0.88, 0.22, 1.0, duration: 0.78)) {
+            // Keep this deliberately longer than a standard button transition.
+            // The mask is transform-driven below, so it can stay smooth without
+            // repeatedly relaying out the full root view.
+            withAnimation(.timingCurve(0.16, 0.82, 0.22, 1.0, duration: 1.12)) {
                 themeRevealProgress = 1
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.92) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.22) {
             themeRevealSnapshot = nil
             themeRevealProgress = 0
             themeRevealCanvasSize = .zero
@@ -1247,7 +1250,7 @@ private struct BeansThemeRevealOverlay: View {
             let farthestX = max(origin.x, proxy.size.width - origin.x)
             let farthestY = max(origin.y, proxy.size.height - origin.y)
             let radius = hypot(farthestX, farthestY) + 4
-            let diameter = max(1, radius * 2 * max(progress, 0.001))
+            let fullDiameter = max(1, radius * 2)
 
             Image(uiImage: snapshot)
                 .resizable()
@@ -1255,22 +1258,38 @@ private struct BeansThemeRevealOverlay: View {
                 .frame(width: proxy.size.width, height: proxy.size.height)
                 .clipped()
                 .mask {
-                    Rectangle()
-                        .fill(Color.white)
-                        .overlay {
-                            Circle()
-                                .fill(Color.black)
-                                .frame(width: diameter, height: diameter)
-                                .position(origin)
-                                .blendMode(.destinationOut)
-                        }
-                        .compositingGroup()
+                    BeansThemeRevealMask(
+                        origin: origin,
+                        diameter: fullDiameter,
+                        progress: progress
+                    )
                 }
-                .drawingGroup(opaque: false, colorMode: .linear)
                 .allowsHitTesting(false)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+    }
+}
+
+/// A lightweight inverse circle mask. The animated element only scales, which
+/// avoids recalculating a growing view hierarchy for every reveal frame.
+private struct BeansThemeRevealMask: View {
+    let origin: CGPoint
+    let diameter: CGFloat
+    let progress: CGFloat
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.white)
+            .overlay {
+                Circle()
+                    .fill(Color.black)
+                    .frame(width: diameter, height: diameter)
+                    .scaleEffect(max(progress, 0.001))
+                    .position(origin)
+                    .blendMode(.destinationOut)
+            }
+            .compositingGroup()
     }
 }
 

@@ -76,6 +76,7 @@ struct PlaylistView: View {
             }
             .navigationTitle(playlist.name)
             .navigationBarTitleDisplayMode(.inline)
+            .beansDetailProfileToolbar()
         .task { await load() }
         .sheet(isPresented: $showBatchDownload) {
             BatchDownloadSheet(songs: displayedTracks, title: "下载歌单")
