@@ -215,8 +215,8 @@ struct BeansDetailProfileShortcut: View {
                         BeansHaptics.tap()
                         showProfile = true
                     } label: {
-                        BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 30, useCustom: true)
-                            .frame(width: 30, height: 30)
+                        BeansAvatarView(remoteURL: auth.user?.avatarURL, size: 38, useCustom: true)
+                            .frame(width: 38, height: 38)
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)

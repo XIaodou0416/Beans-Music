@@ -12,7 +12,6 @@ struct BeansApp: App {
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @State private var showEasterEgg = false
-    @State private var showLaunchAnimation = true
 
     init() {
         // 闪退检测：优先初始化，检测上次异常退出并安装崩溃捕获
@@ -58,11 +57,6 @@ struct BeansApp: App {
                     .transition(.opacity)
                     .zIndex(100)
                 }
-                if #available(iOS 26.0, *), showLaunchAnimation {
-                    BeansIntroAnimation()
-                        .transition(.opacity)
-                        .zIndex(200)
-                }
             }
             .environment(\.locale, Locale(identifier: languageRaw))
             .onReceive(NotificationCenter.default.publisher(for: .beansEasterEggRequested)) { _ in
@@ -75,17 +69,7 @@ struct BeansApp: App {
                 BeansCarPlayCoordinator.shared.configure(player: player)
             }
             .task {
-                if #available(iOS 26.0, *), !UIAccessibility.isReduceMotionEnabled {
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    if !Task.isCancelled {
-                        withAnimation(.easeOut(duration: 0.24)) {
-                            showLaunchAnimation = false
-                        }
-                    }
-                } else {
-                    showLaunchAnimation = false
-                }
-                // 先让系统完成首帧，再恢复仅影响已安装用户的数据与媒体偏好。
+                // 直接进入主页，首帧完成后恢复已安装用户的数据与媒体偏好。
                 await Task.yield()
                 player.restorePersistedPlayMode()
                 player.resumePersistedPlaybackIfEnabled()
