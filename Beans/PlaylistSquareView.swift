@@ -155,20 +155,7 @@ struct PlaylistSquareView: View {
                     onSubmit: { submitSearch() }
                 )
             )
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    playlistNavigationTitle
-                }
-                if #available(iOS 26, *) {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        BeansDetailProfileShortcut()
-                    }
-                } else {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        BeansDetailProfileShortcut()
-                    }
-                }
-            }
+            .modifier(PlaylistSquareToolbarModifier(title: { playlistNavigationTitle }))
             .navigationBarTitleDisplayMode(.inline)
         }
         .confirmationDialog("精选平台", isPresented: $showPlaylistPlatformMenu, titleVisibility: .visible) {
@@ -691,6 +678,37 @@ struct PlaylistSquareView: View {
         searchResults = []
         isSearching = false
         isSearchLoading = false
+    }
+}
+
+/// Keep the iOS 26 navigation placement isolated from the legacy toolbar
+/// builder. Putting the availability branch directly inside `.toolbar` makes
+/// SwiftUI instantiate both builder paths on the iOS 15 deployment target,
+/// which is what caused the duplicate accessory and the failed build.
+private struct PlaylistSquareToolbarModifier<Title: View>: ViewModifier {
+    let title: () -> Title
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content.toolbar {
+                ToolbarItem(placement: .principal) {
+                    title()
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    BeansDetailProfileShortcut()
+                }
+            }
+        } else {
+            content.toolbar {
+                ToolbarItem(placement: .principal) {
+                    title()
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    BeansDetailProfileShortcut()
+                }
+            }
+        }
     }
 }
 
