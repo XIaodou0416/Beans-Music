@@ -171,8 +171,8 @@ struct RootView: View {
     @State private var tabVisibility = BeansTabVisibility.load()
     @AppStorage("beans.queueOverlayPresented") private var queueOverlayPresented = false
     @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
-    /// 强制高刷新率：用于修复部分页面被系统稳定在 60Hz 的问题。
-    @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = true
+    /// 关闭时完全交给系统刷新调度，开启时请求设备最高 120Hz。
+    @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = false
     @AppStorage("beans.developer.homeFrameMeter") private var homeFrameMeterEnabled = true
     @AppStorage("beans.legacyTabCornerRadius") private var legacyTabCornerRadius = 32.0
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0
@@ -369,8 +369,7 @@ struct RootView: View {
             if disclaimerAccepted, ChangelogStore.shouldShowWhatsNew {
                 showWhatsNew = true
             }
-            enableHighRefresh = true
-            HighRefreshKeeper.shared.configure(enabled: true)
+            HighRefreshKeeper.shared.configure(enabled: enableHighRefresh)
             DeveloperFPSOverlayWindow.shared.setVisible(homeFrameMeterEnabled)
             normalizeTabSelection()
             guard !rootLayoutSettled else { return }
@@ -382,11 +381,8 @@ struct RootView: View {
                 }
             }
         }
-        .onChange(of: enableHighRefresh) { _ in
-            if !enableHighRefresh {
-                enableHighRefresh = true
-            }
-            HighRefreshKeeper.shared.configure(enabled: true)
+        .onChange(of: enableHighRefresh) { enabled in
+            HighRefreshKeeper.shared.configure(enabled: enabled)
         }
         .onChange(of: homeFrameMeterEnabled) { enabled in
             DeveloperFPSOverlayWindow.shared.setVisible(enabled)

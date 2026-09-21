@@ -1799,6 +1799,7 @@ struct SettingsView: View {
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
+    @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = false
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @AppStorage("beans.globalFloatingEffect") private var globalFloatingEffectRaw = BeansGlobalFloatingEffect.off.rawValue
     @AppStorage("beans.globalFloatingDensity") private var globalFloatingDensity = 1.0
@@ -1910,6 +1911,7 @@ struct SettingsView: View {
     @State private var showDeveloperTools = false
     @State private var settingsSearchText = ""
     @State private var settingsContentReady = false
+    @State private var runtimeEnvironmentExpanded = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -3106,6 +3108,17 @@ struct SettingsView: View {
                         .font(BeansFont.appFont(15))
                         .tint(Color.beansAmber)
                 }
+
+                Toggle("强制高刷新率（最高 120Hz）", isOn: $enableHighRefresh)
+                    .font(BeansFont.appFont(15))
+                    .tint(Color.beansAmber)
+                    .onChange(of: enableHighRefresh) { enabled in
+                        HighRefreshKeeper.shared.configure(enabled: enabled)
+                    }
+                Text("默认跟随系统刷新策略。开启后可能导致耗电过快、设备发烫严重，并影响续航。")
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(Color.beansComment)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 DisclosureGroup(isExpanded: $appearanceDetailsExpanded) {
                     VStack(alignment: .leading, spacing: 14) {
@@ -4502,55 +4515,57 @@ struct SettingsView: View {
 
     private var runtimeEnvironmentFooter: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "iphone.gen3")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.beansComment)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("运行环境")
-                    .font(BeansFont.appFont(14, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-            }
-            Spacer(minLength: 0)
-            }
-
-            runtimeEnvironmentRow(
-                "设备",
-                value: "\(UIDevice.current.model) · \(DeviceIdentity.hardwareModel)"
-            )
-            runtimeEnvironmentRow(
-                "系统",
-                value: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
-            )
-            runtimeEnvironmentRow("版本", value: runtimeVersionText)
-            runtimeEnvironmentRow(
-                "界面尺寸",
-                value: runtimeScreenDimensions
-            )
             Button {
-                UIPasteboard.general.string = DeviceIdentity.publicID
-                ToastCenter.shared.show("用户 ID 已复制")
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    runtimeEnvironmentExpanded.toggle()
+                }
             } label: {
-                runtimeEnvironmentRow("用户 ID", value: DeviceIdentity.publicID, monospaced: true)
+                HStack(spacing: 12) {
+                    Image(systemName: "iphone.gen3")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.beansComment)
+                        .frame(width: 28)
+                    Text("运行环境")
+                        .font(BeansFont.appFont(14, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Spacer(minLength: 0)
+                    Image(systemName: runtimeEnvironmentExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.beansComment)
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if DeviceIdentity.originalPublicID != DeviceIdentity.publicID {
+
+            if runtimeEnvironmentExpanded {
+                runtimeEnvironmentRow("设备", value: "\(UIDevice.current.model) · \(DeviceIdentity.hardwareModel)")
+                runtimeEnvironmentRow("系统", value: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
+                runtimeEnvironmentRow("版本", value: runtimeVersionText)
+                runtimeEnvironmentRow("界面尺寸", value: runtimeScreenDimensions)
                 Button {
-                    UIPasteboard.general.string = DeviceIdentity.originalPublicID
-                    ToastCenter.shared.show("原始用户 ID 已复制")
+                    UIPasteboard.general.string = DeviceIdentity.publicID
+                    ToastCenter.shared.show("用户 ID 已复制")
                 } label: {
-                    runtimeEnvironmentRow("原始用户 ID", value: DeviceIdentity.originalPublicID, monospaced: true)
+                    runtimeEnvironmentRow("用户 ID", value: DeviceIdentity.publicID, monospaced: true)
+                }
+                .buttonStyle(.plain)
+                if DeviceIdentity.originalPublicID != DeviceIdentity.publicID {
+                    Button {
+                        UIPasteboard.general.string = DeviceIdentity.originalPublicID
+                        ToastCenter.shared.show("原始用户 ID 已复制")
+                    } label: {
+                        runtimeEnvironmentRow("原始用户 ID", value: DeviceIdentity.originalPublicID, monospaced: true)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Button {
+                    UIPasteboard.general.string = DeviceIdentity.userID
+                    ToastCenter.shared.show("设备标识已复制")
+                } label: {
+                    runtimeEnvironmentRow("设备标识", value: DeviceIdentity.userID, monospaced: true)
                 }
                 .buttonStyle(.plain)
             }
-            Button {
-                UIPasteboard.general.string = DeviceIdentity.userID
-                ToastCenter.shared.show("设备标识已复制")
-            } label: {
-                runtimeEnvironmentRow("设备标识", value: DeviceIdentity.userID, monospaced: true)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 14)

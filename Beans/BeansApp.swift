@@ -19,7 +19,7 @@ struct BeansApp: App {
         CrashMetricCollector.shared.start()
         // 主页暂停只应在设置页打开期间生效，避免异常退出后把暂停状态永久写入本地。，
         UserDefaults.standard.set(false, forKey: "beans.pauseHomeRendering")
-        // 新安装默认开启高刷新率；老用户保留自己手动关闭的选择。
+        // 默认交给系统调度；只有用户打开强制高刷新率时才请求 120Hz。
         HighRefreshKeeper.registerDefaults()
         HighRefreshKeeper.shared.configureFromDefaults()
         UserDefaults.standard.register(defaults: [
@@ -85,8 +85,7 @@ struct BeansApp: App {
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
-                // The settings option is intentionally hidden, but high-refresh rendering stays enabled.
-                HighRefreshKeeper.shared.configure(enabled: true)
+                HighRefreshKeeper.shared.configureFromDefaults()
                 Task {
                     await DeviceReporter.shared.reportHeartbeat()
                     await RemoteControlStore.shared.refreshIfNeeded()

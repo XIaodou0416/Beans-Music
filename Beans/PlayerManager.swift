@@ -572,6 +572,38 @@ final class PlayerManager: NSObject, ObservableObject {
         savePersistedPlaybackState()
     }
 
+    /// Move one queue item while keeping the current song and shuffle order
+    /// pointing at the same songs.
+    func moveQueueItem(from source: Int, to destination: Int) {
+        guard queue.indices.contains(source), queue.indices.contains(destination), source != destination else { return }
+        let oldQueue = queue
+        let currentSongID = currentSong?.identityKey
+        let shuffleSongIDs = playOrder.compactMap { oldQueue.indices.contains($0) ? oldQueue[$0].identityKey : nil }
+
+        var reordered = oldQueue
+        let moved = reordered.remove(at: source)
+        let insertionIndex = min(max(destination, 0), reordered.count)
+        reordered.insert(moved, at: insertionIndex)
+        queue = reordered
+
+        if let currentSongID, let newCurrentIndex = queue.firstIndex(where: { $0.identityKey == currentSongID }) {
+            currentIndex = newCurrentIndex
+        } else {
+            currentIndex = min(currentIndex, max(0, queue.count - 1))
+        }
+
+        if playMode == .shuffle {
+            playOrder = shuffleSongIDs.compactMap { id in
+                queue.firstIndex(where: { $0.identityKey == id })
+            }
+            orderPosition = playOrder.firstIndex(of: currentIndex) ?? 0
+        } else {
+            playOrder = Array(queue.indices)
+            orderPosition = currentIndex
+        }
+        savePersistedPlaybackState()
+    }
+
     func retryCurrent() {
         guard ensurePlaybackAllowed() else { return }
         loadFailed = false

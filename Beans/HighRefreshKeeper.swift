@@ -6,6 +6,7 @@ import UIKit
 final class HighRefreshKeeper {
     static let shared = HighRefreshKeeper()
     static let defaultsKey = "beans.enableHighRefresh"
+    private static let migrationKey = "beans.highRefresh.systemDefaultMigration.v1"
 
     private var displayLink: CADisplayLink?
     private var wasRunningBeforeTemporaryPause = false
@@ -13,8 +14,14 @@ final class HighRefreshKeeper {
     private init() {}
 
     static func registerDefaults() {
-        UserDefaults.standard.register(defaults: [defaultsKey: true])
-        UserDefaults.standard.set(true, forKey: defaultsKey)
+        let defaults = UserDefaults.standard
+        // Earlier builds forced this setting on at every launch. Migrate that
+        // legacy behavior once so new launches follow the system scheduler.
+        if defaults.object(forKey: migrationKey) == nil {
+            defaults.set(false, forKey: defaultsKey)
+            defaults.set(true, forKey: migrationKey)
+        }
+        defaults.register(defaults: [defaultsKey: false])
     }
 
     func configureFromDefaults() {
@@ -32,7 +39,11 @@ final class HighRefreshKeeper {
 
     func attach(to view: UIView) {
         _ = view
-        start()
+        if UserDefaults.standard.bool(forKey: Self.defaultsKey) {
+            start()
+        } else {
+            stop()
+        }
     }
 
     /// 设置页展开大量控件时暂停刷新率请求，避免额外占用主线程。

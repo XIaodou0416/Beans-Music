@@ -23,6 +23,7 @@ struct DeveloperToolsView: View {
     @State private var showDownloadGrant = false
     @State private var showExclusiveIDGrant = false
     @AppStorage("beans.developer.homeFrameMeter") private var homeFrameMeterEnabled = true
+    @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = false
 
     private var appVersion: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
@@ -67,7 +68,7 @@ struct DeveloperToolsView: View {
             }
         }
         .onAppear {
-            HighRefreshKeeper.shared.configure(enabled: true)
+            HighRefreshKeeper.shared.configureFromDefaults()
             refreshMonitor.start()
         }
         .onDisappear { refreshMonitor.stop() }
@@ -92,6 +93,16 @@ struct DeveloperToolsView: View {
             }
             developerRow("界面帧间隔", value: String(format: "%.2f ms", refreshMonitor.frameInterval * 1_000))
             developerRow("低电量模式", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "已开启" : "未开启")
+            Toggle("强制高刷新率（最高 120Hz）", isOn: $enableHighRefresh)
+                .font(BeansFont.appFont(13, .medium))
+                .tint(Color.beansAmber)
+                .onChange(of: enableHighRefresh) { enabled in
+                    HighRefreshKeeper.shared.configure(enabled: enabled)
+                }
+            Text("开启后可能导致耗电过快、设备发烫严重，并影响续航。")
+                .font(BeansFont.appFont(11))
+                .foregroundStyle(Color.beansComment)
+                .fixedSize(horizontal: false, vertical: true)
             Toggle("全局显示实时刷新率", isOn: $homeFrameMeterEnabled)
                 .font(BeansFont.appFont(13, .medium))
                 .tint(Color.beansAmber)
@@ -99,12 +110,12 @@ struct DeveloperToolsView: View {
                     DeveloperFPSOverlayWindow.shared.setVisible(enabled)
                 }
             Button {
-                HighRefreshKeeper.shared.configure(enabled: true)
+                HighRefreshKeeper.shared.configureFromDefaults()
                 refreshMonitor.restart()
-                BeansLogger.shared.log("开发者工具：重新申请高刷新率", level: .info)
-                ToastCenter.shared.show("已重新申请高刷新率")
+                BeansLogger.shared.log("开发者工具：按当前设置重新应用刷新率策略", level: .info)
+                ToastCenter.shared.show(enableHighRefresh ? "已重新申请最高 120Hz" : "已恢复系统刷新策略")
             } label: {
-                Label("重新申请高刷新率", systemImage: "arrow.clockwise")
+                Label("重新应用刷新率策略", systemImage: "arrow.clockwise")
                     .font(BeansFont.appFont(13, .semibold))
                     .foregroundStyle(Color.beansAmber)
                     .frame(maxWidth: .infinity)
@@ -858,7 +869,7 @@ final class DeveloperFPSOverlayWindow {
             overlayWindow.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue - 1)
             window = overlayWindow
         }
-        HighRefreshKeeper.shared.configure(enabled: true)
+        HighRefreshKeeper.shared.configureFromDefaults()
         window?.isHidden = false
     }
 }
