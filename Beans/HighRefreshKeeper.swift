@@ -5,45 +5,21 @@ import UIKit
 /// 全局高刷新率保持器，配合 Info.plist 请求设备支持的最高刷新率。
 final class HighRefreshKeeper {
     static let shared = HighRefreshKeeper()
-    static let defaultsKey = "beans.enableHighRefresh"
-    private static let migrationKey = "beans.highRefresh.systemDefaultMigration.v1"
 
     private var displayLink: CADisplayLink?
     private var wasRunningBeforeTemporaryPause = false
     private var isStarting = false
     private init() {}
 
-    static func registerDefaults() {
-        let defaults = UserDefaults.standard
-        // Earlier builds forced this setting on at every launch. Migrate that
-        // legacy behavior once so new launches follow the system scheduler.
-        if defaults.object(forKey: migrationKey) == nil {
-            defaults.set(false, forKey: defaultsKey)
-            defaults.set(true, forKey: migrationKey)
-        }
-        defaults.register(defaults: [defaultsKey: false])
-    }
-
-    func configureFromDefaults() {
-        configure(enabled: UserDefaults.standard.bool(forKey: Self.defaultsKey))
-    }
-
-    func configure(enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: Self.defaultsKey)
-        if enabled {
-            start()
-        } else {
-            stop()
-        }
+    /// 始终按设备支持的最高刷新率创建一个共享 display link。
+    /// 应用不再暴露“强制高刷新率”开关，避免旧开关状态导致启动重入或闪退。
+    func startIfNeeded() {
+        start()
     }
 
     func attach(to view: UIView) {
         _ = view
-        if UserDefaults.standard.bool(forKey: Self.defaultsKey) {
-            start()
-        } else {
-            stop()
-        }
+        start()
     }
 
     /// 设置页展开大量控件时暂停刷新率请求，避免额外占用主线程。
@@ -56,7 +32,6 @@ final class HighRefreshKeeper {
     func resumeAfterTemporaryPause() {
         guard wasRunningBeforeTemporaryPause else { return }
         wasRunningBeforeTemporaryPause = false
-        guard UserDefaults.standard.bool(forKey: Self.defaultsKey) else { return }
         start()
     }
 

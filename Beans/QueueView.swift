@@ -153,7 +153,10 @@ struct QueueReorderHandle: View {
 
                     // Move one slot per update with hysteresis. The dead zone
                     // prevents two adjacent rows from bouncing at the boundary.
-                    withAnimation(.easeOut(duration: 0.12)) {
+                    // 恢复最初的即时换位，避免长按排序时动画堆积、掉帧和相邻项抖动。
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
                         onMove(last, next)
                     }
                     lastPosition = next

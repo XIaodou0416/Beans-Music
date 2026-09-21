@@ -83,6 +83,7 @@ enum BeansExclusiveIDBadgeStyle: String, CaseIterable, Codable {
 
 enum BeansBackendSettings {
     static let downloadUnlockKey = "beans.downloadFeatureUnlocked"
+    static let downloadGlobalUnlockKey = "beans.downloadGlobalFeatureEnabled"
     static let blockedKey = "beans.backend.userBlocked"
     static let exclusiveIDKey = "beans.backend.exclusiveID"
     static let exclusiveIDBadgeStyleKey = "beans.backend.exclusiveIDBadgeStyle"
@@ -384,6 +385,60 @@ final class DeviceReporter {
         }
     }
 
+    func fetchGlobalDownloadAccess() async throws -> Bool {
+        guard BeansDeveloperAccess.isAuthorized else {
+            throw BackendRequestError.server("当前设备没有开发者权限")
+        }
+        guard var components = URLComponents(
+            url: endpoint(for: "developer/download-global"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw BackendRequestError.invalidResponse
+        }
+        components.queryItems = [URLQueryItem(name: "developer_user_id", value: DeviceIdentity.userID)]
+        guard let url = components.url else { throw BackendRequestError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
+        request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response, body: data)
+        let result = try JSONDecoder().decode(BeansGlobalDownloadResponse.self, from: data)
+        guard result.ok != false else {
+            throw BackendRequestError.server(result.message ?? "获取全局下载状态失败")
+        }
+        UserDefaults.standard.set(result.enabled, forKey: BeansBackendSettings.downloadGlobalUnlockKey)
+        return result.enabled
+    }
+
+    func setGlobalDownloadAccess(_ enabled: Bool) async throws -> Bool {
+        guard BeansDeveloperAccess.isAuthorized else {
+            throw BackendRequestError.server("当前设备没有开发者权限")
+        }
+        var request = URLRequest(url: endpoint(for: "developer/download-global"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 8
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "developer_user_id": DeviceIdentity.userID,
+            "developer_public_user_id": DeviceIdentity.publicID,
+            "enabled": enabled
+        ])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response, body: data)
+        let result = try JSONDecoder().decode(BeansGlobalDownloadResponse.self, from: data)
+        guard result.ok != false else {
+            throw BackendRequestError.server(result.message ?? "保存全局下载状态失败")
+        }
+        UserDefaults.standard.set(result.enabled, forKey: BeansBackendSettings.downloadGlobalUnlockKey)
+        return result.enabled
+    }
+
     func grantExclusiveID(
         to targetUserID: String,
         assignedPublicID: String,
@@ -651,6 +706,9 @@ final class DeviceReporter {
             // 否则客户端会永久保留上一次的下载权限。
             UserDefaults.standard.set(downloadUnlocked, forKey: BeansBackendSettings.downloadUnlockKey)
         }
+        if let downloadGlobalEnabled = response.downloadGlobalEnabled {
+            UserDefaults.standard.set(downloadGlobalEnabled, forKey: BeansBackendSettings.downloadGlobalUnlockKey)
+        }
         FeedbackHistoryStore.shared.receiveServerReplies(response.feedbackReplies)
     }
 
@@ -674,6 +732,7 @@ private struct BackendResponse: Decodable {
     let listeningPlayCount: Int?
     let blocked: Bool?
     let downloadUnlocked: Bool?
+    let downloadGlobalEnabled: Bool?
     let feedbackID: String?
     let submittedAt: String?
     let feedbackReplies: [FeedbackReply]
@@ -686,6 +745,7 @@ private struct BackendResponse: Decodable {
         case listeningSeconds = "listening_seconds"
         case listeningPlayCount = "listening_play_count"
         case downloadUnlocked = "download_unlocked"
+        case downloadGlobalEnabled = "download_global_enabled"
         case feedbackID = "feedback_id"
         case submittedAt = "submitted_at"
         case feedbackReplies = "feedback_replies"
@@ -702,6 +762,7 @@ private struct BackendResponse: Decodable {
         listeningPlayCount = try container.decodeIfPresent(Int.self, forKey: .listeningPlayCount)
         blocked = try container.decodeIfPresent(Bool.self, forKey: .blocked)
         downloadUnlocked = try container.decodeIfPresent(Bool.self, forKey: .downloadUnlocked)
+        downloadGlobalEnabled = try container.decodeIfPresent(Bool.self, forKey: .downloadGlobalEnabled)
         feedbackID = try container.decodeIfPresent(String.self, forKey: .feedbackID)
         submittedAt = try container.decodeIfPresent(String.self, forKey: .submittedAt)
         feedbackReplies = try container.decodeIfPresent(
@@ -720,9 +781,21 @@ private struct BackendResponse: Decodable {
         listeningPlayCount = nil
         blocked = nil
         downloadUnlocked = nil
+        downloadGlobalEnabled = nil
         feedbackID = nil
         submittedAt = nil
         feedbackReplies = []
+    }
+}
+
+private struct BeansGlobalDownloadResponse: Decodable {
+    let ok: Bool?
+    let message: String?
+    let enabled: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case ok, message
+        case enabled = "download_global_enabled"
     }
 }
 

@@ -1799,7 +1799,6 @@ struct SettingsView: View {
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
-    @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = false
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @AppStorage("beans.globalFloatingEffect") private var globalFloatingEffectRaw = BeansGlobalFloatingEffect.off.rawValue
     @AppStorage("beans.globalFloatingDensity") private var globalFloatingDensity = 1.0
@@ -3108,17 +3107,6 @@ struct SettingsView: View {
                         .font(BeansFont.appFont(15))
                         .tint(Color.beansAmber)
                 }
-
-                Toggle("强制高刷新率（最高 120Hz）", isOn: $enableHighRefresh)
-                    .font(BeansFont.appFont(15))
-                    .tint(Color.beansAmber)
-                    .onChange(of: enableHighRefresh) { enabled in
-                        HighRefreshKeeper.shared.configure(enabled: enabled)
-                    }
-                Text("默认跟随系统刷新策略。开启后可能导致耗电过快、设备发烫严重，并影响续航。")
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(Color.beansComment)
-                    .fixedSize(horizontal: false, vertical: true)
 
                 DisclosureGroup(isExpanded: $appearanceDetailsExpanded) {
                     VStack(alignment: .leading, spacing: 14) {

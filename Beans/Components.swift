@@ -880,11 +880,19 @@ struct CoverImage: View {
                     } else if url == nil || imageLoader.didFail {
                         placeholderIcon
                     } else {
-                        BeansShimmerSkeleton(cornerRadius: cornerRadius)
+                        // Cover placeholders must stay visually stable while a
+                        // cached/network image is decoded. The animated white
+                        // shimmer was the source of the one-frame flash seen
+                        // across detail pages and the Discover screen.
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(Color.beansGlassFill.opacity(0.72))
                     }
                 }
                 .frame(width: size * max(aspectRatio, 0.1), height: size)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .onAppear {

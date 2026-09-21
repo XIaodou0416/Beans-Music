@@ -129,7 +129,30 @@ function createBeansRouter(options = {}) {
     if (!updatedUser) {
       return response.status(404).json({ ok: false, message: 'user_not_found' });
     }
-    return response.json(publicUserState(updatedUser));
+    return response.json(publicUserState(updatedUser, loadDatabase()));
+  });
+
+  // Temporary global download window. Explicit per-user grants remain stored
+  // on each user and continue to work after this switch is turned off.
+  router.get('/developer/download-global', (request, response) => {
+    const developerUserID = text(request.query.developer_user_id, 80).toLowerCase();
+    if (!isDeveloperDeviceID(developerUserID)) {
+      return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
+    }
+    return response.json({ ok: true, download_global_enabled: globalDownloadEnabled(loadDatabase()) });
+  });
+
+  router.post('/developer/download-global', (request, response) => {
+    const payload = request.body || {};
+    const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
+    if (!isDeveloperDeviceID(developerUserID)) {
+      return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
+    }
+    const enabled = Boolean(payload.enabled);
+    mutateDatabase((database) => {
+      database.settings.download_global_enabled = enabled;
+    });
+    return response.json({ ok: true, download_global_enabled: enabled });
   });
 
   // The developer can grant a badge, select its visual style, and assign an
@@ -539,6 +562,19 @@ function createBeansRouter(options = {}) {
   );
 
   router.post(
+    '/admin/download-global',
+    browserAdmin,
+    express.urlencoded({ extended: false }),
+    (request, response) => {
+      const enabled = request.body.download_global_enabled === 'on';
+      mutateDatabase((database) => {
+        database.settings.download_global_enabled = enabled;
+      });
+      response.redirect('/beans/admin');
+    }
+  );
+
+  router.post(
     '/admin/feedback/:id/delete',
     browserAdmin,
     (request, response) => {
@@ -720,10 +756,18 @@ function createBeansRouter(options = {}) {
           access_count: Number.isFinite(parsed.stats?.access_count) ? parsed.stats.access_count : 0,
           last_access_at: text(parsed.stats?.last_access_at, 64),
         },
+        settings: {
+          download_global_enabled: Boolean(parsed.settings?.download_global_enabled),
+        },
       };
     } catch (error) {
       if (error.code === 'ENOENT') {
-        return { users: {}, feedback: [], stats: { access_count: 0, last_access_at: '' } };
+        return {
+          users: {},
+          feedback: [],
+          stats: { access_count: 0, last_access_at: '' },
+          settings: { download_global_enabled: false },
+        };
       }
       throw error;
     }
@@ -745,7 +789,8 @@ function publicUserState(user, database = null) {
     exclusive_id: Boolean(user?.exclusive_id),
     exclusive_badge_style: normalizeExclusiveBadgeStyle(user?.exclusive_badge_style),
     blocked: Boolean(user?.is_blacklisted),
-    download_unlocked: Boolean(user?.download_unlocked),
+    download_unlocked: Boolean(user?.download_unlocked) || globalDownloadEnabled(database),
+    download_global_enabled: globalDownloadEnabled(database),
     listening_seconds: listeningSeconds(user?.listening_seconds),
     listening_play_count: listeningPlayCount(user?.listening_play_count),
     feedback_replies: database
@@ -791,6 +836,10 @@ function secureEqual(left, right) {
 
 function text(value, maxLength) {
   return String(value || '').trim().slice(0, maxLength);
+}
+
+function globalDownloadEnabled(database) {
+  return Boolean(database?.settings?.download_global_enabled);
 }
 
 function isDeveloperDeviceID(value) {
@@ -1000,6 +1049,7 @@ function statsFor(database) {
 
 function renderAdminPage(database, section = 'overview') {
   const stats = statsFor(database);
+  const globalDownloadEnabledValue = globalDownloadEnabled(database);
   const users = Object.values(database.users)
     .sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))
     .slice(0, 500);
@@ -1056,7 +1106,7 @@ function renderAdminPage(database, section = 'overview') {
     ? `<section class="panel"><h2>用户列表 <small>用户 ID 绑定设备，在线状态按最近 ${ONLINE_WINDOW_MS / 60000} 分钟心跳计算</small></h2><table><thead><tr><th>用户 ID / 设备标识 / 位置</th><th>设备 / 系统</th><th>在线状态</th><th>版本 / 时间</th><th>Beans 听歌时长</th><th>管理</th></tr></thead><tbody>${userRows || emptyRow('暂无用户')}</tbody></table></section>`
     : section === 'feedback'
       ? `<section class="panel"><h2>反馈列表</h2><table><thead><tr><th>时间</th><th>用户</th><th>填写设备</th><th>反馈内容与附件</th><th>操作</th></tr></thead><tbody>${feedbackRows || emptyRow('暂无反馈')}</tbody></table></section>`
-      : `<section class="metrics"><article class="metric"><small>总用户</small><b>${stats.total_users}</b></article><article class="metric"><small>软件访问量</small><b>${stats.access_count}</b></article><article class="metric"><small>Beans 总听歌时长</small><b>${formatListeningDuration(stats.total_listening_seconds)}</b></article><article class="metric"><small>当前在线</small><b>${stats.online_users}</b><small>最近 ${ONLINE_WINDOW_MS / 60000} 分钟有心跳</small></article><article class="metric"><small>超过 ${stats.inactive_window_days} 天未使用</small><b>${stats.inactive_users_10_days}</b></article><article class="metric"><small>反馈数量</small><b>${stats.total_feedback}</b></article></section><section class="panel"><h2>版本使用统计</h2><table><thead><tr><th>版本 / Build</th><th>用户数</th><th>在线</th><th>${stats.inactive_window_days} 天内活跃</th><th>超过 ${stats.inactive_window_days} 天未使用</th><th>最近活跃</th></tr></thead><tbody>${versionRows || emptyRow('暂无版本数据')}</tbody></table></section><section class="panel overview"><h2>使用情况</h2><p>最近一次访问：${escapeHtml(stats.last_access_at || '暂无记录')}</p><p>在线用户通过应用每分钟心跳更新，离开超过 ${ONLINE_WINDOW_MS / 60000} 分钟后自动视为离线；超过 ${stats.inactive_window_days} 天没有心跳的用户会计入未使用统计。</p></section>`;
+      : `<section class="metrics"><article class="metric"><small>总用户</small><b>${stats.total_users}</b></article><article class="metric"><small>软件访问量</small><b>${stats.access_count}</b></article><article class="metric"><small>Beans 总听歌时长</small><b>${formatListeningDuration(stats.total_listening_seconds)}</b></article><article class="metric"><small>当前在线</small><b>${stats.online_users}</b><small>最近 ${ONLINE_WINDOW_MS / 60000} 分钟有心跳</small></article><article class="metric"><small>超过 ${stats.inactive_window_days} 天未使用</small><b>${stats.inactive_users_10_days}</b></article><article class="metric"><small>反馈数量</small><b>${stats.total_feedback}</b></article></section><section class="panel overview"><h2>临时下载开放</h2><p>开启后，未单独授权的用户也能使用下载功能；关闭后恢复到每个用户自己的永久授权状态。</p><form method="post" action="/beans/admin/download-global"><label><input type="checkbox" name="download_global_enabled" ${globalDownloadEnabledValue ? 'checked' : ''}> 全局开放下载</label> <button>保存</button></form></section><section class="panel"><h2>版本使用统计</h2><table><thead><tr><th>版本 / Build</th><th>用户数</th><th>在线</th><th>${stats.inactive_window_days} 天内活跃</th><th>超过 ${stats.inactive_window_days} 天未使用</th><th>最近活跃</th></tr></thead><tbody>${versionRows || emptyRow('暂无版本数据')}</tbody></table></section><section class="panel overview"><h2>使用情况</h2><p>最近一次访问：${escapeHtml(stats.last_access_at || '暂无记录')}</p><p>在线用户通过应用每分钟心跳更新，离开超过 ${ONLINE_WINDOW_MS / 60000} 分钟后自动视为离线；超过 ${stats.inactive_window_days} 天没有心跳的用户会计入未使用统计。</p></section>`;
 
   return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beans 后台</title><style>:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#182230;background:#f8fafc}body{margin:0}.page{max-width:1600px;margin:0 auto;padding:28px}.bar{margin-bottom:24px}.bar h1{font-size:25px;margin:0}.bar p,small{color:#667085}.nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.nav a{color:#344054;text-decoration:none;background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:8px 12px}.nav a.active{color:#fff;background:#182230;border-color:#182230}.metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}.metric,.panel{background:#fff;border:1px solid #eaecf0;border-radius:12px}.metric{padding:18px}.metric b{display:block;font-size:30px;margin-top:8px}.panel{overflow:auto;margin-top:20px}.panel h2{font-size:17px;padding:18px 18px 0;margin:0}.overview{padding-bottom:18px}.overview p{padding:0 18px;color:#667085}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:12px 14px;border-bottom:1px solid #eaecf0;vertical-align:top;text-align:left}th{color:#667085;background:#fcfcfd}.id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}.problem{max-width:500px;white-space:pre-wrap;word-break:break-word}.media{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap}.media a{color:#175cd3;text-decoration:none}.feedback-media{display:inline-flex;flex-direction:column;gap:5px;margin:6px 8px 0 0;vertical-align:top}.feedback-media img,.feedback-media video,.reply-image{display:block;width:min(240px,40vw);max-height:220px;object-fit:cover;border-radius:8px;background:#101828}.reply{margin-top:12px;padding:10px;border-left:3px solid #f79009;background:#fffaeb}.reply strong{display:block;color:#b54708}.reply-form{display:grid;gap:7px;margin-top:12px}.reply-form textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid #d0d5dd;border-radius:6px;font:inherit}.status{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px}.status.online{color:#067647;background:#ecfdf3}.status.offline{color:#667085;background:#f2f4f7}input[name=action_note]{width:150px;box-sizing:border-box;padding:6px;border:1px solid #d0d5dd;border-radius:6px}button{border:0;border-radius:7px;padding:7px 10px;background:#182230;color:#fff;cursor:pointer}@media(max-width:1300px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.page{padding:16px}.metrics{grid-template-columns:1fr}.feedback-media img,.feedback-media video,.reply-image{width:min(260px,70vw)}}</style><body><main class="page"><header class="bar"><h1>Beans 后台</h1><p>用户、反馈与访问情况</p><nav class="nav"><a class="${section === 'overview' ? 'active' : ''}" href="/beans/admin">概览</a><a class="${section === 'users' ? 'active' : ''}" href="/beans/admin/users">用户</a><a class="${section === 'feedback' ? 'active' : ''}" href="/beans/admin/feedback">反馈</a></nav></header>${body}</main></body></html>`;
 

@@ -19,9 +19,8 @@ struct BeansApp: App {
         CrashMetricCollector.shared.start()
         // 主页暂停只应在设置页打开期间生效，避免异常退出后把暂停状态永久写入本地。，
         UserDefaults.standard.set(false, forKey: "beans.pauseHomeRendering")
-        // 默认交给系统调度；只有用户打开强制高刷新率时才请求 120Hz。
-        HighRefreshKeeper.registerDefaults()
-        HighRefreshKeeper.shared.configureFromDefaults()
+        // 应用始终按设备能力请求最高刷新率，不再读取可导致重入的旧开关。
+        HighRefreshKeeper.shared.startIfNeeded()
         UserDefaults.standard.register(defaults: [
             "beans.uiStyle": BeansUIStyle.nativeClean.rawValue,
             "beans.coverPlayerStyle": BeansCoverPlayerStyle.appleMusic.rawValue,
@@ -85,7 +84,7 @@ struct BeansApp: App {
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
-                HighRefreshKeeper.shared.configureFromDefaults()
+                HighRefreshKeeper.shared.startIfNeeded()
                 Task {
                     await DeviceReporter.shared.reportHeartbeat()
                     await RemoteControlStore.shared.refreshIfNeeded()

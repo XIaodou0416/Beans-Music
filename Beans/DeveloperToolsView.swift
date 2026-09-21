@@ -22,8 +22,9 @@ struct DeveloperToolsView: View {
     @State private var showLogShare = false
     @State private var showDownloadGrant = false
     @State private var showExclusiveIDGrant = false
+    @State private var globalDownloadEnabled = false
+    @State private var isLoadingGlobalDownload = false
     @AppStorage("beans.developer.homeFrameMeter") private var homeFrameMeterEnabled = true
-    @AppStorage("beans.enableHighRefresh") private var enableHighRefresh = false
 
     private var appVersion: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
@@ -68,8 +69,9 @@ struct DeveloperToolsView: View {
             }
         }
         .onAppear {
-            HighRefreshKeeper.shared.configureFromDefaults()
+            HighRefreshKeeper.shared.startIfNeeded()
             refreshMonitor.start()
+            Task { await loadGlobalDownloadStatus() }
         }
         .onDisappear { refreshMonitor.stop() }
         .sheet(isPresented: $showLogShare) {
@@ -93,36 +95,12 @@ struct DeveloperToolsView: View {
             }
             developerRow("界面帧间隔", value: String(format: "%.2f ms", refreshMonitor.frameInterval * 1_000))
             developerRow("低电量模式", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "已开启" : "未开启")
-            Toggle("强制高刷新率（最高 120Hz）", isOn: $enableHighRefresh)
-                .font(BeansFont.appFont(13, .medium))
-                .tint(Color.beansAmber)
-                .onChange(of: enableHighRefresh) { enabled in
-                    HighRefreshKeeper.shared.configure(enabled: enabled)
-                }
-            Text("开启后可能导致耗电过快、设备发烫严重，并影响续航。")
-                .font(BeansFont.appFont(11))
-                .foregroundStyle(Color.beansComment)
-                .fixedSize(horizontal: false, vertical: true)
             Toggle("全局显示实时刷新率", isOn: $homeFrameMeterEnabled)
                 .font(BeansFont.appFont(13, .medium))
                 .tint(Color.beansAmber)
                 .onChange(of: homeFrameMeterEnabled) { enabled in
                     DeveloperFPSOverlayWindow.shared.setVisible(enabled)
                 }
-            Button {
-                HighRefreshKeeper.shared.configureFromDefaults()
-                refreshMonitor.restart()
-                BeansLogger.shared.log("开发者工具：按当前设置重新应用刷新率策略", level: .info)
-                ToastCenter.shared.show(enableHighRefresh ? "已重新申请最高 120Hz" : "已恢复系统刷新策略")
-            } label: {
-                Label("重新应用刷新率策略", systemImage: "arrow.clockwise")
-                    .font(BeansFont.appFont(13, .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 38)
-                    .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
-            }
-            .buttonStyle(.plain)
             if DeviceIdentity.originalPublicID != DeviceIdentity.publicID {
                 Button {
                     UIPasteboard.general.string = DeviceIdentity.originalPublicID
@@ -188,6 +166,17 @@ struct DeveloperToolsView: View {
 
     private var downloadPermissionCard: some View {
         developerCard(title: "下载权限", icon: "arrow.down.circle", tint: Color.beansHighlight) {
+            Toggle("临时开放所有用户下载", isOn: $globalDownloadEnabled)
+                .tint(Color.beansAmber)
+                .disabled(isLoadingGlobalDownload)
+                .onChange(of: globalDownloadEnabled) { enabled in
+                    guard !isLoadingGlobalDownload else { return }
+                    Task { await updateGlobalDownloadStatus(enabled) }
+                }
+            Text("开启后未单独授权的用户也能下载；关闭后只保留此前已经永久授权的用户。")
+                .font(BeansFont.appFont(11))
+                .foregroundStyle(Color.beansComment)
+                .fixedSize(horizontal: false, vertical: true)
             Text("使用其他设备的设备标识，为该设备开放或关闭下载功能。")
                 .font(BeansFont.appFont(12))
                 .foregroundStyle(Color.beansComment)
@@ -214,6 +203,29 @@ struct DeveloperToolsView: View {
                     .background { BeansSurface(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private func loadGlobalDownloadStatus() async {
+        guard !isLoadingGlobalDownload else { return }
+        isLoadingGlobalDownload = true
+        defer { isLoadingGlobalDownload = false }
+        do {
+            globalDownloadEnabled = try await DeviceReporter.shared.fetchGlobalDownloadAccess()
+        } catch {
+            BeansLogger.shared.log("临时下载开关读取失败：\(error.localizedDescription)", level: .debug)
+        }
+    }
+
+    private func updateGlobalDownloadStatus(_ enabled: Bool) async {
+        isLoadingGlobalDownload = true
+        defer { isLoadingGlobalDownload = false }
+        do {
+            globalDownloadEnabled = try await DeviceReporter.shared.setGlobalDownloadAccess(enabled)
+            ToastCenter.shared.show(enabled ? "已临时开放所有用户下载" : "已恢复永久授权下载")
+        } catch {
+            globalDownloadEnabled.toggle()
+            ToastCenter.shared.show(error.localizedDescription)
         }
     }
 
@@ -869,7 +881,7 @@ final class DeveloperFPSOverlayWindow {
             overlayWindow.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue - 1)
             window = overlayWindow
         }
-        HighRefreshKeeper.shared.configureFromDefaults()
+        HighRefreshKeeper.shared.startIfNeeded()
         window?.isHidden = false
     }
 }
