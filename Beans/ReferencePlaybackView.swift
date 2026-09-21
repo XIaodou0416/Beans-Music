@@ -913,6 +913,8 @@ struct AppleMusicPlaybackControls: View {
 
 struct AppleMusicCompactQueueContent: View {
     @EnvironmentObject private var player: PlayerManager
+    @State private var draggingPosition: Int?
+    @State private var dragStartPosition: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -966,8 +968,17 @@ struct AppleMusicCompactQueueContent: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 4) {
-                        ForEach(Array(player.upcomingQueue.prefix(100)), id: \.index) { item in
-                            AppleMusicCompactQueueRow(index: item.index, song: item.song)
+                        ForEach(Array(player.upcomingQueue.prefix(100).enumerated()), id: \.element.index) { position, item in
+                            AppleMusicCompactQueueRow(
+                                index: item.index,
+                                position: position,
+                                maxPosition: min(player.upcomingQueue.count, 100) - 1,
+                                song: item.song,
+                                activePosition: $draggingPosition,
+                                startPosition: $dragStartPosition
+                            ) { source, destination in
+                                player.moveUpcomingQueueItem(from: source, to: destination)
+                            }
                         }
                     }
                 }
@@ -1017,37 +1028,54 @@ private struct AppleMusicCompactQueueRow: View {
     @ObservedObject private var customCovers = CustomSongCoverStore.shared
 
     let index: Int
+    let position: Int
+    let maxPosition: Int
     let song: Song
+    @Binding var activePosition: Int?
+    @Binding var startPosition: Int?
+    let onMove: (Int, Int) -> Void
 
     var body: some View {
-        Button {
-            BeansHaptics.tap()
-            player.playQueueIndex(index)
-        } label: {
-            HStack(spacing: 11) {
-                CoverImage(url: customCovers.url(for: song) ?? song.coverURL, size: 46, cornerRadius: 8)
+        HStack(spacing: 8) {
+            Button {
+                BeansHaptics.tap()
+                player.playQueueIndex(index)
+            } label: {
+                HStack(spacing: 11) {
+                    CoverImage(url: customCovers.url(for: song) ?? song.coverURL, size: 46, cornerRadius: 8)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(song.name)
-                        .font(BeansFont.appFont(14, .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(1)
-                    Text(song.artists)
-                        .font(BeansFont.appFont(12))
-                        .foregroundStyle(.white.opacity(0.48))
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(song.name)
+                            .font(BeansFont.appFont(14, .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(1)
+                        Text(song.artists)
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(.white.opacity(0.48))
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Text(song.formattedDuration)
+                        .font(BeansFont.appFont(11, .regular, .monospaced))
+                        .foregroundStyle(.white.opacity(0.36))
                 }
-
-                Spacer(minLength: 4)
-
-                Text(song.formattedDuration)
-                    .font(BeansFont.appFont(11, .regular, .monospaced))
-                    .foregroundStyle(.white.opacity(0.36))
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            QueueReorderHandle(
+                position: position,
+                maxPosition: maxPosition,
+                rowStep: 60,
+                activePosition: $activePosition,
+                startPosition: $startPosition,
+                onMove: onMove
+            )
+            .foregroundStyle(.white.opacity(0.54))
         }
-        .buttonStyle(.plain)
         .contextMenu {
             Button("从播放列表移除", role: .destructive) {
                 player.removeFromQueue(at: index)

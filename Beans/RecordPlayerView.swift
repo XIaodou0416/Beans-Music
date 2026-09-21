@@ -32,6 +32,7 @@ struct RecordPlayerView: View {
     @State private var showQueue = false
     @State private var showQualityPicker = false
     @State private var showCustomCoverPicker = false
+    @State private var dismissDragOffset: CGFloat = 0
     @AppStorage("beans.audioQuality") private var playbackQualityRaw = BeansAudioQuality.hires.rawValue
 
     init(
@@ -77,7 +78,7 @@ struct RecordPlayerView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
+            let surface = ZStack {
                 backdrop
                 if isPhoneLandscape(size: geometry.size) {
                     landscapeLayout(size: geometry.size)
@@ -88,8 +89,16 @@ struct RecordPlayerView: View {
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
+            .offset(y: dismissDragOffset)
             .contentShape(Rectangle())
-            .simultaneousGesture(dismissGesture)
+
+            if #available(iOS 26.0, *) {
+                // iOS 26+ owns the full-screen interactive dismissal. Keeping a
+                // second gesture here made this style disappear instantly.
+                surface
+            } else {
+                surface.simultaneousGesture(dismissGesture(for: geometry.size.height))
+            }
         }
         .animation(.easeInOut(duration: 0.22), value: showLyrics)
         .sheet(isPresented: $showQualityPicker) {
@@ -523,14 +532,39 @@ struct RecordPlayerView: View {
         )
     }
 
-    private var dismissGesture: some Gesture {
+    private func dismissGesture(for height: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 24)
+            .onChanged { value in
+                guard !showLyrics,
+                      !showQueue,
+                      value.translation.height > 0,
+                      value.translation.height > abs(value.translation.width) * 1.15 else { return }
+                dismissDragOffset = min(value.translation.height, height)
+            }
             .onEnded { value in
-                guard value.translation.height > 70,
-                      abs(value.translation.height) > abs(value.translation.width),
-                      !showLyrics,
-                      !showQueue else { return }
-                isPresented = false
+                let vertical = max(value.translation.height, 0)
+                let isDownwardSwipe = vertical > abs(value.translation.width) * 1.15
+                guard !showLyrics, !showQueue, isDownwardSwipe else {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                        dismissDragOffset = 0
+                    }
+                    return
+                }
+                let predicted = max(value.predictedEndTranslation.height, 0)
+                if vertical > 110 || predicted > 190 {
+                    BeansHaptics.medium()
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+                        dismissDragOffset = height
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                        isPresented = false
+                        dismissDragOffset = 0
+                    }
+                } else {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                        dismissDragOffset = 0
+                    }
+                }
             }
     }
 

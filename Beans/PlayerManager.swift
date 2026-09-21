@@ -604,6 +604,30 @@ final class PlayerManager: NSObject, ObservableObject {
         savePersistedPlaybackState()
     }
 
+    /// 按播放列表当前显示顺序移动“接下来播放”的歌曲。
+    /// 顺序播放直接调整队列；随机播放只调整当前歌曲之后的随机顺序，
+    /// 不重新洗牌，也不会改变当前歌曲和已经播放过的歌曲。
+    func moveUpcomingQueueItem(from sourcePosition: Int, to destinationPosition: Int) {
+        let upcoming = upcomingQueue
+        guard upcoming.indices.contains(sourcePosition), !upcoming.isEmpty else { return }
+        let destination = min(max(destinationPosition, 0), upcoming.count - 1)
+        guard sourcePosition != destination else { return }
+
+        if playMode == .shuffle {
+            let nextStart = min(orderPosition + 1, playOrder.count)
+            var future = Array(playOrder.dropFirst(nextStart))
+            guard future.indices.contains(sourcePosition), future.indices.contains(destination) else { return }
+            let moved = future.remove(at: sourcePosition)
+            future.insert(moved, at: destination)
+            objectWillChange.send()
+            playOrder = Array(playOrder.prefix(nextStart)) + future
+            orderPosition = playOrder.firstIndex(of: currentIndex) ?? max(0, nextStart - 1)
+            savePersistedPlaybackState()
+        } else {
+            moveQueueItem(from: upcoming[sourcePosition].index, to: upcoming[destination].index)
+        }
+    }
+
     func retryCurrent() {
         guard ensurePlaybackAllowed() else { return }
         loadFailed = false

@@ -906,15 +906,8 @@ final class BeansRefreshRateMonitor: NSObject, ObservableObject {
         windowStart = 0
         frameCount = 0
         let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
-        if #available(iOS 15.0, *) {
-            let maximum = Float(min(120, max(60, UIScreen.main.maximumFramesPerSecond)))
-            let minimum: Float = maximum >= 120 ? 120 : 60
-            link.preferredFrameRateRange = CAFrameRateRange(
-                minimum: minimum,
-                maximum: maximum,
-                preferred: maximum
-            )
-        }
+        // The monitor is read-only. Do not request 120 Hz here: doing so makes
+        // the FPS overlay itself change the system refresh policy it measures.
         link.add(to: .main, forMode: .common)
         displayLink = link
     }

@@ -424,10 +424,19 @@ struct DiscoverView: View {
                                         homePlatformHintDismissed = true
                                         UserDefaults.standard.set(true, forKey: "beans.homePlatformHintDismissed")
                                     } label: {
-                                        Text("长按这里可切换平台")
-                                            .font(BeansFont.appFont(11, .medium))
-                                            .foregroundStyle(Color.beansComment)
-                                            .fixedSize()
+                                        HStack(spacing: 5) {
+                                            Image(systemName: "hand.tap")
+                                                .font(.system(size: 10, weight: .semibold))
+                                            Text("长按推荐区域切换平台")
+                                                .font(BeansFont.appFont(10, .medium))
+                                        }
+                                        .foregroundStyle(Color.beansComment)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 5)
+                                        .background {
+                                            Capsule(style: .continuous)
+                                                .fill(Color.beansGlassFill.opacity(0.72))
+                                        }
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel("关闭平台切换提示")

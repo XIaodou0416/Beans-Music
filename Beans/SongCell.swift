@@ -53,22 +53,17 @@ struct SongCell: View {
                 CoverImage(url: song.coverURL, song: song, size: coverSize, cornerRadius: 10)
             }
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(song.name)
-                        .font(BeansFont.appFont(15, isCurrent ? .semibold : .regular))
-                        .foregroundStyle(isCurrent ? Color.beansAmber : Color.beansLabel)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                    if showSongVIPBadge, song.isVIP {
-                        Text("VIP")
-                            .font(BeansFont.appFont(9, .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1.5)
-                            .background(Capsule().fill(Color(red: 0.93, green: 0.25, blue: 0.22)))
+                    HStack(spacing: 6) {
+                        Text(song.name)
+                            .font(BeansFont.appFont(15, isCurrent ? .semibold : .regular))
+                            .foregroundStyle(isCurrent ? Color.beansAmber : Color.beansLabel)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .layoutPriority(1)
+                        if showSongVIPBadge, song.isVIP {
+                            VIPBadgeView(text: "VIP")
+                        }
                     }
-                }
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 Text(song.artists.isEmpty ? "未知歌手" : song.artists)
                     .font(BeansFont.appFont(12))

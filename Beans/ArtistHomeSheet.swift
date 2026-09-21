@@ -57,6 +57,7 @@ struct ArtistHomeSheet: View {
     @State private var selectedAlbum: Album?
     @State private var loadTask: Task<Void, Never>?
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
+    @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
 
     private var cacheKey: String {
         let identity = artistID?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -234,12 +235,18 @@ struct ArtistHomeSheet: View {
                                     .frame(width: 32, alignment: .trailing)
                                 CoverImage(url: song.coverURL, song: song, size: 40, cornerRadius: 8)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(song.name)
-                                        .font(BeansFont.appFont(14, .medium))
-                                        .foregroundStyle(Color.beansLabel)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                                    HStack(spacing: 6) {
+                                        Text(song.name)
+                                            .font(BeansFont.appFont(14, .medium))
+                                            .foregroundStyle(Color.beansLabel)
+                                            .lineLimit(1)
+                                            .truncationMode(.tail)
+                                            .layoutPriority(1)
+                                        if showSongVIPBadge, song.isVIP {
+                                            VIPBadgeView(text: "VIP")
+                                        }
+                                    }
+                                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                                     Text(song.album)
                                         .font(BeansFont.appFont(11))
                                         .foregroundStyle(Color.beansComment)
