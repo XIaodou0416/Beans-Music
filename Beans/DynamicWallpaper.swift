@@ -201,6 +201,11 @@ final class DynamicWallpaperStore: ObservableObject {
     /// background synchronization option.
     @Published var syncToPlayer: Bool { didSet { save(syncToPlayer, forKey: Self.syncToPlayerKey) } }
 
+    // Water is evaluated from a TimelineView. Keep the decoded image alive so
+    // animation frames never repeatedly decode the same base64 payload.
+    private var cachedWaterImageKey = ""
+    private var cachedWaterImage: UIImage?
+
     /// The renderer is intentionally unavailable below iOS 17. Do not create
     /// a custom shader fallback on older systems; the normal background stays.
     var renderableKind: BeansDynamicWallpaperKind {
@@ -521,8 +526,14 @@ final class DynamicWallpaperStore: ObservableObject {
     }
 
     var waterImage: UIImage? {
+        if cachedWaterImageKey == waterImageDataBase64 {
+            return cachedWaterImage
+        }
         guard let data = Data(base64Encoded: waterImageDataBase64) else { return nil }
-        return UIImage(data: data)
+        let image = UIImage(data: data)
+        cachedWaterImageKey = waterImageDataBase64
+        cachedWaterImage = image
+        return image
     }
 
     var syncsDynamicWallpaperToPlayer: Bool {
@@ -541,6 +552,8 @@ struct BeansDynamicWallpaperView: View {
         if #available(iOS 17.0, *), store.renderableKind != .off,
            (!forPlayer || store.syncsDynamicWallpaperToPlayer) {
             renderer
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
         } else {
             Color.clear
         }
@@ -612,10 +625,18 @@ struct BeansDynamicWallpaperView: View {
                 colorBack: store.color(store.waterBackHex, fallback: .black),
                 colorHighlight: store.color(store.waterHighlightHex, fallback: .white)
             ) {
-                if let image = store.waterImage {
-                    Image(uiImage: image).resizable().scaledToFill()
-                } else {
-                    store.color(store.waterBackHex, fallback: .black)
+                GeometryReader { proxy in
+                    Group {
+                        if let image = store.waterImage {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            store.color(store.waterBackHex, fallback: .black)
+                        }
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
                 }
             }
         case .off:

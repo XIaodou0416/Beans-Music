@@ -1879,6 +1879,7 @@ struct SettingsView: View {
     @State private var platformExpanded = false
     @State private var playbackExpanded = false
     @State private var audioQualityExpanded = false
+    @State private var dynamicWallpaperExpanded = false
     @State private var showWallpaperPicker = false
     @State private var showWaterWallpaperPicker = false
     @State private var wallpaperAppearanceTarget: BeansWallpaperAppearance = .light
@@ -2795,66 +2796,80 @@ struct SettingsView: View {
 
     private var dynamicWallpaperSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: "wand.and.stars")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(width: 28)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("动态壁纸")
-                        .font(BeansFont.appFont(15))
-                        .foregroundStyle(Color.beansLabel)
-                    Text("内置 ShipSwift 动态效果，支持单独同步到播放器")
-                        .font(BeansFont.appFont(11))
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    dynamicWallpaperExpanded.toggle()
+                }
+                BeansHaptics.tap()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.beansAmber)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("动态壁纸")
+                            .font(BeansFont.appFont(15))
+                            .foregroundStyle(Color.beansLabel)
+                        Text("内置 ShipSwift 动态效果，支持单独同步到播放器")
+                            .font(BeansFont.appFont(11))
+                            .foregroundStyle(Color.beansComment)
+                    }
+                    Spacer()
+                    Image(systemName: dynamicWallpaperExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.beansComment)
                 }
-                Spacer()
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
-            if #available(iOS 17.0, *) {
-                Picker("动态壁纸", selection: $dynamicWallpaper.kind) {
-                    ForEach(BeansDynamicWallpaperKind.allCases) { wallpaper in
-                        Label(wallpaper.title, systemImage: wallpaper.icon)
-                            .tag(wallpaper)
+            if dynamicWallpaperExpanded {
+                if #available(iOS 17.0, *) {
+                    Picker("动态壁纸", selection: $dynamicWallpaper.kind) {
+                        ForEach(BeansDynamicWallpaperKind.allCases) { wallpaper in
+                            Label(wallpaper.title, systemImage: wallpaper.icon)
+                                .tag(wallpaper)
+                        }
                     }
-                }
-                .pickerStyle(.menu)
-                .tint(Color.beansAmber)
-
-                Text(dynamicWallpaper.kind.subtitle)
-                    .font(BeansFont.appFont(11))
-                    .foregroundStyle(Color.beansComment)
-
-                Toggle("同步到播放器界面", isOn: $dynamicWallpaper.syncToPlayer)
-                    .font(BeansFont.appFont(14))
+                    .pickerStyle(.menu)
                     .tint(Color.beansAmber)
 
-                if dynamicWallpaper.kind != .off {
-                    if dynamicWallpaper.kind == .water {
-                        waterWallpaperSourceSection
-                    }
-                    dynamicWallpaperParameterSection
+                    Text(dynamicWallpaper.kind.subtitle)
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
 
-                    HStack(spacing: 12) {
-                        Button {
-                            dynamicWallpaper.resetCurrent()
-                            BeansHaptics.select()
-                        } label: {
-                            Text("恢复当前默认参数")
-                                .font(BeansFont.appFont(13, .medium))
-                                .foregroundStyle(Color.beansAmber)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background { BeansSurface(shape: Capsule()) }
+                    Toggle("同步到播放器界面", isOn: $dynamicWallpaper.syncToPlayer)
+                        .font(BeansFont.appFont(14))
+                        .tint(Color.beansAmber)
+
+                    if dynamicWallpaper.kind != .off {
+                        if dynamicWallpaper.kind == .water {
+                            waterWallpaperSourceSection
                         }
-                        .buttonStyle(.plain)
-                        Spacer()
+                        dynamicWallpaperParameterSection
+
+                        HStack(spacing: 12) {
+                            Button {
+                                dynamicWallpaper.resetCurrent()
+                                BeansHaptics.select()
+                            } label: {
+                                Text("恢复当前默认参数")
+                                    .font(BeansFont.appFont(13, .medium))
+                                    .foregroundStyle(Color.beansAmber)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background { BeansSurface(shape: Capsule()) }
+                            }
+                            .buttonStyle(.plain)
+                            Spacer()
+                        }
                     }
+                } else {
+                    Label("动态壁纸需要 iOS 17 或更高版本，低系统继续使用原有背景。", systemImage: "info.circle")
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
                 }
-            } else {
-                Label("动态壁纸需要 iOS 17 或更高版本，低系统继续使用原有背景。", systemImage: "info.circle")
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansComment)
             }
         }
         .padding(.horizontal, 4)

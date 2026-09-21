@@ -143,9 +143,10 @@ private struct SWWaterRenderer<Content: View>: View {
     var body: some View {
         TimelineView(.animation) { ctx in
             let elapsed = Float(ctx.date.timeIntervalSince(start))
-            // `maxSampleOffset` covers the largest UV shift our distortion
-            // can produce — caustic max ~0.02 of the layer + waves up to
-            // 0.1 — well under 200pt for any reasonable layer.
+            // Keep the offscreen sampling region proportional to the active
+            // distortion. The old 200pt bound forced a large render surface
+            // every frame and caused periodic refresh-rate dips on iPad.
+            let sampleOffset = CGFloat(min(96, max(32, 24 + (initial.waves + initial.caustic) * 120)))
             content.layerEffect(
                 ShaderLibrary.swWater(
                     .boundingRect,
@@ -160,7 +161,7 @@ private struct SWWaterRenderer<Content: View>: View {
                     .color(initial.colorBack),
                     .color(initial.colorHighlight)
                 ),
-                maxSampleOffset: CGSize(width: 200, height: 200)
+                maxSampleOffset: CGSize(width: sampleOffset, height: sampleOffset)
             )
         }
     }
