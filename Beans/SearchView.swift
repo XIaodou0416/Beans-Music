@@ -444,21 +444,24 @@ struct SearchView: View {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
             }
             TabBarAppearanceConfigurator()
-            ScrollView {
-                VStack(spacing: 0) {
-                    legacyHeaderTitle
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .padding(.bottom, 10)
-                    searchField
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
+            VStack(spacing: 0) {
+                legacyHeaderTitle
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
+                searchField
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+                ScrollView {
                     legacyContentArea
+                        .frame(maxWidth: .infinity, alignment: .top)
+                        .padding(.bottom, 120)
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .beansScrollIndicatorsHidden()
+                .beansScrollDismissesKeyboard()
             }
-            .beansScrollIndicatorsHidden()
-            .beansScrollDismissesKeyboard()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
 

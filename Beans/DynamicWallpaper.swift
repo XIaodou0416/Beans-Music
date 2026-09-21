@@ -512,6 +512,8 @@ final class DynamicWallpaperStore: ObservableObject {
     func setWaterImage(_ data: Data?) {
         guard let data, let image = UIImage(data: data) else {
             waterImageDataBase64 = ""
+            cachedWaterImageKey = ""
+            cachedWaterImage = nil
             return
         }
 
@@ -522,7 +524,10 @@ final class DynamicWallpaperStore: ObservableObject {
         let resized = renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: targetSize))
         }
-        waterImageDataBase64 = (resized.jpegData(compressionQuality: 0.82) ?? data).base64EncodedString()
+        let encoded = (resized.jpegData(compressionQuality: 0.82) ?? data).base64EncodedString()
+        waterImageDataBase64 = encoded
+        cachedWaterImageKey = ""
+        cachedWaterImage = nil
     }
 
     var waterImage: UIImage? {
@@ -554,6 +559,7 @@ struct BeansDynamicWallpaperView: View {
             renderer
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
+                .id("dynamic-wallpaper-\(store.renderableKind.rawValue)-\(forPlayer)")
                 .allowsHitTesting(false)
         } else {
             Color.clear
