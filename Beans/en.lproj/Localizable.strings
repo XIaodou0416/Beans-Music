@@ -816,6 +816,7 @@
 "展开全部（\\(min(visibleRankCount, 10))）" = "Expand All (\\(min(visibleRankCount, 10)))";
 "展开全部（\\(personalized.count)）" = "Expand All (\\(personalized.count))";
 "长按这里可切换平台" = "Long press here to switch platforms";
+"长按推荐区域切换平台" = "Long press the recommendations to switch platforms";
 "长度" = "Length";
 "账号" = "Account";
 "账号登录" = "Account Login";

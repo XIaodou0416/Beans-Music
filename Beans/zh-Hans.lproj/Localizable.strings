@@ -819,6 +819,7 @@
 "展开全部（\\(min(visibleRankCount, 10))）" = "展开全部（\\(min(visibleRankCount, 10))）";
 "展开全部（\\(personalized.count)）" = "展开全部（\\(personalized.count)）";
 "长按这里可切换平台" = "长按这里可切换平台";
+"长按推荐区域切换平台" = "长按推荐区域切换平台";
 "长度" = "长度";
 "账号" = "账号";
 "账号登录" = "账号登录";
