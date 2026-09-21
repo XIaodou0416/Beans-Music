@@ -10,6 +10,7 @@ final class HighRefreshKeeper {
 
     private var displayLink: CADisplayLink?
     private var wasRunningBeforeTemporaryPause = false
+    private var isStarting = false
     private init() {}
 
     static func registerDefaults() {
@@ -60,7 +61,9 @@ final class HighRefreshKeeper {
     }
 
     private func start() {
-        guard displayLink == nil else { return }
+        guard displayLink == nil, !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
         let link = CADisplayLink(target: self, selector: #selector(tick))
         if #available(iOS 15.0, *) {
             link.preferredFrameRateRange = preferredFrameRateRange
