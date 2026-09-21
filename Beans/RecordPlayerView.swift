@@ -886,6 +886,10 @@ private final class SmoothRecordDiscUIView: UIView {
     private var hostController: UIHostingController<AnyView>?
     private var rotationIsRunning = false
     private var currentAngle: CGFloat = 0
+    private var renderedCoverURL: URL?
+    private var renderedSize: CGFloat = -1
+    private var renderedPlaysCoverVideoAudio = false
+    private var renderedIsPlaying = false
     private let rotationKey = "beans.recordDiscRotation"
 
     override init(frame: CGRect) {
@@ -899,24 +903,37 @@ private final class SmoothRecordDiscUIView: UIView {
     }
 
     func update(coverURL: URL?, isPlaying: Bool, size: CGFloat, playsCoverVideoAudio: Bool) {
-        let root = AnyView(
-            RecordModeDiscView(
-                coverURL: coverURL,
-                size: size,
-                playsCoverVideoAudio: playsCoverVideoAudio
+        let visualChanged = hostController == nil
+            || renderedCoverURL != coverURL
+            || renderedSize != size
+            || renderedPlaysCoverVideoAudio != playsCoverVideoAudio
+        if visualChanged {
+            let root = AnyView(
+                RecordModeDiscView(
+                    coverURL: coverURL,
+                    size: size,
+                    playsCoverVideoAudio: playsCoverVideoAudio
+                )
             )
-        )
-        if let hostController {
-            hostController.rootView = root
-        } else {
-            let controller = UIHostingController(rootView: root)
-            controller.view.backgroundColor = .clear
-            controller.view.isOpaque = false
-            controller.view.isUserInteractionEnabled = false
-            hostController = controller
-            addSubview(controller.view)
+            if let hostController {
+                hostController.rootView = root
+            } else {
+                let controller = UIHostingController(rootView: root)
+                controller.view.backgroundColor = .clear
+                controller.view.isOpaque = false
+                controller.view.isUserInteractionEnabled = false
+                hostController = controller
+                addSubview(controller.view)
+            }
+            renderedCoverURL = coverURL
+            renderedSize = size
+            renderedPlaysCoverVideoAudio = playsCoverVideoAudio
         }
-        setNeedsLayout()
+        if visualChanged {
+            setNeedsLayout()
+        }
+        guard renderedIsPlaying != isPlaying else { return }
+        renderedIsPlaying = isPlaying
         if isPlaying {
             startRotation()
         } else {

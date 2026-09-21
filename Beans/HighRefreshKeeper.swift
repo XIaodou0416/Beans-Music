@@ -10,6 +10,7 @@ final class HighRefreshKeeper {
 
     private var displayLink: CADisplayLink?
     private var wasRunningBeforeTemporaryPause = false
+    private weak var attachedView: UIView?
 
     private init() {}
 
@@ -30,6 +31,7 @@ final class HighRefreshKeeper {
 
     func configure(enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: Self.defaultsKey)
+        applyPreferredFrameRate()
         if enabled {
             start()
         } else {
@@ -38,7 +40,8 @@ final class HighRefreshKeeper {
     }
 
     func attach(to view: UIView) {
-        _ = view
+        attachedView = view
+        applyPreferredFrameRate()
         if UserDefaults.standard.bool(forKey: Self.defaultsKey) {
             start()
         } else {
@@ -51,17 +54,20 @@ final class HighRefreshKeeper {
         guard displayLink != nil else { return }
         wasRunningBeforeTemporaryPause = true
         stop()
+        applyPreferredFrameRate()
     }
 
     func resumeAfterTemporaryPause() {
         guard wasRunningBeforeTemporaryPause else { return }
         wasRunningBeforeTemporaryPause = false
         guard UserDefaults.standard.bool(forKey: Self.defaultsKey) else { return }
+        applyPreferredFrameRate()
         start()
     }
 
     private func start() {
         guard displayLink == nil else { return }
+        applyPreferredFrameRate()
         let link = CADisplayLink(target: self, selector: #selector(tick))
         if #available(iOS 15.0, *) {
             link.preferredFrameRateRange = preferredFrameRateRange
@@ -82,6 +88,21 @@ final class HighRefreshKeeper {
     private func stop() {
         displayLink?.invalidate()
         displayLink = nil
+    }
+
+    /// CADisplayLink alone does not change the scene's preferred cadence. Set
+    /// the view and window-scene preference as well so the explicit 120 Hz
+    /// switch has an observable effect on ProMotion devices.
+    private func applyPreferredFrameRate() {
+        guard #available(iOS 15.0, *) else { return }
+        let range = UserDefaults.standard.bool(forKey: Self.defaultsKey)
+            ? preferredFrameRateRange
+            : CAFrameRateRange.default
+        attachedView?.preferredFrameRateRange = range
+        attachedView?.window?.windowScene?.preferredFrameRateRange = range
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            scene.preferredFrameRateRange = range
+        }
     }
 
     @objc private func tick() {}

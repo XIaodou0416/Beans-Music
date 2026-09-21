@@ -5,10 +5,6 @@ struct QueueView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @AppStorage("beans.queueOverlayPresented") private var queueOverlayPresented = false
-    @State private var draggingIndex: Int?
-    @State private var dragStartIndex: Int?
-
-    private let rowStep: CGFloat = 76
 
     var body: some View {
         let _ = theme.accent
@@ -58,61 +54,45 @@ struct QueueView: View {
 
     private func row(_ song: Song, index: Int) -> some View {
         let isCurrent = index == player.currentIndex
-        return HStack(spacing: 10) {
-            Button {
-                guard player.queue.indices.contains(index) else { return }
-                player.playQueueIndex(index)
-            } label: {
-                HStack(spacing: 12) {
-                    CoverImage(url: song.coverURL, song: song, size: 42, cornerRadius: 9)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(song.name)
-                            .font(BeansFont.appFont(15, isCurrent ? .semibold : .regular))
-                            .foregroundStyle(isCurrent ? Color.beansAmber : Color.beansLabel)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        Text(song.artists)
-                            .font(BeansFont.appFont(12))
-                            .foregroundStyle(Color.beansComment)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
-                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-
-                    if isCurrent {
-                        if player.isPlaying {
-                            NowPlayingIndicator()
-                        } else {
-                            Image(systemName: "pause.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.beansAmber)
-                        }
-                    } else {
-                        Text(song.formattedDuration)
-                            .font(BeansFont.appFont(12, .regular, .monospaced))
-                            .foregroundStyle(Color.beansComment)
-                    }
+        return Button {
+            guard player.queue.indices.contains(index) else { return }
+            player.playQueueIndex(index)
+        } label: {
+            HStack(spacing: 12) {
+                CoverImage(url: song.coverURL, song: song, size: 42, cornerRadius: 9)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(song.name)
+                        .font(BeansFont.appFont(15, isCurrent ? .semibold : .regular))
+                        .foregroundStyle(isCurrent ? Color.beansAmber : Color.beansLabel)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Text(song.artists)
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
 
-            QueueReorderHandle(
-                position: index,
-                maxPosition: max(player.queue.count - 1, 0),
-                rowStep: rowStep,
-                activePosition: $draggingIndex,
-                startPosition: $dragStartIndex
-            ) { source, destination in
-                player.moveQueueItem(from: source, to: destination)
+                if isCurrent {
+                    if player.isPlaying {
+                        NowPlayingIndicator()
+                    } else {
+                        Image(systemName: "pause.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.beansAmber)
+                    }
+                } else {
+                    Text(song.formattedDuration)
+                        .font(BeansFont.appFont(12, .regular, .monospaced))
+                        .foregroundStyle(Color.beansComment)
+                }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-        .background {
-            BeansGlass(shape: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
+        .buttonStyle(.plain)
         .contextMenu {
             Button(role: .destructive) {
                 player.removeFromQueue(at: index)
@@ -160,12 +140,10 @@ struct QueueReorderHandle: View {
                         maxPosition
                     )
                     if target != current {
-                        var transaction = Transaction()
-                        transaction.disablesAnimations = true
-                        withTransaction(transaction) {
+                        withAnimation(.interactiveSpring(response: 0.22, dampingFraction: 0.86, blendDuration: 0.03)) {
                             onMove(current, target)
+                            activePosition = target
                         }
-                        activePosition = target
                         BeansHaptics.tap()
                     }
                 default:

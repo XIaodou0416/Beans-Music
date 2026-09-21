@@ -71,7 +71,7 @@ struct DiscoverView: View {
     @AppStorage("beans.pauseHomeRendering") private var homeRenderingPaused = false
     @AppStorage("beans.homeHeaderHideSort") private var homeHeaderHideSort = false
     @AppStorage("beans.homeHeaderHideRefresh") private var homeHeaderHideRefresh = true
-    @AppStorage("beans.homePlatformHintDismissed") private var homePlatformHintDismissed = false
+    @AppStorage("beans.homePlatformHintDismissed.v2") private var homePlatformHintDismissed = false
     @AppStorage("beans.homeWallpaperBlur") private var homeWallpaperBlur = 0.0
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
@@ -419,10 +419,10 @@ struct DiscoverView: View {
                                     )
                                     .fixedSize(horizontal: false, vertical: true)
                                     .offset(y: greetingLineOffsetY(index))
-                                if index == 0 && !isNativeClean && !homePlatformHintDismissed {
+                                if index == 0 && !homePlatformHintDismissed {
                                     Button {
                                         homePlatformHintDismissed = true
-                                        UserDefaults.standard.set(true, forKey: "beans.homePlatformHintDismissed")
+                                        UserDefaults.standard.set(true, forKey: "beans.homePlatformHintDismissed.v2")
                                     } label: {
                                         HStack(spacing: 5) {
                                             Image(systemName: "hand.tap")

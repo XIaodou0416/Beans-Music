@@ -968,7 +968,7 @@ struct AppleMusicCompactQueueContent: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 4) {
-                        ForEach(Array(player.upcomingQueue.prefix(100).enumerated()), id: \.element.index) { position, item in
+                        ForEach(Array(player.upcomingQueue.prefix(100).enumerated()), id: \.element.song.identityKey) { position, item in
                             AppleMusicCompactQueueRow(
                                 index: item.index,
                                 position: position,
