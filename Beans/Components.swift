@@ -1580,13 +1580,22 @@ struct NowPlayingIndicator: View {
     @EnvironmentObject private var theme: ThemeStore
     @State private var animating = false
 
+    private let barScales: [CGFloat] = [0.62, 1.0, 0.78]
+
     var body: some View {
         let _ = theme.accent
         HStack(alignment: .bottom, spacing: 2) {
             ForEach(0..<3, id: \.self) { index in
                 Capsule()
                     .fill(Color.beansAmber)
-                    .frame(width: 3, height: animating ? 14 : 5)
+                    // Keep the layout box fixed. Animating the frame height
+                    // made legacy SwiftUI re-layout a detail row while it was
+                    // being reused, which looked like a floating waveform.
+                    .frame(width: 3, height: 14)
+                    .scaleEffect(
+                        y: animating ? barScales[index] : 0.36,
+                        anchor: .bottom
+                    )
                     .animation(
                         .easeInOut(duration: 0.35)
                             .repeatForever(autoreverses: true)

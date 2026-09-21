@@ -2821,6 +2821,12 @@ struct SettingsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.beansComment)
                 }
+                // Keep the collapsed row at the same touch height as the
+                // other settings groups. Without an explicit height, older
+                // SwiftUI versions compress this section into a thin strip.
+                .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

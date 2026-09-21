@@ -40,16 +40,13 @@ struct SongCell: View {
     private var rowContent: some View {
         HStack(spacing: 12) {
             if let leadingIndex {
-                Group {
-                    if isCurrent && player.isPlaying {
-                        NowPlayingIndicator()
-                    } else {
-                        Text("\(leadingIndex)")
-                            .font(BeansFont.appFont(12, .regular, .monospaced))
-                            .foregroundStyle(Color.beansComment)
-                            .monospacedDigit()
-                    }
-                }
+                // Keep the track number stable. Showing a second waveform
+                // here as well as at the trailing edge made album/detail rows
+                // jump between two different leading layouts on older iOS.
+                Text("\(leadingIndex)")
+                    .font(BeansFont.appFont(12, .regular, .monospaced))
+                    .foregroundStyle(Color.beansComment)
+                    .monospacedDigit()
                 .frame(width: 28, alignment: .trailing)
             }
             if showCover {
