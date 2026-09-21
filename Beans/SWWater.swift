@@ -147,7 +147,13 @@ private struct SWWaterRenderer<Content: View>: View {
             // distortion. The old 200pt bound forced a large render surface
             // every frame and caused periodic refresh-rate dips on iPad.
             let sampleOffset = CGFloat(min(96, max(32, 24 + (initial.waves + initial.caustic) * 120)))
-            content.layerEffect(
+            // Water is always a background renderer. Disable hit testing on
+            // both the source content and the shader output because the
+            // iOS 17+ layerEffect path can otherwise expose the source image
+            // as a full-screen hit-test target after a custom image is loaded.
+            content
+                .allowsHitTesting(false)
+                .layerEffect(
                 ShaderLibrary.swWater(
                     .boundingRect,
                     .float(elapsed),
@@ -162,8 +168,10 @@ private struct SWWaterRenderer<Content: View>: View {
                     .color(initial.colorHighlight)
                 ),
                 maxSampleOffset: CGSize(width: sampleOffset, height: sampleOffset)
-            )
+                )
+                .allowsHitTesting(false)
         }
+        .allowsHitTesting(false)
     }
 }
 
