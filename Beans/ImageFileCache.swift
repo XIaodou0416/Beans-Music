@@ -342,8 +342,6 @@ struct BeansDetailProfileShortcut: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 46, height: 46)
-                    .fixedSize()
                     .accessibilityLabel(beansLocalized("我的", "Profile"))
                 case .themeToggle:
                     BeansThemeToggleButton(colorScheme: colorScheme, usesGlassContainer: false)
