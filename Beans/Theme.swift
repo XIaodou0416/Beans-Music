@@ -677,8 +677,10 @@ final class ThemeStore: ObservableObject {
         } else {
             return
         }
+        // A UUID keeps rapid multi-selection uploads distinct even when all
+        // assets finish loading in the same second.
         let url = Self.wallpaperDirectory()
-            .appendingPathComponent("wallpaper-\(Int(Date().timeIntervalSince1970))-\(Int.random(in: 100...999)).jpg")
+            .appendingPathComponent("wallpaper-\(UUID().uuidString).jpg")
         do {
             try imageData.write(to: url, options: .atomic)
             wallpaperPaths.append(url.path)
@@ -706,14 +708,31 @@ final class ThemeStore: ObservableObject {
 
     /// 删除壁纸库中的某张壁纸；若正在使用则自动切换到上一张/清空
     func deleteWallpaper(at path: String) {
-        try? FileManager.default.removeItem(atPath: path)
-        BeansImageFileCache.remove(path)
-        wallpaperPaths.removeAll { $0 == path }
-        removeWallpaperBackup(path)
-        saveDeletedWallpaper(path)
+        // Restored sandboxes can change the absolute path while the filename
+        // stays stable. Resolve that case too, so an image with any aspect
+        // ratio can always be removed from the library.
+        let fileName = URL(fileURLWithPath: path).lastPathComponent
+        let resolvedPath = wallpaperPaths.first {
+            URL(fileURLWithPath: $0).lastPathComponent == fileName
+        } ?? path
+        try? FileManager.default.removeItem(atPath: resolvedPath)
+        BeansImageFileCache.remove(resolvedPath)
+        wallpaperPaths.removeAll {
+            $0 == path || $0 == resolvedPath
+                || URL(fileURLWithPath: $0).lastPathComponent == fileName
+        }
+        removeWallpaperBackup(resolvedPath)
+        if resolvedPath != path { removeWallpaperBackup(path) }
+        saveDeletedWallpaper(resolvedPath)
         saveWallpaperList()
-        if backgroundImagePathLight == path { setBackgroundImagePath(wallpaperPaths.first ?? "", for: .light) }
-        if backgroundImagePathDark == path { setBackgroundImagePath(wallpaperPaths.first ?? "", for: .dark) }
+        if backgroundImagePathLight == path || backgroundImagePathLight == resolvedPath
+            || URL(fileURLWithPath: backgroundImagePathLight).lastPathComponent == fileName {
+            setBackgroundImagePath(wallpaperPaths.first ?? "", for: .light)
+        }
+        if backgroundImagePathDark == path || backgroundImagePathDark == resolvedPath
+            || URL(fileURLWithPath: backgroundImagePathDark).lastPathComponent == fileName {
+            setBackgroundImagePath(wallpaperPaths.first ?? "", for: .dark)
+        }
         invalidateBackgroundCache()
     }
 

@@ -2213,7 +2213,11 @@ struct SettingsView: View {
             // Settings is presented over the home screen. Sample the same
             // wallpaper/backdrop as the home cards so its clear glass does not
             // turn into a milky white surface at either sheet detent.
-            GlassBackdrop(customColor: theme.customBackground, homeMode: true)
+            GlassBackdrop(
+                customColor: theme.customBackground,
+                homeMode: true,
+                includeDynamicWallpaper: false
+            )
             SettingsCompactGlassSurface()
             if settingsContentReady {
                 settingsScrollContent
@@ -2811,9 +2815,6 @@ struct SettingsView: View {
                         Text("动态壁纸")
                             .font(BeansFont.appFont(15))
                             .foregroundStyle(Color.beansLabel)
-                        Text("内置 ShipSwift 动态效果，支持单独同步到播放器")
-                            .font(BeansFont.appFont(11))
-                            .foregroundStyle(Color.beansComment)
                     }
                     Spacer()
                     Image(systemName: dynamicWallpaperExpanded ? "chevron.up" : "chevron.down")
@@ -5283,7 +5284,10 @@ struct WallpaperPhotoPicker: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var config = PHPickerConfiguration()
         config.filter = .images
-        config.selectionLimit = allowsMultiple ? 0 : 1
+        // Explicitly use a generous finite limit. `0` means unlimited on most
+        // systems, but some older Photos pickers silently cap that mode.
+        config.selectionLimit = allowsMultiple ? 100 : 1
+        config.preferredAssetRepresentationMode = .current
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = context.coordinator
         return picker

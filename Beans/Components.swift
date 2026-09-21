@@ -161,6 +161,9 @@ struct GlassBackdrop: View {
     var ignoreCustomBackground: Bool = false
     /// 主页壁纸额外模糊半径
     var wallpaperBlur: CGFloat = 0
+    /// 是否在这个背景宿主中渲染动态壁纸。设置页使用静态背景，避免
+    /// iOS 17+ 的 layerEffect 把 Water 的源图层带入设置页命中测试。
+    var includeDynamicWallpaper: Bool = true
 
     /// 当前页面是否启用自定义背景：同步开启时全部页面生效，关闭时仅主页生效
     private var showCustomBackground: Bool {
@@ -179,7 +182,7 @@ struct GlassBackdrop: View {
     }
 
     private var isDynamicWallpaperActive: Bool {
-        showCustomBackground && dynamicWallpaper.renderableKind != .off
+        includeDynamicWallpaper && showCustomBackground && dynamicWallpaper.renderableKind != .off
     }
 
     @ViewBuilder
