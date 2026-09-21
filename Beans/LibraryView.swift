@@ -72,7 +72,8 @@ struct LibraryView: View {
     @State private var newPlaylistName = ""
     @State private var pendingDelete: Playlist?
     @State private var showDeleteConfirm = false
-    @State private var source: LibraryProvider = .netease
+    /// Persist the selected music-library provider across app relaunches.
+    @AppStorage("beans.librarySource") private var librarySourceRaw = LibraryProvider.netease.rawValue
     @AppStorage("beans.homeHeaderHideSort") private var hideSortButton = false
     @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
     @State private var qqPlaylists: [Playlist] = []
@@ -83,6 +84,15 @@ struct LibraryView: View {
     @State private var kugouSavedAt = Date.distantPast
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     private var libraryProviders: [LibraryProvider] { platformPrefs.enabledLibraryProviders }
+
+    private var source: LibraryProvider {
+        get {
+            LibraryProvider(rawValue: librarySourceRaw) ?? .netease
+        }
+        nonmutating set {
+            librarySourceRaw = newValue.rawValue
+        }
+    }
 
     private var orderedNeteasePlaylists: [Playlist] {
         SyncedPlaylistOrderStore.shared.ordered(auth.playlists, source: .netease)
@@ -198,17 +208,17 @@ struct LibraryView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .beansNeteaseLoginDidUpdate)) { _ in
             guard platformPrefs.isEnabled(SearchProvider.netease) else { return }
-            source = .netease
+            guard source == .netease else { return }
             Task { await auth.loadLibrary(force: true) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .beansQQLoginDidUpdate)) { _ in
             guard platformPrefs.isEnabled(SearchProvider.qq) else { return }
-            source = .qq
+            guard source == .qq else { return }
             Task { await loadQQPlaylists(force: true) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .beansKugouLoginDidUpdate)) { _ in
             guard platformPrefs.isEnabled(SearchProvider.kugou) else { return }
-            source = .kugou
+            guard source == .kugou else { return }
             Task { await loadKugouPlaylists(force: true) }
         }
         .sheet(isPresented: $showHistory) {
