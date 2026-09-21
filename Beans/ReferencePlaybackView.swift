@@ -1265,7 +1265,7 @@ struct AppleMusicLyricsSection: View {
                     isActive: isActive,
                     enabled: karaokeEnabled,
                     font: BeansFont.appFont(visualFocus ? 27 : 23, visualFocus ? .bold : .semibold),
-                    style: AnyShapeStyle(primary),
+                    style: primary,
                     fallbackOpacity: visualFocus ? 1 : 0.36
                 )
                     .fixedSize(horizontal: false, vertical: true)

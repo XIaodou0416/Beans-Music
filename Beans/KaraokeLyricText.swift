@@ -10,7 +10,7 @@ struct KaraokeLyricText: View {
     let isActive: Bool
     let enabled: Bool
     let font: Font
-    let style: AnyShapeStyle
+    let style: Color
     let fallbackOpacity: Double
 
     @State private var anchorDate = Date()
@@ -44,13 +44,13 @@ struct KaraokeLyricText: View {
         // Compose one Text value instead of placing every English word in an
         // HStack. Separate Text views can be independently compressed and
         // wrapped, which makes Latin lyrics appear out of order or scattered.
-        var composed = Text("")
+        var composed = AttributedString()
         for word in words {
-            composed = composed + Text(verbatim: word.text)
-                .foregroundStyle(style)
-                .opacity(LyricKaraokeTiming.opacity(for: word, at: time))
+            var segment = AttributedString(word.text)
+            segment.foregroundColor = style.opacity(LyricKaraokeTiming.opacity(for: word, at: time))
+            composed.append(segment)
         }
-        return composed
+        return Text(composed)
             .font(font)
             .multilineTextAlignment(.leading)
     }
