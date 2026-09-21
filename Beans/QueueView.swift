@@ -134,7 +134,7 @@ struct QueueView: View {
                         dragResidual = 0
                         BeansHaptics.medium()
                     }
-                case .second(true, let drag):
+                case .second(true, let drag?):
                     guard let start = dragStartIndex,
                           let current = draggingIndex,
                           player.queue.indices.contains(current) else { return }
