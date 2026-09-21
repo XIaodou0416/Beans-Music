@@ -17,6 +17,10 @@ final class NetEaseAPI {
     private let deviceId: String
     private let wnMcid: String
     private let cookiesKey = "beans.netease.cookies"
+    /// Playback sync and account refresh can arrive at the same time. Keep
+    /// cookie reads/writes serialized so a background weblog request cannot
+    /// corrupt the dictionary while the profile page is refreshing the account.
+    private let cookiesLock = NSLock()
     private var storedCookies: [String: String] = [:]
     private var personalFMCache: [Song] = []
     private var personalFMCacheDate = Date.distantPast
@@ -112,47 +116,58 @@ final class NetEaseAPI {
     }
 
     private func cookieValue(named name: String) -> String {
-        storedCookies[name] ?? ""
+        cookiesLock.lock()
+        defer { cookiesLock.unlock() }
+        return storedCookies[name] ?? ""
     }
 
     func clearCookies() {
+        cookiesLock.lock()
         storedCookies.removeAll()
+        cookiesLock.unlock()
         UserDefaults.standard.removeObject(forKey: cookiesKey)
     }
 
     /// 应用内网页登录：将 WKWebView 中 music.163.com 的 Cookie 合并进登录态并持久化
     func importWebCookies(_ cookies: [String: String]) {
         var changed = false
+        var snapshot: [String: String] = [:]
+        cookiesLock.lock()
         for (key, value) in cookies where !value.isEmpty {
             if storedCookies[key] != value {
                 storedCookies[key] = value
                 changed = true
             }
         }
-        if changed, let data = try? JSONEncoder().encode(storedCookies) {
+        if changed { snapshot = storedCookies }
+        cookiesLock.unlock()
+        if changed, let data = try? JSONEncoder().encode(snapshot) {
             UserDefaults.standard.set(data, forKey: cookiesKey)
         }
     }
 
     private func storeCookies(from response: HTTPURLResponse) {
         var changed = false
+        var responseCookies: [HTTPCookie] = []
         for (key, value) in response.allHeaderFields {
             guard let key = key as? String, key.lowercased() == "set-cookie",
                   let value = value as? String, !value.isEmpty,
                   let url = response.url
             else { continue }
-            let cookies = HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": value], for: url)
-            for cookie in cookies where !cookie.value.isEmpty {
-                if storedCookies[cookie.name] != cookie.value {
-                    storedCookies[cookie.name] = cookie.value
-                    changed = true
-                }
+            responseCookies.append(contentsOf: HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": value], for: url))
+        }
+        var snapshot: [String: String] = [:]
+        cookiesLock.lock()
+        for cookie in responseCookies where !cookie.value.isEmpty {
+            if storedCookies[cookie.name] != cookie.value {
+                storedCookies[cookie.name] = cookie.value
+                changed = true
             }
         }
-        if changed {
-            if let data = try? JSONEncoder().encode(storedCookies) {
-                UserDefaults.standard.set(data, forKey: cookiesKey)
-            }
+        if changed { snapshot = storedCookies }
+        cookiesLock.unlock()
+        if changed, let data = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(data, forKey: cookiesKey)
         }
     }
 

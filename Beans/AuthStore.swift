@@ -55,14 +55,19 @@ final class AuthStore: ObservableObject {
     @MainActor
     func refreshAccount() async {
         guard let current = user else { return }
-        if let fresh = try? await NetEaseAPI.shared.account() {
-            user = fresh
-            if let data = try? JSONEncoder().encode(fresh) {
-                defaults.set(data, forKey: userKey)
-            }
-            if fresh.uid != current.uid {
-                isLoggedIn = true
-            }
+        // Do the request and its crypto work away from the main actor. This
+        // method is called when the profile sheet appears; account refresh
+        // must never hold the first interactive frame hostage.
+        let fresh = await Task.detached(priority: .utility) {
+            try? await NetEaseAPI.shared.account()
+        }.value
+        guard let fresh, user?.uid == current.uid else { return }
+        user = fresh
+        if let data = try? JSONEncoder().encode(fresh) {
+            defaults.set(data, forKey: userKey)
+        }
+        if fresh.uid != current.uid {
+            isLoggedIn = true
         }
     }
 

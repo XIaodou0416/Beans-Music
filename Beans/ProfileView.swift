@@ -429,7 +429,7 @@ struct ProfileView: View {
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
             TabBarAppearanceConfigurator()
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: isNativeClean ? 26 : 22) {
+                VStack(alignment: .leading, spacing: isNativeClean ? 26 : 22) {
                     if isNativeClean {
                         appleHeader
                     } else {

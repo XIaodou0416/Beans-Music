@@ -1850,7 +1850,7 @@ final class PlayerManager: NSObject, ObservableObject {
         guard !netEasePlaybackStartSent else { return }
         netEasePlaybackStartSent = true
         let trackID = song.id
-        Task {
+        Task.detached(priority: .utility) {
             await NetEaseAPI.shared.syncPlaybackStart(trackID: trackID)
         }
     }
@@ -1872,7 +1872,7 @@ final class PlayerManager: NSObject, ObservableObject {
         netEasePlaybackStartSent = false
         guard seconds > 0 else { return }
         let trackID = song.id
-        Task {
+        Task.detached(priority: .utility) {
             await NetEaseAPI.shared.syncPlaybackFinish(trackID: trackID, seconds: seconds)
         }
     }
