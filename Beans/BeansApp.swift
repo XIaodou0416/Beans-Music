@@ -80,6 +80,11 @@ struct BeansApp: App {
                 player.restorePersistedPlayMode()
                 player.resumePersistedPlaybackIfEnabled()
                 FontManager.reinstallIfNeeded()
+                CoverImagePrefetcher.shared.prefetchStartupCovers(
+                    auth: auth,
+                    player: player,
+                    favorites: favorites
+                )
                 await DeviceReporter.shared.reportLaunch()
                 await RemoteControlStore.shared.refreshIfNeeded(force: true)
             }

@@ -135,6 +135,7 @@ struct ProfileView: View {
     @AppStorage(BeansBackendSettings.publicIDRevisionKey) private var publicIDRevision = 0
 
     @State private var showHistory = false
+    @State private var showCacheManager = false
 
     /// 统一账号登录面板（网易云 + QQ 音乐整合）
     @State private var showAccountHub = false
@@ -490,6 +491,11 @@ struct ProfileView: View {
                 .environmentObject(player)
                 .environmentObject(auth)
                 .environmentObject(theme)
+        }
+        .sheet(isPresented: $showCacheManager) {
+            CacheManagerView()
+                .environmentObject(theme)
+                .modifier(BeansSheetModifier(detents: [.fraction(0.84), .large], dragIndicator: true))
         }
         .sheet(isPresented: $showFeedback) {
             FeedbackSheet()
@@ -963,6 +969,9 @@ struct ProfileView: View {
                 featureCell(icon: hasVisibleAccountLogin ? "checkmark.seal.fill" : "globe", title: isEnglish ? "Accounts and Sign-in" : "账号与登录", subtitle: hasVisibleAccountLogin ? accountStatusLine : (isEnglish ? "Sign in to \(displayPlatformSummary)" : "登录 \(platformPrefs.summaryText)")) {
                     BeansHaptics.tap()
                     showAccountHub = true
+                }
+                featureCell(icon: "internaldrive", title: isEnglish ? "Cache management" : "缓存管理", subtitle: isEnglish ? "Review storage and choose what to clear" : "查看占用并选择清理") {
+                    showCacheManager = true
                 }
             }
         }
@@ -2216,7 +2225,7 @@ struct SettingsView: View {
             GlassBackdrop(
                 customColor: theme.customBackground,
                 homeMode: true,
-                includeDynamicWallpaper: false
+                includeDynamicWallpaper: true
             )
             SettingsCompactGlassSurface()
             if settingsContentReady {
@@ -2821,6 +2830,9 @@ struct SettingsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.beansComment)
                 }
+                .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

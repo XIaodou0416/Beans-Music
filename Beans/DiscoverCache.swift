@@ -57,6 +57,11 @@ final class DiscoverCache {
         persist()
     }
 
+    func clearAll() {
+        store.removeAll()
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+
     private func persist() {
         guard let data = try? JSONEncoder().encode(store) else { return }
         UserDefaults.standard.set(data, forKey: storageKey)

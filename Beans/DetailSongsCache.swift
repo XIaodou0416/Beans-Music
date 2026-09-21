@@ -33,6 +33,13 @@ final class DetailSongsCache {
         return entries[key]
     }
 
+    func clearAll() {
+        lock.lock()
+        entries.removeAll()
+        lock.unlock()
+        defaults.removeObject(forKey: storageKey)
+    }
+
     /// 返回详情页缓存中的歌曲，供启动预加载复用已经访问过的封面。
     func allCachedSongs() -> [Song] {
         lock.lock()

@@ -1040,6 +1040,27 @@ final class BeansCoverImageStore {
         }
     }
 
+    static func clearCache() async -> Bool {
+        await withCheckedContinuation { continuation in
+            clearCache { success in
+                continuation.resume(returning: success)
+            }
+        }
+    }
+
+    /// 返回远程封面缓存的磁盘占用，不包含用户上传的头像、名片和壁纸文件。
+    static func cacheSize() async -> Int64 {
+        await withCheckedContinuation { continuation in
+            diskQueue.async {
+                let customFiles = directorySize(at: diskCacheDirectory)
+                let urlCacheFiles = session.configuration.urlCache?.currentDiskUsage ?? 0
+                DispatchQueue.main.async {
+                    continuation.resume(returning: Int64(customFiles) + Int64(urlCacheFiles))
+                }
+            }
+        }
+    }
+
     /// 分批下载封面，避免首次启动时同时创建大量网络任务。
     static func prefetch(urls: Set<URL>) async {
         let uniqueURLs = Array(urls)
@@ -1098,6 +1119,21 @@ final class BeansCoverImageStore {
         let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
         let filename = digest.map { String(format: "%02x", $0) }.joined()
         return diskCacheDirectory.appendingPathComponent(filename).appendingPathExtension("cover")
+    }
+
+    private static func directorySize(at directory: URL) -> Int64 {
+        guard let files = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+        return files.reduce(Int64(0)) { total, item in
+            guard let fileURL = item as? URL,
+                  let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize else {
+                return total
+            }
+            return total + Int64(size ?? 0)
+        }
     }
 
     private static func trimDiskCacheIfNeeded() {

@@ -104,6 +104,15 @@ final class SyncedPlaylistCache {
         persistAsync(songSnapshot, key: songsKey)
     }
 
+    func clearAll() {
+        lock.lock()
+        playlistEntries.removeAll()
+        songEntries.removeAll()
+        lock.unlock()
+        defaults.removeObject(forKey: playlistsKey)
+        defaults.removeObject(forKey: songsKey)
+    }
+
     private func cacheKey(source: SongSource, accountID: String) -> String {
         let normalizedAccount = accountID.trimmingCharacters(in: .whitespacesAndNewlines)
         return "\(source.rawValue)|\(normalizedAccount.isEmpty ? "default" : normalizedAccount)"

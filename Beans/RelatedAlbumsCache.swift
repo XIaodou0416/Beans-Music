@@ -33,6 +33,20 @@ final class RelatedAlbumsCache {
         return entries[key]
     }
 
+    /// 已缓存的“该歌手的其他专辑”，供启动预加载和缓存管理复用。
+    func allCachedAlbums() -> [Album] {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries.values.flatMap(\.albums)
+    }
+
+    func clearAll() {
+        lock.lock()
+        entries.removeAll()
+        lock.unlock()
+        defaults.removeObject(forKey: storageKey)
+    }
+
     func save(_ albums: [Album], for key: String) {
         guard !albums.isEmpty else { return }
         lock.lock()

@@ -9,7 +9,10 @@ enum DeviceIdentity {
     private static let account = "anonymous-user-id"
     private static let publicIDAccount = "public-user-id"
     private static let originalPublicIDAccount = "original-public-user-id"
+    private static let publicIDDefaultsKey = "beans.identity.publicID"
+    private static let originalPublicIDDefaultsKey = "beans.identity.originalPublicID"
     private static let developerIdentifierHash = "f6073926d77dd0947338f5f27f133201a484a2d2b28f68f7fbd95cb168526d36"
+    private static let publicIDLock = NSLock()
 
     static let userID: String = {
         if let value = loadFromKeychain(), !value.isEmpty {
@@ -24,28 +27,38 @@ enum DeviceIdentity {
     /// through the device keychain. The developer device starts with its
     /// familiar ID, but it can be changed through developer tools as well.
     static var publicID: String {
-        if let value = loadFromKeychain(account: publicIDAccount),
-           isValidPublicID(value) {
-            if loadFromKeychain(account: originalPublicIDAccount) == nil {
+        publicIDLock.lock()
+        defer { publicIDLock.unlock() }
+
+        if let value = currentPublicIDLocked() {
+            mirror(value, key: publicIDDefaultsKey)
+            if currentOriginalPublicIDLocked() == nil {
                 saveToKeychain(value, account: originalPublicIDAccount)
+                mirror(value, key: originalPublicIDDefaultsKey)
             }
             return value
         }
+
         let generated = isDeveloperInstallation ? "5201314" : String(Int.random(in: 100000...500000))
-        saveToKeychain(generated, account: publicIDAccount)
-        saveToKeychain(generated, account: originalPublicIDAccount)
+        persistPublicIDLocked(generated, asOriginal: true)
         return generated
     }
 
     /// The first public ID assigned to this installation, retained when the
     /// developer later renames the visible ID.
     static var originalPublicID: String {
-        if let value = loadFromKeychain(account: originalPublicIDAccount),
-           isValidPublicID(value) {
+        publicIDLock.lock()
+        defer { publicIDLock.unlock() }
+
+        if let value = currentOriginalPublicIDLocked() {
+            saveToKeychain(value, account: originalPublicIDAccount)
+            mirror(value, key: originalPublicIDDefaultsKey)
             return value
         }
-        let value = publicID
-        saveToKeychain(value, account: originalPublicIDAccount)
+
+        let value = currentPublicIDLocked()
+            ?? (isDeveloperInstallation ? "5201314" : String(Int.random(in: 100000...500000)))
+        persistPublicIDLocked(value, asOriginal: true)
         return value
     }
 
@@ -55,7 +68,10 @@ enum DeviceIdentity {
         guard isValidPublicID(value) else {
             return
         }
+        publicIDLock.lock()
+        defer { publicIDLock.unlock() }
         saveToKeychain(value, account: publicIDAccount)
+        mirror(value, key: publicIDDefaultsKey)
     }
 
     static func isValidPublicID(_ value: String) -> Bool {
@@ -71,6 +87,39 @@ enum DeviceIdentity {
         let data = Data(userID.lowercased().utf8)
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         return digest == developerIdentifierHash
+    }
+
+    private static func currentPublicIDLocked() -> String? {
+        if let value = loadFromKeychain(account: publicIDAccount), isValidPublicID(value) {
+            return value
+        }
+        if let value = UserDefaults.standard.string(forKey: publicIDDefaultsKey), isValidPublicID(value) {
+            return value
+        }
+        return nil
+    }
+
+    private static func currentOriginalPublicIDLocked() -> String? {
+        if let value = loadFromKeychain(account: originalPublicIDAccount), isValidPublicID(value) {
+            return value
+        }
+        if let value = UserDefaults.standard.string(forKey: originalPublicIDDefaultsKey), isValidPublicID(value) {
+            return value
+        }
+        return nil
+    }
+
+    private static func persistPublicIDLocked(_ value: String, asOriginal: Bool) {
+        saveToKeychain(value, account: publicIDAccount)
+        mirror(value, key: publicIDDefaultsKey)
+        if asOriginal {
+            saveToKeychain(value, account: originalPublicIDAccount)
+            mirror(value, key: originalPublicIDDefaultsKey)
+        }
+    }
+
+    private static func mirror(_ value: String, key: String) {
+        UserDefaults.standard.set(value, forKey: key)
     }
 
     static var hardwareModel: String {

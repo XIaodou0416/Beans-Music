@@ -32,6 +32,14 @@ final class CoverImagePrefetcher {
         urls.formUnion(Self.urls(in: SyncedPlaylistCache.shared.allCachedPlaylists()))
         urls.formUnion(Self.urls(in: SyncedPlaylistCache.shared.allCachedSongs()))
         urls.formUnion(Self.urls(in: DetailSongsCache.shared.allCachedSongs()))
+        for entry in ArtistHomeCache.shared.allCachedEntries() {
+            if let artistURL = entry.artist?.coverURL {
+                urls.insert(artistURL)
+            }
+            urls.formUnion(Self.urls(in: entry.songs))
+            urls.formUnion(entry.albums.compactMap(\.coverURL))
+        }
+        urls.formUnion(RelatedAlbumsCache.shared.allCachedAlbums().compactMap(\.coverURL))
         schedule(urls)
     }
 

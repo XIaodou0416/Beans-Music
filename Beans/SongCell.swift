@@ -37,6 +37,11 @@ struct SongCell: View {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
 
+    private var usesLegacyStableLayout: Bool {
+        if #available(iOS 26, *) { return false }
+        return true
+    }
+
     private var rowContent: some View {
         HStack(spacing: 12) {
             if let leadingIndex {
@@ -84,10 +89,12 @@ struct SongCell: View {
             Spacer(minLength: 0)
             if isCurrent && player.isPlaying {
                 NowPlayingIndicator()
+                    .frame(width: 42, alignment: .trailing)
             } else {
                 Text(song.formattedDuration)
                     .font(BeansFont.appFont(12, .regular, .monospaced))
                     .foregroundStyle(Color.beansComment)
+                    .frame(width: 42, alignment: .trailing)
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -95,8 +102,8 @@ struct SongCell: View {
         .padding(.vertical, 6)
         .frame(height: fixedRowHeight ?? (compactAlbumRow ? 54 : nil))
         .contentShape(Rectangle())
-        .scaleEffect(isCurrent ? 1.012 : 1)
-        .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isCurrent)
+        .scaleEffect(usesLegacyStableLayout ? 1 : (isCurrent ? 1.012 : 1))
+        .animation(usesLegacyStableLayout ? nil : .spring(response: 0.28, dampingFraction: 0.86), value: isCurrent)
         .onTapGesture {
             onTap?()
         }
@@ -176,9 +183,9 @@ struct SongCell: View {
                 rowContent
             }
         }
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 8)
-        .animation(.easeOut(duration: 0.28), value: appeared)
+        .opacity(usesLegacyStableLayout ? 1 : (appeared ? 1 : 0))
+        .offset(y: usesLegacyStableLayout ? 0 : (appeared ? 0 : 8))
+        .animation(usesLegacyStableLayout ? nil : .easeOut(duration: 0.28), value: appeared)
         .onAppear { appeared = true }
     }
 }

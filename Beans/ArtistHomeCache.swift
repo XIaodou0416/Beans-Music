@@ -30,6 +30,20 @@ final class ArtistHomeCache {
         return entries[key]
     }
 
+    /// 已缓存歌手主页快照，供首帧后的封面预加载和缓存管理使用。
+    func allCachedEntries() -> [Entry] {
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(entries.values)
+    }
+
+    func clearAll() {
+        lock.lock()
+        entries.removeAll()
+        lock.unlock()
+        defaults.removeObject(forKey: storageKey)
+    }
+
     func isFresh(_ entry: Entry, now: Date = Date()) -> Bool {
         now.timeIntervalSince(entry.savedAt) < ttl
     }

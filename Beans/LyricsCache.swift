@@ -50,4 +50,11 @@ final class LyricsCache {
         guard let data = try? JSONEncoder().encode(entry) else { return }
         UserDefaults.standard.set(data, forKey: prefix + safeKey)
     }
+
+    func clearAll() {
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(prefix) {
+            defaults.removeObject(forKey: key)
+        }
+    }
 }
