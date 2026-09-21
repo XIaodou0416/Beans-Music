@@ -2216,7 +2216,7 @@ struct SettingsView: View {
             GlassBackdrop(
                 customColor: theme.customBackground,
                 homeMode: true,
-                includeDynamicWallpaper: false
+                includeDynamicWallpaper: true
             )
             SettingsCompactGlassSurface()
             if settingsContentReady {
