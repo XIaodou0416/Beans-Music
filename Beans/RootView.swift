@@ -834,6 +834,7 @@ struct RootView: View {
             rootLayoutSettled ? .easeInOut(duration: 0.25) : nil,
             value: player.currentSong?.identityKey
         )
+        .beansLegacyLayoutStability()
     }
 
     private func iPadSidebar(

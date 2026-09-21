@@ -33,6 +33,13 @@ final class RelatedAlbumsCache {
         return entries[key]
     }
 
+    /// Returns cached related-album shelves for first-use preloading.
+    func allCachedEntries() -> [Entry] {
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(entries.values)
+    }
+
     func save(_ albums: [Album], for key: String) {
         guard !albums.isEmpty else { return }
         lock.lock()

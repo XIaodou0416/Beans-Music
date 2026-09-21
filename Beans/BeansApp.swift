@@ -77,6 +77,9 @@ struct BeansApp: App {
             .task {
                 // 直接进入主页，首帧完成后恢复已安装用户的数据与媒体偏好。
                 await Task.yield()
+                Task { @MainActor in
+                    await InitialCatalogWarmup.shared.runIfNeeded()
+                }
                 player.restorePersistedPlayMode()
                 player.resumePersistedPlaybackIfEnabled()
                 FontManager.reinstallIfNeeded()
