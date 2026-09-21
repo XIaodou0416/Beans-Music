@@ -213,18 +213,51 @@ struct BeansProfileNameBackgroundView: View {
     var body: some View {
         Group {
             if CustomCoverMedia.usesAnimatedRenderer(for: url) {
-                CustomCoverMediaView(url: url, isMuted: isMuted)
-            } else if let image = BeansImageFileCache.image(at: url.path) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+                CustomCoverMediaView(url: url, isMuted: isMuted, startDelay: 0.12)
             } else {
-                Color.clear
+                BeansDeferredLocalImage(path: url.path)
             }
         }
         .clipped()
         .allowsHitTesting(false)
         .id(store.revision)
+    }
+}
+
+/// Loads user-provided profile images away from SwiftUI body evaluation.
+/// Large avatar/name-card images otherwise decode synchronously while the
+/// profile sheet is presented and can make the whole UI appear frozen.
+struct BeansDeferredLocalImage: View {
+    let path: String
+    var contentMode: ContentMode = .fill
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+            } else {
+                Color.clear
+            }
+        }
+        .task(id: path) {
+            guard !path.isEmpty else {
+                image = nil
+                return
+            }
+
+            let requestedPath = path
+            DispatchQueue.global(qos: .utility).async {
+                let loaded = BeansImageFileCache.image(at: requestedPath)
+                DispatchQueue.main.async {
+                    guard requestedPath == path else { return }
+                    image = loaded
+                }
+            }
+        }
     }
 }
 
@@ -238,12 +271,14 @@ struct BeansAvatarView: View {
     var body: some View {
         Group {
             if useCustom, store.isVideo {
-                CustomCoverMediaView(url: URL(fileURLWithPath: store.path), isMuted: true)
+                CustomCoverMediaView(
+                    url: URL(fileURLWithPath: store.path),
+                    isMuted: true,
+                    startDelay: 0.12
+                )
                     .id(store.revision)
-            } else if useCustom, let custom = BeansImageFileCache.image(at: store.path) {
-                Image(uiImage: custom)
-                    .resizable()
-                    .scaledToFill()
+            } else if useCustom, !store.path.isEmpty {
+                BeansDeferredLocalImage(path: store.path)
             } else if let remoteURL {
                 CoverImage(url: remoteURL, size: size, cornerRadius: size / 2)
             } else {

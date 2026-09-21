@@ -404,15 +404,18 @@ private struct CustomSongCoverPhotoPicker: UIViewControllerRepresentable {
 struct CustomCoverMediaView: UIViewRepresentable {
     let url: URL
     let isMuted: Bool
+    /// Profile media can be a large user-uploaded video. Delay player creation
+    /// until the first profile frame has become interactive.
+    var startDelay: TimeInterval = 0
 
     func makeUIView(context: Context) -> CustomCoverMediaUIView {
         let view = CustomCoverMediaUIView()
-        view.configure(url: url, isMuted: isMuted)
+        view.configure(url: url, isMuted: isMuted, startDelay: startDelay)
         return view
     }
 
     func updateUIView(_ uiView: CustomCoverMediaUIView, context: Context) {
-        uiView.configure(url: url, isMuted: isMuted)
+        uiView.configure(url: url, isMuted: isMuted, startDelay: startDelay)
     }
 }
 
@@ -424,6 +427,8 @@ final class CustomCoverMediaUIView: UIView {
     private var videoLayer: AVPlayerLayer?
     private var currentURL: URL?
     private var currentKind: CustomCoverMediaKind?
+    private var pendingVideoURL: URL?
+    private var pendingVideoWorkItem: DispatchWorkItem?
     private var activeObserver: NSObjectProtocol?
 
     override init(frame: CGRect) {
@@ -446,6 +451,7 @@ final class CustomCoverMediaUIView: UIView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     deinit {
+        pendingVideoWorkItem?.cancel()
         if let activeObserver {
             NotificationCenter.default.removeObserver(activeObserver)
         }
@@ -469,13 +475,20 @@ final class CustomCoverMediaUIView: UIView {
         videoLayer?.frame = videoHost.bounds
     }
 
-    func configure(url: URL, isMuted: Bool) {
+    func configure(url: URL, isMuted: Bool, startDelay: TimeInterval = 0) {
         let kind = CustomCoverMedia.kind(for: url)
-        guard currentURL != url || currentKind != kind || (kind == .video && player == nil) else {
+        guard currentURL != url || currentKind != kind else {
             player?.isMuted = isMuted
+            if kind == .video, player == nil, pendingVideoURL != url {
+                scheduleVideo(url: url, isMuted: isMuted, startDelay: startDelay)
+            }
             resumePlaybackIfNeeded()
             return
         }
+
+        pendingVideoWorkItem?.cancel()
+        pendingVideoWorkItem = nil
+        pendingVideoURL = nil
         currentURL = url
         currentKind = kind
         imageView.stopAnimating()
@@ -499,20 +512,43 @@ final class CustomCoverMediaUIView: UIView {
         case .video:
             imageView.isHidden = true
             videoHost.isHidden = false
-            let item = AVPlayerItem(url: url)
-            let player = AVQueuePlayer()
-            player.isMuted = isMuted
-            player.actionAtItemEnd = .none
-            player.automaticallyWaitsToMinimizeStalling = false
-            self.player = player
-            looper = AVPlayerLooper(player: player, templateItem: item)
-            let layer = AVPlayerLayer(player: player)
-            layer.videoGravity = .resizeAspectFill
-            videoHost.layer.addSublayer(layer)
-            videoLayer = layer
-            player.playImmediately(atRate: 1.0)
+            scheduleVideo(url: url, isMuted: isMuted, startDelay: startDelay)
         }
         setNeedsLayout()
+    }
+
+    private func scheduleVideo(url: URL, isMuted: Bool, startDelay: TimeInterval) {
+        guard pendingVideoURL != url else { return }
+        pendingVideoURL = url
+        let install = DispatchWorkItem { [weak self] in
+            self?.installVideo(url: url, isMuted: isMuted)
+        }
+        pendingVideoWorkItem = install
+        let delay = max(0, startDelay)
+        if delay == 0 {
+            DispatchQueue.main.async(execute: install)
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: install)
+        }
+    }
+
+    private func installVideo(url: URL, isMuted: Bool) {
+        guard currentURL == url, currentKind == .video, pendingVideoURL == url else { return }
+        pendingVideoURL = nil
+        pendingVideoWorkItem = nil
+
+        let item = AVPlayerItem(url: url)
+        let player = AVQueuePlayer()
+        player.isMuted = isMuted
+        player.actionAtItemEnd = .none
+        player.automaticallyWaitsToMinimizeStalling = false
+        self.player = player
+        looper = AVPlayerLooper(player: player, templateItem: item)
+        let layer = AVPlayerLayer(player: player)
+        layer.videoGravity = .resizeAspectFill
+        videoHost.layer.addSublayer(layer)
+        videoLayer = layer
+        player.playImmediately(atRate: 1.0)
     }
 
     private func resumePlaybackIfNeeded() {

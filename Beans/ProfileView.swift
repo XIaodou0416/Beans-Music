@@ -419,7 +419,11 @@ struct ProfileView: View {
                 // 头像入口作为主页延伸时始终沿用主页壁纸；常规“我的”页继续遵循同步开关。
                 GlassBackdrop(
                     customColor: forceHomeBackdrop ? theme.customBackground : (theme.backgroundSyncAll ? theme.customBackground : nil),
-                    homeMode: forceHomeBackdrop
+                    homeMode: forceHomeBackdrop,
+                    // The presenting home page already owns the dynamic
+                    // wallpaper. A second full-screen shader inside the
+                    // profile sheet can starve the main UI on older devices.
+                    includeDynamicWallpaper: !forceHomeBackdrop
                 )
             }
             // 实例级 UITabBar 清透风格（固定全透明，无需调节）
@@ -466,6 +470,10 @@ struct ProfileView: View {
             profileGlobalFrame = frame
         }
         .task {
+            // Let the profile sheet finish its first interactive frame before
+            // account refresh/network callbacks publish more view updates.
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            guard !Task.isCancelled else { return }
             guard !didRefreshProfileAccount else { return }
             didRefreshProfileAccount = true
             await auth.refreshAccount()
