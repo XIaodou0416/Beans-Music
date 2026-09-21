@@ -18,29 +18,40 @@ final class CoverImagePrefetcher {
         guard !didStartStartupPrefetch else { return }
         didStartStartupPrefetch = true
 
-        var urls = Set<URL>()
-        for snapshot in DiscoverCache.shared.allSnapshots() {
-            urls.formUnion(Self.urls(in: snapshot))
-        }
-        urls.formUnion(Self.urls(in: auth.playlists))
-        urls.formUnion(Self.urls(in: player.queue))
-        urls.formUnion(Self.urls(in: player.history))
-        urls.formUnion(Self.urls(in: favorites.neteaseFavoriteSongs))
-        urls.formUnion(Self.urls(in: favorites.qqFavoriteSongs))
-        urls.formUnion(Self.urls(in: favorites.kugouFavoriteSongs))
-        urls.formUnion(Self.urls(in: LocalLibraryStore.shared.playlists.flatMap(\.songs)))
-        urls.formUnion(Self.urls(in: SyncedPlaylistCache.shared.allCachedPlaylists()))
-        urls.formUnion(Self.urls(in: SyncedPlaylistCache.shared.allCachedSongs()))
-        urls.formUnion(Self.urls(in: DetailSongsCache.shared.allCachedSongs()))
-        for entry in ArtistHomeCache.shared.allCachedEntries() {
-            if let artistURL = entry.artist?.coverURL {
-                urls.insert(artistURL)
+        // Keep the first profile frame responsive. Persistent cache stores can
+        // contain hundreds of songs and decoding their snapshots on the main
+        // actor made the profile tab appear frozen on older devices.
+        var immediateURLs = Set<URL>()
+        immediateURLs.formUnion(Self.urls(in: auth.playlists))
+        immediateURLs.formUnion(Self.urls(in: player.queue))
+        immediateURLs.formUnion(Self.urls(in: player.history))
+        immediateURLs.formUnion(Self.urls(in: favorites.neteaseFavoriteSongs))
+        immediateURLs.formUnion(Self.urls(in: favorites.qqFavoriteSongs))
+        immediateURLs.formUnion(Self.urls(in: favorites.kugouFavoriteSongs))
+
+        let persistentTask = Task.detached(priority: .utility) {
+            var cachedURLs = Set<URL>()
+            cachedURLs.formUnion(Self.urls(in: LocalLibraryStore.shared.playlists.flatMap(\.songs)))
+            cachedURLs.formUnion(Self.urls(in: SyncedPlaylistCache.shared.allCachedPlaylists()))
+            cachedURLs.formUnion(Self.urls(in: SyncedPlaylistCache.shared.allCachedSongs()))
+            cachedURLs.formUnion(Self.urls(in: DetailSongsCache.shared.allCachedSongs()))
+            for entry in ArtistHomeCache.shared.allCachedEntries() {
+                if let artistURL = entry.artist?.coverURL {
+                    cachedURLs.insert(artistURL)
+                }
+                cachedURLs.formUnion(Self.urls(in: entry.songs))
+                cachedURLs.formUnion(entry.albums.compactMap(\.coverURL))
             }
-            urls.formUnion(Self.urls(in: entry.songs))
-            urls.formUnion(entry.albums.compactMap(\.coverURL))
+            cachedURLs.formUnion(RelatedAlbumsCache.shared.allCachedAlbums().compactMap(\.coverURL))
+            return cachedURLs
         }
-        urls.formUnion(RelatedAlbumsCache.shared.allCachedAlbums().compactMap(\.coverURL))
-        schedule(urls)
+
+        schedule(immediateURLs)
+        Task { [weak self] in
+            let cachedURLs = await persistentTask.value
+            guard let self else { return }
+            schedule(cachedURLs)
+        }
     }
 
     /// 主页请求完成后立即补充本次新拿到的封面，不必等下次启动。
@@ -57,7 +68,7 @@ final class CoverImagePrefetcher {
         }
     }
 
-    private static func urls(in snapshot: DiscoverCache.Snapshot) -> Set<URL> {
+    nonisolated private static func urls(in snapshot: DiscoverCache.Snapshot) -> Set<URL> {
         var urls = Set<URL>()
         urls.formUnion(Self.urls(in: snapshot.dailySongs))
         urls.formUnion(snapshot.newAlbums.compactMap(\.coverURL))
@@ -69,13 +80,13 @@ final class CoverImagePrefetcher {
         return urls
     }
 
-    private static func urls(in playlists: [Playlist]) -> Set<URL> {
+    nonisolated private static func urls(in playlists: [Playlist]) -> Set<URL> {
         Set(playlists.flatMap { playlist in
             [playlist.coverURL, playlist.creatorAvatarURL].compactMap { $0 }
         })
     }
 
-    private static func urls(in songs: [Song]) -> Set<URL> {
+    nonisolated private static func urls(in songs: [Song]) -> Set<URL> {
         Set(songs.compactMap(\.coverURL))
     }
 }

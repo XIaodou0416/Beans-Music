@@ -27,9 +27,7 @@ final class BeansCacheManager: ObservableObject {
     @Published private(set) var isCleaning = false
     @Published var selectedIDs: Set<String> = []
 
-    init() {
-        refresh()
-    }
+    init() {}
 
     var totalBytes: Int64 {
         items.reduce(0) { $0 + $1.bytes }
