@@ -61,21 +61,6 @@ extension View {
             self
         }
     }
-
-    /// SwiftUI's legacy layout engine can animate implicit geometry changes
-    /// while a recycled row is being attached. Disable only that implicit
-    /// transaction below iOS 26 so controls keep their fixed positions.
-    @ViewBuilder
-    func beansLegacyLayoutStability() -> some View {
-        if #available(iOS 26.0, *) {
-            self
-        } else {
-            transaction { transaction in
-                transaction.animation = nil
-                transaction.disablesAnimations = true
-            }
-        }
-    }
 }
 
 private struct BeansAdaptiveContentWidthModifier: ViewModifier {

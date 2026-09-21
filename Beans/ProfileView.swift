@@ -444,7 +444,6 @@ struct ProfileView: View {
                 .beansAdaptiveContentWidth()
             }
             .beansScrollIndicatorsHidden()
-            .beansLegacyLayoutStability()
 
             if let themeRevealSnapshot {
                 BeansProfileThemeRevealOverlay(
@@ -2217,7 +2216,7 @@ struct SettingsView: View {
             GlassBackdrop(
                 customColor: theme.customBackground,
                 homeMode: true,
-                includeDynamicWallpaper: true
+                includeDynamicWallpaper: false
             )
             SettingsCompactGlassSurface()
             if settingsContentReady {

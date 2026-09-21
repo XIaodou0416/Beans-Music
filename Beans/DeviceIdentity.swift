@@ -9,10 +9,7 @@ enum DeviceIdentity {
     private static let account = "anonymous-user-id"
     private static let publicIDAccount = "public-user-id"
     private static let originalPublicIDAccount = "original-public-user-id"
-    private static let publicIDDefaultsKey = "beans.identity.publicID"
-    private static let originalPublicIDDefaultsKey = "beans.identity.originalPublicID"
     private static let developerIdentifierHash = "f6073926d77dd0947338f5f27f133201a484a2d2b28f68f7fbd95cb168526d36"
-    private static let lock = NSLock()
 
     static let userID: String = {
         if let value = loadFromKeychain(), !value.isEmpty {
@@ -27,38 +24,28 @@ enum DeviceIdentity {
     /// through the device keychain. The developer device starts with its
     /// familiar ID, but it can be changed through developer tools as well.
     static var publicID: String {
-        lock.lock()
-        defer { lock.unlock() }
-
-        // Keychain reads can transiently fail on older systems while the
-        // protected data/keychain service is becoming available. Keep a
-        // second persistent copy so a failed read never generates a new ID.
-        if let value = persistentPublicID(account: publicIDAccount, defaultsKey: publicIDDefaultsKey) {
-            if persistentPublicID(account: originalPublicIDAccount, defaultsKey: originalPublicIDDefaultsKey) == nil {
-                persist(value, account: originalPublicIDAccount, defaultsKey: originalPublicIDDefaultsKey)
+        if let value = loadFromKeychain(account: publicIDAccount),
+           isValidPublicID(value) {
+            if loadFromKeychain(account: originalPublicIDAccount) == nil {
+                saveToKeychain(value, account: originalPublicIDAccount)
             }
             return value
         }
-
         let generated = isDeveloperInstallation ? "5201314" : String(Int.random(in: 100000...500000))
-        persist(generated, account: publicIDAccount, defaultsKey: publicIDDefaultsKey)
-        persist(generated, account: originalPublicIDAccount, defaultsKey: originalPublicIDDefaultsKey)
+        saveToKeychain(generated, account: publicIDAccount)
+        saveToKeychain(generated, account: originalPublicIDAccount)
         return generated
     }
 
     /// The first public ID assigned to this installation, retained when the
     /// developer later renames the visible ID.
     static var originalPublicID: String {
-        lock.lock()
-        defer { lock.unlock() }
-
-        if let value = persistentPublicID(account: originalPublicIDAccount, defaultsKey: originalPublicIDDefaultsKey) {
+        if let value = loadFromKeychain(account: originalPublicIDAccount),
+           isValidPublicID(value) {
             return value
         }
-        let value = persistentPublicID(account: publicIDAccount, defaultsKey: publicIDDefaultsKey)
-            ?? (isDeveloperInstallation ? "5201314" : String(Int.random(in: 100000...500000)))
-        persist(value, account: publicIDAccount, defaultsKey: publicIDDefaultsKey)
-        persist(value, account: originalPublicIDAccount, defaultsKey: originalPublicIDDefaultsKey)
+        let value = publicID
+        saveToKeychain(value, account: originalPublicIDAccount)
         return value
     }
 
@@ -68,9 +55,7 @@ enum DeviceIdentity {
         guard isValidPublicID(value) else {
             return
         }
-        lock.lock()
-        persist(value, account: publicIDAccount, defaultsKey: publicIDDefaultsKey)
-        lock.unlock()
+        saveToKeychain(value, account: publicIDAccount)
     }
 
     static func isValidPublicID(_ value: String) -> Bool {
@@ -133,26 +118,6 @@ enum DeviceIdentity {
             return nil
         }
         return value
-    }
-
-    private static func persistentPublicID(account: String, defaultsKey: String) -> String? {
-        if let keychainValue = loadFromKeychain(account: account), isValidPublicID(keychainValue) {
-            UserDefaults.standard.set(keychainValue, forKey: defaultsKey)
-            return keychainValue
-        }
-        if let defaultsValue = UserDefaults.standard.string(forKey: defaultsKey),
-           isValidPublicID(defaultsValue) {
-            // Repair the keychain opportunistically, but never depend on this
-            // write succeeding for the stability of the visible ID.
-            saveToKeychain(defaultsValue, account: account)
-            return defaultsValue
-        }
-        return nil
-    }
-
-    private static func persist(_ value: String, account: String, defaultsKey: String) {
-        UserDefaults.standard.set(value, forKey: defaultsKey)
-        saveToKeychain(value, account: account)
     }
 
     private static func saveToKeychain(_ value: String, account: String = account) {

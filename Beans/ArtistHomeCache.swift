@@ -30,13 +30,6 @@ final class ArtistHomeCache {
         return entries[key]
     }
 
-    /// Returns successful artist pages for first-use cover warmup.
-    func allCachedEntries() -> [Entry] {
-        lock.lock()
-        defer { lock.unlock() }
-        return Array(entries.values)
-    }
-
     func isFresh(_ entry: Entry, now: Date = Date()) -> Bool {
         now.timeIntervalSince(entry.savedAt) < ttl
     }
