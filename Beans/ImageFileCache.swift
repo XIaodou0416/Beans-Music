@@ -168,7 +168,9 @@ final class BeansProfileNameBackgroundStore: ObservableObject {
         guard !data.isEmpty else { return }
         let ext = fileExtension.isEmpty ? "jpg" : fileExtension.lowercased()
         let fileURL = Self.storageDirectory
-            .appendingPathComponent("BeansProfileNameBackground")
+            // Give every replacement a new URL so AVPlayer and SwiftUI cannot
+            // reuse a cached video when two uploads share the same extension.
+            .appendingPathComponent("BeansProfileNameBackground-\(UUID().uuidString)")
             .appendingPathExtension(ext)
         do {
             try FileManager.default.createDirectory(
@@ -206,6 +208,8 @@ struct BeansProfileNameBackgroundView: View {
     let url: URL
     var isMuted = true
 
+    @ObservedObject private var store = BeansProfileNameBackgroundStore.shared
+
     var body: some View {
         Group {
             if CustomCoverMedia.usesAnimatedRenderer(for: url) {
@@ -220,6 +224,7 @@ struct BeansProfileNameBackgroundView: View {
         }
         .clipped()
         .allowsHitTesting(false)
+        .id(store.revision)
     }
 }
 
