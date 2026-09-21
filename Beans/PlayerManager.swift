@@ -574,7 +574,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
     /// Move one queue item while keeping the current song and shuffle order
     /// pointing at the same songs.
-    func moveQueueItem(from source: Int, to destination: Int) {
+    func moveQueueItem(from source: Int, to destination: Int, persist: Bool = true) {
         guard queue.indices.contains(source), queue.indices.contains(destination), source != destination else { return }
         let oldQueue = queue
         let currentSongID = currentSong?.identityKey
@@ -601,13 +601,13 @@ final class PlayerManager: NSObject, ObservableObject {
             playOrder = Array(queue.indices)
             orderPosition = currentIndex
         }
-        savePersistedPlaybackState()
+        if persist { savePersistedPlaybackState() }
     }
 
     /// 按播放列表当前显示顺序移动“接下来播放”的歌曲。
     /// 顺序播放直接调整队列；随机播放只调整当前歌曲之后的随机顺序，
     /// 不重新洗牌，也不会改变当前歌曲和已经播放过的歌曲。
-    func moveUpcomingQueueItem(from sourcePosition: Int, to destinationPosition: Int) {
+    func moveUpcomingQueueItem(from sourcePosition: Int, to destinationPosition: Int, persist: Bool = true) {
         let upcoming = upcomingQueue
         guard upcoming.indices.contains(sourcePosition), !upcoming.isEmpty else { return }
         let destination = min(max(destinationPosition, 0), upcoming.count - 1)
@@ -622,10 +622,14 @@ final class PlayerManager: NSObject, ObservableObject {
             objectWillChange.send()
             playOrder = Array(playOrder.prefix(nextStart)) + future
             orderPosition = playOrder.firstIndex(of: currentIndex) ?? max(0, nextStart - 1)
-            savePersistedPlaybackState()
+            if persist { savePersistedPlaybackState() }
         } else {
-            moveQueueItem(from: upcoming[sourcePosition].index, to: upcoming[destination].index)
+            moveQueueItem(from: upcoming[sourcePosition].index, to: upcoming[destination].index, persist: persist)
         }
+    }
+
+    func finishUpcomingQueueReorder() {
+        savePersistedPlaybackState()
     }
 
     func retryCurrent() {

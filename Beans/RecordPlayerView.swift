@@ -166,7 +166,10 @@ struct RecordPlayerView: View {
                 RecordModeMiniLyrics(lyrics: lyrics) {
                     withAnimation(.easeInOut(duration: 0.22)) { showLyrics = true }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Keep the lyric preview's footprint stable while the next
+                // song's lyrics are being resolved, so the scrubber never jumps.
+                .frame(maxWidth: .infinity)
+                .frame(height: 84)
             }
             RecordModeScrubber()
                 .padding(.horizontal, 20)
@@ -701,6 +704,7 @@ private struct RecordModeMiniLyrics: View {
                 Color.clear
             }
         }
+        .frame(height: 84)
     }
 
     private func line(_ line: LyricLine?, emphasized: Bool) -> some View {
@@ -789,7 +793,7 @@ private struct RecordModeTurntableView: View {
             // gradients and cover view participate in every animation tick.
             SmoothRecordDiscView(
                 coverURL: coverURL,
-                isPlaying: isPlaying && !isDragging && !isTransitioningTrack && !reduceMotion,
+                isPlaying: isPlaying && !isDragging && !reduceMotion,
                 size: size,
                 playsCoverVideoAudio: playsCoverVideoAudio
             )
@@ -843,13 +847,21 @@ private struct RecordModeTurntableView: View {
     }
 
     private func switchTrack(offset: CGFloat, callback: (() -> Void)?) {
-        withAnimation(.easeOut(duration: 0.20)) { dragOffset = offset }
-        callback?()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-            dragOffset = offset > 0 ? -size * 1.25 : size * 1.25
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.80)) {
+        let slideOutDuration = 0.20
+        let slideInDuration = 0.22
+
+        // Finish moving the old track off-screen before replacing its song and
+        // cover. This keeps the expensive artwork/lyrics update out of the
+        // visible part of the swipe and avoids a mid-gesture hitch.
+        withAnimation(.easeOut(duration: slideOutDuration)) {
+            dragOffset = offset
+            isDragging = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + slideOutDuration) {
+            callback?()
+            dragOffset = -offset
+            withAnimation(.easeOut(duration: slideInDuration)) {
                 dragOffset = 0
-                isDragging = false
             }
         }
     }

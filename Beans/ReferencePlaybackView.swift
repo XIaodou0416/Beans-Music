@@ -913,11 +913,9 @@ struct AppleMusicPlaybackControls: View {
 
 struct AppleMusicCompactQueueContent: View {
     @EnvironmentObject private var player: PlayerManager
-    @State private var draggingPosition: Int?
-    @State private var dragStartPosition: Int?
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
+        let upcoming = Array(player.upcomingQueue.prefix(100))
+        return VStack(alignment: .leading, spacing: 15) {
             HStack(spacing: 10) {
                 modeButton(
                     mode: .sequential,
@@ -956,7 +954,7 @@ struct AppleMusicCompactQueueContent: View {
                     .foregroundStyle(.white.opacity(0.46))
             }
 
-            if player.upcomingQueue.isEmpty {
+            if upcoming.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 28, weight: .light))
@@ -968,16 +966,16 @@ struct AppleMusicCompactQueueContent: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 4) {
-                        ForEach(Array(player.upcomingQueue.prefix(100).enumerated()), id: \.element.song.identityKey) { position, item in
+                        ForEach(upcoming.enumerated(), id: \.element.song.identityKey) { position, item in
                             AppleMusicCompactQueueRow(
                                 index: item.index,
                                 position: position,
-                                maxPosition: min(player.upcomingQueue.count, 100) - 1,
+                                maxPosition: max(upcoming.count - 1, 0),
                                 song: item.song,
-                                activePosition: $draggingPosition,
-                                startPosition: $dragStartPosition
                             ) { source, destination in
-                                player.moveUpcomingQueueItem(from: source, to: destination)
+                                player.moveUpcomingQueueItem(from: source, to: destination, persist: false)
+                            } onCommit: {
+                                player.finishUpcomingQueueReorder()
                             }
                         }
                     }
@@ -1031,9 +1029,8 @@ private struct AppleMusicCompactQueueRow: View {
     let position: Int
     let maxPosition: Int
     let song: Song
-    @Binding var activePosition: Int?
-    @Binding var startPosition: Int?
     let onMove: (Int, Int) -> Void
+    let onCommit: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
@@ -1070,9 +1067,8 @@ private struct AppleMusicCompactQueueRow: View {
                 position: position,
                 maxPosition: maxPosition,
                 rowStep: 60,
-                activePosition: $activePosition,
-                startPosition: $startPosition,
-                onMove: onMove
+                onMove: onMove,
+                onCommit: onCommit
             )
             .foregroundStyle(.white.opacity(0.54))
         }

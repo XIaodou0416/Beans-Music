@@ -108,9 +108,12 @@ struct QueueReorderHandle: View {
     let position: Int
     let maxPosition: Int
     let rowStep: CGFloat
-    @Binding var activePosition: Int?
-    @Binding var startPosition: Int?
     let onMove: (Int, Int) -> Void
+    let onCommit: () -> Void
+
+    @State private var originPosition: Int?
+    @State private var lastPosition: Int?
+    @State private var isDragging = false
 
     var body: some View {
         Image(systemName: "line.3.horizontal")
@@ -124,35 +127,47 @@ struct QueueReorderHandle: View {
 
     private var queueDragGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.34)
-            .sequenced(before: DragGesture(minimumDistance: 2))
+            .sequenced(before: DragGesture(minimumDistance: 4))
             .onChanged { value in
                 switch value {
                 case .first(true):
-                    if activePosition == nil {
-                        activePosition = position
-                        startPosition = position
-                        BeansHaptics.medium()
-                    }
+                    guard originPosition == nil else { return }
+                    originPosition = position
+                    lastPosition = position
+                    isDragging = true
+                    BeansHaptics.medium()
                 case .second(true, let drag?):
-                    guard let start = startPosition, let current = activePosition else { return }
-                    let target = min(
-                        max(start + Int((drag.translation.height / rowStep).rounded()), 0),
-                        maxPosition
-                    )
-                    if target != current {
-                        withAnimation(.interactiveSpring(response: 0.22, dampingFraction: 0.86, blendDuration: 0.03)) {
-                            onMove(current, target)
-                            activePosition = target
-                        }
-                        BeansHaptics.tap()
+                    guard let origin = originPosition, let last = lastPosition else { return }
+                    let rawOffset = drag.translation.height / rowStep
+                    let slotOffset = CGFloat(last - origin)
+                    let hysteresis: CGFloat = 0.60
+                    let next: Int
+                    if rawOffset > slotOffset + hysteresis {
+                        next = min(last + 1, maxPosition)
+                    } else if rawOffset < slotOffset - hysteresis {
+                        next = max(last - 1, 0)
+                    } else {
+                        return
                     }
+                    guard next != last else { return }
+
+                    // Move one slot per update with hysteresis. The dead zone
+                    // prevents two adjacent rows from bouncing at the boundary.
+                    withAnimation(.easeOut(duration: 0.12)) {
+                        onMove(last, next)
+                    }
+                    lastPosition = next
+                    BeansHaptics.tap()
                 default:
                     break
                 }
             }
             .onEnded { _ in
-                activePosition = nil
-                startPosition = nil
+                guard isDragging else { return }
+                onCommit()
+                originPosition = nil
+                lastPosition = nil
+                isDragging = false
             }
     }
 }
