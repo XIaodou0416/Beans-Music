@@ -554,6 +554,7 @@ struct BeansDynamicWallpaperView: View {
             renderer
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
+                .allowsHitTesting(false)
         } else {
             Color.clear
         }

@@ -186,6 +186,7 @@ struct GlassBackdrop: View {
     private var dynamicWallpaperLayer: some View {
         if isDynamicWallpaperActive {
             BeansDynamicWallpaperView()
+                .allowsHitTesting(false)
         } else {
             Color.clear
         }

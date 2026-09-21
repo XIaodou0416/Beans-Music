@@ -144,6 +144,11 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastListeningSongKey: String?
     private var pendingListeningDuration: TimeInterval = 0
     private var lastListeningPublishUptime = 0.0
+    /// Encode and persist playback snapshots away from the main thread.
+    private let playbackPersistenceQueue = DispatchQueue(
+        label: "Beans.PlayerManager.playback-persistence",
+        qos: .utility
+    )
     private var lastNowPlayingArtworkKey: String?
     private var nowPlayingSongKey: String?
     private var nowPlayingInfo: [String: Any] = [:]
@@ -2332,8 +2337,11 @@ final class PlayerManager: NSObject, ObservableObject {
             duration: duration,
             savedAt: Date()
         )
-        if let data = try? JSONEncoder().encode(state) {
-            defaults.set(data, forKey: playbackStateKey)
+        let defaults = self.defaults
+        let key = playbackStateKey
+        playbackPersistenceQueue.async {
+            guard let data = try? JSONEncoder().encode(state) else { return }
+            defaults.set(data, forKey: key)
         }
     }
 
