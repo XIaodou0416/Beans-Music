@@ -29,7 +29,6 @@ final class HighRefreshKeeper {
 
     func configure(enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: Self.defaultsKey)
-        applyPreferredFrameRate()
         if enabled {
             start()
         } else {
@@ -51,7 +50,6 @@ final class HighRefreshKeeper {
         guard displayLink != nil else { return }
         wasRunningBeforeTemporaryPause = true
         stop()
-        applyPreferredFrameRate()
     }
 
     func resumeAfterTemporaryPause() {
@@ -63,7 +61,6 @@ final class HighRefreshKeeper {
 
     private func start() {
         guard displayLink == nil else { return }
-        applyPreferredFrameRate()
         let link = CADisplayLink(target: self, selector: #selector(tick))
         if #available(iOS 15.0, *) {
             link.preferredFrameRateRange = preferredFrameRateRange
@@ -84,20 +81,6 @@ final class HighRefreshKeeper {
     private func stop() {
         displayLink?.invalidate()
         displayLink = nil
-    }
-
-    /// CADisplayLink alone does not change the scene's preferred cadence. Set
-    /// the view and window-scene preference as well so the explicit 120 Hz
-    /// switch has an observable effect on ProMotion devices.
-    private func applyPreferredFrameRate() {
-        // CADisplayLink is the supported cross-version way to request the
-        // app's display cadence. UIKit's view/window-scene frame-rate
-        // properties are not available in the SDK used by this project.
-        // Restarting the link applies the current preference immediately.
-        stop()
-        if UserDefaults.standard.bool(forKey: Self.defaultsKey) {
-            start()
-        }
     }
 
     @objc private func tick() {}
