@@ -144,6 +144,10 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastListeningSongKey: String?
     private var pendingListeningDuration: TimeInterval = 0
     private var lastListeningPublishUptime = 0.0
+    /// 当前网易云歌曲的播放打卡状态。第三方地址播放网易云歌曲时，仍使用
+    /// 原网易云歌曲 ID 同步，避免切换音源后丢失账号播放记录。
+    private var netEasePlaybackSong: Song?
+    private var netEasePlaybackStartSent = false
     /// Encode and persist playback snapshots away from the main thread.
     private let playbackPersistenceQueue = DispatchQueue(
         label: "Beans.PlayerManager.playback-persistence",
@@ -186,6 +190,7 @@ final class PlayerManager: NSObject, ObservableObject {
     static let autoCrossPlatformFallbackKey = "beans.playback.autoCrossPlatformFallback"
     static let playbackSourcePreferenceKey = PlaybackSourcePreference.storageKey
     static let listeningDurationKey = "beans.playback.listeningDuration.v1"
+    static let netEasePlaybackSyncKey = "beans.netease.syncPlayback"
     private static let listeningPlayCountOffsetKey = "beans.playback.listeningPlayCountOffset.v1"
     private let autoResumeLastPlaybackKey = "beans.playback.autoResumeLast"
     private let thirdPartyVIPNoticeKey = "beans.showThirdPartyVIPNotice"
@@ -372,6 +377,7 @@ final class PlayerManager: NSObject, ObservableObject {
     func play(songs: [Song], startAt index: Int = 0) {
         guard !songs.isEmpty else { return }
         guard ensurePlaybackAllowed() else { return }
+        finishNetEasePlaybackSyncIfNeeded()
         queue = songs
         buildPlayOrder()
         jumpToOrderPosition(min(max(index, 0), songs.count - 1))
@@ -434,6 +440,7 @@ final class PlayerManager: NSObject, ObservableObject {
             clearAudioRecoveryIntent()
             isPlaying = false
             player.pause()
+            finishNetEasePlaybackSyncIfNeeded()
             flushListeningDuration()
             resetListeningProgress()
             stopAudioSessionWatchdog()
@@ -458,6 +465,7 @@ final class PlayerManager: NSObject, ObservableObject {
     func previous() {
         guard ensurePlaybackAllowed() else { return }
         guard !queue.isEmpty else { return }
+        finishNetEasePlaybackSyncIfNeeded()
         // 直接切换到上一首（不再做“播放超过 3 秒先重头播放”的判断）
         if playMode == .shuffle {
             orderPosition = (orderPosition - 1 + playOrder.count) % playOrder.count
@@ -561,6 +569,9 @@ final class PlayerManager: NSObject, ObservableObject {
     func removeFromQueue(at index: Int) {
         guard queue.indices.contains(index), queue.count > 1 else { return }
         let removedID = queue[index].id
+        if index == currentIndex {
+            finishNetEasePlaybackSyncIfNeeded()
+        }
         queue.remove(at: index)
         if index < currentIndex {
             currentIndex -= 1
@@ -645,6 +656,7 @@ final class PlayerManager: NSObject, ObservableObject {
         clearAudioRecoveryIntent()
         isPlaying = false
         player?.pause()
+        finishNetEasePlaybackSyncIfNeeded()
         stopAudioSessionWatchdog()
         updateNowPlaying()
     }
@@ -665,6 +677,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func advance() {
+        finishNetEasePlaybackSyncIfNeeded()
         resetCrossPlatformFallbackState()
         switch playMode {
         case .shuffle:
@@ -678,6 +691,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func jumpToOrderPosition(_ index: Int) {
+        finishNetEasePlaybackSyncIfNeeded()
         resetCrossPlatformFallbackState()
         currentIndex = index
         if playMode == .shuffle {
@@ -695,6 +709,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
     private func restartCurrent() {
         guard ensurePlaybackAllowed() else { return }
+        finishNetEasePlaybackSyncIfNeeded()
         seek(to: 0)
         player?.playImmediately(atRate: Float(rate))
         isPlaying = true
@@ -1305,6 +1320,9 @@ final class PlayerManager: NSObject, ObservableObject {
                 if player.timeControlStatus == .playing, self.audioLossInProgress {
                     self.isPlaying = true
                 }
+                if player.timeControlStatus == .playing {
+                    self.startNetEasePlaybackSyncIfNeeded(for: loadedSong)
+                }
                 if player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
                     self.isBuffering = true
                     self.playbackStallWorkItem?.cancel()
@@ -1402,6 +1420,7 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             guard let self else { return }
+            self.finishNetEasePlaybackSyncIfNeeded()
             if self.playMode == .repeatOne {
                 self.restartCurrent()
             } else if self.playMode == .sequential,
@@ -1812,6 +1831,50 @@ final class PlayerManager: NSObject, ObservableObject {
     private func resetListeningProgress() {
         lastListeningProgress = nil
         lastListeningSongKey = nil
+    }
+
+    private var netEasePlaybackSyncEnabled: Bool {
+        defaults.object(forKey: Self.netEasePlaybackSyncKey) as? Bool ?? true
+    }
+
+    private func startNetEasePlaybackSyncIfNeeded(for song: Song) {
+        guard netEasePlaybackSyncEnabled,
+              song.source == .netease,
+              NetEaseAPI.shared.hasAuthenticatedSession else { return }
+
+        if netEasePlaybackSong?.identityKey != song.identityKey {
+            finishNetEasePlaybackSyncIfNeeded()
+            netEasePlaybackSong = song
+            netEasePlaybackStartSent = false
+        }
+        guard !netEasePlaybackStartSent else { return }
+        netEasePlaybackStartSent = true
+        let trackID = song.id
+        Task {
+            await NetEaseAPI.shared.syncPlaybackStart(trackID: trackID)
+        }
+    }
+
+    private func finishNetEasePlaybackSyncIfNeeded() {
+        guard netEasePlaybackSyncEnabled,
+              let song = netEasePlaybackSong,
+              song.source == .netease,
+              netEasePlaybackStartSent,
+              NetEaseAPI.shared.hasAuthenticatedSession else {
+            netEasePlaybackSong = nil
+            netEasePlaybackStartSent = false
+            return
+        }
+
+        let upperBound = Int(max(duration, song.duration).rounded(.down))
+        let seconds = max(0, min(Int(progress.rounded(.down)), upperBound))
+        netEasePlaybackSong = nil
+        netEasePlaybackStartSent = false
+        guard seconds > 0 else { return }
+        let trackID = song.id
+        Task {
+            await NetEaseAPI.shared.syncPlaybackFinish(trackID: trackID, seconds: seconds)
+        }
     }
 
     private func recordListeningProgress(at playbackTime: TimeInterval, player: AVPlayer) {

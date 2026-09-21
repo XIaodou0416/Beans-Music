@@ -1847,6 +1847,7 @@ struct SettingsView: View {
     @AppStorage("beans.favoriteDestination") private var favoriteDestinationRaw = FavoriteDestination.local.rawValue
     @AppStorage(BeansHaptics.enabledKey) private var hapticsEnabled = true
     @AppStorage("beans.playback.autoResumeLast") private var autoResumeLastPlayback = false
+    @AppStorage(PlayerManager.netEasePlaybackSyncKey) private var netEasePlaybackSync = true
     @AppStorage("beans.labelColorHex") private var labelColorHex = ""
     @AppStorage("beans.homeGreetingText") private var homeGreetingText = ""
     @AppStorage("beans.homeGreetingSize") private var homeGreetingSize = 30.0
@@ -2456,7 +2457,7 @@ struct SettingsView: View {
     }
     private var showPlatformSettings: Bool { settingsMatches("平台 显示 网易云 QQ 酷狗") }
     private var showAudioSettings: Bool { settingsMatches("音源 音质 网络 Wi-Fi 蜂窝 导入") }
-    private var showPlaybackSettings: Bool { settingsMatches("播放 触感 锁屏 灵动岛 收藏") }
+    private var showPlaybackSettings: Bool { settingsMatches("播放 触感 锁屏 灵动岛 收藏 网易云 播放记录 同步") }
     private var showEqualizerSettings: Bool { settingsMatches("均衡器 音效") }
     private var showBackupSettings: Bool { settingsMatches("备份 恢复 导出 导入 缓存") }
     private var showChangelogSettings: Bool { settingsMatches("更新 日志 版本") }
@@ -3962,6 +3963,27 @@ struct SettingsView: View {
                                 .font(BeansFont.appFont(15))
                                 .foregroundStyle(Color.beansLabel)
                             Text(beansLocalized("打开软件后自动恢复上次未播放完的歌曲", "Automatically resume the last unfinished song when the app starts."))
+                                .font(BeansFont.appFont(11))
+                                .foregroundStyle(Color.beansComment)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color.beansAmber)
+
+                Divider().overlay(Color.beansComment.opacity(0.15))
+
+                Toggle(isOn: $netEasePlaybackSync) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.beansAmber)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(beansLocalized("同步网易云播放记录", "Sync NetEase playback history"))
+                                .font(BeansFont.appFont(15))
+                                .foregroundStyle(Color.beansLabel)
+                            Text(beansLocalized("登录网易云后，按实际播放进度同步最近播放和听歌排行", "When signed in to NetEase, sync recent plays and listening rankings using actual playback progress."))
                                 .font(BeansFont.appFont(11))
                                 .foregroundStyle(Color.beansComment)
                         }

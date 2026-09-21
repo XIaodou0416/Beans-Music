@@ -105,6 +105,12 @@ final class NetEaseAPI {
         cookieValue(named: "MUSIC_U")
     }
 
+    /// 网易云登录态是否仍有可用于账号接口的 Cookie。
+    /// 播放打卡只在用户登录后发送，未登录时静默跳过，不影响正常播放。
+    var hasAuthenticatedSession: Bool {
+        !musicU.isEmpty
+    }
+
     private func cookieValue(named name: String) -> String {
         storedCookies[name] ?? ""
     }
@@ -249,6 +255,63 @@ final class NetEaseAPI {
             throw NetEaseError.unknown("获取账号信息失败")
         }
         return user
+    }
+
+    // MARK: - 播放记录同步
+
+    /// 将歌曲写入网易云「最近播放」。与官方客户端一样，开始播放和结束/切歌
+    /// 时分别提交两次 weblog，避免只更新听歌排行而不写入最近播放列表。
+    func syncPlaybackStart(trackID: Int) async {
+        guard hasAuthenticatedSession else { return }
+        await sendPlaybackWeblog([[
+            "action": "startplay",
+            "json": [
+                "id": trackID,
+                "type": "song",
+                "mainsite": "1",
+                "mainsiteWeb": "1",
+                "content": "id=\(trackID)",
+            ],
+        ]])
+    }
+
+    /// 向网易云提交本次实际播放到的秒数，更新账号的听歌排行/播放记录。
+    func syncPlaybackFinish(trackID: Int, seconds: Int) async {
+        guard hasAuthenticatedSession, seconds > 0 else { return }
+        await sendPlaybackWeblog([[
+            "action": "play",
+            "json": [
+                "download": 0,
+                "end": "playend",
+                "id": trackID,
+                "sourceId": String(trackID),
+                "time": seconds,
+                "type": "song",
+                "wifi": 0,
+                "source": "list",
+                "mainsite": "1",
+                "mainsiteWeb": "1",
+                "content": "id=\(trackID)",
+            ],
+        ]])
+    }
+
+    private func sendPlaybackWeblog(_ logs: [[String: Any]]) async {
+        guard let data = try? JSONSerialization.data(withJSONObject: logs),
+              let serialized = String(data: data, encoding: .utf8) else { return }
+        do {
+            let response = try await request(
+                "/api/feedback/weblog",
+                payload: ["logs": serialized],
+                crypto: "eapi"
+            )
+            if let code = response["code"] as? Int, code != 200 {
+                BeansLogger.shared.log("网易云播放记录同步返回异常：code=\(code)", level: .warn)
+            }
+        } catch {
+            // 播放打卡失败不应影响音频，写入日志供开发者排查即可。
+            BeansLogger.shared.log("网易云播放记录同步失败：\(error.localizedDescription)", level: .debug)
+        }
     }
 
     // MARK: - 音乐库
