@@ -451,6 +451,22 @@ struct RecordPlayerView: View {
     private var recordHeader: some View {
         HStack {
             Spacer()
+            if showLyrics {
+                Button {
+                    BeansHaptics.tap()
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        showLyrics = false
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(RecordModePressButtonStyle())
+                .accessibilityLabel("返回唱片")
+            }
             Menu {
                 if showLyrics || showQueue {
                     Button("返回唱片") {
@@ -493,23 +509,6 @@ struct RecordPlayerView: View {
             }
             .buttonStyle(RecordModePressButtonStyle())
             .accessibilityLabel("更多设置")
-
-            if showLyrics {
-                Button {
-                    BeansHaptics.tap()
-                    withAnimation(.easeInOut(duration: 0.22)) {
-                        showLyrics = false
-                    }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.88))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(RecordModePressButtonStyle())
-                .accessibilityLabel("返回唱片")
-            }
 
         }
     }

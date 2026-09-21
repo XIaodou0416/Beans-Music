@@ -1374,7 +1374,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 if abs(time.seconds - self.lastPublishedProgress) >= 0.18 {
                     self.lastPublishedProgress = time.seconds
                     self.progress = time.seconds
-                    if abs(time.seconds - self.lastPersistedProgress) >= 2.0 {
+                    if abs(time.seconds - self.lastPersistedProgress) >= 5.0 {
                         self.lastPersistedProgress = time.seconds
                         self.savePersistedPlaybackState()
                     }

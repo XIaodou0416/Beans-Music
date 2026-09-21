@@ -41,13 +41,17 @@ struct KaraokeLyricText: View {
     }
 
     private func wordView(words: [LyricWord], time: Double) -> some View {
-        HStack(spacing: 0) {
-            ForEach(Array(words.enumerated()), id: \.offset) { _, word in
-                Text(word.text)
-                    .font(font)
-                    .foregroundStyle(style)
-                    .opacity(LyricKaraokeTiming.opacity(for: word, at: time))
-            }
+        // Compose one Text value instead of placing every English word in an
+        // HStack. Separate Text views can be independently compressed and
+        // wrapped, which makes Latin lyrics appear out of order or scattered.
+        var composed = Text("")
+        for word in words {
+            composed = composed + Text(verbatim: word.text)
+                .foregroundStyle(style)
+                .opacity(LyricKaraokeTiming.opacity(for: word, at: time))
         }
+        return composed
+            .font(font)
+            .multilineTextAlignment(.leading)
     }
 }
