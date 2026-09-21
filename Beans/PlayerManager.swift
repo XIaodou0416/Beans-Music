@@ -143,6 +143,8 @@ final class PlayerManager: NSObject, ObservableObject {
     private var lastListeningProgress: Double?
     private var lastListeningSongKey: String?
     private var pendingListeningDuration: TimeInterval = 0
+    /// 单调时钟记录当前实际播放片段，不依赖歌曲进度，避免拖动/切歌放大统计。
+    private var listeningSegmentStartedUptime: TimeInterval?
     private var lastListeningPublishUptime = 0.0
     /// Encode and persist playback snapshots away from the main thread.
     private let playbackPersistenceQueue = DispatchQueue(
@@ -434,13 +436,14 @@ final class PlayerManager: NSObject, ObservableObject {
             clearAudioRecoveryIntent()
             isPlaying = false
             player.pause()
-            flushListeningDuration()
+            stopListeningSegment()
             resetListeningProgress()
             stopAudioSessionWatchdog()
         } else {
             clearAudioRecoveryIntent()
             player.playImmediately(atRate: Float(rate))
             isPlaying = true
+            startListeningSegment()
             startAudioSessionWatchdogIfNeeded()
         }
         savePersistedPlaybackState()
@@ -516,6 +519,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 if shouldKeepPlaying {
                     self.player?.playImmediately(atRate: Float(self.rate))
                     self.isPlaying = true
+                    self.startListeningSegment()
                 }
                 self.updateNowPlaying()
                 self.savePersistedPlaybackState()
@@ -705,6 +709,7 @@ final class PlayerManager: NSObject, ObservableObject {
         clearAudioRecoveryIntent()
         isPlaying = false
         player?.pause()
+        stopListeningSegment()
         stopAudioSessionWatchdog()
         updateNowPlaying()
     }
@@ -758,6 +763,7 @@ final class PlayerManager: NSObject, ObservableObject {
         seek(to: 0)
         player?.playImmediately(atRate: Float(rate))
         isPlaying = true
+        startListeningSegment()
         updateNowPlaying()
     }
 
@@ -784,6 +790,7 @@ final class PlayerManager: NSObject, ObservableObject {
         thirdPartyPrefetchTask?.cancel()
         thirdPartyPrefetchTask = nil
         qqThirdPartyFallbackSongKey = nil
+        stopListeningSegment()
         flushListeningDuration()
         resetListeningProgress()
         let initialProgress = max(0, min(resumeAt ?? 0, max(song.duration, 0)))
@@ -1355,15 +1362,18 @@ final class PlayerManager: NSObject, ObservableObject {
                         // 通知；保留播放意图，等系统音频会话释放后自动恢复。
                         self.rememberAudioPlaybackIntent()
                         self.isPlaying = false
+                        self.stopListeningSegment()
                         self.refreshNowPlayingOwnership()
                         self.scheduleAudioRecovery(reason: "外部音频暂停播放器", delay: 0.25)
                     } else if self.audioLossInProgress {
                         self.isPlaying = false
+                        self.stopListeningSegment()
                         self.refreshNowPlayingOwnership()
                     }
                 }
                 if player.timeControlStatus == .playing, self.audioLossInProgress {
                     self.isPlaying = true
+                    self.startListeningSegment()
                 }
                 if player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
                     self.isBuffering = true
@@ -1417,6 +1427,7 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         player.playImmediately(atRate: Float(rate))
         isPlaying = true
+        startListeningSegment()
         isBuffering = false
         loadFailed = false
         startAudioSessionWatchdogIfNeeded()
@@ -1467,6 +1478,7 @@ final class PlayerManager: NSObject, ObservableObject {
             } else if self.playMode == .sequential,
                       self.currentIndex >= self.queue.count - 1 {
                 self.isPlaying = false
+                self.stopListeningSegment()
                 self.stopAudioSessionWatchdog()
                 self.updateNowPlaying()
             } else {
@@ -1509,6 +1521,7 @@ final class PlayerManager: NSObject, ObservableObject {
             loadFailed = true
             isBuffering = false
             isPlaying = false
+            stopListeningSegment()
             stopAudioSessionWatchdog()
             return
         }
@@ -1516,12 +1529,14 @@ final class PlayerManager: NSObject, ObservableObject {
             loadFailed = false
             isBuffering = true
             isPlaying = false
+            stopListeningSegment()
             stopAudioSessionWatchdog()
             return
         }
         loadFailed = true
         isBuffering = false
         isPlaying = false
+        stopListeningSegment()
         stopAudioSessionWatchdog()
         finalizedFailureSongKey = failedSong.identityKey
         let shouldAutoSkip = defaults.object(forKey: autoSkipOnFailureKey) as? Bool ?? true
@@ -1842,6 +1857,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
     private func removeCurrentObservers() {
         stopAudioSessionWatchdog()
+        stopListeningSegment()
         flushListeningDuration()
         resetListeningProgress()
         if let timeObserver {
@@ -1874,31 +1890,41 @@ final class PlayerManager: NSObject, ObservableObject {
         lastListeningSongKey = nil
     }
 
+    private func startListeningSegment() {
+        guard listeningSegmentStartedUptime == nil else { return }
+        listeningSegmentStartedUptime = ProcessInfo.processInfo.systemUptime
+    }
+
+    private func stopListeningSegment() {
+        guard let started = listeningSegmentStartedUptime else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        let elapsed = max(0, now - started)
+        if elapsed > 0 {
+            pendingListeningDuration += elapsed
+        }
+        listeningSegmentStartedUptime = nil
+        flushListeningDuration()
+    }
+
     private func recordListeningProgress(at playbackTime: TimeInterval, player: AVPlayer) {
-        guard let song = currentSong,
-              isPlaying,
+        guard isPlaying,
               player.timeControlStatus == .playing else {
+            stopListeningSegment()
             resetListeningProgress()
             return
         }
 
-        guard lastListeningSongKey == song.identityKey else {
-            lastListeningSongKey = song.identityKey
-            lastListeningProgress = playbackTime
-            return
+        startListeningSegment()
+        // 统计真实播放经过的时间，而不是歌曲进度变化。这样拖动、循环、
+        // 切歌和同一首歌反复测试都不会把统计值重复计算。
+        if let started = listeningSegmentStartedUptime {
+            let now = ProcessInfo.processInfo.systemUptime
+            let elapsed = max(0, now - started)
+            if elapsed > 0 {
+                pendingListeningDuration += elapsed
+                listeningSegmentStartedUptime = now
+            }
         }
-
-        guard let previous = lastListeningProgress else {
-            lastListeningProgress = playbackTime
-            return
-        }
-        lastListeningProgress = playbackTime
-
-        // 时间观察器正常间隔为 0.2 秒。更大的跳变通常来自拖动、恢复或切歌，不能计入。
-        let delta = playbackTime - previous
-        guard delta > 0, delta <= 1.0 else { return }
-
-        pendingListeningDuration += delta
         let uptime = ProcessInfo.processInfo.systemUptime
         if uptime - lastListeningPublishUptime >= 15 {
             flushListeningDuration()
@@ -2129,6 +2155,7 @@ final class PlayerManager: NSObject, ObservableObject {
             // 结束通知和次级音频提示，避免在系统仍占用音频会话时抢先播放。
             if !mixesWithOthers {
                 isPlaying = false
+                stopListeningSegment()
                 player?.pause()
                 updateNowPlaying()
             } else {
@@ -2272,6 +2299,7 @@ final class PlayerManager: NSObject, ObservableObject {
             }
             if isPlaying {
                 isPlaying = false
+                stopListeningSegment()
                 refreshNowPlayingOwnership()
             }
         }
@@ -2344,6 +2372,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
         currentPlayer.playImmediately(atRate: Float(rate))
         isPlaying = true
+        startListeningSegment()
         isBuffering = false
         audioLossInProgress = false
         shouldResumeAfterAudioLoss = false
@@ -2538,6 +2567,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 self.clearAudioRecoveryIntent()
                 self.player?.playImmediately(atRate: Float(self.rate))
                 self.isPlaying = true
+                self.startListeningSegment()
                 self.updateNowPlaying()
             }
             return .success
@@ -2548,6 +2578,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 guard let self else { return }
                 self.clearAudioRecoveryIntent()
                 self.isPlaying = false
+                self.stopListeningSegment()
                 self.player?.pause()
                 self.stopAudioSessionWatchdog()
                 self.updateNowPlaying()

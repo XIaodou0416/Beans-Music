@@ -602,10 +602,6 @@ struct ProfileView: View {
         .transition(.opacity)
     }
 
-    private var totalPlayCount: Int {
-        player.totalPlayCount
-    }
-
     private var customAvatarCard: some View {
         VStack(spacing: 15) {
             HStack(spacing: 13) {
@@ -670,14 +666,6 @@ struct ProfileView: View {
                     title: isEnglish ? "Listening time" : "听歌时长",
                     value: player.formattedListeningDuration,
                     icon: "clock"
-                )
-                Rectangle()
-                    .fill(Color.beansLabel.opacity(0.10))
-                    .frame(width: 1, height: 31)
-                profileStat(
-                    title: isEnglish ? "Play count" : "播放次数",
-                    value: "\(totalPlayCount) \(isEnglish ? "plays" : "次")",
-                    icon: "music.note"
                 )
             }
         }
@@ -2436,7 +2424,7 @@ struct SettingsView: View {
 
     private var showAppearanceSettings: Bool { settingsMatches("主题 外观 背景 壁纸 字体 底栏 颜色 赞助") }
     private var showDynamicWallpaperSettings: Bool {
-        settingsMatches("动态壁纸 Fractal Clouds Ink Smoke Liquid Chrome Neuro Noise Simplex Noise Metaballs Water 分形云层 墨水扩散 液态金属 神经噪声 单纯形噪声 融合球 水面")
+        settingsMatches("动态壁纸 Fractal Clouds Ink Smoke Liquid Chrome Neuro Noise Simplex Noise Metaballs Water Star Nest Dot Orbit Dots Grain Gradient 分形云层 墨水扩散 液态金属 神经噪声 单纯形噪声 融合球 水面 星云 圆点 点阵 颗粒渐变")
     }
     private var showPlatformSettings: Bool { settingsMatches("平台 显示 网易云 QQ 酷狗") }
     private var showAudioSettings: Bool { settingsMatches("音源 音质 网络 Wi-Fi 蜂窝 导入") }
@@ -3038,6 +3026,69 @@ struct SettingsView: View {
                 layoutSettingSlider("纹理叠加", value: $dynamicWallpaper.waterLayering, range: 0...1, step: 0.01, format: "%.2f")
                 layoutSettingSlider("边缘变形", value: $dynamicWallpaper.waterEdges, range: 0...1, step: 0.01, format: "%.2f")
                 layoutSettingSlider("高光强度", value: $dynamicWallpaper.waterHighlights, range: 0...1, step: 0.01, format: "%.2f")
+            }
+        case .starNest:
+            VStack(alignment: .leading, spacing: 10) {
+                layoutSettingSlider("视野缩放", value: $dynamicWallpaper.starNestZoom, range: 0.2...2, step: 0.01, format: "%.2f")
+                layoutSettingSlider("速度", value: $dynamicWallpaper.starNestSpeed, range: 0...0.05, step: 0.001, format: "%.3f")
+                layoutSettingSlider("亮度", value: $dynamicWallpaper.starNestBrightness, range: 0.0002...0.006, step: 0.0001, format: "%.4f")
+                layoutSettingSlider("饱和度", value: $dynamicWallpaper.starNestSaturation, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("暗物质", value: $dynamicWallpaper.starNestDarkmatter, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("远景衰减", value: $dynamicWallpaper.starNestDistfading, range: 0.3...0.95, step: 0.01, format: "%.2f")
+                layoutSettingSlider("水平角度", value: $dynamicWallpaper.starNestAngleX, range: 0...6.283, step: 0.01, format: "%.2f")
+                layoutSettingSlider("垂直角度", value: $dynamicWallpaper.starNestAngleY, range: 0...6.283, step: 0.01, format: "%.2f")
+                layoutSettingSlider("体积步数", value: $dynamicWallpaper.starNestVolsteps, range: 4...24, step: 1, format: "%.0f")
+                layoutSettingSlider("细节迭代", value: $dynamicWallpaper.starNestIterations, range: 4...24, step: 1, format: "%.0f")
+            }
+        case .dotOrbit:
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(dynamicWallpaper.dotOrbitColorsHex.indices, id: \.self) { index in
+                    dynamicColorRow("圆点色 \(index + 1)", hex: Binding(
+                        get: { dynamicWallpaper.dotOrbitColorsHex[index] },
+                        set: { dynamicWallpaper.dotOrbitColorsHex[index] = $0 }
+                    ), fallback: .white)
+                }
+                dynamicColorRow("背景色", hex: $dynamicWallpaper.dotOrbitBackgroundHex, fallback: .white)
+                layoutSettingSlider("速度", value: $dynamicWallpaper.dotOrbitSpeed, range: 0...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("网格密度", value: $dynamicWallpaper.dotOrbitScale, range: 0.5...20, step: 0.1, format: "%.1f")
+                layoutSettingSlider("圆点大小", value: $dynamicWallpaper.dotOrbitSize, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("大小变化", value: $dynamicWallpaper.dotOrbitSizeRange, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("轨道范围", value: $dynamicWallpaper.dotOrbitSpreading, range: 0...1, step: 0.01, format: "%.2f")
+                layoutSettingSlider("颜色层数", value: $dynamicWallpaper.dotOrbitStepsPerColor, range: 1...4, step: 1, format: "%.0f")
+            }
+        case .dots:
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("样式", selection: $dynamicWallpaper.dotsStyleRaw) {
+                    ForEach(SWDotsStyle.allCases) { style in
+                        Text(style.displayName).tag(style.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+                dynamicColorRow("点阵色", hex: $dynamicWallpaper.dotsTintHex, fallback: .white)
+                dynamicColorRow("背景色", hex: $dynamicWallpaper.dotsBackgroundHex, fallback: .black)
+                layoutSettingSlider("速度", value: $dynamicWallpaper.dotsSpeed, range: 0...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("亮度", value: $dynamicWallpaper.dotsBrightness, range: 0...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("点大小", value: $dynamicWallpaper.dotsDotSize, range: 0.2...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("网格密度", value: $dynamicWallpaper.dotsGridDensity, range: 0.3...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("图案缩放", value: $dynamicWallpaper.dotsPatternScale, range: 0.2...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("波浪幅度", value: $dynamicWallpaper.dotsAmplitude, range: 0...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("深度衰减", value: $dynamicWallpaper.dotsDepthFade, range: 0...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("暗角", value: $dynamicWallpaper.dotsVignette, range: 0...3, step: 0.05, format: "%.2f")
+                layoutSettingSlider("地平线", value: $dynamicWallpaper.dotsHorizon, range: -1...0.4, step: 0.01, format: "%.2f")
+            }
+        case .grainGradient:
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(dynamicWallpaper.grainGradientColorsHex.indices, id: \.self) { index in
+                    dynamicColorRow("渐变色 \(index + 1)", hex: Binding(
+                        get: { dynamicWallpaper.grainGradientColorsHex[index] },
+                        set: { dynamicWallpaper.grainGradientColorsHex[index] = $0 }
+                    ), fallback: .white)
+                }
+                layoutSettingSlider("渐变缩放", value: $dynamicWallpaper.grainGradientScale, range: 0.2...5, step: 0.05, format: "%.2f")
+                layoutSettingSlider("对比度", value: $dynamicWallpaper.grainGradientContrast, range: 0.1...4, step: 0.05, format: "%.2f")
+                Text("Grain Gradient 已按静态壁纸处理，不会持续消耗动画刷新。")
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(Color.beansComment)
             }
         }
     }

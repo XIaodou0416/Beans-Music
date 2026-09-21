@@ -75,6 +75,20 @@ enum ChangelogStore {
 
     static let logs: [VersionLog] = [
         VersionLog(
+            id: "1.8.1",
+            version: "1.8.1",
+            title: "动态壁纸与听歌统计优化",
+            features: [
+                "新增 Star Nest、Dot Orbit、Dots 与 Grain Gradient 壁纸",
+                "Grain Gradient 按静态壁纸处理，支持颜色、缩放和对比度调节",
+                "我的界面仅保留听歌时长显示"
+            ],
+            fixes: [
+                "听歌时长改为按实际播放中的经过时间计算，暂停、缓冲和切歌间隙不再计入",
+                "修复拖动进度、循环播放或反复测试同一首歌导致听歌时长异常增加的问题"
+            ]
+        ),
+        VersionLog(
             id: "1.8",
             version: "1.8",
             title: "专辑浏览体验优化",

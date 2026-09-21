@@ -13,6 +13,10 @@ enum BeansDynamicWallpaperKind: String, CaseIterable, Identifiable {
     case simplexNoise
     case metaballs
     case water
+    case starNest
+    case dotOrbit
+    case dots
+    case grainGradient
 
     var id: String { rawValue }
 
@@ -26,6 +30,10 @@ enum BeansDynamicWallpaperKind: String, CaseIterable, Identifiable {
         case .simplexNoise: return "Simplex Noise"
         case .metaballs: return "Metaballs"
         case .water: return "Water"
+        case .starNest: return "Star Nest"
+        case .dotOrbit: return "Dot Orbit"
+        case .dots: return "Dots"
+        case .grainGradient: return "Grain Gradient"
         }
     }
 
@@ -39,6 +47,10 @@ enum BeansDynamicWallpaperKind: String, CaseIterable, Identifiable {
         case .simplexNoise: return "单纯形噪声，多色渐变流场"
         case .metaballs: return "融合球，柔和的彩色流体形状"
         case .water: return "水面折射，使用你上传的图片作为源内容"
+        case .starNest: return "星云隧道，保留 ShipSwift 原始参数"
+        case .dotOrbit: return "彩色圆点围绕网格中心缓慢运动"
+        case .dots: return "点阵波浪、海洋与流动样式"
+        case .grainGradient: return "静态颗粒渐变，不持续播放动画"
         }
     }
 
@@ -52,6 +64,10 @@ enum BeansDynamicWallpaperKind: String, CaseIterable, Identifiable {
         case .simplexNoise: return "waveform.path.ecg"
         case .metaballs: return "circle.hexagongrid.fill"
         case .water: return "water.waves"
+        case .starNest: return "sparkles"
+        case .dotOrbit: return "circle.grid.2x2"
+        case .dots: return "circle.grid.3x3.fill"
+        case .grainGradient: return "square.3.layers.3d"
         }
     }
 }
@@ -196,6 +212,48 @@ final class DynamicWallpaperStore: ObservableObject {
     @Published var waterBackHex: String { didSet { save(waterBackHex, forKey: Self.waterBackKey) } }
     @Published var waterHighlightHex: String { didSet { save(waterHighlightHex, forKey: Self.waterHighlightKey) } }
 
+    // Star Nest
+    @Published var starNestZoom: Double { didSet { save(starNestZoom, forKey: Self.starNestZoomKey) } }
+    @Published var starNestSpeed: Double { didSet { save(starNestSpeed, forKey: Self.starNestSpeedKey) } }
+    @Published var starNestBrightness: Double { didSet { save(starNestBrightness, forKey: Self.starNestBrightnessKey) } }
+    @Published var starNestSaturation: Double { didSet { save(starNestSaturation, forKey: Self.starNestSaturationKey) } }
+    @Published var starNestDarkmatter: Double { didSet { save(starNestDarkmatter, forKey: Self.starNestDarkmatterKey) } }
+    @Published var starNestDistfading: Double { didSet { save(starNestDistfading, forKey: Self.starNestDistfadingKey) } }
+    @Published var starNestAngleX: Double { didSet { save(starNestAngleX, forKey: Self.starNestAngleXKey) } }
+    @Published var starNestAngleY: Double { didSet { save(starNestAngleY, forKey: Self.starNestAngleYKey) } }
+    @Published var starNestVolsteps: Double { didSet { save(starNestVolsteps, forKey: Self.starNestVolstepsKey) } }
+    @Published var starNestIterations: Double { didSet { save(starNestIterations, forKey: Self.starNestIterationsKey) } }
+
+    // Dot Orbit
+    @Published var dotOrbitColorsHex: [String] { didSet { save(dotOrbitColorsHex, forKey: Self.dotOrbitColorsKey) } }
+    @Published var dotOrbitBackgroundHex: String { didSet { save(dotOrbitBackgroundHex, forKey: Self.dotOrbitBackgroundKey) } }
+    @Published var dotOrbitSpeed: Double { didSet { save(dotOrbitSpeed, forKey: Self.dotOrbitSpeedKey) } }
+    @Published var dotOrbitScale: Double { didSet { save(dotOrbitScale, forKey: Self.dotOrbitScaleKey) } }
+    @Published var dotOrbitSize: Double { didSet { save(dotOrbitSize, forKey: Self.dotOrbitSizeKey) } }
+    @Published var dotOrbitSizeRange: Double { didSet { save(dotOrbitSizeRange, forKey: Self.dotOrbitSizeRangeKey) } }
+    @Published var dotOrbitSpreading: Double { didSet { save(dotOrbitSpreading, forKey: Self.dotOrbitSpreadingKey) } }
+    @Published var dotOrbitStepsPerColor: Double { didSet { save(dotOrbitStepsPerColor, forKey: Self.dotOrbitStepsKey) } }
+
+    // Dots
+    @Published var dotsStyleRaw: String { didSet { save(dotsStyleRaw, forKey: Self.dotsStyleKey) } }
+    @Published var dotsTintHex: String { didSet { save(dotsTintHex, forKey: Self.dotsTintKey) } }
+    @Published var dotsBackgroundHex: String { didSet { save(dotsBackgroundHex, forKey: Self.dotsBackgroundKey) } }
+    @Published var dotsSpeed: Double { didSet { save(dotsSpeed, forKey: Self.dotsSpeedKey) } }
+    @Published var dotsBrightness: Double { didSet { save(dotsBrightness, forKey: Self.dotsBrightnessKey) } }
+    @Published var dotsDotSize: Double { didSet { save(dotsDotSize, forKey: Self.dotsDotSizeKey) } }
+    @Published var dotsGridDensity: Double { didSet { save(dotsGridDensity, forKey: Self.dotsGridDensityKey) } }
+    @Published var dotsPatternScale: Double { didSet { save(dotsPatternScale, forKey: Self.dotsPatternScaleKey) } }
+    @Published var dotsAmplitude: Double { didSet { save(dotsAmplitude, forKey: Self.dotsAmplitudeKey) } }
+    @Published var dotsDepthFade: Double { didSet { save(dotsDepthFade, forKey: Self.dotsDepthFadeKey) } }
+    @Published var dotsVignette: Double { didSet { save(dotsVignette, forKey: Self.dotsVignetteKey) } }
+    @Published var dotsHorizon: Double { didSet { save(dotsHorizon, forKey: Self.dotsHorizonKey) } }
+
+    // Grain Gradient is intentionally rendered as a still image: speed and
+    // grain are fixed at zero when it is selected as the wallpaper.
+    @Published var grainGradientColorsHex: [String] { didSet { save(grainGradientColorsHex, forKey: Self.grainGradientColorsKey) } }
+    @Published var grainGradientScale: Double { didSet { save(grainGradientScale, forKey: Self.grainGradientScaleKey) } }
+    @Published var grainGradientContrast: Double { didSet { save(grainGradientContrast, forKey: Self.grainGradientContrastKey) } }
+
     /// Whether the selected dynamic wallpaper should also replace the player's
     /// cover-blur background. The normal app pages still follow the existing
     /// background synchronization option.
@@ -280,6 +338,39 @@ final class DynamicWallpaperStore: ObservableObject {
     private static let waterHighlightsKey = "beans.dynamicWallpaper.water.highlights"
     private static let waterBackKey = "beans.dynamicWallpaper.water.back"
     private static let waterHighlightKey = "beans.dynamicWallpaper.water.highlight"
+    private static let starNestZoomKey = "beans.dynamicWallpaper.starNest.zoom"
+    private static let starNestSpeedKey = "beans.dynamicWallpaper.starNest.speed"
+    private static let starNestBrightnessKey = "beans.dynamicWallpaper.starNest.brightness"
+    private static let starNestSaturationKey = "beans.dynamicWallpaper.starNest.saturation"
+    private static let starNestDarkmatterKey = "beans.dynamicWallpaper.starNest.darkmatter"
+    private static let starNestDistfadingKey = "beans.dynamicWallpaper.starNest.distfading"
+    private static let starNestAngleXKey = "beans.dynamicWallpaper.starNest.angleX"
+    private static let starNestAngleYKey = "beans.dynamicWallpaper.starNest.angleY"
+    private static let starNestVolstepsKey = "beans.dynamicWallpaper.starNest.volsteps"
+    private static let starNestIterationsKey = "beans.dynamicWallpaper.starNest.iterations"
+    private static let dotOrbitColorsKey = "beans.dynamicWallpaper.dotOrbit.colors"
+    private static let dotOrbitBackgroundKey = "beans.dynamicWallpaper.dotOrbit.background"
+    private static let dotOrbitSpeedKey = "beans.dynamicWallpaper.dotOrbit.speed"
+    private static let dotOrbitScaleKey = "beans.dynamicWallpaper.dotOrbit.scale"
+    private static let dotOrbitSizeKey = "beans.dynamicWallpaper.dotOrbit.size"
+    private static let dotOrbitSizeRangeKey = "beans.dynamicWallpaper.dotOrbit.sizeRange"
+    private static let dotOrbitSpreadingKey = "beans.dynamicWallpaper.dotOrbit.spreading"
+    private static let dotOrbitStepsKey = "beans.dynamicWallpaper.dotOrbit.steps"
+    private static let dotsStyleKey = "beans.dynamicWallpaper.dots.style"
+    private static let dotsTintKey = "beans.dynamicWallpaper.dots.tint"
+    private static let dotsBackgroundKey = "beans.dynamicWallpaper.dots.background"
+    private static let dotsSpeedKey = "beans.dynamicWallpaper.dots.speed"
+    private static let dotsBrightnessKey = "beans.dynamicWallpaper.dots.brightness"
+    private static let dotsDotSizeKey = "beans.dynamicWallpaper.dots.dotSize"
+    private static let dotsGridDensityKey = "beans.dynamicWallpaper.dots.gridDensity"
+    private static let dotsPatternScaleKey = "beans.dynamicWallpaper.dots.patternScale"
+    private static let dotsAmplitudeKey = "beans.dynamicWallpaper.dots.amplitude"
+    private static let dotsDepthFadeKey = "beans.dynamicWallpaper.dots.depthFade"
+    private static let dotsVignetteKey = "beans.dynamicWallpaper.dots.vignette"
+    private static let dotsHorizonKey = "beans.dynamicWallpaper.dots.horizon"
+    private static let grainGradientColorsKey = "beans.dynamicWallpaper.grainGradient.colors"
+    private static let grainGradientScaleKey = "beans.dynamicWallpaper.grainGradient.scale"
+    private static let grainGradientContrastKey = "beans.dynamicWallpaper.grainGradient.contrast"
     private static let syncToPlayerKey = "beans.dynamicWallpaper.syncToPlayer"
 
     private init() {
@@ -352,6 +443,43 @@ final class DynamicWallpaperStore: ObservableObject {
         waterHighlights = defaults.object(forKey: Self.waterHighlightsKey) as? Double ?? 0.35
         waterBackHex = defaults.string(forKey: Self.waterBackKey) ?? "#000000"
         waterHighlightHex = defaults.string(forKey: Self.waterHighlightKey) ?? "#FFFFFF"
+
+        starNestZoom = defaults.object(forKey: Self.starNestZoomKey) as? Double ?? 0.8
+        starNestSpeed = defaults.object(forKey: Self.starNestSpeedKey) as? Double ?? 0.01
+        starNestBrightness = defaults.object(forKey: Self.starNestBrightnessKey) as? Double ?? 0.0015
+        starNestSaturation = defaults.object(forKey: Self.starNestSaturationKey) as? Double ?? 0.85
+        starNestDarkmatter = defaults.object(forKey: Self.starNestDarkmatterKey) as? Double ?? 0.3
+        starNestDistfading = defaults.object(forKey: Self.starNestDistfadingKey) as? Double ?? 0.73
+        starNestAngleX = defaults.object(forKey: Self.starNestAngleXKey) as? Double ?? 0.5
+        starNestAngleY = defaults.object(forKey: Self.starNestAngleYKey) as? Double ?? 0.8
+        starNestVolsteps = defaults.object(forKey: Self.starNestVolstepsKey) as? Double ?? 16
+        starNestIterations = defaults.object(forKey: Self.starNestIterationsKey) as? Double ?? 17
+
+        dotOrbitColorsHex = defaults.stringArray(forKey: Self.dotOrbitColorsKey) ?? ["#33D9F2", "#1A66F2", "#8C33F2", "#F24DA6", "#FFE033"]
+        dotOrbitBackgroundHex = defaults.string(forKey: Self.dotOrbitBackgroundKey) ?? "#FFFFFF"
+        dotOrbitSpeed = defaults.object(forKey: Self.dotOrbitSpeedKey) as? Double ?? 1.0
+        dotOrbitScale = defaults.object(forKey: Self.dotOrbitScaleKey) as? Double ?? 10.0
+        dotOrbitSize = defaults.object(forKey: Self.dotOrbitSizeKey) as? Double ?? 1.0
+        dotOrbitSizeRange = defaults.object(forKey: Self.dotOrbitSizeRangeKey) as? Double ?? 0.5
+        dotOrbitSpreading = defaults.object(forKey: Self.dotOrbitSpreadingKey) as? Double ?? 1.0
+        dotOrbitStepsPerColor = defaults.object(forKey: Self.dotOrbitStepsKey) as? Double ?? 1.0
+
+        dotsStyleRaw = defaults.string(forKey: Self.dotsStyleKey) ?? SWDotsStyle.wavy.rawValue
+        dotsTintHex = defaults.string(forKey: Self.dotsTintKey) ?? "#FFFFFF"
+        dotsBackgroundHex = defaults.string(forKey: Self.dotsBackgroundKey) ?? "#000000"
+        dotsSpeed = defaults.object(forKey: Self.dotsSpeedKey) as? Double ?? 1.0
+        dotsBrightness = defaults.object(forKey: Self.dotsBrightnessKey) as? Double ?? 1.0
+        dotsDotSize = defaults.object(forKey: Self.dotsDotSizeKey) as? Double ?? 1.0
+        dotsGridDensity = defaults.object(forKey: Self.dotsGridDensityKey) as? Double ?? 1.0
+        dotsPatternScale = defaults.object(forKey: Self.dotsPatternScaleKey) as? Double ?? 1.0
+        dotsAmplitude = defaults.object(forKey: Self.dotsAmplitudeKey) as? Double ?? 1.0
+        dotsDepthFade = defaults.object(forKey: Self.dotsDepthFadeKey) as? Double ?? 1.0
+        dotsVignette = defaults.object(forKey: Self.dotsVignetteKey) as? Double ?? 1.0
+        dotsHorizon = defaults.object(forKey: Self.dotsHorizonKey) as? Double ?? -0.45
+
+        grainGradientColorsHex = defaults.stringArray(forKey: Self.grainGradientColorsKey) ?? ["#FFB380", "#B399FF", "#FF8099"]
+        grainGradientScale = defaults.object(forKey: Self.grainGradientScaleKey) as? Double ?? 1.2
+        grainGradientContrast = defaults.object(forKey: Self.grainGradientContrastKey) as? Double ?? 1.0
         syncToPlayer = defaults.object(forKey: Self.syncToPlayerKey) as? Bool ?? false
     }
 
@@ -424,6 +552,43 @@ final class DynamicWallpaperStore: ObservableObject {
         waterHighlights = defaults.object(forKey: Self.waterHighlightsKey) as? Double ?? 0.35
         waterBackHex = defaults.string(forKey: Self.waterBackKey) ?? "#000000"
         waterHighlightHex = defaults.string(forKey: Self.waterHighlightKey) ?? "#FFFFFF"
+
+        starNestZoom = defaults.object(forKey: Self.starNestZoomKey) as? Double ?? 0.8
+        starNestSpeed = defaults.object(forKey: Self.starNestSpeedKey) as? Double ?? 0.01
+        starNestBrightness = defaults.object(forKey: Self.starNestBrightnessKey) as? Double ?? 0.0015
+        starNestSaturation = defaults.object(forKey: Self.starNestSaturationKey) as? Double ?? 0.85
+        starNestDarkmatter = defaults.object(forKey: Self.starNestDarkmatterKey) as? Double ?? 0.3
+        starNestDistfading = defaults.object(forKey: Self.starNestDistfadingKey) as? Double ?? 0.73
+        starNestAngleX = defaults.object(forKey: Self.starNestAngleXKey) as? Double ?? 0.5
+        starNestAngleY = defaults.object(forKey: Self.starNestAngleYKey) as? Double ?? 0.8
+        starNestVolsteps = defaults.object(forKey: Self.starNestVolstepsKey) as? Double ?? 16
+        starNestIterations = defaults.object(forKey: Self.starNestIterationsKey) as? Double ?? 17
+
+        dotOrbitColorsHex = defaults.stringArray(forKey: Self.dotOrbitColorsKey) ?? ["#33D9F2", "#1A66F2", "#8C33F2", "#F24DA6", "#FFE033"]
+        dotOrbitBackgroundHex = defaults.string(forKey: Self.dotOrbitBackgroundKey) ?? "#FFFFFF"
+        dotOrbitSpeed = defaults.object(forKey: Self.dotOrbitSpeedKey) as? Double ?? 1.0
+        dotOrbitScale = defaults.object(forKey: Self.dotOrbitScaleKey) as? Double ?? 10.0
+        dotOrbitSize = defaults.object(forKey: Self.dotOrbitSizeKey) as? Double ?? 1.0
+        dotOrbitSizeRange = defaults.object(forKey: Self.dotOrbitSizeRangeKey) as? Double ?? 0.5
+        dotOrbitSpreading = defaults.object(forKey: Self.dotOrbitSpreadingKey) as? Double ?? 1.0
+        dotOrbitStepsPerColor = defaults.object(forKey: Self.dotOrbitStepsKey) as? Double ?? 1.0
+
+        dotsStyleRaw = defaults.string(forKey: Self.dotsStyleKey) ?? SWDotsStyle.wavy.rawValue
+        dotsTintHex = defaults.string(forKey: Self.dotsTintKey) ?? "#FFFFFF"
+        dotsBackgroundHex = defaults.string(forKey: Self.dotsBackgroundKey) ?? "#000000"
+        dotsSpeed = defaults.object(forKey: Self.dotsSpeedKey) as? Double ?? 1.0
+        dotsBrightness = defaults.object(forKey: Self.dotsBrightnessKey) as? Double ?? 1.0
+        dotsDotSize = defaults.object(forKey: Self.dotsDotSizeKey) as? Double ?? 1.0
+        dotsGridDensity = defaults.object(forKey: Self.dotsGridDensityKey) as? Double ?? 1.0
+        dotsPatternScale = defaults.object(forKey: Self.dotsPatternScaleKey) as? Double ?? 1.0
+        dotsAmplitude = defaults.object(forKey: Self.dotsAmplitudeKey) as? Double ?? 1.0
+        dotsDepthFade = defaults.object(forKey: Self.dotsDepthFadeKey) as? Double ?? 1.0
+        dotsVignette = defaults.object(forKey: Self.dotsVignetteKey) as? Double ?? 1.0
+        dotsHorizon = defaults.object(forKey: Self.dotsHorizonKey) as? Double ?? -0.45
+
+        grainGradientColorsHex = defaults.stringArray(forKey: Self.grainGradientColorsKey) ?? ["#FFB380", "#B399FF", "#FF8099"]
+        grainGradientScale = defaults.object(forKey: Self.grainGradientScaleKey) as? Double ?? 1.2
+        grainGradientContrast = defaults.object(forKey: Self.grainGradientContrastKey) as? Double ?? 1.0
         syncToPlayer = defaults.object(forKey: Self.syncToPlayerKey) as? Bool ?? false
     }
 
@@ -496,6 +661,43 @@ final class DynamicWallpaperStore: ObservableObject {
             waterHighlights = 0.35
             waterBackHex = "#000000"
             waterHighlightHex = "#FFFFFF"
+        case .starNest:
+            starNestZoom = 0.8
+            starNestSpeed = 0.01
+            starNestBrightness = 0.0015
+            starNestSaturation = 0.85
+            starNestDarkmatter = 0.3
+            starNestDistfading = 0.73
+            starNestAngleX = 0.5
+            starNestAngleY = 0.8
+            starNestVolsteps = 16
+            starNestIterations = 17
+        case .dotOrbit:
+            dotOrbitColorsHex = ["#33D9F2", "#1A66F2", "#8C33F2", "#F24DA6", "#FFE033"]
+            dotOrbitBackgroundHex = "#FFFFFF"
+            dotOrbitSpeed = 1.0
+            dotOrbitScale = 10.0
+            dotOrbitSize = 1.0
+            dotOrbitSizeRange = 0.5
+            dotOrbitSpreading = 1.0
+            dotOrbitStepsPerColor = 1.0
+        case .dots:
+            dotsStyleRaw = SWDotsStyle.wavy.rawValue
+            dotsTintHex = "#FFFFFF"
+            dotsBackgroundHex = "#000000"
+            dotsSpeed = 1.0
+            dotsBrightness = 1.0
+            dotsDotSize = 1.0
+            dotsGridDensity = 1.0
+            dotsPatternScale = 1.0
+            dotsAmplitude = 1.0
+            dotsDepthFade = 1.0
+            dotsVignette = 1.0
+            dotsHorizon = -0.45
+        case .grainGradient:
+            grainGradientColorsHex = ["#FFB380", "#B399FF", "#FF8099"]
+            grainGradientScale = 1.2
+            grainGradientContrast = 1.0
         }
     }
 
@@ -646,6 +848,57 @@ struct BeansDynamicWallpaperView: View {
                     .clipped()
                 }
             }
+        case .starNest:
+            SWStarNest(
+                zoom: Float(store.starNestZoom),
+                speed: Float(store.starNestSpeed),
+                brightness: Float(store.starNestBrightness),
+                saturation: Float(store.starNestSaturation),
+                darkmatter: Float(store.starNestDarkmatter),
+                distfading: Float(store.starNestDistfading),
+                angleX: Float(store.starNestAngleX),
+                angleY: Float(store.starNestAngleY),
+                volsteps: Float(store.starNestVolsteps),
+                iterations: Float(store.starNestIterations)
+            )
+        case .dotOrbit:
+            SWDotOrbit(
+                colors: store.dotOrbitColorsHex.map { store.color($0, fallback: .white) },
+                colorBack: store.color(store.dotOrbitBackgroundHex, fallback: .white),
+                speed: Float(store.dotOrbitSpeed),
+                scale: Float(store.dotOrbitScale),
+                size: Float(store.dotOrbitSize),
+                sizeRange: Float(store.dotOrbitSizeRange),
+                spreading: Float(store.dotOrbitSpreading),
+                stepsPerColor: Float(store.dotOrbitStepsPerColor)
+            )
+        case .dots:
+            SWDots(
+                style: SWDotsStyle(rawValue: store.dotsStyleRaw) ?? .wavy,
+                tint: store.color(store.dotsTintHex, fallback: .white),
+                background: store.color(store.dotsBackgroundHex, fallback: .black),
+                speed: Float(store.dotsSpeed),
+                brightness: Float(store.dotsBrightness),
+                dotSize: Float(store.dotsDotSize),
+                gridDensity: Float(store.dotsGridDensity),
+                patternScale: Float(store.dotsPatternScale),
+                amplitude: Float(store.dotsAmplitude),
+                depthFade: Float(store.dotsDepthFade),
+                vignette: Float(store.dotsVignette),
+                horizon: Float(store.dotsHorizon)
+            )
+        case .grainGradient:
+            // Grain Gradient is deliberately still: zero motion and zero
+            // per-frame grain keep this ShipSwift shader as a static surface.
+            SWGrainGradient(
+                color1: store.color(store.grainGradientColorsHex.count > 0 ? store.grainGradientColorsHex[0] : "#FFB380", fallback: Color(red: 1.0, green: 0.702, blue: 0.502)),
+                color2: store.color(store.grainGradientColorsHex.count > 1 ? store.grainGradientColorsHex[1] : "#B399FF", fallback: Color(red: 0.702, green: 0.6, blue: 1.0)),
+                color3: store.color(store.grainGradientColorsHex.count > 2 ? store.grainGradientColorsHex[2] : "#FF8099", fallback: Color(red: 1.0, green: 0.502, blue: 0.6)),
+                speed: 0,
+                scale: Float(store.grainGradientScale),
+                grain: 0,
+                contrast: Float(store.grainGradientContrast)
+            )
         case .off:
             Color.clear
         }

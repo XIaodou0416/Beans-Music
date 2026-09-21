@@ -298,7 +298,6 @@
     </div>
     <div class="stats-row">
       <div class="stat"><span class="stat-label">听歌时长</span><span class="stat-value" id="listenStat">--</span></div>
-      <div class="stat"><span class="stat-label">播放次数</span><span class="stat-value" id="playStat">--</span></div>
     </div>
   </div>
 </div>
@@ -388,7 +387,6 @@ const panel = document.getElementById('panel');
 const panelClose = document.getElementById('panelClose');
 const toast = document.getElementById('toast');
 const listenStat = document.getElementById('listenStat');
-const playStat = document.getElementById('playStat');
 
 let locked = false;
 
@@ -564,7 +562,6 @@ function applyDefaultInfo(){
 window.__beansUpdateStats = function(data){
   if(!data) return;
   if(listenStat && data.listeningDuration) listenStat.textContent = data.listeningDuration;
-  if(playStat && data.playCount) playStat.textContent = data.playCount;
 };
 
 avatarImg.addEventListener('error', function(){
