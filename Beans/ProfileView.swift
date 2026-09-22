@@ -140,6 +140,8 @@ struct ProfileView: View {
     @State private var showAccountHub = false
     /// 设置页（外观 + 歌词翻译等）
     @State private var showSettings = false
+    /// 只在开发者设备的“我的”页面底部显示。
+    @State private var showDeveloperTools = false
     @State private var themeRevealSnapshot: UIImage?
     @State private var themeRevealOrigin = CGPoint.zero
     @State private var themeRevealProgress: CGFloat = 0
@@ -437,6 +439,9 @@ struct ProfileView: View {
                     }
                     easterEggCard
                     profileVersionFooter
+                    if BeansDeveloperAccess.isAuthorized {
+                        developerToolsCard
+                    }
                 }
                 .padding(.horizontal, isNativeClean ? 24 : 16)
                 .padding(.top, isNativeClean ? 14 : 8)
@@ -513,6 +518,12 @@ struct ProfileView: View {
             settingsScreen(SettingsView(onClose: { showSettings = false }))
                 .modifier(BeansSheetModifier(detents: [.fraction(0.62), .large], dragIndicator: true))
                 .modifier(SettingsLiquidSheetPresentation())
+        }
+        .sheet(isPresented: $showDeveloperTools) {
+            DeveloperToolsView()
+                .environmentObject(theme)
+                .environmentObject(player)
+                .modifier(BeansSheetModifier(detents: [.fraction(0.62), .large], dragIndicator: true))
         }
         .sheet(item: $updateShareFile, onDismiss: cleanupUpdateShareFile) { item in
             ShareSheet(items: [item.url])
@@ -1107,6 +1118,38 @@ struct ProfileView: View {
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .padding(.top, 2)
+    }
+
+    private var developerToolsCard: some View {
+        Button {
+            BeansHaptics.tap()
+            showDeveloperTools = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "hammer.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.beansAmber)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("开发者工具")
+                        .font(BeansFont.appFont(14, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text("刷新率、公告、权限与诊断")
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.beansComment)
+            }
+            .padding(16)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
+        .accessibilityLabel("开发者工具")
     }
 
     private var feedbackCard: some View {
@@ -1895,7 +1938,6 @@ struct SettingsView: View {
     @State private var disclaimerExpanded = false
     @State private var showFloatingImagePicker = false
     @State private var showTabVisibilitySettings = false
-    @State private var showDeveloperTools = false
     @State private var settingsSearchText = ""
     @State private var settingsContentReady = false
     @State private var runtimeEnvironmentExpanded = false
@@ -2302,11 +2344,6 @@ struct SettingsView: View {
             FeedbackSheet()
                 .environmentObject(theme)
         }
-        .sheet(isPresented: $showDeveloperTools) {
-            DeveloperToolsView()
-                .environmentObject(theme)
-                .environmentObject(player)
-        }
         .alert("检查更新", isPresented: $showUpdateResult, presenting: updateResult) { result in
             switch result {
             case .update(let info):
@@ -2433,12 +2470,10 @@ struct SettingsView: View {
     private var showBackupSettings: Bool { settingsMatches("备份 恢复 导出 导入 缓存") }
     private var showChangelogSettings: Bool { settingsMatches("更新 日志 版本") }
     private var showSupportSettings: Bool { settingsMatches("帮助 反馈 声明 检查更新") }
-    private var showDeveloperSettings: Bool { BeansDeveloperAccess.isAuthorized && settingsMatches("开发者 调试 诊断 刷新率 日志") }
-
     private var hasSettingsSearchResults: Bool {
         showAccountSettings || showAppearanceSettings || showPlatformSettings
             || showDynamicWallpaperSettings || showAudioSettings || showPlaybackSettings || showEqualizerSettings
-            || showBackupSettings || showChangelogSettings || showSupportSettings || showDeveloperSettings
+            || showBackupSettings || showChangelogSettings || showSupportSettings
     }
 
     @ViewBuilder
@@ -2469,15 +2504,13 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var utilitySettingsGroup: some View {
-        if showBackupSettings || showChangelogSettings || showSupportSettings || showDeveloperSettings {
+        if showBackupSettings || showChangelogSettings || showSupportSettings {
             SettingsCatalogGroup {
                 if showBackupSettings { backupSection }
-                if showBackupSettings && (showChangelogSettings || showSupportSettings || showDeveloperSettings) { catalogDivider }
+                if showBackupSettings && (showChangelogSettings || showSupportSettings) { catalogDivider }
                 if showChangelogSettings { changelogSection }
-                if showChangelogSettings && (showSupportSettings || showDeveloperSettings) { catalogDivider }
+                if showChangelogSettings && showSupportSettings { catalogDivider }
                 if showSupportSettings { settingsSupportSection }
-                if showSupportSettings && showDeveloperSettings { catalogDivider }
-                if showDeveloperSettings { developerToolsSection }
             }
         }
     }
@@ -4633,16 +4666,6 @@ struct SettingsView: View {
     private var runtimeScreenDimensions: String {
         let bounds = UIScreen.main.bounds
         return "\(Int(bounds.width)) × \(Int(bounds.height)) @\(Int(UIScreen.main.scale.rounded()))x"
-    }
-
-    private var developerToolsSection: some View {
-        settingsSupportButton(
-            icon: "hammer.fill",
-            title: "开发者工具",
-            tint: Color.beansAmber
-        ) {
-            showDeveloperTools = true
-        }
     }
 
     private func disclaimerRow(_ index: Int, _ text: String) -> some View {
