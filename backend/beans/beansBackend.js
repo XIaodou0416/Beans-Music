@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+﻿const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -197,7 +197,7 @@ function createBeansRouter(options = {}) {
     const patch = {
       ...current,
       announcement: text(payload.announcement, 8000),
-      announcement_enabled: payload.announcement_enabled === true,
+      announcement_enabled: payload.announcement_enabled === true || payload.announcement_enabled === 'true',
       updated_at: now(),
     };
     try {
