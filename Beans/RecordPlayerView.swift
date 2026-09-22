@@ -323,8 +323,16 @@ struct RecordPlayerView: View {
                 RecordModeScrubber()
                     .frame(maxWidth: 430)
                     .modifier(recordLayout(.progress))
-                transportControls
-                    .frame(maxWidth: 300)
+                HStack(spacing: 10) {
+                    transportControls
+                        .frame(maxWidth: 270)
+                    circleButton(icon: "list.bullet", size: 17) {
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            showQueue = false
+                        }
+                    }
+                }
+                .frame(maxWidth: 330)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: size.width * 0.44, maxHeight: .infinity)
