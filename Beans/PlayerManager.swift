@@ -125,6 +125,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private var secondaryAudioHintObserverInstalled = false
     private var mediaServicesObserverInstalled = false
     private var applicationAudioObserverInstalled = false
+    private var applicationIsInBackground = false
     private var remoteCommandsInstalled = false
     private var playOrder: [Int] = []
     private var orderPosition = 0
@@ -1356,7 +1357,18 @@ final class PlayerManager: NSObject, ObservableObject {
             self.performOnMain { [weak self] in
                 guard let self, self.player === player else { return }
                 if player.timeControlStatus == .paused, self.isPlaying {
-                    if self.mixesWithOthers,
+                    if self.applicationIsInBackground,
+                       item.status == .readyToPlay {
+                        // iOS 26.x can pause an AVPlayer while the app is being
+                        // suspended without delivering a complete interruption
+                        // sequence. Keep the user's playback intent and retry
+                        // after the background audio session has settled.
+                        self.rememberAudioPlaybackIntent()
+                        self.isPlaying = false
+                        self.stopListeningSegment()
+                        self.refreshNowPlayingOwnership()
+                        self.scheduleAudioRecovery(reason: "后台播放器暂停", delay: 0.25)
+                    } else if self.mixesWithOthers,
                        item.status == .readyToPlay {
                         // 某些外部音频只会让 AVPlayer 暂停，不会发出完整的 interruption
                         // 通知；保留播放意图，等系统音频会话释放后自动恢复。
@@ -2125,6 +2137,12 @@ final class PlayerManager: NSObject, ObservableObject {
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleApplicationDidEnterBackground(_:)),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
     }
 
     @objc private func handleInterruption(_ notification: Notification) {
@@ -2224,6 +2242,21 @@ final class PlayerManager: NSObject, ObservableObject {
         rememberAudioPlaybackIntent()
     }
 
+    @objc private func handleApplicationDidEnterBackground(_ notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.handleApplicationDidEnterBackground(notification)
+            }
+            return
+        }
+        applicationIsInBackground = true
+        guard currentSong != nil,
+              isPlaying || shouldResumeAfterAudioLoss || player?.timeControlStatus == .playing else { return }
+        rememberAudioPlaybackIntent()
+        sessionConfigured = false
+        scheduleAudioRecovery(reason: "进入后台保持播放", delay: 0.25)
+    }
+
     @objc private func handleApplicationDidBecomeActive(_ notification: Notification) {
         guard Thread.isMainThread else {
             DispatchQueue.main.async { [weak self] in
@@ -2231,6 +2264,7 @@ final class PlayerManager: NSObject, ObservableObject {
             }
             return
         }
+        applicationIsInBackground = false
         guard currentSong != nil else { return }
         sessionConfigured = false
         if shouldResumeAfterAudioLoss || isPlaying || player?.timeControlStatus == .playing {
