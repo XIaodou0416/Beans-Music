@@ -383,10 +383,8 @@ final class DynamicWallpaperStore: ObservableObject {
     private init() {
         let defaults = UserDefaults.standard
 
-        kind = BeansDynamicWallpaperKind(rawValue: defaults.string(forKey: Self.kindKey) ?? "") ?? .off
-        if kind == .dots || kind == .starNest {
-            kind = .off
-        }
+        let storedKind = BeansDynamicWallpaperKind(rawValue: defaults.string(forKey: Self.kindKey) ?? "") ?? .off
+        kind = (storedKind == .dots || storedKind == .starNest) ? .off : storedKind
 
         fractalSkyHex = defaults.string(forKey: Self.fractalSkyKey) ?? "#1A2659"
         fractalCloudHex = defaults.string(forKey: Self.fractalCloudKey) ?? "#E6E6FF"
