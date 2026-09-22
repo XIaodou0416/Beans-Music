@@ -349,6 +349,14 @@ struct CommentsSheet: View {
                     qqLatestComments.append(contentsOf: result.comments)
                 }
                 qqTotal = result.total
+            } else if song.source == .qishui {
+                let result = try await QishuiAPI.shared.comments(for: song, limit: limit)
+                if reset {
+                    page = result
+                } else if var current = page {
+                    current.comments.append(contentsOf: result.comments)
+                    page = current
+                }
             } else {
                 let result = try await NetEaseAPI.shared.songComments(id: song.id, limit: limit, offset: offset)
                 if reset {
@@ -427,14 +435,6 @@ struct CommentsSheet: View {
         Group {
             if kugouHotComments.isEmpty && kugouLatestComments.isEmpty {
                 EmptyStateView(icon: "bubble.left", text: "暂无评论")
-            } else if song.source == .qishui {
-                let result = try await QishuiAPI.shared.comments(for: song, limit: limit)
-                if reset {
-                    page = result
-                } else if var current = page {
-                    current.comments.append(contentsOf: result.comments)
-                    page = current
-                }
             } else {
                 List {
                     Section {

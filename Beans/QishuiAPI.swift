@@ -118,7 +118,7 @@ final class QishuiAPI {
                 let key = name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).lowercased()
                 guard !key.isEmpty, seen.insert(key).inserted else { continue }
                 result.append(Artist(
-                    id: "qishui-artist-\(stableID(key))",
+                    id: "qishui-artist-\(Self.stableID(key))",
                     name: name,
                     coverURL: song.coverURL,
                     source: .qishui
@@ -201,7 +201,7 @@ final class QishuiAPI {
     func lyric(for song: Song) async throws -> String? {
         guard let identifier = song.qishuiID, !identifier.isEmpty else { return nil }
         let data = try await requestObject("/lyric", query: ["track_id": identifier])
-        if let lyric = firstString(in: data, keys: ["lyric", "lyrics", "content", "lrc"]), !lyric.isEmpty {
+        if let lyric = firstString(data, keys: ["lyric", "lyrics", "content", "lrc"]), !lyric.isEmpty {
             return lyric
         }
         return nil
@@ -224,7 +224,7 @@ final class QishuiAPI {
             let timestamp = number(raw["timestamp"] ?? raw["create_time"] ?? raw["time"])
             let seconds = timestamp > 10_000_000_000 ? timestamp / 1_000 : timestamp
             return SongComment(
-                id: stableID(idText),
+                id: Self.stableID(idText),
                 content: content,
                 nickname: nickname,
                 avatarURL: avatar,
