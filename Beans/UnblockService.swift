@@ -701,6 +701,7 @@ enum UnblockService {
         case .kugou: return "kg"
         case .kuwo: return "kw"
         case .migu: return "mg"
+        case .qishui: return "qs"
         }
     }
 

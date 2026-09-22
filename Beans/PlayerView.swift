@@ -363,7 +363,7 @@ struct PlayerView: View {
             return try await KugouMusicAPI.shared.userPlaylists()
         case .qq:
             return []
-        case .kuwo, .migu:
+        case .kuwo, .migu, .qishui:
             return []
         }
     }
@@ -410,7 +410,7 @@ struct PlayerView: View {
             }
         case .qq:
             ToastCenter.shared.show("当前仅支持网易云音乐和酷狗音乐官方收藏")
-        case .kuwo, .migu:
+        case .kuwo, .migu, .qishui:
             ToastCenter.shared.show("当前平台仅支持本地收藏")
         }
     }
@@ -439,7 +439,7 @@ struct PlayerView: View {
             }
         case .qq:
             ToastCenter.shared.show("当前不支持 QQ 官方歌单收藏")
-        case .kuwo, .migu:
+        case .kuwo, .migu, .qishui:
             ToastCenter.shared.show("当前平台仅支持本地收藏")
         }
         favoriteCandidate = nil
@@ -460,7 +460,7 @@ struct PlayerView: View {
                     ToastCenter.shared.show("已创建酷狗歌单")
                 case .qq:
                     ToastCenter.shared.show("当前不支持 QQ 官方歌单")
-                case .kuwo, .migu:
+                case .kuwo, .migu, .qishui:
                     ToastCenter.shared.show("当前平台不支持官方歌单")
                 }
             } catch {
@@ -481,7 +481,7 @@ struct PlayerView: View {
                     success = try await KugouMusicAPI.shared.deletePlaylist(playlistID: playlist.id)
                 case .qq:
                     success = false
-                case .kuwo, .migu:
+                case .kuwo, .migu, .qishui:
                     success = false
                 }
                 if success {
@@ -5087,6 +5087,8 @@ struct PlayerView: View {
             return URL(string: "https://www.kuwo.cn/play_detail/\(song.id)")
         case .migu:
             return URL(string: "https://music.migu.cn/v3/music/song/\(song.id)")
+        case .qishui:
+            return song.officialURL
         }
     }
 

@@ -408,6 +408,7 @@ struct RecordPlayerView: View {
         case .kugou: return "酷狗"
         case .kuwo: return "酷我"
         case .migu: return "咪咕"
+        case .qishui: return "汽水"
         case nil: return "未知"
         }
     }

@@ -183,6 +183,9 @@ struct CommentsSheet: View {
             return selectedSection == .hot ? kugouHotComments : kugouLatestComments
         case .kuwo, .migu:
             return []
+        case .qishui:
+            guard let page else { return [] }
+            return selectedSection == .hot ? page.hot : page.comments
         }
     }
 
@@ -196,6 +199,8 @@ struct CommentsSheet: View {
             return kugouTotal <= 0 || kugouLatestComments.count < kugouTotal
         case .kuwo, .migu:
             return false
+        case .qishui:
+            return (page?.comments.count ?? 0) >= limit
         }
     }
 
@@ -210,6 +215,8 @@ struct CommentsSheet: View {
             await load(reset: false)
         case .kuwo, .migu:
             return
+        case .qishui:
+            await loadMore()
         }
     }
 
@@ -420,6 +427,14 @@ struct CommentsSheet: View {
         Group {
             if kugouHotComments.isEmpty && kugouLatestComments.isEmpty {
                 EmptyStateView(icon: "bubble.left", text: "暂无评论")
+            } else if song.source == .qishui {
+                let result = try await QishuiAPI.shared.comments(for: song, limit: limit)
+                if reset {
+                    page = result
+                } else if var current = page {
+                    current.comments.append(contentsOf: result.comments)
+                    page = current
+                }
             } else {
                 List {
                     Section {

@@ -50,6 +50,8 @@ struct PlaylistView: View {
             accountID = KugouMusicAuth.shared.userId
         case .kuwo, .migu:
             accountID = ""
+        case .qishui:
+            accountID = QishuiAPI.shared.sessionID ?? ""
         }
         return SyncedPlaylistCache.shared.cachedSongs(playlist: playlist, accountID: accountID)
     }
@@ -69,6 +71,8 @@ struct PlaylistView: View {
             return KugouMusicAuth.shared.userId
         case .kuwo, .migu:
             return ""
+        case .qishui:
+            return QishuiAPI.shared.sessionID ?? ""
         }
     }
 
@@ -318,6 +322,9 @@ struct PlaylistView: View {
                     tracks = favorites.qqFavoriteSongs
                     BeansLogger.shared.log("QQ 我的喜欢页面网络结果为空，使用本地收藏回退 count=\(tracks.count)", level: tracks.isEmpty ? .warn : .info)
                 }
+            } else if playlist.source == .qishui {
+                let identifier = playlist.qishuiID ?? String(playlist.id)
+                tracks = try await QishuiAPI.shared.playlistSongs(id: identifier)
             } else if playlist.source == .kuwo || playlist.source == .migu {
                 tracks = try await AdditionalCatalogSearchAPI.playlistSongs(source: playlist.source, id: playlist.id)
             } else {

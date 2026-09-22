@@ -595,6 +595,8 @@ struct ArtistHomeSheet: View {
             songs = (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: artistName, limit: 100)) ?? []
         case .migu:
             songs = (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: artistName, limit: 100)) ?? []
+        case .qishui:
+            songs = (try? await QishuiAPI.shared.artistSongs(name: artistName, limit: 100)) ?? []
         default:
             songs = []
         }
@@ -632,6 +634,8 @@ struct ArtistHomeSheet: View {
             candidates = (try? await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: artistName, limit: 60)) ?? []
         case .netease:
             candidates = (try? await NetEaseAPI.shared.searchAlbums(keyword: artistName, limit: 60)) ?? []
+        case .qishui:
+            candidates = (try? await QishuiAPI.shared.artistAlbums(name: artistName, limit: 60)) ?? []
         }
         let expected = normalizedArtistName(artistName)
         guard !expected.isEmpty else { return Array(candidates.prefix(60)) }

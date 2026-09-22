@@ -405,6 +405,7 @@ enum BeansPlaylistImportService {
         case "kg", "kugou", "kugoumusic", "酷狗", "酷狗音乐": return .kugou
         case "kw", "kuwo", "kuwomusic", "酷我", "酷我音乐": return .kuwo
         case "mg", "migu", "migumusic", "咪咕", "咪咕音乐": return .migu
+        case "qs", "qishui", "qishuimusic", "汽水", "汽水音乐": return .qishui
         default: return .netease
         }
     }
@@ -416,6 +417,7 @@ enum BeansPlaylistImportService {
         case .kugou: return "酷狗音乐"
         case .kuwo: return "酷我音乐"
         case .migu: return "咪咕音乐"
+        case .qishui: return "汽水音乐"
         }
     }
 

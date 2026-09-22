@@ -724,6 +724,7 @@ struct LocalPlaylistDetailSheet: View {
         case .kugou: return "酷狗音乐"
         case .kuwo: return "酷我音乐"
         case .migu: return "咪咕音乐"
+        case .qishui: return "汽水音乐"
         }
     }
 }

@@ -375,6 +375,7 @@ struct PlaylistSquareView: View {
         case .kugou: return "酷狗"
         case .kuwo: return "酷我"
         case .migu: return "咪咕"
+        case .qishui: return "汽水"
         }
     }
 
@@ -462,6 +463,7 @@ struct PlaylistSquareView: View {
         case .netease: return beansLocalized("推荐歌单暂时没有内容", "No NetEase playlists available")
         case .qq: return beansLocalized("QQ音乐热门歌单暂时没有内容", "No QQ Music playlists available")
         case .kugou: return beansLocalized("酷狗歌单广场暂时没有内容", "No Kugou playlists available")
+        case .qishui: return beansLocalized("汽水音乐歌单暂时没有内容", "No Qishui playlists available")
         }
     }
 
@@ -510,6 +512,8 @@ struct PlaylistSquareView: View {
                 loadedPlaylists = category.id == PlaylistSquareCategory.all.id
                     ? try await KugouMusicAPI.shared.recommendPlaylists(limit: 12)
                     : try await KugouMusicAPI.shared.playlists(categoryID: category.remoteID ?? 0, limit: 30)
+            case .qishui:
+                loadedPlaylists = try await QishuiAPI.shared.recommendedPlaylists(limit: 18)
             }
             guard isCurrent(requestedID, source: requestedSource, categoryID: category.id) else { return }
             playlists = loadedPlaylists
@@ -628,6 +632,8 @@ struct PlaylistSquareView: View {
                 loadedCategories = try await QQMusicAPI.shared.playlistCategories()
             case .kugou:
                 loadedCategories = try await KugouMusicAPI.shared.playlistCategories()
+            case .qishui:
+                loadedCategories = [.all]
             }
         } catch {
             loadedCategories = [.all]
@@ -664,6 +670,8 @@ struct PlaylistSquareView: View {
             case .kugou:
                 // 酷狗歌单搜索接口不稳定，分类浏览保持可用。
                 results = []
+            case .qishui:
+                results = (try? await QishuiAPI.shared.searchPlaylists(keyword: keyword, limit: 30)) ?? []
             }
             guard !Task.isCancelled, requestedSource == source else { return }
             searchResults = results

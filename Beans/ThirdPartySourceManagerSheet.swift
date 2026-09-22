@@ -586,6 +586,7 @@ private enum ThirdPartySourcePlatform: String, CaseIterable, Identifiable {
     case kugou
     case kuwo
     case migu
+    case qishui
 
     var id: String { rawValue }
 
@@ -597,6 +598,7 @@ private enum ThirdPartySourcePlatform: String, CaseIterable, Identifiable {
         case .kugou: return beansLocalized("酷狗音乐", "Kugou Music")
         case .kuwo: return beansLocalized("酷我音乐", "Kuwo Music")
         case .migu: return beansLocalized("咪咕音乐", "Migu Music")
+        case .qishui: return beansLocalized("汽水音乐", "Qishui Music")
         }
     }
 
@@ -608,6 +610,7 @@ private enum ThirdPartySourcePlatform: String, CaseIterable, Identifiable {
         case .kugou: return "kg"
         case .kuwo: return "kw"
         case .migu: return "mg"
+        case .qishui: return "qs"
         }
     }
 
@@ -623,6 +626,8 @@ private enum ThirdPartySourcePlatform: String, CaseIterable, Identifiable {
             self = .kuwo
         case "mg", "migu":
             self = .migu
+        case "qs", "qishui":
+            self = .qishui
         default:
             self = .all
         }

@@ -232,6 +232,8 @@ enum AdditionalCatalogSearchAPI {
             let url = URL(string: "https://app.c.nf.migu.cn/MIGUM3.0/resource/playlist/song/v2.0?pageNo=1&pageSize=1000&playlistId=\(id)")!
             let root = try await fetchObject(url, headers: ["Referer": "https://m.music.migu.cn/", "User-Agent": browserUserAgent])
             return dictionaries(in: root["songList"] ?? root["songlist"] ?? root["tracks"] ?? root["list"] ?? root["data"]).compactMap(miguSong)
+        case .qishui:
+            throw AdditionalCatalogSearchError.invalidResponse
         default:
             throw AdditionalCatalogSearchError.invalidResponse
         }
@@ -334,6 +336,11 @@ enum AdditionalCatalogSearchAPI {
             return lyric
         case .migu:
             return try await miguLyric(songID: song.id, copyrightID: song.miguCopyrightId, directURL: song.miguLyricURL)
+        case .qishui:
+            guard let lyric = try await QishuiAPI.shared.lyric(for: song), !lyric.isEmpty else {
+                throw AdditionalCatalogSearchError.invalidResponse
+            }
+            return lyric
         default:
             throw AdditionalCatalogSearchError.invalidResponse
         }

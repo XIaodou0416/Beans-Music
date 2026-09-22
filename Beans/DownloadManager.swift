@@ -164,6 +164,13 @@ final class DownloadManager {
     }
 
     private func resolveURL(song: Song, quality: DownloadQuality) async -> ResolvedDownloadURL? {
+        // 汽水音乐使用独立的字符串曲目 ID，下载时先走汽水专用接口，
+        // 避免把它误送到网易云数字 ID 接口。
+        if song.source == .qishui,
+           let url = try? await QishuiAPI.shared.playbackURL(for: song) {
+            return ResolvedDownloadURL(url: url, actualQuality: quality, sourceName: "汽水音乐")
+        }
+
         // 下载优先复用已配置的第三方音源，避免播放能用第三方而下载仍走官方地址。
         let thirdPartyID = song.source == .netease ? song.id : 0
         let thirdPartyKugouID = song.kugouHash ?? song.kugouAlbumAudioId

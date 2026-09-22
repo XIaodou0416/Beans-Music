@@ -884,6 +884,15 @@ final class PlayerManager: NSObject, ObservableObject {
                         enableUnblock: enableUnblock,
                         strict: strictUnlock
                     )
+                } else if song.source == .qishui {
+                    urlString = (try? await QishuiAPI.shared.playbackURL(for: song))?.absoluteString
+                    if urlString == nil, enableUnblock {
+                        resolvedThirdParty = await resolveThirdParty(
+                            song: song,
+                            quality: thirdPartyQuality,
+                            strict: strictUnlock
+                        )
+                    }
                 } else {
                     resolvedThirdParty = await resolveThirdParty(
                         song: song,
@@ -1684,6 +1693,8 @@ final class PlayerManager: NSObject, ObservableObject {
             candidates = (try? await AdditionalCatalogSearchAPI.searchKuwo(keyword: keyword, limit: 12)) ?? []
         case .migu:
             candidates = (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: keyword, limit: 12)) ?? []
+        case .qishui:
+            candidates = (try? await QishuiAPI.shared.searchSongs(keyword: keyword, limit: 12)) ?? []
         }
         return bestMatchingSong(for: sourceSong, in: candidates)
     }
@@ -1734,6 +1745,7 @@ final class PlayerManager: NSObject, ObservableObject {
         case .kugou: return "酷狗音乐"
         case .kuwo: return "酷我音乐"
         case .migu: return "咪咕音乐"
+        case .qishui: return "汽水音乐"
         }
     }
 
@@ -1855,6 +1867,8 @@ final class PlayerManager: NSObject, ObservableObject {
                 strict: strict,
                 excludedHosts: excludedHosts
             )
+        case .qishui:
+            return nil
         }
     }
 
@@ -2044,7 +2058,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 return false
             }
             return user.vipBadge != nil
-        case .kuwo, .migu:
+        case .kuwo, .migu, .qishui:
             return false
         }
     }

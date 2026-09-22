@@ -41,7 +41,7 @@ final class FavoritesStore: ObservableObject {
         case .kugou:
             return kugouFavoriteSongs.contains { $0.identityKey == song.identityKey }
                 || kugouOfficialFavoriteSongs.contains { $0.identityKey == song.identityKey }
-        case .kuwo, .migu:
+        case .kuwo, .migu, .qishui:
             return kugouFavoriteSongs.contains { $0.identityKey == song.identityKey }
         }
     }
@@ -55,7 +55,7 @@ final class FavoritesStore: ObservableObject {
             return kugouOfficialFavoriteSongs.contains { $0.identityKey == song.identityKey }
         case .qq:
             return false
-        case .kuwo, .migu:
+        case .kuwo, .migu, .qishui:
             return false
         }
     }
@@ -96,7 +96,7 @@ final class FavoritesStore: ObservableObject {
             let liked = !isLiked(song)
             updateKugou(song, liked: liked)
             return true
-        case .kuwo, .migu:
+        case .kuwo, .migu, .qishui:
             let liked = !isLiked(song)
             updateKugou(song, liked: liked)
             return true
