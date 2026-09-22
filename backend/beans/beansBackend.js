@@ -45,10 +45,26 @@ function createBeansRouter(options = {}) {
   const storageDir = options.storageDir || path.join(process.cwd(), 'beans-data');
   const uploadDir = path.join(storageDir, 'uploads');
   const databasePath = path.join(storageDir, 'users.json');
+  const announcementPath = path.join(storageDir, 'announcement.json');
   const adminPassword = String(options.adminPassword || process.env.BEANS_ADMIN_PASSWORD || '');
   const browserAdmin = typeof options.adminMiddleware === 'function'
     ? options.adminMiddleware
     : requireBrowserAdmin(adminPassword);
+  const readRemoteConfig = typeof options.getRemoteConfig === 'function'
+    ? options.getRemoteConfig
+    : () => {
+        try {
+          return JSON.parse(fs.readFileSync(announcementPath, 'utf8'));
+        } catch {
+          return {};
+        }
+      };
+  const writeRemoteConfig = typeof options.updateRemoteConfig === 'function'
+    ? options.updateRemoteConfig
+    : (patch) => {
+        ensureDirectory(storageDir);
+        fs.writeFileSync(announcementPath, JSON.stringify(patch, null, 2), { mode: 0o640 });
+      };
 
   ensureDirectory(storageDir);
   ensureDirectory(uploadDir);
@@ -153,6 +169,48 @@ function createBeansRouter(options = {}) {
       database.settings.download_global_enabled = enabled;
     });
     return response.json({ ok: true, download_global_enabled: enabled });
+  });
+
+  // The authorized developer installation can edit the same announcement
+  // consumed by /beans/config.json, without exposing the admin password in the app.
+  router.get('/developer/announcement', (request, response) => {
+    const developerUserID = text(request.query.developer_user_id, 80).toLowerCase();
+    if (!isDeveloperDeviceID(developerUserID)) {
+      return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
+    }
+    const config = readRemoteConfig() || {};
+    return response.json({
+      ok: true,
+      announcement: text(config.announcement, 8000),
+      announcement_enabled: config.announcement_enabled === true,
+      updated_at: text(config.updated_at, 80),
+    });
+  });
+
+  router.post('/developer/announcement', (request, response) => {
+    const payload = request.body || {};
+    const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
+    if (!isDeveloperDeviceID(developerUserID)) {
+      return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
+    }
+    const current = readRemoteConfig() || {};
+    const patch = {
+      ...current,
+      announcement: text(payload.announcement, 8000),
+      announcement_enabled: payload.announcement_enabled === true,
+      updated_at: now(),
+    };
+    try {
+      writeRemoteConfig(patch);
+    } catch (error) {
+      return response.status(500).json({ ok: false, message: 'server_error', detail: error.message });
+    }
+    return response.json({
+      ok: true,
+      announcement: patch.announcement,
+      announcement_enabled: patch.announcement_enabled,
+      updated_at: patch.updated_at,
+    });
   });
 
   // The developer can grant a badge, select its visual style, and assign an
