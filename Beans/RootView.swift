@@ -1375,6 +1375,13 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             }
         }
         .onAppear { dragOffset = 0 }
+        .background {
+            if !usesSystemInteractiveDismissal {
+                BeansPresentedSurfaceClearer()
+                    .frame(width: 0, height: 0)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     @ViewBuilder
@@ -1443,6 +1450,31 @@ struct BeansNowPlayingPresentation<Content: View>: View {
                     }
                 }
             }
+    }
+}
+
+/// On pre-iOS-26 full-screen covers, SwiftUI leaves an opaque white host view
+/// behind a manually dragged player. Clear that host so the root page remains
+/// visible through the exposed area during the interactive dismissal.
+private struct BeansPresentedSurfaceClearer: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        let controller = UIViewController()
+        controller.view.backgroundColor = .clear
+        controller.view.isUserInteractionEnabled = false
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        DispatchQueue.main.async {
+            var current: UIViewController? = uiViewController
+            while let controller = current {
+                controller.view.backgroundColor = .clear
+                controller.parent?.view.backgroundColor = .clear
+                controller.presentationController?.containerView?.backgroundColor = .clear
+                controller.presentationController?.presentedView?.backgroundColor = .clear
+                current = controller.parent
+            }
+        }
     }
 }
 

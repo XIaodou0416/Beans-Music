@@ -1503,11 +1503,25 @@ struct BeansSoftwareVolumeSheetHost: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var theme: ThemeStore
 
+    @ViewBuilder
     var body: some View {
-        BeansSoftwareVolumeSheet()
+        let content = BeansSoftwareVolumeSheet()
             .environmentObject(player)
             .environmentObject(theme)
-            .modifier(BeansSheetModifier(detents: [.medium, .large], dragIndicator: true))
+
+        if #available(iOS 16.4, *) {
+            content
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.clear)
+                .presentationCornerRadius(28)
+        } else if #available(iOS 16, *) {
+            content
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        } else {
+            content
+        }
     }
 }
 
