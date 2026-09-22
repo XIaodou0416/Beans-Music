@@ -108,6 +108,8 @@ final class PlayerManager: NSObject, ObservableObject {
     }
     @Published var sleepTimerEndsAt: Date?
     @Published var sleepTimerRemaining: Int = 0
+    /// 播放当前歌曲自然结束后停止，不受当前播放模式影响。
+    @Published var stopAfterCurrentSong = false
     @Published var history: [Song] = []
     @Published var playCounts: [String: Int] = [:]
     /// 仅在 AVPlayer 实际输出音频时累积，不包含暂停、缓冲和拖动进度的跳变。
@@ -1500,7 +1502,10 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             guard let self else { return }
-            if self.playMode == .repeatOne {
+            if self.stopAfterCurrentSong {
+                self.stopAfterCurrentSong = false
+                self.pausePlayback()
+            } else if self.playMode == .repeatOne {
                 self.restartCurrent()
             } else if self.playMode == .sequential,
                       self.currentIndex >= self.queue.count - 1 {

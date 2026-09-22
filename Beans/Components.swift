@@ -457,6 +457,21 @@ struct BeansGlass<S: Shape>: View {
     }
 }
 
+/// Shared translucent sheet background. Keep the sheet host transparent so
+/// the page below remains visible through the same liquid surface as comments.
+struct BeansLiquidSheetBackground: View {
+    @EnvironmentObject private var theme: ThemeStore
+
+    var body: some View {
+        ZStack {
+            GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            BeansGlass(shape: Rectangle(), forceLiquid: true)
+        }
+        .background(BeansSheetPresentationSurfaceClearer())
+        .ignoresSafeArea()
+    }
+}
+
 /// 统一表面容器：Apple 简洁样式使用低存在感的平面底色，
 /// 其他样式继续沿用原有的玻璃材质，避免页面局部出现不同质感。
 struct BeansSurface<S: Shape>: View {
@@ -693,6 +708,39 @@ struct BeansSheetModifier: ViewModifier {
             }
         } else {
             content
+        }
+    }
+}
+
+/// Clear the UIKit presentation host used by a translucent sheet.
+/// SwiftUI's clear presentation background does not clear every intermediate
+/// host on older system builds, which can leave a solid white surface behind
+/// an otherwise transparent liquid sheet.
+struct BeansSheetPresentationSurfaceClearer: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        let controller = UIViewController()
+        controller.view.backgroundColor = .clear
+        controller.view.isOpaque = false
+        controller.view.isUserInteractionEnabled = false
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        DispatchQueue.main.async {
+            var current: UIViewController? = uiViewController
+            var depth = 0
+            while let controller = current, depth < 10 {
+                controller.view.backgroundColor = .clear
+                controller.view.isOpaque = false
+                controller.parent?.view.backgroundColor = .clear
+                controller.parent?.view.isOpaque = false
+                controller.presentationController?.containerView?.backgroundColor = .clear
+                controller.presentationController?.containerView?.isOpaque = false
+                controller.presentationController?.presentedView?.backgroundColor = .clear
+                controller.presentationController?.presentedView?.isOpaque = false
+                current = controller.parent
+                depth += 1
+            }
         }
     }
 }

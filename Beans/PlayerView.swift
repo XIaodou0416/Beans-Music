@@ -950,7 +950,11 @@ struct PlayerView: View {
                 .environmentObject(player)
                 .environmentObject(theme)
         }
-        .sheet(isPresented: $showSleepTimer) { SleepTimerSheet().environmentObject(player) }
+        .sheet(isPresented: $showSleepTimer) {
+            SleepTimerSheetHost()
+                .environmentObject(player)
+                .environmentObject(theme)
+        }
         .sheet(isPresented: $showAddToPlaylist) {
             if let song {
                 AddToPlaylistSheet(song: song)

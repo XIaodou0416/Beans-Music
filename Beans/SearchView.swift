@@ -283,6 +283,7 @@ struct SearchView: View {
     @State private var playlistSearchTask: Task<Void, Never>?
     @State private var playlistSearchRequestID = UUID()
     @State private var showBatchDownload = false
+    @State private var selectedDownloadSong: Song?
     @State private var showProfile = false
     @State private var artistCoverCache: [String: URL] = [:]
     /// UIKit 输入框控制器（提交拼音、收起键盘等由它统一处理）
@@ -391,6 +392,10 @@ struct SearchView: View {
         }
         .sheet(isPresented: $showBatchDownload) {
             BatchDownloadSheet(songs: songResults, title: "下载搜索结果")
+                .environmentObject(theme)
+        }
+        .sheet(item: $selectedDownloadSong) { song in
+            BatchDownloadSheet(songs: [song], title: "下载歌曲")
                 .environmentObject(theme)
         }
         .sheet(isPresented: $showProfile) {
@@ -843,10 +848,22 @@ struct SearchView: View {
                                 }
                             }
                             ForEach(Array(songResults.prefix(6).enumerated()), id: \.element.identityKey) { index, song in
-                                BeansSearchSongRow(song: song) {
-                                    BeansHaptics.tap()
-                                    player.play(songs: songResults, startAt: index)
-                                }
+                                BeansSearchSongRow(
+                                    song: song,
+                                    onTap: {
+                                        BeansHaptics.tap()
+                                        player.play(songs: songResults, startAt: index)
+                                    },
+                                    onPlayNext: {
+                                        player.playNext(song)
+                                    },
+                                    onAddToPlaylist: {
+                                        showAddToPlaylist = song
+                                    },
+                                    onDownload: downloadFeatureUnlocked ? {
+                                        selectedDownloadSong = song
+                                    } : nil
+                                )
                             }
                         }
                     }
@@ -1073,10 +1090,22 @@ struct SearchView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 8)
                         ForEach(Array(songResults.enumerated()), id: \.element.identityKey) { index, song in
-                            BeansSearchSongRow(song: song) {
-                                BeansHaptics.tap()
-                                player.play(songs: songResults, startAt: index)
-                            }
+                            BeansSearchSongRow(
+                                song: song,
+                                onTap: {
+                                    BeansHaptics.tap()
+                                    player.play(songs: songResults, startAt: index)
+                                },
+                                onPlayNext: {
+                                    player.playNext(song)
+                                },
+                                onAddToPlaylist: {
+                                    showAddToPlaylist = song
+                                },
+                                onDownload: downloadFeatureUnlocked ? {
+                                    selectedDownloadSong = song
+                                } : nil
+                            )
                         }
                     }
                     .padding(.horizontal, 20)
@@ -1728,6 +1757,9 @@ struct SearchView: View {
 private struct BeansSearchSongRow: View {
     let song: Song
     let onTap: () -> Void
+    let onPlayNext: () -> Void
+    let onAddToPlaylist: () -> Void
+    let onDownload: (() -> Void)?
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
 
     private var sourceName: String {
@@ -1780,6 +1812,28 @@ private struct BeansSearchSongRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                BeansHaptics.tap()
+                onPlayNext()
+            } label: {
+                Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+            Button {
+                BeansHaptics.tap()
+                onAddToPlaylist()
+            } label: {
+                Label("添加到歌单", systemImage: "text.badge.plus")
+            }
+            if let onDownload {
+                Button {
+                    BeansHaptics.medium()
+                    onDownload()
+                } label: {
+                    Label("下载歌曲", systemImage: "arrow.down.circle")
+                }
+            }
+        }
     }
 }
 
