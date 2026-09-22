@@ -355,9 +355,8 @@ final class DeviceReporter {
             throw BackendRequestError.server("当前设备没有开发者权限")
         }
         let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isInternalID = normalizedTarget.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
-        guard isInternalID || DeviceIdentity.isValidPublicID(normalizedTarget) else {
-            throw BackendRequestError.server("用户 ID 格式不正确")
+        guard normalizedTarget.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil else {
+            throw BackendRequestError.server("设备码格式不正确")
         }
 
         var request = URLRequest(url: endpoint(for: "developer/grant-download"))
@@ -370,8 +369,8 @@ final class DeviceReporter {
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "developer_user_id": DeviceIdentity.userID,
             "developer_public_user_id": DeviceIdentity.publicID,
-            "target_user_id": isInternalID ? normalizedTarget : "",
-            "target_public_user_id": isInternalID ? "" : normalizedTarget,
+            "target_user_id": normalizedTarget,
+            "target_public_user_id": "",
             "download_unlocked": enabled
         ])
 
@@ -382,7 +381,10 @@ final class DeviceReporter {
             guard result.ok != false else {
                 throw BackendRequestError.server(result.message ?? "下载权限操作失败")
             }
-            applyServerState(result)
+            applyServerState(
+                result,
+                allowPublicIDUpdate: normalizedTarget.lowercased() == DeviceIdentity.userID.lowercased()
+            )
         } catch {
             // The backend writes the permission before its response reaches the
             // device. Confirm the resulting state before showing a failure;
@@ -510,9 +512,8 @@ final class DeviceReporter {
         }
         let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedAssignedID = assignedPublicID.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isInternalID = normalizedTarget.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
-        guard isInternalID || DeviceIdentity.isValidPublicID(normalizedTarget) else {
-            throw BackendRequestError.server("用户 ID 格式不正确")
+        guard normalizedTarget.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil else {
+            throw BackendRequestError.server("设备码格式不正确")
         }
         guard normalizedAssignedID.isEmpty
             || DeviceIdentity.isValidPublicID(normalizedAssignedID) else {
@@ -532,8 +533,8 @@ final class DeviceReporter {
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "developer_user_id": DeviceIdentity.userID,
             "developer_public_user_id": DeviceIdentity.publicID,
-            "target_user_id": isInternalID ? normalizedTarget : "",
-            "target_public_user_id": isInternalID ? "" : normalizedTarget,
+            "target_user_id": normalizedTarget,
+            "target_public_user_id": "",
             "assigned_public_user_id": normalizedAssignedID,
             "exclusive_id": enabled,
             "exclusive_badge_style": badgeStyle.rawValue
@@ -546,7 +547,10 @@ final class DeviceReporter {
             guard result.ok != false else {
                 throw BackendRequestError.server(result.message ?? "专属 ID 操作失败")
             }
-            applyServerState(result)
+            applyServerState(
+                result,
+                allowPublicIDUpdate: normalizedTarget.lowercased() == DeviceIdentity.userID.lowercased()
+            )
         } catch {
             if isRecoverableGrantError(error),
                await serverConfirmsExclusiveAccess(target: normalizedTarget, enabled: enabled) {
@@ -606,11 +610,10 @@ final class DeviceReporter {
         ) else {
             throw BackendRequestError.invalidResponse
         }
-        let isInternalID = target.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
         components.queryItems = [
             URLQueryItem(name: "developer_user_id", value: DeviceIdentity.userID),
-            URLQueryItem(name: "target_user_id", value: isInternalID ? target : ""),
-            URLQueryItem(name: "target_public_user_id", value: isInternalID ? "" : target)
+            URLQueryItem(name: "target_user_id", value: target),
+            URLQueryItem(name: "target_public_user_id", value: "")
         ]
         guard let url = components.url else { throw BackendRequestError.invalidResponse }
 
@@ -732,8 +735,12 @@ final class DeviceReporter {
         applyServerState(response)
     }
 
-    private func applyServerState(_ response: BackendResponse) {
-        if let publicUserID = response.publicUserID {
+    private func applyServerState(_ response: BackendResponse, allowPublicIDUpdate: Bool = false) {
+        // Normal register/heartbeat responses describe the server's copy of
+        // this device. Never replace the local public ID from a stale response.
+        // An explicit developer rename for this device is the only operation
+        // allowed to update the local label.
+        if allowPublicIDUpdate, let publicUserID = response.publicUserID {
             let previous = DeviceIdentity.publicID
             DeviceIdentity.updatePublicID(publicUserID)
             if previous != DeviceIdentity.publicID {

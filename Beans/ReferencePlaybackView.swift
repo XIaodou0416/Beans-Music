@@ -965,8 +965,11 @@ struct AppleMusicCompactQueueContent: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 4) {
-                        ForEach(upcoming.enumerated(), id: \.element.song.identityKey) { position, item in
+                    // The queue is capped at 100 items. A plain VStack avoids
+                    // the old SwiftUI lazy-container metadata crash on iOS 16
+                    // while keeping the same visual layout.
+                    VStack(spacing: 4) {
+                        ForEach(Array(upcoming.enumerated()), id: \.offset) { position, item in
                             AppleMusicCompactQueueRow(
                                 index: item.index,
                                 position: position,
@@ -1063,14 +1066,16 @@ private struct AppleMusicCompactQueueRow: View {
             }
             .buttonStyle(.plain)
 
-            QueueReorderHandle(
-                position: position,
-                maxPosition: maxPosition,
-                rowStep: 60,
-                onMove: onMove,
-                onCommit: onCommit
-            )
-            .foregroundStyle(.white.opacity(0.54))
+            if #available(iOS 17.0, *) {
+                QueueReorderHandle(
+                    position: position,
+                    maxPosition: maxPosition,
+                    rowStep: 60,
+                    onMove: onMove,
+                    onCommit: onCommit
+                )
+                .foregroundStyle(.white.opacity(0.54))
+            }
         }
         .contextMenu {
             Button("从播放列表移除", role: .destructive) {

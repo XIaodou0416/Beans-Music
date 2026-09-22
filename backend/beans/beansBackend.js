@@ -113,14 +113,11 @@ function createBeansRouter(options = {}) {
     const payload = request.body || {};
     const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
     const targetUserID = text(payload.target_user_id, 80).toLowerCase();
-    const requestedTargetPublicUserID = text(
-      payload.target_public_user_id || (!USER_ID_PATTERN.test(targetUserID) ? targetUserID : ''),
-      24
-    );
+    const requestedTargetPublicUserID = text(payload.target_public_user_id, 24);
     if (!isDeveloperDeviceID(developerUserID)) {
       return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
     }
-    if (!USER_ID_PATTERN.test(targetUserID) && !isValidPublicUserID(requestedTargetPublicUserID)) {
+    if (!USER_ID_PATTERN.test(targetUserID)) {
       return response.status(422).json({ ok: false, message: 'invalid_user_id' });
     }
 
@@ -219,10 +216,7 @@ function createBeansRouter(options = {}) {
     const payload = request.body || {};
     const developerUserID = text(payload.developer_user_id, 80).toLowerCase();
     const targetUserID = text(payload.target_user_id, 80).toLowerCase();
-    const requestedTargetPublicUserID = text(
-      payload.target_public_user_id || (!USER_ID_PATTERN.test(targetUserID) ? targetUserID : ''),
-      24
-    );
+    const requestedTargetPublicUserID = text(payload.target_public_user_id, 24);
     const assignedPublicUserID = text(payload.assigned_public_user_id, 24);
     const enabled = payload.exclusive_id !== false;
     const badgeStyle = normalizeExclusiveBadgeStyle(payload.exclusive_badge_style);
@@ -230,7 +224,7 @@ function createBeansRouter(options = {}) {
     if (!isDeveloperDeviceID(developerUserID)) {
       return response.status(401).json({ ok: false, message: 'developer_unauthorized' });
     }
-    if (!USER_ID_PATTERN.test(targetUserID) && !isValidPublicUserID(requestedTargetPublicUserID)) {
+    if (!USER_ID_PATTERN.test(targetUserID)) {
       return response.status(422).json({ ok: false, message: 'invalid_user_id' });
     }
     if (assignedPublicUserID && !isValidPublicUserID(assignedPublicUserID)) {
@@ -243,10 +237,6 @@ function createBeansRouter(options = {}) {
     if (!targetUser) {
       return response.status(404).json({ ok: false, message: 'user_not_found' });
     }
-    if (assignedPublicUserID && publicIDBelongsToAnotherUser(database, assignedPublicUserID, targetUser.user_id)) {
-      return response.status(409).json({ ok: false, message: 'public_user_id_taken' });
-    }
-
     let updatedUser;
     mutateDatabase((nextDatabase) => {
       const user = nextDatabase.users[userKey];
@@ -506,9 +496,6 @@ function createBeansRouter(options = {}) {
       return response.status(422).json({ ok: false, message: 'invalid_public_user_id' });
     }
     const database = loadDatabase();
-    if (requestedPublicUserID && publicIDBelongsToAnotherUser(database, requestedPublicUserID, userID)) {
-      return response.status(409).json({ ok: false, message: 'public_user_id_taken' });
-    }
     let updatedUser;
     mutateDatabase((database) => {
       const user = database.users[userID];
@@ -599,9 +586,6 @@ function createBeansRouter(options = {}) {
       const existingUser = database.users[userID];
       if (!existingUser) {
         return response.redirect('/beans/admin/users');
-      }
-      if (requestedPublicUserID && publicIDBelongsToAnotherUser(database, requestedPublicUserID, userID)) {
-        return response.status(409).send('这个用户 ID 已被其他设备使用。');
       }
       mutateDatabase((database) => {
         const user = database.users[userID];
@@ -907,26 +891,15 @@ function isDeveloperDeviceID(value) {
 
 function resolvePublicUserID(database, internalUserID, requestedValue, existingValue) {
   const existing = text(existingValue || requestedValue, 24);
-  if (isValidPublicUserID(existing) && !publicIDBelongsToAnotherUser(database, existing, internalUserID)) {
+  if (isValidPublicUserID(existing)) {
     return existing;
   }
 
-  if (isDeveloperDeviceID(internalUserID)
-    && !publicIDBelongsToAnotherUser(database, DEVELOPER_INITIAL_PUBLIC_USER_ID, internalUserID)) {
+  if (isDeveloperDeviceID(internalUserID)) {
     return DEVELOPER_INITIAL_PUBLIC_USER_ID;
   }
 
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const candidate = String(Math.floor(Math.random() * (PUBLIC_USER_ID_MAX - PUBLIC_USER_ID_MIN + 1)) + PUBLIC_USER_ID_MIN);
-    if (!publicIDBelongsToAnotherUser(database, candidate, internalUserID)) return candidate;
-  }
-
-  for (let candidate = PUBLIC_USER_ID_MIN; candidate <= PUBLIC_USER_ID_MAX; candidate += 1) {
-    const value = String(candidate);
-    if (!publicIDBelongsToAnotherUser(database, value, internalUserID)) return value;
-  }
-
-  throw new Error('public_user_id_exhausted');
+  return String(Math.floor(Math.random() * (PUBLIC_USER_ID_MAX - PUBLIC_USER_ID_MIN + 1)) + PUBLIC_USER_ID_MIN);
 }
 
 function publicIDBelongsToAnotherUser(database, publicUserID, internalUserID) {
@@ -936,6 +909,8 @@ function publicIDBelongsToAnotherUser(database, publicUserID, internalUserID) {
 }
 
 function findUserKey(database, targetUserID, targetPublicUserID) {
+  const internalMatch = Object.keys(database.users).find((key) => key.toLowerCase() === String(targetUserID || '').toLowerCase());
+  if (internalMatch) return internalMatch;
   if (isValidPublicUserID(targetPublicUserID)) {
     const publicMatch = Object.keys(database.users).find((key) => database.users[key]?.public_user_id === targetPublicUserID);
     if (publicMatch) return publicMatch;

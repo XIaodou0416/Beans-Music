@@ -99,8 +99,8 @@ struct DeveloperToolsView: View {
     private var refreshCard: some View {
         developerCard(title: "显示与刷新率", icon: "gauge.with.dots.needle.67percent", tint: .beansAmber) {
             HStack(spacing: 10) {
-                refreshMetric(title: "实时刷新", value: "\(Int(refreshMonitor.framesPerSecond.rounded())) FPS")
-                refreshMetric(title: "屏幕上限", value: "\(UIScreen.main.maximumFramesPerSecond) FPS")
+                refreshMetric(title: "设备刷新率", value: "\(Int(refreshMonitor.effectiveDisplayRate.rounded())) FPS")
+                refreshMetric(title: "实际采样", value: "\(Int(refreshMonitor.framesPerSecond.rounded())) FPS")
             }
             developerRow("界面帧间隔", value: String(format: "%.2f ms", refreshMonitor.frameInterval * 1_000))
             developerRow("低电量模式", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "已开启" : "未开启")
@@ -347,7 +347,7 @@ struct DeveloperToolsView: View {
     }
 
     private var diagnosticSnapshot: String {
-        "开发者快照：fps=\(Int(refreshMonitor.framesPerSecond.rounded())) maxFPS=\(UIScreen.main.maximumFramesPerSecond) lowPower=\(ProcessInfo.processInfo.isLowPowerModeEnabled) player=\(playbackState) queue=\(player.currentIndex + 1)/\(player.queue.count) progress=\(String(format: "%.2f", player.progress))/\(String(format: "%.2f", player.duration))"
+        "开发者快照：displayRate=\(Int(refreshMonitor.effectiveDisplayRate.rounded())) sampledFPS=\(Int(refreshMonitor.framesPerSecond.rounded())) maxFPS=\(UIScreen.main.maximumFramesPerSecond) lowPower=\(ProcessInfo.processInfo.isLowPowerModeEnabled) player=\(playbackState) queue=\(player.currentIndex + 1)/\(player.queue.count) progress=\(String(format: "%.2f", player.progress))/\(String(format: "%.2f", player.duration))"
     }
 
     private func developerCard<Content: View>(title: String, icon: String, tint: Color, @ViewBuilder content: () -> Content) -> some View {
@@ -427,11 +427,11 @@ private struct DeveloperDownloadGrantSheet: View {
                         Text("下载权限")
                             .font(BeansFont.appFont(24, .bold))
                             .foregroundStyle(Color.beansLabel)
-                        Text("输入对方的用户 ID。对方需要先启动过 Beans，才能被找到并更新权限。")
+                        Text("输入对方的设备码。对方需要先启动过 Beans，才能被找到并更新权限。")
                             .font(BeansFont.appFont(13))
                             .foregroundStyle(Color.beansComment)
                             .fixedSize(horizontal: false, vertical: true)
-                        TextField("用户 ID", text: $targetDeviceID)
+                        TextField("设备码", text: $targetDeviceID)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(size: 13, design: .monospaced))
@@ -530,7 +530,7 @@ private struct DeveloperDownloadGrantSheet: View {
                     Text(record.deviceName.isEmpty ? record.deviceModel : record.deviceName)
                         .font(BeansFont.appFont(13, .semibold))
                         .foregroundStyle(Color.beansLabel)
-                    Text("用户 ID \(record.publicUserID ?? record.userID) · \(record.systemName) \(record.systemVersion)")
+                    Text("设备码 \(record.userID) · 显示 ID \(record.publicUserID ?? "未设置") · \(record.systemName) \(record.systemVersion)")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(Color.beansComment)
                         .lineLimit(2)
@@ -548,7 +548,7 @@ private struct DeveloperDownloadGrantSheet: View {
                     .lineLimit(1)
                 Spacer()
                 Button {
-                    targetDeviceID = record.publicUserID ?? record.userID
+                    targetDeviceID = record.userID
                     enabled = !record.enabled
                     submit()
                 } label: {
@@ -583,8 +583,7 @@ private struct DeveloperDownloadGrantSheet: View {
 
     private var isValidTargetID: Bool {
         let value = targetDeviceID.trimmingCharacters(in: .whitespacesAndNewlines)
-        return DeviceIdentity.isValidPublicID(value)
-            || value.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
+        return value.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
     }
 
     private func reloadRecords(showError: Bool = true) async {
@@ -624,21 +623,21 @@ private struct DeveloperExclusiveIDSheet: View {
                         Text("专属 ID")
                             .font(BeansFont.appFont(24, .bold))
                             .foregroundStyle(Color.beansLabel)
-                        Text("输入对方当前用户 ID。可保留原 ID，也可以改为任意未被占用的新 ID；最多 24 个字符，不能包含空格。")
+                        Text("输入对方的设备码，再设置公开显示 ID。公开 ID 可以与其他用户重复。")
                             .font(BeansFont.appFont(13))
                             .foregroundStyle(Color.beansComment)
                             .fixedSize(horizontal: false, vertical: true)
-                        inputField("当前用户 ID", text: $targetUserID)
+                        inputField("目标设备码", text: $targetUserID)
                         HStack {
                             Spacer()
-                            Button("编辑当前设备 ID") {
-                                targetUserID = DeviceIdentity.publicID
+                            Button("编辑当前设备") {
+                                targetUserID = DeviceIdentity.userID
                             }
                             .font(BeansFont.appFont(12, .semibold))
                             .foregroundStyle(Color.beansAmber)
                             .buttonStyle(.plain)
                         }
-                        inputField("新用户 ID（可不填）", text: $assignedPublicID)
+                        inputField("新的公开 ID（可不填）", text: $assignedPublicID)
                         badgeStyleSelector
                         Toggle("启用专属铭牌", isOn: $enabled)
                             .tint(Color.beansAmber)
@@ -776,7 +775,7 @@ private struct DeveloperExclusiveIDSheet: View {
                                 .lineLimit(1)
                             Spacer()
                             Button {
-                                targetUserID = record.publicUserID ?? record.userID
+                                targetUserID = record.userID
                                 assignedPublicID = ""
                                 enabled = !record.enabled
                                 badgeStyle = record.badgeStyle ?? .blackPurpleGold
@@ -799,8 +798,7 @@ private struct DeveloperExclusiveIDSheet: View {
 
     private var isValidTargetID: Bool {
         let value = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines)
-        return DeviceIdentity.isValidPublicID(value)
-            || value.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
+        return value.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
     }
 
     private var isValidAssignedID: Bool {
@@ -882,7 +880,7 @@ private struct DeveloperFrameRateOverlay: View {
         GeometryReader { proxy in
             let currentPosition = resolvedPosition(in: proxy)
 
-            Text("\(Int(monitor.framesPerSecond.rounded())) FPS")
+            Text("\(Int(monitor.effectiveDisplayRate.rounded())) FPS")
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.primary)
                 .monospacedDigit()
@@ -1008,6 +1006,10 @@ private final class DeveloperFPSPassthroughWindow: UIWindow {
 final class BeansRefreshRateMonitor: NSObject, ObservableObject {
     @Published private(set) var framesPerSecond: Double = 0
     @Published private(set) var frameInterval: TimeInterval = 0
+
+    var effectiveDisplayRate: Double {
+        Double(UIScreen.main.maximumFramesPerSecond)
+    }
 
     private var displayLink: CADisplayLink?
     private var lastTimestamp: CFTimeInterval = 0

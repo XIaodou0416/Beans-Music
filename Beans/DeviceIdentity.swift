@@ -31,9 +31,18 @@ enum DeviceIdentity {
             }
             return value
         }
+        if let value = UserDefaults.standard.string(forKey: "beans.stablePublicID"),
+           isValidPublicID(value) {
+            saveToKeychain(value, account: publicIDAccount)
+            if loadFromKeychain(account: originalPublicIDAccount) == nil {
+                saveToKeychain(value, account: originalPublicIDAccount)
+            }
+            return value
+        }
         let generated = isDeveloperInstallation ? "5201314" : String(Int.random(in: 100000...500000))
         saveToKeychain(generated, account: publicIDAccount)
         saveToKeychain(generated, account: originalPublicIDAccount)
+        UserDefaults.standard.set(generated, forKey: "beans.stablePublicID")
         return generated
     }
 
@@ -49,13 +58,14 @@ enum DeviceIdentity {
         return value
     }
 
-    /// The backend may assign a new, unique public ID from the developer
-    /// tools. Keep the value in the keychain so it survives app updates.
+    /// The backend may assign a new public ID from the developer tools. Public
+    /// IDs are labels and are intentionally allowed to repeat.
     static func updatePublicID(_ value: String) {
         guard isValidPublicID(value) else {
             return
         }
         saveToKeychain(value, account: publicIDAccount)
+        UserDefaults.standard.set(value, forKey: "beans.stablePublicID")
     }
 
     static func isValidPublicID(_ value: String) -> Bool {

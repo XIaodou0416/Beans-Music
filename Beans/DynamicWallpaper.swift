@@ -20,6 +20,12 @@ enum BeansDynamicWallpaperKind: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Dots and Star Nest were removed from the picker, while their enum
+    /// values remain readable so older installs can migrate safely.
+    static var selectableCases: [BeansDynamicWallpaperKind] {
+        allCases.filter { $0 != .dots && $0 != .starNest }
+    }
+
     var title: String {
         switch self {
         case .off: return "关闭"
@@ -267,6 +273,7 @@ final class DynamicWallpaperStore: ObservableObject {
     /// The renderer is intentionally unavailable below iOS 17. Do not create
     /// a custom shader fallback on older systems; the normal background stays.
     var renderableKind: BeansDynamicWallpaperKind {
+        if kind == .dots || kind == .starNest { return .off }
         if #available(iOS 17.0, *) { return kind }
         return .off
     }
@@ -377,6 +384,9 @@ final class DynamicWallpaperStore: ObservableObject {
         let defaults = UserDefaults.standard
 
         kind = BeansDynamicWallpaperKind(rawValue: defaults.string(forKey: Self.kindKey) ?? "") ?? .off
+        if kind == .dots || kind == .starNest {
+            kind = .off
+        }
 
         fractalSkyHex = defaults.string(forKey: Self.fractalSkyKey) ?? "#1A2659"
         fractalCloudHex = defaults.string(forKey: Self.fractalCloudKey) ?? "#E6E6FF"

@@ -2856,7 +2856,7 @@ struct SettingsView: View {
             if dynamicWallpaperExpanded {
                 if #available(iOS 17.0, *) {
                     Picker("动态壁纸", selection: $dynamicWallpaper.kind) {
-                        ForEach(BeansDynamicWallpaperKind.allCases) { wallpaper in
+                        ForEach(BeansDynamicWallpaperKind.selectableCases) { wallpaper in
                             Label(wallpaper.title, systemImage: wallpaper.icon)
                                 .tag(wallpaper)
                         }
@@ -4614,22 +4614,6 @@ struct SettingsView: View {
                 runtimeEnvironmentRow("系统", value: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
                 runtimeEnvironmentRow("版本", value: runtimeVersionText)
                 runtimeEnvironmentRow("界面尺寸", value: runtimeScreenDimensions)
-                Button {
-                    UIPasteboard.general.string = DeviceIdentity.publicID
-                    ToastCenter.shared.show("用户 ID 已复制")
-                } label: {
-                    runtimeEnvironmentRow("用户 ID", value: DeviceIdentity.publicID, monospaced: true)
-                }
-                .buttonStyle(.plain)
-                if DeviceIdentity.originalPublicID != DeviceIdentity.publicID {
-                    Button {
-                        UIPasteboard.general.string = DeviceIdentity.originalPublicID
-                        ToastCenter.shared.show("原始用户 ID 已复制")
-                    } label: {
-                        runtimeEnvironmentRow("原始用户 ID", value: DeviceIdentity.originalPublicID, monospaced: true)
-                    }
-                    .buttonStyle(.plain)
-                }
                 Button {
                     UIPasteboard.general.string = DeviceIdentity.userID
                     ToastCenter.shared.show("设备标识已复制")
