@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import Combine
 
 enum QishuiAPIError: LocalizedError {
     case invalidURL
@@ -40,13 +41,15 @@ struct QishuiPlaylistDetails {
 ///
 /// 汽水曲目和歌单 ID 使用字符串保存，避免把 19 位 ID 截断成 Int。客户端
 /// 只把稳定的展示用 Int 写入现有模型，真正请求始终使用 qishuiID。
-final class QishuiAPI {
+final class QishuiAPI: ObservableObject {
     static let shared = QishuiAPI()
 
     private static let sessionKeychainService = "com.beans.app.qishui"
     private static let sessionKeychainAccount = "sessionid"
     private static let baseURLKey = "beans.qishui.apiBaseURL"
     private static let defaultBaseURL = "http://189.24.78.193/qishui"
+
+    @Published private(set) var isLoggedIn = false
 
     private let session: URLSession
 
@@ -56,10 +59,7 @@ final class QishuiAPI {
         configuration.timeoutIntervalForResource = 30
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         session = URLSession(configuration: configuration)
-    }
-
-    var isLoggedIn: Bool {
-        !(readSessionID() ?? "").isEmpty
+        isLoggedIn = !(readSessionID() ?? "").isEmpty
     }
 
     var sessionID: String? {
@@ -73,6 +73,7 @@ final class QishuiAPI {
             kSecAttrAccount as String: Self.sessionKeychainAccount,
         ]
         SecItemDelete(query as CFDictionary)
+        isLoggedIn = false
     }
 
     // MARK: - Search
@@ -536,6 +537,7 @@ final class QishuiAPI {
         SecItemDelete(base as CFDictionary)
         let attributes = base.merging([kSecValueData as String: data]) { _, new in new }
         SecItemAdd(attributes as CFDictionary, nil)
+        isLoggedIn = true
     }
 
     static func stableID(_ value: String) -> Int {
