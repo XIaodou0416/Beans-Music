@@ -150,7 +150,7 @@ struct ReferencePlaybackView: View {
             )
         }
         .sheet(isPresented: $showSoftwareVolume) {
-            BeansSoftwareVolumeSheet()
+            BeansSoftwareVolumeSheetHost()
                 .environmentObject(player)
         }
     }
@@ -1443,52 +1443,71 @@ struct ReferenceVolumeControl: View {
 
 struct BeansSoftwareVolumeSheet: View {
     @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Label("软件音量", systemImage: "speaker.wave.2.fill")
-                    .font(BeansFont.appFont(20, .bold))
-                Spacer()
-                Text("\(Int((player.softwareVolume * 100).rounded()))%")
-                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Color.beansComment)
-            }
+        ZStack {
+            GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            BeansGlass(shape: Rectangle(), forceLiquid: true)
 
-            Text("只调整 Beans 的播放音量，不改变系统音量。适合和其他音频同时播放时降低背景音。")
-                .font(BeansFont.appFont(13))
-                .foregroundStyle(Color.beansComment)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 12) {
-                Image(systemName: "speaker.fill")
-                    .foregroundStyle(Color.beansComment)
-                Slider(
-                    value: Binding(
-                        get: { player.softwareVolume },
-                        set: { player.softwareVolume = $0 }
-                    ),
-                    in: 0...1
-                )
-                .tint(Color.beansAmber)
-                Image(systemName: "speaker.wave.3.fill")
-                    .foregroundStyle(Color.beansComment)
-            }
-
-            HStack {
-                Button("恢复 100%") {
-                    player.softwareVolume = 1
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Label("软件音量", systemImage: "speaker.wave.2.fill")
+                        .font(BeansFont.appFont(20, .bold))
+                    Spacer()
+                    Text("\(Int((player.softwareVolume * 100).rounded()))%")
+                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Color.beansComment)
                 }
-                .buttonStyle(.bordered)
-                Spacer()
-                Button("完成") {
-                    dismiss()
+
+                Text("只调整 Beans 的播放音量，不改变系统音量。适合和其他音频同时播放时降低背景音。")
+                    .font(BeansFont.appFont(13))
+                    .foregroundStyle(Color.beansComment)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 12) {
+                    Image(systemName: "speaker.fill")
+                        .foregroundStyle(Color.beansComment)
+                    Slider(
+                        value: Binding(
+                            get: { player.softwareVolume },
+                            set: { player.softwareVolume = $0 }
+                        ),
+                        in: 0...1
+                    )
+                    .tint(Color.beansAmber)
+                    Image(systemName: "speaker.wave.3.fill")
+                        .foregroundStyle(Color.beansComment)
                 }
-                .buttonStyle(.borderedProminent)
+
+                HStack {
+                    Button("恢复 100%") {
+                        player.softwareVolume = 1
+                    }
+                    .buttonStyle(.bordered)
+                    Spacer()
+                    Button("完成") {
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             }
+            .padding(24)
         }
-        .padding(24)
+        .ignoresSafeArea()
+    }
+}
+
+struct BeansSoftwareVolumeSheetHost: View {
+    @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var theme: ThemeStore
+
+    var body: some View {
+        BeansSoftwareVolumeSheet()
+            .environmentObject(player)
+            .environmentObject(theme)
+            .modifier(BeansSheetModifier(detents: [.medium, .large], dragIndicator: true))
     }
 }
 

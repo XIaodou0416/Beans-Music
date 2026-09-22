@@ -1017,7 +1017,7 @@ struct PlayerView: View {
             )
         }
         .sheet(isPresented: $showSoftwareVolume) {
-            BeansSoftwareVolumeSheet()
+            BeansSoftwareVolumeSheetHost()
                 .environmentObject(player)
         }
         .sheet(item: $shareFile, onDismiss: cleanupSharedFile) { item in

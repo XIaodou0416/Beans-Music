@@ -116,7 +116,7 @@ struct RecordPlayerView: View {
             )
         }
         .sheet(isPresented: $showSoftwareVolume) {
-            BeansSoftwareVolumeSheet()
+            BeansSoftwareVolumeSheetHost()
                 .environmentObject(player)
         }
         .overlay(alignment: .top) {
