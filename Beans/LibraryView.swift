@@ -241,6 +241,11 @@ struct LibraryView: View {
             guard source == .kugou else { return }
             Task { await loadKugouPlaylists(force: true) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .beansQishuiLoginDidUpdate)) { _ in
+            guard platformPrefs.isEnabled(SearchProvider.qishui) else { return }
+            guard source == .qishui else { return }
+            Task { await loadQishuiPlaylists(force: true) }
+        }
         .sheet(isPresented: $showHistory) {
             HistoryView()
                 .environmentObject(player)

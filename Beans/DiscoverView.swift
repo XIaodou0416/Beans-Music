@@ -263,6 +263,11 @@ struct DiscoverView: View {
                 guard platformPrefs.isEnabled(SearchProvider.kugou) else { return }
                 reloadAfterLoginUpdate(.kugou)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .beansQishuiLoginDidUpdate)) { _ in
+                guard !homeRenderingPaused else { return }
+                guard platformPrefs.isEnabled(SearchProvider.qishui) else { return }
+                reloadAfterLoginUpdate(.qishui)
+            }
             .sheet(isPresented: $showSectionSort) {
                 SectionOrderSheet(
                     title: "主页板块排序",
