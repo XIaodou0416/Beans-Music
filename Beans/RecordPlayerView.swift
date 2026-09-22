@@ -32,6 +32,7 @@ struct RecordPlayerView: View {
     @State private var showQueue = false
     @State private var showQualityPicker = false
     @State private var showCustomCoverPicker = false
+    @State private var showSoftwareVolume = false
     @State private var dismissDragOffset: CGFloat = 0
     @AppStorage("beans.audioQuality") private var playbackQualityRaw = BeansAudioQuality.hires.rawValue
 
@@ -114,6 +115,10 @@ struct RecordPlayerView: View {
                 onCancel: { showCustomCoverPicker = false }
             )
         }
+        .sheet(isPresented: $showSoftwareVolume) {
+            BeansSoftwareVolumeSheet()
+                .environmentObject(player)
+        }
         .overlay(alignment: .top) {
             recordHeader
                 .padding(.horizontal, 20)
@@ -145,26 +150,28 @@ struct RecordPlayerView: View {
         .ignoresSafeArea()
     }
 
+    @ViewBuilder
     private func compactLayout(size: CGSize) -> some View {
-        let artworkDimension = max(150, min(size.width - 72, size.height * 0.43, 310))
-        let isPortraitIPad = isIPadPortrait(size: size)
-        return VStack(spacing: 16) {
-            Spacer().frame(height: 34)
-            if showQueue {
-                recordQueuePage
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity)
-            } else if showLyrics && !isPortraitIPad {
-                lyricsColumn
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity)
-            } else {
-                turntable(size: artworkDimension, allowsLyrics: !isPortraitIPad)
-                    .modifier(recordLayout(.vinylCover))
-                    .frame(maxWidth: .infinity)
-                trackMetadata
-                    .modifier(recordLayout(.vinylTitle))
-                if !isPortraitIPad {
+        if isIPadPortrait(size: size) {
+            portraitIPadLayout(size: size)
+        } else {
+            let artworkDimension = max(150, min(size.width - 72, size.height * 0.43, 310))
+            VStack(spacing: 16) {
+                Spacer().frame(height: 34)
+                if showQueue {
+                    recordQueuePage
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .transition(.opacity)
+                } else if showLyrics {
+                    lyricsColumn
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .transition(.opacity)
+                } else {
+                    turntable(size: artworkDimension)
+                        .modifier(recordLayout(.vinylCover))
+                        .frame(maxWidth: .infinity)
+                    trackMetadata
+                        .modifier(recordLayout(.vinylTitle))
                     RecordModeMiniLyrics(lyrics: lyrics) {
                         withAnimation(.easeInOut(duration: 0.22)) { showLyrics = true }
                     }
@@ -172,23 +179,60 @@ struct RecordPlayerView: View {
                     // song's lyrics are being resolved, so the scrubber never jumps.
                     .frame(maxWidth: .infinity)
                     .frame(height: 84)
-                } else {
-                    // iPad portrait is intentionally a player-only layout. Keep
-                    // the reserved height so the controls do not jump when the
-                    // device rotates from landscape.
-                    Color.clear
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 84)
                 }
+                RecordModeScrubber()
+                    .padding(.horizontal, 20)
+                    .modifier(recordLayout(.progress))
+                controls
+                    .padding(.bottom, 20)
+                    .modifier(recordLayout(.controls))
             }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func portraitIPadLayout(size: CGSize) -> some View {
+        let artworkDimension = min(
+            390,
+            max(280, size.width * 0.54),
+            max(280, size.height * 0.42)
+        )
+
+        return VStack(spacing: 12) {
+            Spacer(minLength: 18)
+
+            if showQueue {
+                recordQueuePage
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
+            } else if showLyrics {
+                lyricsColumn
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
+            } else {
+                turntable(size: artworkDimension)
+                    .modifier(recordLayout(.vinylCover))
+                    .frame(maxWidth: .infinity)
+                trackMetadata
+                    .modifier(recordLayout(.vinylTitle))
+                RecordModeMiniLyrics(lyrics: lyrics) {
+                    withAnimation(.easeInOut(duration: 0.22)) { showLyrics = true }
+                }
+                .frame(maxWidth: 620)
+                .frame(height: 84)
+            }
+
             RecordModeScrubber()
-                .padding(.horizontal, 20)
+                .frame(maxWidth: 700)
+                .padding(.horizontal, 24)
                 .modifier(recordLayout(.progress))
             controls
-                .padding(.bottom, 20)
+                .frame(maxWidth: 760)
                 .modifier(recordLayout(.controls))
+                .padding(.bottom, 12)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 42)
+        .padding(.vertical, 12)
     }
 
     private func landscapeLayout(size: CGSize) -> some View {
@@ -232,15 +276,8 @@ struct RecordPlayerView: View {
         let artworkDimension = max(180, min(330, size.width * 0.30, size.height - 300))
         return Group {
             if showQueue {
-                VStack(spacing: 14) {
-                    recordQueuePage
-                    RecordModeScrubber()
-                        .frame(maxWidth: 380)
-                        .modifier(recordLayout(.progress))
-                    controls
-                        .modifier(recordLayout(.controls))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                regularQueueLayout(size: size)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HStack(spacing: 0) {
                     VStack(spacing: 22) {
@@ -269,6 +306,35 @@ struct RecordPlayerView: View {
         .padding(.vertical, size.height < 500 ? 24 : 40)
     }
 
+    private func regularQueueLayout(size: CGSize) -> some View {
+        let artworkDimension = min(
+            290,
+            max(190, size.width * 0.24),
+            max(190, size.height - 260)
+        )
+
+        return HStack(spacing: 30) {
+            VStack(spacing: 13) {
+                Spacer(minLength: 0)
+                turntable(size: artworkDimension)
+                    .modifier(recordLayout(.vinylCover))
+                trackMetadata
+                    .modifier(recordLayout(.vinylTitle))
+                RecordModeScrubber()
+                    .frame(maxWidth: 430)
+                    .modifier(recordLayout(.progress))
+                transportControls
+                    .frame(maxWidth: 300)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: size.width * 0.44, maxHeight: .infinity)
+
+            AppleMusicCompactQueueContent()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .padding(.horizontal, 8)
+    }
+
     private func turntable(size: CGFloat, allowsLyrics: Bool = true) -> some View {
         RecordModeTurntableView(
             coverURL: displayCoverURL,
@@ -276,9 +342,8 @@ struct RecordPlayerView: View {
             trackId: song?.id,
             size: size,
             onTap: {
-                // iPad portrait is a player-only mode; tapping the record must
-                // not reveal the lyric page there.
                 guard allowsLyrics else { return }
+                if showQueue { showQueue = false }
                 withAnimation(.easeInOut(duration: 0.22)) { showLyrics = true }
             },
             onNextTrack: { player.next() },
@@ -478,7 +543,7 @@ struct RecordPlayerView: View {
     private var recordHeader: some View {
         HStack {
             Spacer()
-            if showLyrics && !isIPadPortrait(size: UIScreen.main.bounds.size) {
+            if showLyrics {
                 Button {
                     BeansHaptics.tap()
                     withAnimation(.easeInOut(duration: 0.22)) {
@@ -527,6 +592,9 @@ struct RecordPlayerView: View {
                     Button("下载歌曲", action: onDownload)
                 }
                 Button("播放器设置", action: onSettings)
+                Button("软件音量") {
+                    showSoftwareVolume = true
+                }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 20, weight: .medium))

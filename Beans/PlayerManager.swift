@@ -94,6 +94,18 @@ final class PlayerManager: NSObject, ObservableObject {
         }
     }
     @Published var rate: Double = 1.0
+    /// Beans 自身的播放音量，不改变系统音量，方便和其他音频应用混合播放。
+    @Published var softwareVolume: Double = 1.0 {
+        didSet {
+            let clamped = min(max(softwareVolume, 0), 1)
+            if softwareVolume != clamped {
+                softwareVolume = clamped
+                return
+            }
+            defaults.set(clamped, forKey: softwareVolumeKey)
+            player?.volume = Float(clamped)
+        }
+    }
     @Published var sleepTimerEndsAt: Date?
     @Published var sleepTimerRemaining: Int = 0
     @Published var history: [Song] = []
@@ -185,6 +197,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private let audioMixKey = "beans.audio.mixothers.v1"
     private let nowPlayingEnabledKey = "beans.nowPlaying.enabled.v1"
     private let playModeKey = "beans.player.playMode"
+    private let softwareVolumeKey = "beans.player.softwareVolume.v1"
     private let autoSkipOnFailureKey = "beans.playback.autoSkipOnFailure"
     static let autoCrossPlatformFallbackKey = "beans.playback.autoCrossPlatformFallback"
     static let playbackSourcePreferenceKey = PlaybackSourcePreference.storageKey
@@ -296,6 +309,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        softwareVolume = min(max(defaults.object(forKey: softwareVolumeKey) as? Double ?? 1.0, 0), 1)
         // Ensure a stale auxiliary-audio category cannot carry a previous mix
         // preference into the first playback after relaunch.
         sessionConfigured = Self.applyAudioMixPreference(mixesWithOthers, activate: false)
@@ -1333,6 +1347,7 @@ final class PlayerManager: NSObject, ObservableObject {
         // QQ CDN 返回的首包较小，避免 AVPlayer 为了预缓冲过久而表现为
         // “点击后没反应”；真正不可播放时仍由 item 失败回调触发音质降级。
         player.automaticallyWaitsToMinimizeStalling = false
+        player.volume = Float(softwareVolume)
         player.rate = Float(rate)
         self.player = player
         configureEqualizer(for: item)

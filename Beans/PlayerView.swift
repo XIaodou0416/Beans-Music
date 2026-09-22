@@ -35,6 +35,7 @@ struct PlayerView: View {
     @State private var showMoreActions = false
     @State private var showNativeMoreActions = false
     @State private var showCustomCoverPicker = false
+    @State private var showSoftwareVolume = false
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
     /// 下载完成后直接弹原生分享（用户自行选择保存或转发）
     @State private var shareFile: ShareFileItem?
@@ -1015,6 +1016,10 @@ struct PlayerView: View {
                 onCancel: { showCustomCoverPicker = false }
             )
         }
+        .sheet(isPresented: $showSoftwareVolume) {
+            BeansSoftwareVolumeSheet()
+                .environmentObject(player)
+        }
         .sheet(item: $shareFile, onDismiss: cleanupSharedFile) { item in
             ShareSheet(items: [item.url])
         }
@@ -1062,6 +1067,9 @@ struct PlayerView: View {
             }
             Button("播放器设置") {
                 openPlayerSettings()
+            }
+            Button("软件音量") {
+                showSoftwareVolume = true
             }
             Button("取消", role: .cancel) {}
         }
@@ -1953,6 +1961,10 @@ struct PlayerView: View {
             moreActionRow("播放器设置", systemName: "slider.horizontal.3") {
                 showMoreActions = false
                 openPlayerSettings()
+            }
+            moreActionRow("软件音量", systemName: "speaker.wave.2.fill") {
+                showMoreActions = false
+                showSoftwareVolume = true
             }
         }
         .padding(14)

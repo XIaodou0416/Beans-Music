@@ -99,8 +99,8 @@ struct DeveloperToolsView: View {
     private var refreshCard: some View {
         developerCard(title: "显示与刷新率", icon: "gauge.with.dots.needle.67percent", tint: .beansAmber) {
             HStack(spacing: 10) {
-                refreshMetric(title: "设备刷新率", value: "\(Int(refreshMonitor.effectiveDisplayRate.rounded())) FPS")
-                refreshMetric(title: "实际采样", value: "\(Int(refreshMonitor.framesPerSecond.rounded())) FPS")
+                refreshMetric(title: "实时刷新", value: "\(Int(refreshMonitor.framesPerSecond.rounded())) FPS")
+                refreshMetric(title: "屏幕上限", value: "\(UIScreen.main.maximumFramesPerSecond) FPS")
             }
             developerRow("界面帧间隔", value: String(format: "%.2f ms", refreshMonitor.frameInterval * 1_000))
             developerRow("低电量模式", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "已开启" : "未开启")
@@ -347,7 +347,7 @@ struct DeveloperToolsView: View {
     }
 
     private var diagnosticSnapshot: String {
-        "开发者快照：displayRate=\(Int(refreshMonitor.effectiveDisplayRate.rounded())) sampledFPS=\(Int(refreshMonitor.framesPerSecond.rounded())) maxFPS=\(UIScreen.main.maximumFramesPerSecond) lowPower=\(ProcessInfo.processInfo.isLowPowerModeEnabled) player=\(playbackState) queue=\(player.currentIndex + 1)/\(player.queue.count) progress=\(String(format: "%.2f", player.progress))/\(String(format: "%.2f", player.duration))"
+        "开发者快照：fps=\(Int(refreshMonitor.framesPerSecond.rounded())) maxFPS=\(UIScreen.main.maximumFramesPerSecond) lowPower=\(ProcessInfo.processInfo.isLowPowerModeEnabled) player=\(playbackState) queue=\(player.currentIndex + 1)/\(player.queue.count) progress=\(String(format: "%.2f", player.progress))/\(String(format: "%.2f", player.duration))"
     }
 
     private func developerCard<Content: View>(title: String, icon: String, tint: Color, @ViewBuilder content: () -> Content) -> some View {
@@ -880,7 +880,7 @@ private struct DeveloperFrameRateOverlay: View {
         GeometryReader { proxy in
             let currentPosition = resolvedPosition(in: proxy)
 
-            Text("\(Int(monitor.effectiveDisplayRate.rounded())) FPS")
+            Text("\(Int(monitor.framesPerSecond.rounded())) FPS")
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.primary)
                 .monospacedDigit()
@@ -1006,10 +1006,6 @@ private final class DeveloperFPSPassthroughWindow: UIWindow {
 final class BeansRefreshRateMonitor: NSObject, ObservableObject {
     @Published private(set) var framesPerSecond: Double = 0
     @Published private(set) var frameInterval: TimeInterval = 0
-
-    var effectiveDisplayRate: Double {
-        Double(UIScreen.main.maximumFramesPerSecond)
-    }
 
     private var displayLink: CADisplayLink?
     private var lastTimestamp: CFTimeInterval = 0
