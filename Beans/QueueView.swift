@@ -13,22 +13,34 @@ struct QueueView: View {
                 if player.queue.isEmpty {
                     EmptyStateView(icon: "music.note.list", text: "播放队列为空")
                 } else {
-                    List {
-                        Section("接下来 (\(player.queue.count) 首)") {
-                            ForEach(Array(player.queue.enumerated()), id: \.element.identityKey) { index, song in
+                    let songs = player.queue
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("接下来 (\(songs.count) 首)")
+                                .font(BeansFont.appFont(13, .semibold))
+                                .foregroundStyle(Color.beansComment)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 10)
+                                .padding(.bottom, 4)
+
+                            // 使用位置索引而不是歌曲 identityKey。播放队列允许同一首歌
+                            // 重复出现，低系统的 SwiftUI List 在重复 ID 下容易直接崩溃。
+                            ForEach(Array(songs.enumerated()), id: \.offset) { index, song in
                                 row(song, index: index)
-                                    .listRowBackground(Color.clear)
-                                    .listRowSeparator(.hidden)
-                            }
-                            .onDelete { offsets in
-                                for index in offsets.sorted(by: >) where player.queue.indices.contains(index) {
-                                    player.removeFromQueue(at: index)
-                                }
+                                    .padding(.horizontal, 8)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            guard player.queue.indices.contains(index) else { return }
+                                            player.removeFromQueue(at: index)
+                                        } label: {
+                                            Label("移除", systemImage: "trash")
+                                        }
+                                    }
                             }
                         }
+                        .padding(.bottom, 20)
                     }
                     .beansScrollContentBackgroundHidden()
-                    .listStyle(.plain)
                     .background(LinearGradient.beansBackdrop)
                 }
             }
