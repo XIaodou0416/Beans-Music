@@ -7,6 +7,18 @@ struct FeedbackSubmissionResult: Sendable {
     let submittedAt: String?
 }
 
+struct BeansDeveloperAnnouncement: Decodable, Equatable, Sendable {
+    let announcement: String
+    let enabled: Bool
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case announcement
+        case enabled = "announcement_enabled"
+        case updatedAt = "updated_at"
+    }
+}
+
 struct BeansDownloadAccessRecord: Decodable, Identifiable, Equatable {
     let userID: String
     let publicUserID: String?
@@ -439,6 +451,54 @@ final class DeviceReporter {
         return result.enabled
     }
 
+    func fetchDeveloperAnnouncement() async throws -> BeansDeveloperAnnouncement {
+        guard BeansDeveloperAccess.isAuthorized else {
+            throw BackendRequestError.server("当前设备没有开发者权限")
+        }
+        guard var components = URLComponents(
+            url: endpoint(for: "developer/announcement"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw BackendRequestError.invalidResponse
+        }
+        components.queryItems = [URLQueryItem(name: "developer_user_id", value: DeviceIdentity.userID)]
+        guard let url = components.url else { throw BackendRequestError.invalidResponse }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
+        request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response, body: data)
+        let result = try JSONDecoder().decode(BeansDeveloperAnnouncementResponse.self, from: data)
+        guard result.ok != false else {
+            throw BackendRequestError.server(result.message ?? "获取公告失败")
+        }
+        return result.announcement
+    }
+
+    func updateDeveloperAnnouncement(enabled: Bool, text: String) async throws -> BeansDeveloperAnnouncement {
+        guard BeansDeveloperAccess.isAuthorized else {
+            throw BackendRequestError.server("当前设备没有开发者权限")
+        }
+        let normalizedText = String(text.prefix(8000))
+        let data = try await postJSON(
+            to: endpoint(for: "developer/announcement"),
+            payload: [
+                "developer_user_id": DeviceIdentity.userID,
+                "announcement_enabled": enabled ? "true" : "false",
+                "announcement": normalizedText,
+            ]
+        )
+        let result = try JSONDecoder().decode(BeansDeveloperAnnouncementResponse.self, from: data)
+        guard result.ok != false else {
+            throw BackendRequestError.server(result.message ?? "保存公告失败")
+        }
+        return result.announcement
+    }
+
     func grantExclusiveID(
         to targetUserID: String,
         assignedPublicID: String,
@@ -796,6 +856,30 @@ private struct BeansGlobalDownloadResponse: Decodable {
     enum CodingKeys: String, CodingKey {
         case ok, message
         case enabled = "download_global_enabled"
+    }
+}
+
+private struct BeansDeveloperAnnouncementResponse: Decodable {
+    let ok: Bool?
+    let message: String?
+    let announcement: BeansDeveloperAnnouncement
+
+    enum CodingKeys: String, CodingKey {
+        case ok, message
+        case announcement
+        case enabled = "announcement_enabled"
+        case updatedAt = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try container.decodeIfPresent(Bool.self, forKey: .ok)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        announcement = BeansDeveloperAnnouncement(
+            announcement: try container.decodeIfPresent(String.self, forKey: .announcement) ?? "",
+            enabled: try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false,
+            updatedAt: try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
+        )
     }
 }
 
