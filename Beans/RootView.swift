@@ -661,7 +661,6 @@ struct RootView: View {
                 .tabViewStyle(.sidebarAdaptable)
         } else {
             nativeTabContent(isPadLandscape: false)
-                .tabViewStyle(.tabBar)
         }
     }
 
