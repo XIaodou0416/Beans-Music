@@ -24,13 +24,14 @@ final class BilibiliAuth: ObservableObject {
         accountID = defaults.string(forKey: "beans.bilibili.mid.v1") ?? ""
         if let cookie = Self.readCookie(), !cookie.isEmpty {
             isLoggedIn = true
-            Task { await BilibiliAPI.shared.setCookie(cookie) }
         }
     }
 
+    var cookieHeader: String { BilibiliProtocol.normalizeCookie(Self.readCookie() ?? "") }
+
     func login(cookie: String) async throws {
-        let normalized = Self.normalizeCookie(cookie)
-        guard normalized.contains(where: { $0.lowercased().hasPrefix("sessdata=") }) else {
+        let normalized = BilibiliProtocol.normalizeCookie(cookie)
+        guard BilibiliProtocol.hasSession(normalized) else {
             throw BilibiliError(message: "登录凭据不完整，请重新扫码")
         }
         let info = try await BilibiliAPI.shared.accountInfo(cookie: normalized)
@@ -53,17 +54,6 @@ final class BilibiliAuth: ObservableObject {
         defaults.removeObject(forKey: "beans.bilibili.mid.v1")
         Task { await BilibiliAPI.shared.setCookie("") }
         NotificationCenter.default.post(name: .beansBilibiliLoginDidUpdate, object: nil)
-    }
-
-    private static func normalizeCookie(_ raw: String) -> String {
-        let allowed = Set(["SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid"])
-        var values: [String: String] = [:]
-        for component in raw.split(separator: ";") {
-            let pair = component.split(separator: "=", maxSplits: 1).map(String.init)
-            guard pair.count == 2, allowed.contains(pair[0]) else { continue }
-            values[pair[0]] = pair[1]
-        }
-        return values.keys.sorted().map { "\($0)=\(values[$0]!)" }.joined(separator: "; ")
     }
 
     private static func readCookie() -> String? {
@@ -214,6 +204,8 @@ struct BilibiliLoginSheet: View {
                 do {
                     try await Task.sleep(nanoseconds: 2_000_000_000)
                     let result = try await BilibiliAPI.shared.pollQR(key)
+                    try Task.checkCancellation()
+                    guard qrKey == key else { return }
                     errorMessage = nil
                     switch result.code {
                     case 0:
@@ -221,8 +213,25 @@ struct BilibiliLoginSheet: View {
                             errorMessage = "扫码已确认，但未取得登录凭据，请刷新二维码重试。"
                             return
                         }
-                        try await auth.login(cookie: result.cookie)
-                        dismiss()
+                        status = "正在验证登录状态"
+                        // A successful QR token is one-use. Retry verification with
+                        // its captured cookie instead of polling the token again.
+                        for attempt in 0..<3 {
+                            do {
+                                try Task.checkCancellation()
+                                try await auth.login(cookie: result.cookie)
+                                dismiss()
+                                return
+                            } catch is CancellationError {
+                                return
+                            } catch {
+                                if attempt == 2 {
+                                    errorMessage = error.localizedDescription
+                                    return
+                                }
+                                try await Task.sleep(nanoseconds: 1_000_000_000)
+                            }
+                        }
                         return
                     case 86101:
                         status = "请使用哔哩哔哩 App 扫码"

@@ -20,6 +20,8 @@ actor BilibiliAPI {
     ]
     private let session: URLSession
     private var cookie = ""
+    private var restoredSession = false
+    private var pendingQRLogin: (key: String, values: [String: String], redirect: URL?)?
     private var fingerprint = ""
     private var wbiKey = ""
     private var wbiDate = Date.distantPast
@@ -33,18 +35,27 @@ actor BilibiliAPI {
         session = URLSession(configuration: config)
     }
     func setCookie(_ value: String) {
-        cookie = value
+        cookie = BilibiliProtocol.normalizeCookie(value)
+        restoredSession = true
+        pendingQRLogin = nil
         cache.removeAll()
         wbiKey = ""
     }
     private func raw(_ url: URL, cookieOverride: String? = nil) async throws -> ([String: Any], HTTPURLResponse) {
+        if cookieOverride == nil, !restoredSession {
+            let saved = await BilibiliAuth.shared.cookieHeader
+            if !restoredSession {
+                cookie = saved
+                restoredSession = true
+            }
+        }
         var request = URLRequest(url: url)
         Self.headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         let cookies = [cookieOverride ?? cookie, fingerprint].filter { !$0.isEmpty }.joined(separator: "; ")
         if !cookies.isEmpty { request.setValue(cookies, forHTTPHeaderField: "Cookie") }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw BilibiliError(message: "哔哩哔哩请求失败，请稍后重试")
+            throw BilibiliError(message: "哔哩哔哩请求失败（HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)）")
         }
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw BilibiliError(message: "哔哩哔哩返回了无法识别的数据")
@@ -188,6 +199,20 @@ actor BilibiliAPI {
             : try await get("/x/web-interface/ranking/v2", ["rid":"3","type":"all"], signed:true, identity:true, ttl:1800)
         return Array((data["list"] as? [[String: Any]] ?? []).prefix(limit)).map { playlist($0) }
     }
+    func popularVideos(page: Int, force: Bool = false) async throws -> (videos: [BilibiliFeedVideo], hasMore: Bool) {
+        let data = try await get("/x/web-interface/popular", ["pn": String(max(1, page)), "ps": "20"], identity: true, ttl: force ? 0 : 900)
+        let rows = data["list"] as? [[String: Any]] ?? []
+        let videos = rows.compactMap { row -> BilibiliFeedVideo? in
+            guard let track = song(row) else { return nil }
+            let owner = row["owner"] as? [String: Any] ?? [:]
+            let stat = row["stat"] as? [String: Any] ?? [:]
+            return BilibiliFeedVideo(song: track, ownerAvatarURL: Self.image(owner["face"]),
+                                     playCount: (stat["view"] as? NSNumber)?.intValue ?? 0,
+                                     danmakuCount: (stat["danmaku"] as? NSNumber)?.intValue ?? 0)
+        }
+        let noMore = (data["no_more"] as? Bool) ?? ((data["no_more"] as? NSNumber)?.boolValue ?? false)
+        return (videos, !noMore && !rows.isEmpty)
+    }
     func recommendedSongs(limit: Int = 30) async throws -> [Song] {
         let data = try await get("/x/web-interface/ranking/v2", ["rid":"3","type":"all"], signed:true, identity:true, ttl:1800)
         return Array((data["list"] as? [[String:Any]] ?? []).prefix(limit)).compactMap { song($0) }
@@ -222,20 +247,45 @@ actor BilibiliAPI {
         return BilibiliCollection(playlist:p,songs:tracks)
     }
     func playbackURL(for track: Song, quality: BeansAudioQuality = .hires) async throws -> URL {
+        let urls = try await playbackURLs(for: track, quality: quality)
+        guard let first = urls.first else { throw BilibiliError(message: "该视频没有可播放的音轨") }
+        return first
+    }
+
+    func playbackURLs(for track: Song, quality: BeansAudioQuality = .hires) async throws -> [URL] {
         let key = track.bilibiliID ?? ""
         let data = try await video(key)
         let selectedCID = key.split(separator: ":").dropFirst().first.map(String.init)
         let cid = selectedCID ?? Self.text(data["cid"])
-        let response = try await get("/x/player/playurl",["bvid":Self.text(data["bvid"]),"cid":cid,"qn":"127","fnval":"4048","fnver":"0","fourk":"1"])
-        let dash = response["dash"] as? [String:Any] ?? [:]
-        // AAC audio streams are supported by AVPlayer on all supported iOS versions.
-        let audio = (dash["audio"] as? [[String:Any]] ?? []).filter { Self.text($0["codecs"]).hasPrefix("mp4a") }
+        guard !cid.isEmpty else { throw BilibiliError(message: "该视频缺少分P编号，请重新打开视频") }
         let preferred = quality == .standard ? 30216 : quality == .higher ? 30232 : 30280
-        guard let chosen = audio.first(where:{ ($0["id"] as? Int) == preferred }) ?? audio.max(by:{ ($0["bandwidth"] as? Int ?? 0) < ($1["bandwidth"] as? Int ?? 0) }),
-              let url = Self.image(chosen["baseUrl"] ?? chosen["base_url"]), ["https","http"].contains(url.scheme ?? "") else {
-            throw BilibiliError(message:"该视频暂无可播放音轨，可能已下架或需要账号权限")
+        var query = ["cid": cid, "qn": "80", "fnval": "16", "fnver": "0", "fourk": "1"]
+        let bvid = Self.text(data["bvid"])
+        if bvid.isEmpty { query["aid"] = Self.text(data["aid"]) } else { query["bvid"] = bvid }
+        var lastError: Error = BilibiliError(message: "该视频没有返回可播放的 AAC 音轨，可能需要登录或已不可用")
+        for signed in [false, true] {
+            try Task.checkCancellation()
+            do {
+                let response = try await get(signed ? "/x/player/wbi/playurl" : "/x/player/playurl", query, signed: signed)
+                let urls = BilibiliProtocol.audioURLs(response, preferredID: preferred)
+                if !urls.isEmpty { return urls }
+                let progressive = BilibiliProtocol.progressiveURLs(response)
+                if !progressive.isEmpty { return progressive }
+            } catch is CancellationError { throw CancellationError() }
+            catch { lastError = error }
         }
-        return url
+        // A few public videos return only a single progressive MP4 rather than
+        // DASH audio. AVPlayer can play its audio track without displaying video.
+        do {
+            query["fnval"] = "1"
+            query["qn"] = "16"
+            query["platform"] = "html5"
+            let response = try await get("/x/player/playurl", query)
+            let urls = BilibiliProtocol.progressiveURLs(response)
+            if !urls.isEmpty { return urls }
+        } catch is CancellationError { throw CancellationError() }
+        catch { lastError = error }
+        throw lastError
     }
     func lyric(for track: Song) async throws -> String? {
         let key = track.bilibiliID ?? ""
@@ -297,19 +347,66 @@ actor BilibiliAPI {
         let (root,_) = try await raw(URL(string:"https://passport.bilibili.com/x/passport-login/web/qrcode/generate")!)
         guard let data=root["data"] as? [String:Any],let url=data["url"] as? String, let key=data["qrcode_key"] as? String,
               let parsed=URL(string:url),parsed.scheme == "https",let host=parsed.host,host == "bilibili.com" || host.hasSuffix(".bilibili.com") else { throw BilibiliError(message:"无法生成 B站登录二维码") }
+        pendingQRLogin = nil
         return (url,key)
     }
     func pollQR(_ key: String) async throws -> (code: Int, cookie: String) {
-        var url=URLComponents(string:"https://passport.bilibili.com/x/passport-login/web/qrcode/poll")!
-        url.queryItems=[URLQueryItem(name:"qrcode_key",value:key)]
-        let (root,response)=try await raw(url.url!)
-        guard let data=root["data"] as? [String:Any],let code=data["code"] as? Int else { throw BilibiliError(message:"B站扫码状态异常") }
-        var values: [String:String]=[:]
-        let fields=response.allHeaderFields.reduce(into:[String:String]()) { result,pair in result[String(describing:pair.key)]=String(describing:pair.value) }
-        for c in HTTPCookie.cookies(withResponseHeaderFields:fields,for:url.url!) { values[c.name]=c.value }
-        if let redirect=data["url"] as? String,let components=URLComponents(string:redirect),let host=components.host,host == "bilibili.com" || host.hasSuffix(".bilibili.com") {
-            for q in components.queryItems ?? [] where ["SESSDATA","bili_jct","DedeUserID","DedeUserID__ckMd5"].contains(q.name) { if let value=q.value { values[q.name]=value } }
+        if pendingQRLogin?.key == key { return try await completeQRLogin(key) }
+        var components = URLComponents(string: "https://passport.bilibili.com/x/passport-login/web/qrcode/poll")!
+        components.queryItems = [URLQueryItem(name: "qrcode_key", value: key)]
+        let (root, response) = try await raw(components.url!)
+        guard (root["code"] as? NSNumber)?.intValue == 0,
+              let data = root["data"] as? [String: Any], let code = (data["code"] as? NSNumber)?.intValue else {
+            throw BilibiliError(message: "B站扫码状态异常，请刷新二维码")
         }
-        return (code,values.keys.sorted().map { $0 + "=" + values[$0]! }.joined(separator:"; "))
+        guard code == 0 else { return (code, "") }
+        let redirect = (data["url"] as? String).flatMap(BilibiliProtocol.loginURL)
+        pendingQRLogin = (key, BilibiliProtocol.responseCookies(response), redirect)
+        return try await completeQRLogin(key)
+    }
+
+    private func completeQRLogin(_ key: String) async throws -> (code: Int, cookie: String) {
+        guard let pending = pendingQRLogin, pending.key == key else { throw CancellationError() }
+        var values = pending.values
+        if let redirect = pending.redirect {
+            values.merge(BilibiliProtocol.queryCookies(from: redirect)) { current, _ in current }
+            if values["SESSDATA"] == nil {
+                values.merge(try await crossDomainCookies(from: redirect)) { current, _ in current }
+            }
+        }
+        guard pendingQRLogin?.key == key else { throw CancellationError() }
+        pendingQRLogin = (key, values, pending.redirect)
+        return (0, BilibiliProtocol.cookieHeader(values))
+    }
+
+    private func crossDomainCookies(from url: URL) async throws -> [String: String] {
+        guard url.path.lowercased().contains("crossdomain") else { return [:] }
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 25
+        config.httpCookieStorage = nil
+        config.httpShouldSetCookies = false
+        let exchange = URLSession(configuration: config, delegate: BilibiliLoginRedirectDelegate(), delegateQueue: nil)
+        defer { exchange.invalidateAndCancel() }
+        var next: URL? = url
+        var values: [String: String] = [:]
+        for _ in 0..<5 {
+            try Task.checkCancellation()
+            guard let current = next, BilibiliProtocol.loginURL(current.absoluteString) != nil else { break }
+            var request = URLRequest(url: current)
+            Self.headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+            let (_, response) = try await exchange.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<400).contains(http.statusCode) else {
+                throw BilibiliError(message: "扫码已确认，但登录凭据交换失败，请刷新二维码重试")
+            }
+            values.merge(BilibiliProtocol.responseCookies(http)) { _, latest in latest }
+            if values["SESSDATA"] != nil { return values }
+            guard let location = http.value(forHTTPHeaderField: "Location"),
+                  let redirect = URL(string: location, relativeTo: current)?.absoluteURL,
+                  BilibiliProtocol.loginURL(redirect.absoluteString) != nil else { break }
+            values.merge(BilibiliProtocol.queryCookies(from: redirect)) { _, latest in latest }
+            next = redirect
+        }
+        return values
     }
 }

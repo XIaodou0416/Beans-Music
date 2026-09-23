@@ -179,6 +179,8 @@ final class PlayerManager: NSObject, ObservableObject {
     /// 记录 QQ 官方 vkey 已经尝试过的 BR，官方地址实际打不开时继续换档位。
     private var attemptedQQOfficialBRsBySong: [String: Set<String>] = [:]
     private var activeQQOfficialBR: String?
+    private var bilibiliPlaybackAlternatives: [URL] = []
+    private var bilibiliRetryScheduled = false
     /// KVO 与 AVPlayerItemFailedToPlayToEndTime 可能同时报告同一次失败。
     private var playbackRecoveryInFlightSongKey: String?
     /// 同一首歌的多个 AVFoundation 失败回调只允许弹一次提示并自动切歌一次。
@@ -793,6 +795,8 @@ final class PlayerManager: NSObject, ObservableObject {
         clearAudioRecoveryIntent()
         loadGeneration += 1
         let generation = loadGeneration
+        bilibiliPlaybackAlternatives = []
+        bilibiliRetryScheduled = false
         thirdPartyRetryExcludedHostsBySong.removeValue(forKey: song.identityKey)
         attemptedThirdPartyQualitiesBySong.removeValue(forKey: song.identityKey)
         attemptedQQOfficialBRsBySong.removeValue(forKey: song.identityKey)
@@ -825,6 +829,8 @@ final class PlayerManager: NSObject, ObservableObject {
         savePersistedPlaybackState()
         Task {
             var urlString: String?
+            var bilibiliURLs: [URL] = []
+            var bilibiliErrorMessage: String?
             var resolvedThirdParty: UnblockService.Resolved?
             var qqOfficialBR: String?
             var attemptedQQOfficialBRs: [String] = []
@@ -843,8 +849,16 @@ final class PlayerManager: NSObject, ObservableObject {
                 resolvedThirdParty = nil
                 qqOfficialBR = nil
                 attemptedQQOfficialBRs = []
+                guard generation == self.loadGeneration else { return }
                 if song.source == .bilibili {
-                    urlString = (try? await BilibiliAPI.shared.playbackURL(for: song, quality: quality))?.absoluteString
+                    do {
+                        bilibiliURLs = try await BilibiliAPI.shared.playbackURLs(for: song, quality: quality)
+                        urlString = bilibiliURLs.first?.absoluteString
+                    } catch is CancellationError { return }
+                    catch {
+                        bilibiliErrorMessage = error.localizedDescription
+                        BeansLogger.shared.log("B站播放解析失败：\(song.bilibiliID ?? "unknown")｜\(error.localizedDescription)", level: .warn)
+                    }
                 } else if sourcePreference == .thirdParty {
                     resolvedThirdParty = await resolveThirdParty(
                         song: song,
@@ -924,13 +938,14 @@ final class PlayerManager: NSObject, ObservableObject {
                     guard generation == self.loadGeneration else { return }
                     self.isBuffering = false
                     self.loadFailed = true
+                    let reason = bilibiliErrorMessage ?? "解析播放地址失败"
                     let failureMessage = beansLocalized(
-                        "播放失败：\(self.playbackFailureMessage(for: song, reason: "解析播放地址失败"))",
-                        "Playback failed: \(self.playbackFailureMessage(for: song, reason: "解析播放地址失败", english: true))"
+                        "播放失败：\(self.playbackFailureMessage(for: song, reason: reason))",
+                        "Playback failed: \(self.playbackFailureMessage(for: song, reason: reason, english: true))"
                     )
                     self.finishUnrecoverablePlaybackFailure(
                         song: song,
-                        reason: "解析播放地址失败",
+                        reason: reason,
                         message: failureMessage
                     )
                 }
@@ -938,6 +953,7 @@ final class PlayerManager: NSObject, ObservableObject {
             }
             await MainActor.run {
                 guard generation == self.loadGeneration else { return }
+                self.bilibiliPlaybackAlternatives = Array(bilibiliURLs.dropFirst())
                 self.setupPlayer(
                     url: url,
                     resumeAt: initialProgress,
@@ -1353,7 +1369,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 "AVURLAssetHTTPHeaderFieldsKey": playbackHeaders
             ])
             item = AVPlayerItem(asset: asset)
-        } else if isBilibiliAudioHost(url.host) {
+        } else if loadedSong.source == .bilibili || isBilibiliAudioHost(url.host) {
             playbackHeaders = BilibiliAPI.headers
             let asset = AVURLAsset(url: url, options: [
                 "AVURLAssetHTTPHeaderFieldsKey": playbackHeaders
@@ -1379,11 +1395,15 @@ final class PlayerManager: NSObject, ObservableObject {
                       self.currentSong?.identityKey == loadedSong.identityKey else { return }
                 if item.status == .readyToPlay { return }
                 guard item.status == .failed else { return }
+                if self.retryBilibiliIfNeeded(failedURL: url) { return }
                 if isThirdParty && self.retryThirdPartyIfNeeded(excludingHost: url.host) { return }
                 if !isThirdParty && self.retryQQOfficialIfNeeded() { return }
                 if !isThirdParty && self.fallbackQQToThirdPartyIfNeeded() { return }
                 if self.retryKugouAtStandardIfNeeded(error: item.error) { return }
-                self.finishUnrecoverablePlaybackFailure(song: loadedSong, reason: "AVPlayerItem 加载失败")
+                let reason = loadedSong.source == .bilibili
+                    ? "B站音频加载失败（\((item.error as NSError?)?.code ?? 0)），请检查网络或稍后重试"
+                    : "AVPlayerItem 加载失败"
+                self.finishUnrecoverablePlaybackFailure(song: loadedSong, reason: reason)
             }
         }
         timeControlStatusObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
@@ -1433,6 +1453,7 @@ final class PlayerManager: NSObject, ObservableObject {
                               self.currentSong?.identityKey == loadedSong.identityKey,
                               player.timeControlStatus == .waitingToPlayAtSpecifiedRate,
                               !self.playbackConfirmed else { return }
+                        if self.retryBilibiliIfNeeded(failedURL: url) { return }
                         if isThirdParty && self.retryThirdPartyIfNeeded(excludingHost: url.host) { return }
                         if !isThirdParty && self.retryQQOfficialIfNeeded() { return }
                         if !isThirdParty && self.fallbackQQToThirdPartyIfNeeded() { return }
@@ -1539,6 +1560,7 @@ final class PlayerManager: NSObject, ObservableObject {
             guard let self,
                   self.player?.currentItem === item,
                   self.currentSong?.identityKey == loadedSong.identityKey else { return }
+            if self.retryBilibiliIfNeeded(failedURL: url) { return }
             if !isThirdParty && self.retryQQOfficialIfNeeded() { return }
             if !isThirdParty && self.fallbackQQToThirdPartyIfNeeded() { return }
             if isThirdParty && self.retryThirdPartyIfNeeded(excludingHost: url.host) { return }
@@ -1546,6 +1568,30 @@ final class PlayerManager: NSObject, ObservableObject {
             self.finishUnrecoverablePlaybackFailure(song: loadedSong, reason: "播放中断失败")
         }
         updateNowPlaying()
+    }
+
+    private func retryBilibiliIfNeeded(failedURL: URL) -> Bool {
+        guard let song = currentSong, song.source == .bilibili else { return false }
+        if bilibiliRetryScheduled { return true }
+        guard !bilibiliPlaybackAlternatives.isEmpty else { return false }
+        let generation = loadGeneration
+        let failedPlayer = player
+        let resume = progress
+        bilibiliRetryScheduled = true
+        stopListeningSegment()
+        isBuffering = true
+        DispatchQueue.main.async { [weak self, weak failedPlayer] in
+            guard let self, self.loadGeneration == generation,
+                  self.player === failedPlayer,
+                  self.currentSong?.identityKey == song.identityKey else { return }
+            self.bilibiliRetryScheduled = false
+            guard !self.bilibiliPlaybackAlternatives.isEmpty else { return }
+            let next = self.bilibiliPlaybackAlternatives.removeFirst()
+            BeansLogger.shared.log("B站音频切换备用节点：\(failedURL.host ?? "") → \(next.host ?? "")", level: .info)
+            self.player?.pause()
+            self.setupPlayer(url: next, resumeAt: resume)
+        }
+        return true
     }
 
     /// AVFoundation KVO callbacks are not guaranteed to arrive on the main
@@ -1626,6 +1672,9 @@ final class PlayerManager: NSObject, ObservableObject {
     /// 这样会优先遵循用户的官方/第三方播放来源设置；只接受标题、歌手和时长均匹配的结果，避免播放到翻唱或不同版本。
     @discardableResult
     private func attemptCrossPlatformFallbackIfNeeded(for song: Song, reason: String) -> Bool {
+        // General Bilibili videos are not music catalog recordings; searching
+        // other platforms by a video's title/UP name can play unrelated content.
+        guard song.source != .bilibili else { return false }
         let enabled = defaults.object(forKey: Self.autoCrossPlatformFallbackKey) as? Bool ?? true
         guard enabled,
               crossPlatformFallbackInFlightSongKey != song.identityKey else { return false }
@@ -1767,6 +1816,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func playbackFailureMessage(for song: Song, reason: String, english: Bool = false) -> String {
+        if song.source == .bilibili { return reason }
         let category = playbackFailureCategory(for: song, reason: reason)
         if english {
             switch category {

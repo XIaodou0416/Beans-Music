@@ -163,14 +163,20 @@ struct DiscoverView: View {
                 if !homeRenderingPaused {
                     ScrollViewReader { proxy in
                     VStack(alignment: .leading, spacing: isNativeClean ? 34 : 26) {
-                        header
+                        if source == .bilibili {
+                            bilibiliHeader
+                        } else {
+                            header
+                        }
                         if shouldShowRemoteAnnouncementBanner {
                             remoteAnnouncementBanner
                         }
-                        if !hidePlatformPicker && !isNativeClean {
+                        if !hidePlatformPicker && !isNativeClean && source != .bilibili {
                             providerPicker
                         }
-                        if let errorMessage {
+                        if source == .bilibili {
+                            BilibiliHomeFeed()
+                        } else if let errorMessage {
                             ErrorStateView(message: errorMessage) {
                                 Task { await load(force: true) }
                             }
@@ -396,6 +402,18 @@ struct DiscoverView: View {
         remoteAnnouncementEnabled
             && (!remoteAnnouncementText.isEmpty || !remoteAnnouncementMediaURL.isEmpty || !remoteAnnouncementImageURL.isEmpty)
             && remoteAnnouncementBannerDismissedKey != remoteAnnouncementBannerKey
+    }
+
+    private var bilibiliHeader: some View {
+        HStack(spacing: 12) {
+            Image("BrandBilibili").resizable().scaledToFit().frame(width: 30, height: 30)
+            Text("哔哩哔哩").font(BeansFont.appFont(24, .bold)).foregroundStyle(Color.beansLabel)
+                .onLongPressGesture { showHomePlatformMenu = true }
+            Spacer(minLength: 4)
+            if !hidePlatformPicker { nativeHomeProviderMenu }
+            homeProfileButton
+        }
+        .padding(.top, 8)
     }
 
     /// 顶部问候区：大标题 + 刷新按钮
@@ -1853,6 +1871,12 @@ struct DiscoverView: View {
         guard !homeRenderingPaused else { return }
         let cache = DiscoverCache.shared
         let requestedSource = source
+        if requestedSource == .bilibili {
+            loading = false
+            errorMessage = nil
+            if force { await BilibiliHomeFeedStore.shared.loadFirst(force: true) }
+            return
+        }
         // 网易云非「全部」分类的歌单不缓存（切换分类即重新拉取）
         let requestedCat = neteaseCat
         let loadKey = "\(requestedSource.rawValue)|\(requestedCat)"

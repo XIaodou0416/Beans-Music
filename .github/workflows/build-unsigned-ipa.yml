@@ -51,6 +51,11 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Verify Bilibili login and playback parsing
+        run: |
+          xcrun swiftc Beans/BilibiliProtocol.swift scripts/check-bilibili-protocol.swift -o /tmp/beans-bilibili-checks
+          /tmp/beans-bilibili-checks
+
       - name: Build (unsigned)
         run: |
           VER=$(cat version.txt)
