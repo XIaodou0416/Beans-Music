@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import CryptoKit
+import ObjectiveC
 
 private struct BeansSharedRootBackdropKey: EnvironmentKey {
     static let defaultValue = false
@@ -627,11 +628,132 @@ struct BeansNavigationStackWithPath<Route: Hashable, Content: View>: View {
     }
 }
 
+private var beansScrollFadeObserverAssociationKey: UInt8 = 0
+
+private final class BeansScrollFadeObserver: NSObject {
+    private weak var scrollView: UIScrollView?
+    private var observations: [NSKeyValueObservation] = []
+    private var updateScheduled = false
+    private var lastTopFade: Bool?
+    private var lastBottomFade: Bool?
+    private var lastSize = CGSize.zero
+
+    init(scrollView: UIScrollView) {
+        self.scrollView = scrollView
+        super.init()
+        observations = [
+            scrollView.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in self?.scheduleUpdate() },
+            scrollView.observe(\.contentSize, options: [.new]) { [weak self] _, _ in self?.scheduleUpdate() },
+        ]
+        updateMask()
+    }
+
+    func refresh() {
+        scheduleUpdate()
+    }
+
+    private func scheduleUpdate() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.scheduleUpdate() }
+            return
+        }
+        guard !updateScheduled else { return }
+        updateScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.updateScheduled = false
+            self.updateMask()
+        }
+    }
+
+    private func updateMask() {
+        guard let scrollView, scrollView.bounds.height > 1 else { return }
+        let topLimit = -scrollView.adjustedContentInset.top
+        let bottomLimit = max(
+            topLimit,
+            scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+        )
+        let canScrollVertically = bottomLimit > topLimit + 1
+        let showTopFade = canScrollVertically && scrollView.contentOffset.y > topLimit + 1
+        let showBottomFade = canScrollVertically && scrollView.contentOffset.y < bottomLimit - 1
+        let size = scrollView.bounds.size
+
+        guard lastTopFade != showTopFade || lastBottomFade != showBottomFade || lastSize != size else {
+            WCLGFadeContentMaskUpdateFrame(scrollView)
+            return
+        }
+
+        lastTopFade = showTopFade
+        lastBottomFade = showBottomFade
+        lastSize = size
+        WCLGFadeContentMaskApply(scrollView, 0, showTopFade ? 22 : 0, 0, showBottomFade ? 30 : 0)
+    }
+}
+
+private enum BeansScrollFadeInstaller {
+    private static var lastScanByWindow: [ObjectIdentifier: TimeInterval] = [:]
+    private static var isScanning = false
+
+    static func scan(window: UIWindow?, force: Bool = false) {
+        guard let window, !isScanning else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        let windowID = ObjectIdentifier(window)
+        if !force, now - (lastScanByWindow[windowID] ?? 0) < 0.75 { return }
+        lastScanByWindow[windowID] = now
+        isScanning = true
+        defer { isScanning = false }
+
+        func visit(_ view: UIView) {
+            if let scrollView = view as? UIScrollView {
+                if let observer = objc_getAssociatedObject(scrollView, &beansScrollFadeObserverAssociationKey) as? BeansScrollFadeObserver {
+                    observer.refresh()
+                } else {
+                    let observer = BeansScrollFadeObserver(scrollView: scrollView)
+                    objc_setAssociatedObject(
+                        scrollView,
+                        &beansScrollFadeObserverAssociationKey,
+                        observer,
+                        .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                    )
+                }
+            }
+            view.subviews.forEach(visit)
+        }
+
+        visit(window)
+    }
+}
+
+private final class BeansScrollFadeProbeController: UIViewController {
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        BeansScrollFadeInstaller.scan(window: view.window)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        BeansScrollFadeInstaller.scan(window: view.window, force: true)
+    }
+}
+
+struct BeansScrollFadeProbe: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        let controller = BeansScrollFadeProbeController()
+        controller.view.backgroundColor = .clear
+        controller.view.isUserInteractionEnabled = false
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        BeansScrollFadeInstaller.scan(window: uiViewController.view.window)
+    }
+}
+
 /// SwiftUI 的 NavigationStack 会在透明内容后方保留系统默认底色。
 /// 将导航容器和承载控制器设为透明后，iPad 横屏页面才能透出根层唯一的主页壁纸。
 private struct BeansNavigationSurfaceClearer: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
-        let controller = UIViewController()
+        let controller = BeansScrollFadeProbeController()
         controller.view.backgroundColor = .clear
         controller.view.isUserInteractionEnabled = false
         return controller
@@ -649,6 +771,7 @@ private struct BeansNavigationSurfaceClearer: UIViewControllerRepresentable {
                 }
                 current = controller.parent
             }
+            BeansScrollFadeInstaller.scan(window: uiViewController.view.window)
         }
     }
 }

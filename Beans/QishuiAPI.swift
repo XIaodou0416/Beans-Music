@@ -37,6 +37,16 @@ struct QishuiPlaylistDetails {
     let songs: [Song]
 }
 
+private final class QishuiCacheBox<Value>: NSObject {
+    let value: Value
+    let savedAt: Date
+
+    init(value: Value, savedAt: Date = Date()) {
+        self.value = value
+        self.savedAt = savedAt
+    }
+}
+
 enum QishuiResourceURL {
     static func first(in value: Any?) -> URL? {
         first(in: value, depth: 0)
@@ -189,10 +199,22 @@ final class QishuiAPI: ObservableObject {
     private static let sessionKeychainAccount = "sessionid"
     private static let baseURLKey = "beans.qishui.apiBaseURL"
     private static let defaultBaseURL = "http://189.24.78.193/qishui"
+    private static let fastCatalogPaths: Set<String> = [
+        "/search/mixed", "/search", "/search/playlist", "/recommend/playlist"
+    ]
 
     @Published private(set) var isLoggedIn = false
 
     private let session: URLSession
+    private let songSearchCache = NSCache<NSString, QishuiCacheBox<[Song]>>()
+    private let playlistSearchCache = NSCache<NSString, QishuiCacheBox<[Playlist]>>()
+    private let recommendationCache = NSCache<NSString, QishuiCacheBox<[Playlist]>>()
+    private let playlistDetailsCache = NSCache<NSString, QishuiCacheBox<QishuiPlaylistDetails>>()
+
+    private let songSearchTTL: TimeInterval = 5 * 60
+    private let playlistSearchTTL: TimeInterval = 5 * 60
+    private let recommendationTTL: TimeInterval = 30 * 60
+    private let playlistDetailsTTL: TimeInterval = 30 * 60
 
     private init() {
         let configuration = URLSessionConfiguration.default
@@ -200,6 +222,10 @@ final class QishuiAPI: ObservableObject {
         configuration.timeoutIntervalForResource = 30
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         session = URLSession(configuration: configuration)
+        songSearchCache.countLimit = 40
+        playlistSearchCache.countLimit = 40
+        recommendationCache.countLimit = 8
+        playlistDetailsCache.countLimit = 24
         isLoggedIn = !(readSessionID() ?? "").isEmpty
     }
 
@@ -219,64 +245,106 @@ final class QishuiAPI: ObservableObject {
 
     // MARK: - Search
 
-    func searchSongs(keyword: String, limit: Int = 30) async throws -> [Song] {
+    func searchSongs(
+        keyword: String,
+        limit: Int = 30,
+        onPartialResults: (@MainActor ([Song]) -> Void)? = nil
+    ) async throws -> [Song] {
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         let targetCount = min(max(limit, 1), 200)
+        let cacheKey = catalogCacheKey("songs", query: trimmed, limit: targetCount)
+        let (cached, stale) = cacheLookup(songSearchCache, key: cacheKey, ttl: songSearchTTL, staleTTL: 48 * 3600)
+        if let cached { return cached }
+
         var songs: [Song] = []
         var seenSongs = Set<String>()
         var offset = 0
         var visitedOffsets = Set<Int>()
 
-        for _ in 0..<10 where songs.count < targetCount {
-            guard visitedOffsets.insert(offset).inserted else { break }
-            let pageSize = min(50, targetCount - songs.count)
-            let query = [
-                "keywords": trimmed,
-                "count": String(pageSize),
-                "cursor": String(offset),
-                "offset": String(offset),
-            ]
-            let mixed = try await requestObject("/search/mixed", query: query)
-            var pageSongs = trackDictionaries(mixed["tracks"] ?? mixed["data"] ?? mixed).compactMap(makeSong)
-            var pageResponse = mixed
-            if pageSongs.isEmpty {
-                let direct = try await requestObject("/search", query: query)
-                pageSongs = trackDictionaries(direct["tracks"] ?? direct["data"] ?? direct).compactMap(makeSong)
-                pageResponse = direct
+        do {
+            for _ in 0..<10 where songs.count < targetCount {
+                guard !Task.isCancelled else { throw CancellationError() }
+                guard visitedOffsets.insert(offset).inserted else { break }
+                let pageSize = min(100, targetCount - songs.count)
+                let query = [
+                    "keywords": trimmed,
+                    "count": String(pageSize),
+                    "cursor": String(offset),
+                    "offset": String(offset),
+                ]
+                let mixed = try await requestObject("/search/mixed", query: query)
+                var pageSongs = trackDictionaries(mixed["tracks"] ?? mixed["data"] ?? mixed).compactMap(makeSong)
+                var pageResponse = mixed
+                if pageSongs.isEmpty {
+                    let direct = try await requestObject("/search", query: query)
+                    pageSongs = trackDictionaries(direct["tracks"] ?? direct["data"] ?? direct).compactMap(makeSong)
+                    pageResponse = direct
+                }
+                guard !pageSongs.isEmpty else { break }
+                let receivedCount = pageSongs.count
+                let previousCount = songs.count
+                for song in pageSongs where seenSongs.insert(song.identityKey).inserted {
+                    songs.append(song)
+                    if songs.count >= targetCount { break }
+                }
+                let currentResults = Array(deduplicated(songs).prefix(targetCount))
+                if currentResults.count > previousCount, let onPartialResults {
+                    await onPartialResults(currentResults)
+                }
+                let pageState = QishuiSearchPageState.resolve(
+                    pageResponse,
+                    currentOffset: offset,
+                    receivedCount: receivedCount
+                )
+                guard pageState.hasMore, pageState.nextOffset > offset else { break }
+                offset = pageState.nextOffset
             }
-            guard !pageSongs.isEmpty else { break }
-            let receivedCount = pageSongs.count
-            for song in pageSongs where seenSongs.insert(song.identityKey).inserted {
-                songs.append(song)
-                if songs.count >= targetCount { break }
-            }
-            let pageState = QishuiSearchPageState.resolve(
-                pageResponse,
-                currentOffset: offset,
-                receivedCount: receivedCount
-            )
-            guard pageState.hasMore, pageState.nextOffset > offset else { break }
-            offset = pageState.nextOffset
+        } catch {
+            if Task.isCancelled { throw error }
+            if !songs.isEmpty { return Array(deduplicated(songs).prefix(targetCount)) }
+            if let stale { return stale }
+            throw error
         }
-        return deduplicated(songs).prefix(targetCount).map { $0 }
+
+        let result = Array(deduplicated(songs).prefix(targetCount))
+        if !result.isEmpty {
+            cache(result, in: songSearchCache, key: cacheKey)
+            return result
+        }
+        return stale ?? []
     }
 
     func searchPlaylists(keyword: String, limit: Int = 30) async throws -> [Playlist] {
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
-        let data = try await requestObject("/search/playlist", query: [
-            "keywords": trimmed,
-            "count": String(min(max(limit, 1), 50)),
-        ])
-        return playlistDictionaries(data["playlists"] ?? data["data"] ?? data)
-            .compactMap(makePlaylist)
-            .prefix(limit)
-            .map { $0 }
+        let targetCount = min(max(limit, 1), 50)
+        let cacheKey = catalogCacheKey("playlists", query: trimmed, limit: targetCount)
+        let (cached, stale) = cacheLookup(playlistSearchCache, key: cacheKey, ttl: playlistSearchTTL, staleTTL: 7 * 24 * 3600)
+        if let cached { return cached }
+        do {
+            let data = try await requestObject("/search/playlist", query: [
+                "keywords": trimmed,
+                "count": String(targetCount),
+            ])
+            let results = playlistDictionaries(data["playlists"] ?? data["data"] ?? data)
+                .compactMap(makePlaylist)
+                .prefix(targetCount)
+                .map { $0 }
+            if !results.isEmpty {
+                cache(results, in: playlistSearchCache, key: cacheKey)
+                return results
+            }
+            return stale ?? []
+        } catch {
+            if Task.isCancelled { throw error }
+            if let stale { return stale }
+            throw error
+        }
     }
 
     func searchArtists(keyword: String, limit: Int = 40) async throws -> [Artist] {
-        let songs = try await searchSongs(keyword: keyword, limit: max(limit * 2, 40))
+        let songs = try await searchSongs(keyword: keyword, limit: min(max(limit * 2, 40), 200))
         var result: [Artist] = []
         var seen = Set<String>()
         for song in songs {
@@ -297,24 +365,50 @@ final class QishuiAPI: ObservableObject {
     }
 
     func searchAlbums(keyword: String, limit: Int = 40) async throws -> [Album] {
-        let songs = try await searchSongs(keyword: keyword, limit: max(limit * 3, 80))
+        let songs = try await searchSongs(keyword: keyword, limit: min(max(limit * 3, 80), 200))
         return albums(from: songs, limit: limit)
     }
 
     // MARK: - Discovery and collections
 
     func recommendedPlaylists(limit: Int = 18) async throws -> [Playlist] {
-        let data = try await requestObject("/recommend/playlist", query: [
-            "count": String(min(max(limit, 1), 50)),
-        ])
-        return playlistDictionaries(data["playlists"] ?? data["data"] ?? data)
-            .compactMap(makePlaylist)
-            .prefix(limit)
-            .map { $0 }
+        let targetCount = min(max(limit, 1), 50)
+        let accountKey = Self.stableID(sessionID ?? "guest")
+        let cacheKey = "recommendations|\(accountKey)|\(targetCount)"
+        let (cached, stale) = cacheLookup(recommendationCache, key: cacheKey, ttl: recommendationTTL, staleTTL: 7 * 24 * 3600)
+        if let cached { return cached }
+        do {
+            let data = try await requestObject("/recommend/playlist", query: [
+                "count": String(targetCount),
+            ])
+            let results = playlistDictionaries(data["playlists"] ?? data["data"] ?? data)
+                .compactMap(makePlaylist)
+                .prefix(targetCount)
+                .map { $0 }
+            if !results.isEmpty {
+                cache(results, in: recommendationCache, key: cacheKey)
+                return results
+            }
+            return stale ?? []
+        } catch {
+            if Task.isCancelled { throw error }
+            if let stale { return stale }
+            throw error
+        }
     }
 
-    func playlistDetails(id: String, count: Int = 1000) async throws -> QishuiPlaylistDetails {
+    func playlistDetails(
+        id: String,
+        count: Int = 1000,
+        onPartialSongs: (@MainActor ([Song]) -> Void)? = nil
+    ) async throws -> QishuiPlaylistDetails {
         let targetCount = min(max(count, 1), 1000)
+        let cacheKey = "details|\(id)|\(targetCount)"
+        let (cached, stale) = cacheLookup(playlistDetailsCache, key: cacheKey, ttl: playlistDetailsTTL, staleTTL: 7 * 24 * 3600)
+        if let cached {
+            if let onPartialSongs { await onPartialSongs(cached.songs) }
+            return cached
+        }
         let pageSize = min(targetCount, 100)
         var cursor = ""
         var sessionID = ""
@@ -323,35 +417,55 @@ final class QishuiAPI: ObservableObject {
         var songs: [Song] = []
         var seenSongs = Set<String>()
 
-        for _ in 0..<20 where songs.count < targetCount {
-            var query = ["playlist_id": id, "count": String(pageSize)]
-            if !cursor.isEmpty { query["cursor"] = cursor }
-            if !sessionID.isEmpty { query["session_id"] = sessionID }
-            let data = try await requestObject("/playlist/detail", query: query)
-            if sessionID.isEmpty {
-                sessionID = firstString(data, keys: ["session_id", "sessionId"]) ?? ""
+        do {
+            for _ in 0..<20 where songs.count < targetCount {
+                guard !Task.isCancelled else { throw CancellationError() }
+                var query = ["playlist_id": id, "count": String(pageSize)]
+                if !cursor.isEmpty { query["cursor"] = cursor }
+                if !sessionID.isEmpty { query["session_id"] = sessionID }
+                let data = try await requestObject("/playlist/detail", query: query)
+                if sessionID.isEmpty {
+                    sessionID = firstString(data, keys: ["session_id", "sessionId"]) ?? ""
+                }
+                if playlist == nil {
+                    playlist = dictionary(data["playlist"]).flatMap(makePlaylist)
+                }
+                let resources = data["media_resources"] ?? data["tracks"] ?? data["songs"] ?? []
+                let pageSongs = trackDictionaries(resources).compactMap(makeSong)
+                guard !pageSongs.isEmpty else { break }
+                for song in pageSongs where seenSongs.insert(song.identityKey).inserted {
+                    songs.append(song)
+                    if songs.count >= targetCount { break }
+                }
+                if !songs.isEmpty, let onPartialSongs {
+                    await onPartialSongs(Array(songs.prefix(targetCount)))
+                }
+                let nextCursor = firstString(data, keys: ["next_cursor", "nextCursor", "cursor"]) ?? ""
+                guard !nextCursor.isEmpty,
+                      nextCursor != cursor,
+                      visitedCursors.insert(nextCursor).inserted else { break }
+                cursor = nextCursor
             }
-            if playlist == nil {
-                playlist = dictionary(data["playlist"]).flatMap(makePlaylist)
-            }
-            let resources = data["media_resources"] ?? data["tracks"] ?? data["songs"] ?? []
-            let pageSongs = trackDictionaries(resources).compactMap(makeSong)
-            guard !pageSongs.isEmpty else { break }
-            for song in pageSongs where seenSongs.insert(song.identityKey).inserted {
-                songs.append(song)
-                if songs.count >= targetCount { break }
-            }
-            let nextCursor = firstString(data, keys: ["next_cursor", "nextCursor", "cursor"]) ?? ""
-            guard !nextCursor.isEmpty,
-                  nextCursor != cursor,
-                  visitedCursors.insert(nextCursor).inserted else { break }
-            cursor = nextCursor
+        } catch {
+            if Task.isCancelled { throw error }
+            if !songs.isEmpty { throw error }
+            if let stale { return stale }
+            throw error
         }
-        return QishuiPlaylistDetails(playlist: playlist, songs: Array(songs.prefix(targetCount)))
+        let result = QishuiPlaylistDetails(playlist: playlist, songs: Array(songs.prefix(targetCount)))
+        if !result.songs.isEmpty {
+            cache(result, in: playlistDetailsCache, key: cacheKey)
+            return result
+        }
+        return stale ?? result
     }
 
-    func playlistSongs(id: String, count: Int = 1000) async throws -> [Song] {
-        try await playlistDetails(id: id, count: count).songs
+    func playlistSongs(
+        id: String,
+        count: Int = 1000,
+        onPartialSongs: (@MainActor ([Song]) -> Void)? = nil
+    ) async throws -> [Song] {
+        try await playlistDetails(id: id, count: count, onPartialSongs: onPartialSongs).songs
     }
 
     func artistSongs(name: String, limit: Int = 300) async throws -> [Song] {
@@ -509,7 +623,7 @@ final class QishuiAPI: ObservableObject {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
-        request.timeoutInterval = 20
+        request.timeoutInterval = Self.fastCatalogPaths.contains(path) ? 15 : 20
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
@@ -533,6 +647,35 @@ final class QishuiAPI: ObservableObject {
             throw QishuiAPIError.server(firstString(root, keys: ["message", "msg"]) ?? "汽水音乐接口返回失败")
         }
         return root["data"] ?? [:]
+    }
+
+    private func catalogCacheKey(_ category: String, query: String, limit: Int) -> String {
+        let normalized = query
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let baseURL = UserDefaults.standard.string(forKey: Self.baseURLKey) ?? Self.defaultBaseURL
+        return "\(category)|\(baseURL)|\(limit)|\(normalized)"
+    }
+
+    private func cacheLookup<Value>(
+        _ cache: NSCache<NSString, QishuiCacheBox<Value>>,
+        key: String,
+        ttl: TimeInterval,
+        staleTTL: TimeInterval
+    ) -> (fresh: Value?, stale: Value?) {
+        guard let entry = cache.object(forKey: key as NSString) else { return (nil, nil) }
+        let age = Date().timeIntervalSince(entry.savedAt)
+        if age < ttl { return (entry.value, nil) }
+        return age < staleTTL ? (nil, entry.value) : (nil, nil)
+    }
+
+    private func cache<Value>(
+        _ value: Value,
+        in cache: NSCache<NSString, QishuiCacheBox<Value>>,
+        key: String
+    ) {
+        cache.setObject(QishuiCacheBox(value: value), forKey: key as NSString)
     }
 
     // MARK: - Mapping helpers

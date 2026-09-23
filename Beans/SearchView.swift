@@ -1379,18 +1379,34 @@ struct SearchView: View {
                         if !songs.isEmpty || !playlists.isEmpty { BeansHaptics.success() }
                     }
                 case .song:
-                    let songs = await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)
+                    let songs: [Song]
+                    if selectedProvider == .qishui {
+                        songs = await catalogSongs(
+                            keyword: trimmed,
+                            provider: selectedProvider,
+                            limit: 100,
+                            onPartialResults: { partial in
+                                guard searchRequestID == requestID else { return }
+                                songResults = partial
+                            }
+                        )
+                    } else {
+                        songs = await catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 100)
+                    }
                     guard !Task.isCancelled, searchRequestID == requestID else { return }
+                    let completedSongs = await MainActor.run {
+                        songs.isEmpty && selectedProvider == .qishui ? songResults : songs
+                    }
                     await MainActor.run {
                         guard searchRequestID == requestID else { return }
-                        songResults = songs
+                        songResults = completedSongs
                         searchResultCache[cacheKey] = SearchResultCacheEntry(
-                            songs: songs,
+                            songs: completedSongs,
                             artists: [],
                             albums: [],
                             playlists: []
                         )
-                        if !songs.isEmpty { BeansHaptics.success() }
+                        if !completedSongs.isEmpty { BeansHaptics.success() }
                     }
                 case .artist:
                     let artists = await catalogArtists(keyword: trimmed, provider: selectedProvider, limit: 100)
@@ -1468,6 +1484,20 @@ struct SearchView: View {
         let requestID = UUID()
         playlistSearchRequestID = requestID
         let selectedProvider = provider
+        let cacheKey = SearchResultCacheKey(
+            keyword: trimmed.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).lowercased(),
+            provider: selectedProvider,
+            resultType: .playlist
+        )
+
+        if selectedProvider == .qishui,
+           let cached = searchResultCache[cacheKey],
+           !cached.playlists.isEmpty {
+            playlistResults = cached.playlists
+            searching = false
+            errorMessage = nil
+            return
+        }
 
         searching = true
         errorMessage = nil
@@ -1481,6 +1511,14 @@ struct SearchView: View {
                       resultType == .playlist,
                       provider == selectedProvider else { return }
                 playlistResults = playlists
+                if selectedProvider == .qishui, !playlists.isEmpty {
+                    searchResultCache[cacheKey] = SearchResultCacheEntry(
+                        songs: [],
+                        artists: [],
+                        albums: [],
+                        playlists: playlists
+                    )
+                }
                 searching = false
                 if !playlists.isEmpty { BeansHaptics.success() }
             }
@@ -1593,7 +1631,8 @@ struct SearchView: View {
     private func catalogSongs(
         keyword: String,
         provider: SearchCatalogProvider,
-        limit: Int
+        limit: Int,
+        onPartialResults: (@MainActor ([Song]) -> Void)? = nil
     ) async -> [Song] {
         switch provider {
         case .aggregate:
@@ -1614,7 +1653,11 @@ struct SearchView: View {
         case .migu:
             return (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: keyword, limit: limit)) ?? []
         case .qishui:
-            return (try? await QishuiAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
+            return (try? await QishuiAPI.shared.searchSongs(
+                keyword: keyword,
+                limit: limit,
+                onPartialResults: onPartialResults
+            )) ?? []
         case .netease:
             return (try? await NetEaseAPI.shared.search(keyword: keyword, limit: limit)) ?? []
         case .qq:

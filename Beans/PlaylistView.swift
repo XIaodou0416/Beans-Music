@@ -303,6 +303,9 @@ struct PlaylistView: View {
         if let cached = cache.cachedSongs(playlist: playlist, accountID: cacheAccountID) {
             tracks = cached.songs
             loading = false
+            if !force, playlist.source == .qishui, cache.isFresh(cached) {
+                return
+            }
             if !force, cache.isFresh(cached), !BeansNetworkStatus.shared.isReachable {
                 return
             }
@@ -324,7 +327,11 @@ struct PlaylistView: View {
                 }
             } else if playlist.source == .qishui {
                 let identifier = playlist.qishuiID ?? String(playlist.id)
-                tracks = try await QishuiAPI.shared.playlistSongs(id: identifier)
+                tracks = try await QishuiAPI.shared.playlistSongs(id: identifier) { partialSongs in
+                    guard !partialSongs.isEmpty else { return }
+                    tracks = partialSongs
+                    loading = false
+                }
             } else if playlist.source == .kuwo || playlist.source == .migu {
                 tracks = try await AdditionalCatalogSearchAPI.playlistSongs(source: playlist.source, id: playlist.id)
             } else {

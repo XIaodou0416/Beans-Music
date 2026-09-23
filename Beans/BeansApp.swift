@@ -63,6 +63,7 @@ struct BeansApp: App {
                     .zIndex(100)
                 }
             }
+            .background(BeansScrollFadeProbe())
             .environment(\.locale, Locale(identifier: languageRaw))
             .onReceive(NotificationCenter.default.publisher(for: .beansEasterEggRequested)) { _ in
                 guard !showEasterEgg else { return }
