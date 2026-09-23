@@ -106,7 +106,8 @@ final class SyncedPlaylistCache {
 
     private func cacheKey(source: SongSource, accountID: String) -> String {
         let normalizedAccount = accountID.trimmingCharacters(in: .whitespacesAndNewlines)
-        return "\(source.rawValue)|\(normalizedAccount.isEmpty ? "default" : normalizedAccount)"
+        let sourceKey = source == .qishui ? "qishui-cover-v2" : source.rawValue
+        return "\(sourceKey)|\(normalizedAccount.isEmpty ? "default" : normalizedAccount)"
     }
 
     private func persistAsync<T: Encodable>(_ value: T, key: String) {

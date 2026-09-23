@@ -16,7 +16,7 @@ final class QishuiAPITests: XCTestCase {
         XCTAssertEqual(QishuiResourceURL.first(in: "//cdn.example.com/cover.jpg")?.absoluteString, "https://cdn.example.com/cover.jpg")
     }
 
-    func testQishuiPlaylistCoverCombinesURIAndConvertsImagePrefixToObjectPath() {
+    func testQishuiPlaylistCoverCombinesURIAndImageTemplate() {
         let playlist: [String: Any] = [
             "cover_url": "https://p3-luna.douyinpic.com/img/",
             "raw": [
@@ -33,14 +33,45 @@ final class QishuiAPITests: XCTestCase {
 
         XCTAssertEqual(
             QishuiResourceURL.playlistCover(in: playlist)?.absoluteString,
-            "https://p3-luna.douyinpic.com/obj/ies-music/pgc_cover_123"
+            "https://p3-luna.douyinpic.com/img/ies-music/pgc_cover_123~tplv-b829550vbb-crop-center:720:720.jpg"
         )
     }
 
-    func testQishuiImagePrefixIsRepairedWhenOnlyNormalizedCoverURLExists() {
+    func testQishuiSongImageURLKeepsItsOriginalImagePath() {
         XCTAssertEqual(
             QishuiResourceURL.first(in: "https://p3-luna.douyinpic.com/img/ies-music/pgc_cover_123")?.absoluteString,
-            "https://p3-luna.douyinpic.com/obj/ies-music/pgc_cover_123"
+            "https://p3-luna.douyinpic.com/img/ies-music/pgc_cover_123"
+        )
+    }
+
+    func testQishuiTrackCoverUsesOriginalAlbumTemplateMetadata() {
+        let albumCover: [String: Any] = [
+            "uri": "tos-cn-v-2774c002/cover-id",
+            "urls": ["https://p3-luna.douyinpic.com/img/"],
+            "template_prefix": "tplv-b829550vbb",
+        ]
+
+        XCTAssertEqual(
+            QishuiResourceURL.first(in: albumCover)?.absoluteString,
+            "https://p3-luna.douyinpic.com/img/tos-cn-v-2774c002/cover-id~tplv-b829550vbb-crop-center:720:720.jpg"
+        )
+    }
+
+    func testQishuiPlaylistCoverRepairsFlatURLUsingRawTemplateMetadata() {
+        let playlist: [String: Any] = [
+            "cover_url": "https://p3-luna.douyinpic.com/img/tos-cn-i-b829550vbb/cover-id",
+            "raw": [
+                "url_cover": [
+                    "uri": "tos-cn-i-b829550vbb/cover-id",
+                    "urls": ["https://p3-luna.douyinpic.com/img/"],
+                    "template_prefix": "tplv-b829550vbb",
+                ],
+            ],
+        ]
+
+        XCTAssertEqual(
+            QishuiResourceURL.playlistCover(in: playlist)?.absoluteString,
+            "https://p3-luna.douyinpic.com/img/tos-cn-i-b829550vbb/cover-id~tplv-b829550vbb-crop-center:720:720.jpg"
         )
     }
 

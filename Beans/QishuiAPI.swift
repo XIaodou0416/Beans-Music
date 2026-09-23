@@ -46,10 +46,10 @@ enum QishuiResourceURL {
         let raw = playlist["raw"] as? [String: Any] ?? playlist
         let keys = ["url_cover", "cover_url", "coverURL", "urlCover", "cover_uri", "cover", "pic_url", "picUrl"]
         for key in keys {
-            if let url = first(in: raw[key]) { return url }
+            if let url = first(in: raw[key]) { return normalizedPlaylistCover(url) }
         }
         for key in keys {
-            if let url = first(in: playlist[key]) { return url }
+            if let url = first(in: playlist[key]) { return normalizedPlaylistCover(url) }
         }
         return nil
     }
@@ -62,16 +62,20 @@ enum QishuiResourceURL {
             guard let url = URL(string: candidate),
                   ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
                   url.host != nil else { return nil }
-            return normalizedImageURL(url)
+            return url
         }
         if let values = value as? [Any] {
             return values.lazy.compactMap { first(in: $0, depth: depth + 1) }.first
         }
         guard let object = value as? [String: Any] else { return nil }
 
+        if let direct = first(in: object["url"], depth: depth + 1) {
+            return direct
+        }
+
         if let uri = object["uri"] as? String,
            let base = first(in: object["urls"] ?? object["url_list"], depth: depth + 1),
-           let completed = complete(uri: uri, using: base) {
+           let completed = complete(uri: uri, using: base, templatePrefix: object["template_prefix"] as? String) {
             return completed
         }
 
@@ -88,29 +92,35 @@ enum QishuiResourceURL {
         return nil
     }
 
-    private static func complete(uri: String, using base: URL) -> URL? {
+    private static func complete(uri: String, using base: URL, templatePrefix: String?) -> URL? {
         let value = uri.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }
         if let direct = URL(string: value),
            ["http", "https"].contains(direct.scheme?.lowercased() ?? ""),
            direct.host != nil {
-            return normalizedImageURL(direct)
+            return direct
         }
         if base.absoluteString.contains(value) { return base }
         guard value.contains("/") || base.path.hasSuffix("/") else { return nil }
         guard let url = URL(string: value, relativeTo: base)?.absoluteURL,
               ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
               url.host != nil else { return nil }
-        return normalizedImageURL(url)
-    }
-
-    private static func normalizedImageURL(_ url: URL) -> URL {
-        guard url.host?.lowercased().hasSuffix("douyinpic.com") == true,
-              var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let range = components.percentEncodedPath.range(of: "/img/") else {
+        guard let templatePrefix = templatePrefix?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !templatePrefix.isEmpty,
+              !value.contains("~tplv-") else {
             return url
         }
-        components.percentEncodedPath.replaceSubrange(range, with: "/obj/")
+        return URL(string: "\(url.absoluteString)~\(templatePrefix)-crop-center:720:720.jpg") ?? url
+    }
+
+    private static func normalizedPlaylistCover(_ url: URL) -> URL {
+        guard url.host?.lowercased().hasSuffix("douyinpic.com") == true,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.percentEncodedPath.contains("/img/"),
+              !components.percentEncodedPath.contains("~tplv-") else {
+            return url
+        }
+        components.percentEncodedPath += "~tplv-b829550vbb-crop-center:720:720.jpg"
         return components.url ?? url
     }
 }
@@ -536,10 +546,14 @@ final class QishuiAPI: ObservableObject {
             ?? raw
         guard let identifier = firstString(track, keys: ["id", "track_id"]), !identifier.isEmpty else { return nil }
         let album = dictionary(track["album"])
+        let sourceTrack = dictionary(track["raw"]) ?? track
+        let sourceAlbum = dictionary(sourceTrack["album"])
         let artistValues = dictionaryArray(track["artists"])
         let artistText = artistValues.compactMap { firstString($0, keys: ["name", "simple_display_name"]) }.joined(separator: " / ")
         let albumName = firstString(album, keys: ["name"]) ?? firstString(track, keys: ["album_name", "albumName"]) ?? ""
-        let cover = QishuiResourceURL.first(in: album?["cover_url"])
+        let cover = QishuiResourceURL.first(in: sourceAlbum?["url_cover"])
+            ?? QishuiResourceURL.first(in: sourceAlbum?["cover_url"])
+            ?? QishuiResourceURL.first(in: album?["cover_url"])
             ?? QishuiResourceURL.first(in: album?["coverURL"])
             ?? QishuiResourceURL.first(in: album?["url_cover"])
             ?? QishuiResourceURL.first(in: track["cover_url"])
