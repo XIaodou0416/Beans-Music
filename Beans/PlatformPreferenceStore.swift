@@ -18,15 +18,14 @@ final class PlatformPreferenceStore: ObservableObject {
 
     private init() {
         let saved = UserDefaults.standard.stringArray(forKey: Self.key) ?? []
-        if saved.isEmpty {
-            selectedRaw = Set(SearchProvider.allCases.map(\.rawValue))
-        } else {
-            selectedRaw = Set(saved.map(Self.migrateRawValue))
-            if !UserDefaults.standard.bool(forKey: "beans.platforms.migrated.bilibili.v1") {
-                selectedRaw.insert(SearchProvider.bilibili.rawValue)
-                UserDefaults.standard.set(true, forKey: "beans.platforms.migrated.bilibili.v1")
-            }
+        var selected = saved.isEmpty
+            ? Set(SearchProvider.allCases.map(\.rawValue))
+            : Set(saved.map(Self.migrateRawValue))
+        if !saved.isEmpty, !UserDefaults.standard.bool(forKey: "beans.platforms.migrated.bilibili.v1") {
+            selected.insert(SearchProvider.bilibili.rawValue)
+            UserDefaults.standard.set(true, forKey: "beans.platforms.migrated.bilibili.v1")
         }
+        selectedRaw = selected
         orderedRaw = UserDefaults.standard.stringArray(forKey: Self.orderKey)?
             .map(Self.migrateRawValue) ?? []
         normalize()
