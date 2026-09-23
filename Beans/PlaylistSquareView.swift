@@ -488,7 +488,8 @@ struct PlaylistSquareView: View {
             expanded = false
             errorMessage = nil
             isLoading = false
-            if cache.isFresh(entry), !BeansNetworkStatus.shared.isReachable { return }
+            if cache.isFresh(entry),
+               requestedSource == .qishui || !BeansNetworkStatus.shared.isReachable { return }
         }
 
         isLoading = true

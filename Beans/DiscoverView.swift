@@ -1861,7 +1861,8 @@ struct DiscoverView: View {
             errorMessage = nil
             lastLoadedKey = loadKey
             lastLoadedAt = Date()
-            if cache.isFresh(cached, source: requestedSource), !BeansNetworkStatus.shared.isReachable { return }
+            if cache.isFresh(cached, source: requestedSource),
+               requestedSource == .qishui || !BeansNetworkStatus.shared.isReachable { return }
             // 缓存过期：先用缓存展示，后台静默刷新
         } else {
             loading = true

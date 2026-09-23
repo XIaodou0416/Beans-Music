@@ -5288,6 +5288,8 @@ struct PlayerView: View {
             cacheKey = "qq:\(song.qqMid ?? song.identityKey)"
         } else if song.source == .kuwo || song.source == .migu {
             cacheKey = "\(song.source.rawValue):\(song.id)"
+        } else if song.source == .qishui {
+            cacheKey = "qishui:\(song.qishuiID ?? song.identityKey)"
         } else {
             cacheKey = "netease:\(song.id)"
         }
@@ -5317,6 +5319,23 @@ struct PlayerView: View {
             if let lrc = try? await AdditionalCatalogSearchAPI.lyric(for: song), !lrc.isEmpty {
                 apply(LyricParser.parse(lrc))
                 LyricsCache.shared.save(lyric: lrc, translation: nil, for: cacheKey)
+            }
+        } else if song.source == .qishui {
+            if let raw = try? await QishuiAPI.shared.lyric(for: song), !raw.isEmpty {
+                let isKRC = raw.range(of: #"(?m)^\[\d+,\d+\].*<\d+,\d+"#, options: .regularExpression) != nil
+                let parsed = isKRC
+                    ? LyricParser.parse(raw, wordRaw: raw, wordFormat: .kugouKRC)
+                    : LyricParser.parse(raw)
+                if !parsed.isEmpty {
+                    apply(parsed)
+                    LyricsCache.shared.save(
+                        lyric: raw,
+                        translation: nil,
+                        wordTiming: isKRC ? raw : nil,
+                        wordFormat: isKRC ? .kugouKRC : nil,
+                        for: cacheKey
+                    )
+                }
             }
         } else {
             if let (lrc, tlyric, yrc) = try? await NetEaseAPI.shared.lyricWithTranslation(id: song.id) {

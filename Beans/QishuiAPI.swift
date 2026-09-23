@@ -37,6 +37,92 @@ struct QishuiPlaylistDetails {
     let songs: [Song]
 }
 
+enum QishuiResourceURL {
+    static func first(in value: Any?) -> URL? {
+        first(in: value, depth: 0)
+    }
+
+    private static func first(in value: Any?, depth: Int) -> URL? {
+        guard depth < 8 else { return nil }
+        if let string = value as? String {
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            let candidate = trimmed.hasPrefix("//") ? "https:\(trimmed)" : trimmed
+            guard let url = URL(string: candidate),
+                  ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                  url.host != nil else { return nil }
+            return url
+        }
+        if let values = value as? [Any] {
+            return values.lazy.compactMap { first(in: $0, depth: depth + 1) }.first
+        }
+        guard let object = value as? [String: Any] else { return nil }
+        let preferredKeys = [
+            "url", "urls", "url_list", "cover_url", "cover_urls", "url_cover",
+            "origin_url", "origin_url_list", "uri", "cover", "artwork"
+        ]
+        for key in preferredKeys {
+            if let url = first(in: object[key], depth: depth + 1) { return url }
+        }
+        for nested in object.values {
+            if let url = first(in: nested, depth: depth + 1) { return url }
+        }
+        return nil
+    }
+}
+
+struct QishuiSearchPageState {
+    let hasMore: Bool
+    let nextOffset: Int
+
+    static func resolve(_ response: [String: Any], currentOffset: Int, receivedCount: Int) -> Self {
+        let upstream = response["upstream"] as? [String: Any] ?? [:]
+        let upstreamData = upstream["data"] as? [String: Any] ?? [:]
+        let pagination = response["pagination"] as? [String: Any]
+            ?? upstream["pagination"] as? [String: Any]
+            ?? upstreamData["pagination"] as? [String: Any]
+            ?? [:]
+        let sources = [response, upstream, upstreamData, pagination]
+        let moreValue = firstValue(in: sources, keys: ["has_more", "hasMore", "has_next", "hasNext"])
+        let explicitMore = boolean(moreValue)
+        let cursorValue = firstValue(in: sources, keys: ["next_offset", "nextOffset", "next_cursor", "nextCursor", "cursor"])
+        let parsedCursor = integer(cursorValue)
+        let nextOffset = parsedCursor.flatMap { $0 > currentOffset ? $0 : nil }
+            ?? currentOffset + max(receivedCount, 1)
+        return Self(
+            hasMore: explicitMore ?? (parsedCursor.map { $0 > currentOffset } ?? false),
+            nextOffset: nextOffset
+        )
+    }
+
+    private static func firstValue(in sources: [[String: Any]], keys: [String]) -> Any? {
+        for source in sources {
+            for key in keys {
+                if let value = source[key] { return value }
+            }
+        }
+        return nil
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+
+    private static func boolean(_ value: Any?) -> Bool? {
+        if let value = value as? Bool { return value }
+        if let value = value as? NSNumber { return value.boolValue }
+        if let value = value as? String {
+            switch value.lowercased() {
+            case "1", "true", "yes": return true
+            case "0", "false", "no": return false
+            default: return nil
+            }
+        }
+        return nil
+    }
+}
+
 /// 汽水音乐统一网关客户端。
 ///
 /// 汽水曲目和歌单 ID 使用字符串保存，避免把 19 位 ID 截断成 Int。客户端
@@ -81,19 +167,44 @@ final class QishuiAPI: ObservableObject {
     func searchSongs(keyword: String, limit: Int = 30) async throws -> [Song] {
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
-        let mixed = try await requestObject("/search/mixed", query: [
-            "keywords": trimmed,
-            "count": String(min(max(limit, 1), 50)),
-        ])
-        var songs = trackDictionaries(mixed["tracks"] ?? mixed["data"] ?? mixed).compactMap(makeSong)
-        if songs.isEmpty {
-            let direct = try await requestObject("/search", query: [
+        let targetCount = min(max(limit, 1), 200)
+        var songs: [Song] = []
+        var seenSongs = Set<String>()
+        var offset = 0
+        var visitedOffsets = Set<Int>()
+
+        for _ in 0..<10 where songs.count < targetCount {
+            guard visitedOffsets.insert(offset).inserted else { break }
+            let pageSize = min(50, targetCount - songs.count)
+            let query = [
                 "keywords": trimmed,
-                "count": String(min(max(limit, 1), 50)),
-            ])
-            songs = trackDictionaries(direct["tracks"] ?? direct["data"] ?? direct).compactMap(makeSong)
+                "count": String(pageSize),
+                "cursor": String(offset),
+                "offset": String(offset),
+            ]
+            let mixed = try await requestObject("/search/mixed", query: query)
+            var pageSongs = trackDictionaries(mixed["tracks"] ?? mixed["data"] ?? mixed).compactMap(makeSong)
+            var pageResponse = mixed
+            if pageSongs.isEmpty {
+                let direct = try await requestObject("/search", query: query)
+                pageSongs = trackDictionaries(direct["tracks"] ?? direct["data"] ?? direct).compactMap(makeSong)
+                pageResponse = direct
+            }
+            guard !pageSongs.isEmpty else { break }
+            let receivedCount = pageSongs.count
+            for song in pageSongs where seenSongs.insert(song.identityKey).inserted {
+                songs.append(song)
+                if songs.count >= targetCount { break }
+            }
+            let pageState = QishuiSearchPageState.resolve(
+                pageResponse,
+                currentOffset: offset,
+                receivedCount: receivedCount
+            )
+            guard pageState.hasMore, pageState.nextOffset > offset else { break }
+            offset = pageState.nextOffset
         }
-        return deduplicated(songs).prefix(limit).map { $0 }
+        return deduplicated(songs).prefix(targetCount).map { $0 }
     }
 
     func searchPlaylists(keyword: String, limit: Int = 30) async throws -> [Playlist] {
@@ -148,15 +259,40 @@ final class QishuiAPI: ObservableObject {
     }
 
     func playlistDetails(id: String, count: Int = 1000) async throws -> QishuiPlaylistDetails {
-        let data = try await requestObject("/playlist/detail", query: [
-            "playlist_id": id,
-            "count": String(min(max(count, 1), 1000)),
-        ])
-        let rawPlaylist = dictionary(data["playlist"])
-        let playlist = rawPlaylist.flatMap(makePlaylist)
-        let resources = data["media_resources"] ?? data["tracks"] ?? data["songs"] ?? []
-        let songs = trackDictionaries(resources).compactMap(makeSong)
-        return QishuiPlaylistDetails(playlist: playlist, songs: deduplicated(songs))
+        let targetCount = min(max(count, 1), 1000)
+        let pageSize = min(targetCount, 100)
+        var cursor = ""
+        var sessionID = ""
+        var visitedCursors = Set<String>()
+        var playlist: Playlist?
+        var songs: [Song] = []
+        var seenSongs = Set<String>()
+
+        for _ in 0..<20 where songs.count < targetCount {
+            var query = ["playlist_id": id, "count": String(pageSize)]
+            if !cursor.isEmpty { query["cursor"] = cursor }
+            if !sessionID.isEmpty { query["session_id"] = sessionID }
+            let data = try await requestObject("/playlist/detail", query: query)
+            if sessionID.isEmpty {
+                sessionID = firstString(data, keys: ["session_id", "sessionId"]) ?? ""
+            }
+            if playlist == nil {
+                playlist = dictionary(data["playlist"]).flatMap(makePlaylist)
+            }
+            let resources = data["media_resources"] ?? data["tracks"] ?? data["songs"] ?? []
+            let pageSongs = trackDictionaries(resources).compactMap(makeSong)
+            guard !pageSongs.isEmpty else { break }
+            for song in pageSongs where seenSongs.insert(song.identityKey).inserted {
+                songs.append(song)
+                if songs.count >= targetCount { break }
+            }
+            let nextCursor = firstString(data, keys: ["next_cursor", "nextCursor", "cursor"]) ?? ""
+            guard !nextCursor.isEmpty,
+                  nextCursor != cursor,
+                  visitedCursors.insert(nextCursor).inserted else { break }
+            cursor = nextCursor
+        }
+        return QishuiPlaylistDetails(playlist: playlist, songs: Array(songs.prefix(targetCount)))
     }
 
     func playlistSongs(id: String, count: Int = 1000) async throws -> [Song] {
@@ -358,8 +494,13 @@ final class QishuiAPI: ObservableObject {
         let artistValues = dictionaryArray(track["artists"])
         let artistText = artistValues.compactMap { firstString($0, keys: ["name", "simple_display_name"]) }.joined(separator: " / ")
         let albumName = firstString(album, keys: ["name"]) ?? firstString(track, keys: ["album_name", "albumName"]) ?? ""
-        let cover = firstString(album, keys: ["cover_url", "coverURL", "url_cover"])
-            ?? firstString(track, keys: ["cover_url", "coverURL", "url_cover"])
+        let cover = QishuiResourceURL.first(in: album?["cover_url"])
+            ?? QishuiResourceURL.first(in: album?["coverURL"])
+            ?? QishuiResourceURL.first(in: album?["url_cover"])
+            ?? QishuiResourceURL.first(in: track["cover_url"])
+            ?? QishuiResourceURL.first(in: track["coverURL"])
+            ?? QishuiResourceURL.first(in: track["url_cover"])
+            ?? QishuiResourceURL.first(in: track["cover_uri"])
         let rawDuration = number(track["duration"] ?? track["duration_ms"] ?? track["interval"])
         let duration = rawDuration > 1000 ? rawDuration / 1000 : rawDuration
         let stats = dictionary(track["stats"]) ?? [:]
@@ -371,7 +512,7 @@ final class QishuiAPI: ObservableObject {
             name: firstString(track, keys: ["name", "trackName", "title"]) ?? "",
             artists: artistText.isEmpty ? (firstString(track, keys: ["artists_text", "artist", "singer"]) ?? "") : artistText,
             album: albumName,
-            coverURL: cover.flatMap(URL.init(string:)),
+            coverURL: cover,
             duration: duration,
             source: .qishui,
             qishuiID: identifier,
@@ -382,11 +523,14 @@ final class QishuiAPI: ObservableObject {
     private func makePlaylist(_ raw: [String: Any]) -> Playlist? {
         let playlist = dictionary(raw["playlist"]) ?? raw
         guard let identifier = firstString(playlist, keys: ["id", "playlist_id"]), !identifier.isEmpty else { return nil }
-        let cover = firstString(playlist, keys: ["cover_url", "coverURL", "url_cover", "cover"])
+        let cover = QishuiResourceURL.first(in: playlist["cover_url"])
+            ?? QishuiResourceURL.first(in: playlist["coverURL"])
+            ?? QishuiResourceURL.first(in: playlist["url_cover"])
+            ?? QishuiResourceURL.first(in: playlist["cover"])
         return Playlist(
             id: Self.stableID(identifier),
             name: firstString(playlist, keys: ["title", "name"]) ?? "未命名歌单",
-            coverURL: cover.flatMap(URL.init(string:)),
+            coverURL: cover,
             trackCount: Int(number(playlist["count_tracks"] ?? playlist["track_count"] ?? playlist["song_count"])),
             creatorName: firstString(playlist, keys: ["creator_name", "creatorName", "nickname"]) ?? "",
             playlistDescription: firstString(playlist, keys: ["description", "intro"]) ?? "",

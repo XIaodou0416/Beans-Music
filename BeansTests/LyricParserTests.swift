@@ -30,6 +30,15 @@ final class LyricParserTests: XCTestCase {
         XCTAssertEqual(line?.words?.dropFirst().first?.start ?? -1, 3.4, accuracy: 0.001)
     }
 
+    func testQishuiKRCUsesTheKugouWordTimelineFormat() {
+        let krc = "[290,1530]<0,330,0>我<330,420,0>听"
+        let line = LyricParser.parse(krc, wordRaw: krc, wordFormat: .kugouKRC).first
+
+        XCTAssertEqual(line?.text, "我听")
+        XCTAssertEqual(line?.time ?? -1, 0.29, accuracy: 0.001)
+        XCTAssertEqual(line?.words?.first?.start ?? -1, 0.29, accuracy: 0.001)
+    }
+
     func testPlainLRCKeepsLineFallback() {
         let lines = LyricParser.parse("[00:01.00]plain line\n[00:03.00]next")
 
