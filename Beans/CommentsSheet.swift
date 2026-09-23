@@ -48,7 +48,10 @@ struct CommentsSheet: View {
     @State private var offset = 0
     @State private var selectedSection: CommentSection
 
-    private let limit = 30
+    private var limit: Int { song.source == .bilibili ? 20 : 30 }
+    @State private var lastBilibiliPageCount = 0
+    @State private var loadingNextPage = false
+    @State private var officialComments: BilibiliOfficialPage?
     /// QQ 音乐每页条数（接口单页上限 25）
     private let qqPageSize = 25
 
@@ -80,6 +83,7 @@ struct CommentsSheet: View {
             }
         }
         .task { await load(reset: true) }
+        .sheet(item: $officialComments) { page in BilibiliOfficialBrowser(page: page) }
     }
 
     private var standardCommentsView: some View {
@@ -90,6 +94,13 @@ struct CommentsSheet: View {
                 commentsContent
                     .navigationTitle("评论")
                     .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        if song.source == .bilibili {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button("官方评论") { officialComments = BilibiliOfficialPage.video(song) }
+                            }
+                        }
+                    }
             }
         }
     }
@@ -142,6 +153,11 @@ struct CommentsSheet: View {
             .navigationTitle("评论")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if song.source == .bilibili {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("官方评论") { officialComments = BilibiliOfficialPage.video(song) }
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
                 }
@@ -199,8 +215,10 @@ struct CommentsSheet: View {
             return kugouTotal <= 0 || kugouLatestComments.count < kugouTotal
         case .kuwo, .migu:
             return false
-        case .qishui, .bilibili:
+        case .qishui:
             return (page?.comments.count ?? 0) >= limit
+        case .bilibili:
+            return lastBilibiliPageCount >= limit && (page?.total ?? 0) > (page?.comments.count ?? 0)
         }
     }
 
@@ -286,7 +304,7 @@ struct CommentsSheet: View {
                     }
                 }
             }
-            if selectedSection == .latest && page.comments.count >= limit {
+            if selectedSection == .latest && canLoadMore {
                 Section {
                     Button {
                         Task { await loadMore() }
@@ -305,6 +323,7 @@ struct CommentsSheet: View {
 
     private func load(reset: Bool) async {
         if reset {
+            lastBilibiliPageCount = 0
             offset = 0
             page = nil
             qqHotComments = []
@@ -359,10 +378,12 @@ struct CommentsSheet: View {
                 }
             } else if song.source == .bilibili {
                 let result = try await BilibiliAPI.shared.comments(for: song, limit: limit, offset: offset)
+                lastBilibiliPageCount = result.comments.count
                 if reset {
                     page = result
                 } else if var current = page {
-                    current.comments.append(contentsOf: result.comments)
+                    let existing = Set(current.comments.map(\.id))
+                    current.comments.append(contentsOf: result.comments.filter { !existing.contains($0.id) })
                     page = current
                 }
             } else {
@@ -492,8 +513,13 @@ struct CommentsSheet: View {
     }
 
     private func loadMore() async {
+        guard !loadingNextPage else { return }
+        loadingNextPage = true
+        defer { loadingNextPage = false }
+        let previousOffset = offset
         offset += limit
         await load(reset: false)
+        if errorMessage != nil { offset = previousOffset }
     }
 
     private var emptyCommentSection: some View {

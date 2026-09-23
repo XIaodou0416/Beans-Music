@@ -53,6 +53,7 @@ struct ReferencePlaybackView: View {
     @State private var selectedLyricID: UUID?
     @State private var lyricsViewportHeight: CGFloat = 0
     @State private var isDraggingLyrics = false
+    @GestureState private var lyricDragActive = false
     @State private var resumeTask: Task<Void, Never>?
     @State private var lyricTapTask: Task<Void, Never>?
     @State private var showCustomCoverPicker = false
@@ -139,6 +140,9 @@ struct ReferencePlaybackView: View {
         .onDisappear {
             resumeTask?.cancel()
             lyricTapTask?.cancel()
+            isDraggingLyrics = false
+            selectedLyricID = nil
+            focusedLyricID = nil
         }
         .sheet(isPresented: $showCustomCoverPicker) {
             CustomSongCoverPicker(
@@ -353,8 +357,27 @@ struct ReferencePlaybackView: View {
                     .onPreferenceChange(ReferenceLyricCenterKey.self) { centers in
                         lyricCenters = centers
                         updateFocusedLyric(from: centers)
+                        if isDraggingLyrics, !lyricDragActive { scheduleLyricResume(proxy: proxy) }
                     }
                     .simultaneousGesture(lyricsDragGesture(proxy: proxy))
+                    .onChange(of: lyricDragActive) { active in
+                        if !active, isDraggingLyrics { scheduleLyricResume(proxy: proxy) }
+                    }
+                    .onChange(of: lyrics.first?.id) { _ in
+                        resumeTask?.cancel()
+                        lyricTapTask?.cancel()
+                        isDraggingLyrics = false
+                        selectedLyricID = nil
+                        focusedLyricID = nil
+                        scrollToPlaybackLyric(proxy: proxy, animated: false)
+                    }
+                    .onDisappear {
+                        resumeTask?.cancel()
+                        lyricTapTask?.cancel()
+                        isDraggingLyrics = false
+                        selectedLyricID = nil
+                        focusedLyricID = nil
+                    }
                     .onAppear {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
                             scrollToPlaybackLyric(proxy: proxy, animated: false)
@@ -683,7 +706,7 @@ struct ReferencePlaybackView: View {
         .scaleEffect(visualFocus ? 1.06 : 0.84, anchor: .leading)
         .blur(radius: visualFocus ? 0 : 0.7)
         .onTapGesture {
-            scheduleLyricSelection(line.id)
+            scheduleLyricSelection(line.id, proxy: proxy)
         }
         .simultaneousGesture(
             TapGesture(count: 2)
@@ -695,20 +718,22 @@ struct ReferencePlaybackView: View {
         .animation(.spring(response: 0.28, dampingFraction: 0.88), value: visualFocus)
     }
 
-    private func scheduleLyricSelection(_ id: UUID) {
+    private func scheduleLyricSelection(_ id: UUID, proxy: ScrollViewProxy) {
         lyricTapTask?.cancel()
         lyricTapTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 220_000_000)
             guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 selectedLyricID = id
+                isDraggingLyrics = true
             }
+            scheduleLyricResume(proxy: proxy)
             BeansHaptics.tap()
         }
     }
 
     private func playLyric(_ line: LyricLine, proxy: ScrollViewProxy) {
-        selectedLyricID = line.id
+        selectedLyricID = nil
         resumeTask?.cancel()
         isDraggingLyrics = false
         focusedLyricID = nil
@@ -739,9 +764,25 @@ struct ReferencePlaybackView: View {
         }
     }
 
+    private func scheduleLyricResume(proxy: ScrollViewProxy) {
+        resumeTask?.cancel()
+        resumeTask = Task { @MainActor in
+            do { try await Task.sleep(nanoseconds: 2_500_000_000) }
+            catch { return }
+            guard !Task.isCancelled, !lyricDragActive else { return }
+            lyricTapTask?.cancel()
+            isDraggingLyrics = false
+            selectedLyricID = nil
+            focusedLyricID = nil
+            scrollToPlaybackLyric(proxy: proxy, animated: true)
+        }
+    }
+
     private func lyricsDragGesture(proxy: ScrollViewProxy) -> some Gesture {
         DragGesture(minimumDistance: 4)
+            .updating($lyricDragActive) { _, active, _ in active = true }
             .onChanged { _ in
+                lyricTapTask?.cancel()
                 isDraggingLyrics = true
                 resumeTask?.cancel()
                 updateFocusedLyric(from: lyricCenters)
@@ -753,11 +794,7 @@ struct ReferencePlaybackView: View {
                         proxy.scrollTo(id, anchor: .center)
                     }
                 }
-                resumeTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 2_500_000_000)
-                    guard !Task.isCancelled else { return }
-                    isDraggingLyrics = false
-                }
+                scheduleLyricResume(proxy: proxy)
             }
     }
 
@@ -1188,6 +1225,7 @@ struct AppleMusicLyricsSection: View {
     @State private var selectedLyricID: UUID?
     @State private var viewportHeight: CGFloat = 0
     @State private var isDraggingLyrics = false
+    @GestureState private var lyricDragActive = false
     @State private var resumeTask: Task<Void, Never>?
     @State private var lyricTapTask: Task<Void, Never>?
 
@@ -1274,8 +1312,27 @@ struct AppleMusicLyricsSection: View {
                     .onPreferenceChange(ReferenceLyricCenterKey.self) { centers in
                         lyricCenters = centers
                         updateFocusedLyric(from: centers)
+                        if isDraggingLyrics, !lyricDragActive { scheduleLyricResume(proxy: proxy) }
                     }
                     .simultaneousGesture(lyricsDragGesture(proxy: proxy))
+                    .onChange(of: lyricDragActive) { active in
+                        if !active, isDraggingLyrics { scheduleLyricResume(proxy: proxy) }
+                    }
+                    .onChange(of: lyrics.first?.id) { _ in
+                        resumeTask?.cancel()
+                        lyricTapTask?.cancel()
+                        isDraggingLyrics = false
+                        selectedLyricID = nil
+                        focusedLyricID = nil
+                        scrollToPlaybackLyric(proxy: proxy, animated: false)
+                    }
+                    .onDisappear {
+                        resumeTask?.cancel()
+                        lyricTapTask?.cancel()
+                        isDraggingLyrics = false
+                        selectedLyricID = nil
+                        focusedLyricID = nil
+                    }
                     .onAppear {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
                             scrollToPlaybackLyric(proxy: proxy, animated: false)
@@ -1292,6 +1349,9 @@ struct AppleMusicLyricsSection: View {
         .onDisappear {
             resumeTask?.cancel()
             lyricTapTask?.cancel()
+            isDraggingLyrics = false
+            selectedLyricID = nil
+            focusedLyricID = nil
         }
     }
 
@@ -1342,7 +1402,7 @@ struct AppleMusicLyricsSection: View {
         .scaleEffect(visualFocus ? 1.06 : 0.84, anchor: .leading)
         .blur(radius: visualFocus ? 0 : 0.7)
         .onTapGesture {
-            scheduleLyricSelection(line.id)
+            scheduleLyricSelection(line.id, proxy: proxy)
         }
         .simultaneousGesture(
             TapGesture(count: 2)
@@ -1354,20 +1414,22 @@ struct AppleMusicLyricsSection: View {
         .animation(.spring(response: 0.28, dampingFraction: 0.88), value: visualFocus)
     }
 
-    private func scheduleLyricSelection(_ id: UUID) {
+    private func scheduleLyricSelection(_ id: UUID, proxy: ScrollViewProxy) {
         lyricTapTask?.cancel()
         lyricTapTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 220_000_000)
             guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 selectedLyricID = id
+                isDraggingLyrics = true
             }
+            scheduleLyricResume(proxy: proxy)
             BeansHaptics.tap()
         }
     }
 
     private func playLyric(_ line: LyricLine, proxy: ScrollViewProxy) {
-        selectedLyricID = line.id
+        selectedLyricID = nil
         resumeTask?.cancel()
         isDraggingLyrics = false
         focusedLyricID = nil
@@ -1398,9 +1460,25 @@ struct AppleMusicLyricsSection: View {
         }
     }
 
+    private func scheduleLyricResume(proxy: ScrollViewProxy) {
+        resumeTask?.cancel()
+        resumeTask = Task { @MainActor in
+            do { try await Task.sleep(nanoseconds: 2_500_000_000) }
+            catch { return }
+            guard !Task.isCancelled, !lyricDragActive else { return }
+            lyricTapTask?.cancel()
+            isDraggingLyrics = false
+            selectedLyricID = nil
+            focusedLyricID = nil
+            scrollToPlaybackLyric(proxy: proxy, animated: true)
+        }
+    }
+
     private func lyricsDragGesture(proxy: ScrollViewProxy) -> some Gesture {
         DragGesture(minimumDistance: 4)
+            .updating($lyricDragActive) { _, active, _ in active = true }
             .onChanged { _ in
+                lyricTapTask?.cancel()
                 isDraggingLyrics = true
                 resumeTask?.cancel()
                 updateFocusedLyric(from: lyricCenters)
@@ -1413,11 +1491,7 @@ struct AppleMusicLyricsSection: View {
                         proxy.scrollTo(id, anchor: .center)
                     }
                 }
-                resumeTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 2_500_000_000)
-                    guard !Task.isCancelled else { return }
-                    isDraggingLyrics = false
-                }
+                scheduleLyricResume(proxy: proxy)
             }
     }
 }

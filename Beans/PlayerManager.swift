@@ -724,6 +724,15 @@ final class PlayerManager: NSObject, ObservableObject {
         return String(format: "%d:%02d", sleepTimerRemaining / 60, sleepTimerRemaining % 60)
     }
 
+    func pauseForBilibiliWeb() {
+        guard isPlaying || isBuffering else { return }
+        loadGeneration += 1
+        isBuffering = false
+        bilibiliPlaybackAlternatives = []
+        bilibiliRetryScheduled = false
+        pausePlayback()
+    }
+
     private func pausePlayback() {
         clearAudioRecoveryIntent()
         isPlaying = false

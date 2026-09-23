@@ -22,6 +22,8 @@ final class BilibiliHomeFeedStore: ObservableObject {
     @Published private(set) var isLoadingMore = false
     @Published private(set) var error: String?
     @Published private(set) var hasMore = true
+    @Published private(set) var query = ""
+    private var searchLimit = 30
     private var page = 0
     private var failedPage = 1
     private var generation = UUID()
@@ -55,10 +57,16 @@ final class BilibiliHomeFeedStore: ObservableObject {
         error = nil
         defer { if generation == token { isLoading = false } }
         do {
-            let result = try await BilibiliAPI.shared.popularVideos(page: 1, force: force)
+            let result: (videos: [BilibiliFeedVideo], hasMore: Bool)
+            if query.isEmpty {
+                result = try await BilibiliAPI.shared.popularVideos(page: 1, force: force)
+            } else {
+                let songs = try await BilibiliAPI.shared.searchSongs(keyword: query, limit: searchLimit)
+                result = (songs.map { BilibiliFeedVideo(song: $0, ownerAvatarURL: nil, playCount: 0, danmakuCount: 0) }, songs.count >= searchLimit && searchLimit < 200)
+            }
             try Task.checkCancellation()
             guard generation == token else { return }
-            guard !result.videos.isEmpty else { throw BilibiliError(message: "暂时没有推荐视频，请稍后刷新") }
+            if result.videos.isEmpty, query.isEmpty { throw BilibiliError(message: "暂时没有推荐视频，请稍后刷新") }
             var seen = Set<String>()
             videos = result.videos.filter { seen.insert($0.id).inserted }
             page = 1
@@ -76,7 +84,17 @@ final class BilibiliHomeFeedStore: ObservableObject {
         error = nil
         defer { if generation == token { isLoadingMore = false } }
         do {
-            let result = try await BilibiliAPI.shared.popularVideos(page: page + 1)
+            let result: (videos: [BilibiliFeedVideo], hasMore: Bool)
+            if query.isEmpty {
+                result = try await BilibiliAPI.shared.popularVideos(page: page + 1)
+            } else {
+                let limit = min(searchLimit + 30, 200)
+                let songs = try await BilibiliAPI.shared.searchSongs(keyword: query, limit: limit)
+                try Task.checkCancellation()
+                guard generation == token else { return }
+                searchLimit = limit
+                result = (songs.map { BilibiliFeedVideo(song: $0, ownerAvatarURL: nil, playCount: 0, danmakuCount: 0) }, songs.count >= limit && limit < 200)
+            }
             try Task.checkCancellation()
             guard generation == token else { return }
             var seen = Set(videos.map(\.id))
@@ -89,12 +107,34 @@ final class BilibiliHomeFeedStore: ObservableObject {
         catch { if generation == token { failedPage = page + 1; self.error = error.localizedDescription } }
     }
 
+    func search(_ text: String) async {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text != query {
+            generation = UUID()
+            isLoading = false
+            isLoadingMore = false
+            query = text
+            searchLimit = 30
+            videos = []
+            page = 0
+            hasMore = true
+            error = nil
+        }
+        await loadFirst(force: true)
+    }
+
+    func loadMoreIfNeeded(id: String) async {
+        guard error == nil, videos.suffix(6).contains(where: { $0.id == id }) else { return }
+        await loadMore()
+    }
+
     func retry() async {
         if failedPage == 1 { await loadFirst(force: true) }
         else { await loadMore() }
     }
 
     private func persist() {
+        guard query.isEmpty else { return }
         // Keep a small first-page snapshot; pagination always resumes from page 2
         // after restarting, without skipping pages removed by the cache cap.
         let snapshot = Snapshot(videos: Array(videos.prefix(20)), page: 1,
@@ -116,24 +156,14 @@ struct BilibiliHomeFeed: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("热门推荐")
-                    .font(BeansFont.appFont(20, .bold))
-                    .foregroundStyle(Color.beansLabel)
-                Spacer()
-                Button {
-                    Task { await store.loadFirst(force: true) }
-                } label: {
-                    Label("刷新", systemImage: "arrow.clockwise")
-                        .font(BeansFont.appFont(13, .medium))
-                        .frame(minHeight: 44)
-                }
-                .disabled(store.isLoading)
-            }
+        LazyVStack(alignment: .leading, spacing: 16) {
+            Text(store.query.isEmpty ? "热门推荐" : "搜索结果")
+                .font(BeansFont.appFont(20, .bold)).foregroundStyle(Color.beansLabel)
             if store.videos.isEmpty {
                 if let error = store.error {
                     ErrorStateView(message: error) { Task { await store.loadFirst(force: true) } }
+                } else if !store.isLoading && !store.query.isEmpty {
+                    EmptyStateView(icon: "magnifyingglass", text: "没有找到相关视频")
                 } else {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 22) {
                         ForEach(0..<6, id: \.self) { _ in
@@ -155,6 +185,7 @@ struct BilibiliHomeFeed: View {
                             let tracks = store.videos.map(\.song)
                             player.play(songs: tracks, startAt: tracks.firstIndex(where: { $0.identityKey == video.id }) ?? 0)
                         }
+                        .onAppear { Task { await store.loadMoreIfNeeded(id: video.id) } }
                         .contextMenu {
                             Button { player.playNext(video.song) } label: { Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward") }
                             if let url = video.song.officialURL { Link(destination: url) { Label("在哔哩哔哩打开", systemImage: "arrow.up.right.square") } }
@@ -169,22 +200,16 @@ struct BilibiliHomeFeed: View {
                         }.frame(minHeight: 44)
                     }.frame(maxWidth: .infinity)
                 } else if store.hasMore {
-                    Button { Task { await store.loadMore() } } label: {
-                        Group {
-                            if store.isLoadingMore { ProgressView() }
-                            else { Text("加载更多").font(BeansFont.appFont(13)) }
-                        }.frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .disabled(store.isLoadingMore)
-                    .id(store.videos.last?.id)
-                    .onAppear { Task { await store.loadMore() } }
+                    ProgressView().frame(maxWidth: .infinity, minHeight: 44)
+                        .id(store.videos.last?.id)
+                        .onAppear { Task { await store.loadMore() } }
                 } else {
                     Text("暂时没有更多视频").font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment).frame(maxWidth: .infinity, minHeight: 44)
                 }
             }
         }
-        .task { await store.loadFirst() }
+        .task { if store.videos.isEmpty && store.error == nil { await store.loadFirst() } }
     }
 }
 
@@ -207,8 +232,10 @@ private struct BilibiliFeedCard: View {
                             .frame(height: 42)
                             .overlay(alignment: .bottom) {
                                 HStack(spacing: 4) {
-                                    Image(systemName: "play.rectangle").font(.system(size: 10))
-                                    Text(BilibiliFeedVideo.countLabel(video.playCount))
+                                    if video.playCount > 0 {
+                                        Image(systemName: "play.rectangle").font(.system(size: 10))
+                                        Text(BilibiliFeedVideo.countLabel(video.playCount))
+                                    }
                                     Spacer(minLength: 2)
                                     Text(video.song.formattedDuration).monospacedDigit()
                                 }

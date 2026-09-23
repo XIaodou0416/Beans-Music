@@ -326,6 +326,7 @@ struct SearchView: View {
             }
         }
         .task(id: provider) {
+            if provider == .bilibili { return }
             if let cached = hotWordsCache[provider] {
                 hotLoadedProvider = provider
                 hotWords = cached
@@ -358,6 +359,11 @@ struct SearchView: View {
             }
         }
         .onChange(of: provider) { _ in
+            searchTask?.cancel()
+            playlistSearchTask?.cancel()
+            searchRequestID = UUID()
+            playlistSearchRequestID = UUID()
+            if provider == .bilibili, resultType == .album { resultType = .playlist }
             restoreHomeSourceSnapshot()
             let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
@@ -392,8 +398,11 @@ struct SearchView: View {
                 .environmentObject(theme)
         }
         .sheet(item: $selectedArtist) { artist in
-            ArtistHomeSheet(artist: artist)
-                .environmentObject(player)
+            if artist.source == .bilibili, let page = BilibiliOfficialPage.up(artist.id) {
+                BilibiliOfficialBrowser(page: page).onAppear { player.pauseForBilibiliWeb() }
+            } else {
+                ArtistHomeSheet(artist: artist).environmentObject(player)
+            }
         }
         .sheet(item: $selectedAlbum) { album in
             AlbumDetailView(album: album)
@@ -536,7 +545,7 @@ struct SearchView: View {
         BeansUnifiedSearchField(
             text: $keyword,
             controller: searchController,
-            placeholder: beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
+            placeholder: provider == .bilibili ? "搜索视频、UP主或合集" : beansLocalized("搜索歌曲、歌手、专辑", "Search songs, artists, or albums"),
             isSearching: searching,
             onClear: {
                 songResults = []
@@ -635,13 +644,13 @@ struct SearchView: View {
     private var typeTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(SearchResultType.allCases) { type in
+                ForEach(provider == .bilibili ? SearchResultType.bilibiliCases : SearchResultType.allCases) { type in
                     Button {
                         guard resultType != type else { return }
                         BeansHaptics.tap()
                         resultType = type
                     } label: {
-                        Text(LocalizedStringKey(type.rawValue))
+                        Text(LocalizedStringKey(provider == .bilibili ? type.bilibiliTitle : type.rawValue))
                             .font(BeansFont.appFont(13, .semibold))
                             .foregroundStyle(resultType == type ? Color.beansAmber : Color.beansLabel)
                             .frame(minWidth: 58, minHeight: 40)
@@ -803,12 +812,16 @@ struct SearchView: View {
 
     @ViewBuilder
     private var resultsArea: some View {
-        switch resultType {
-        case .all: allResultsArea
-        case .song: songResultsArea
-        case .artist: artistResultsArea
-        case .album: albumResultsArea
-        case .playlist: playlistResultsArea
+        if provider == .bilibili {
+            BilibiliSearchResults(keyword: keyword, type: resultType)
+        } else {
+            switch resultType {
+            case .all: allResultsArea
+            case .song: songResultsArea
+            case .artist: artistResultsArea
+            case .album: albumResultsArea
+            case .playlist: playlistResultsArea
+            }
         }
     }
 
@@ -1304,6 +1317,15 @@ struct SearchView: View {
     }
 
     private func startSearch(_ text: String) async {
+        if provider == .bilibili {
+            searchTask?.cancel()
+            playlistSearchTask?.cancel()
+            searchRequestID = UUID()
+            playlistSearchRequestID = UUID()
+            searching = false
+            errorMessage = nil
+            return
+        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         searchTask?.cancel()
@@ -1504,6 +1526,15 @@ struct SearchView: View {
     /// 歌单 tab 使用独立任务，不与“综合/单曲”等并发请求共享状态。
     /// 这条路径和精选页一样在用户切换到歌单后立即发起 QQ 歌单请求。
     private func searchPlaylistTab(_ text: String) async {
+        if provider == .bilibili {
+            searchTask?.cancel()
+            playlistSearchTask?.cancel()
+            searchRequestID = UUID()
+            playlistSearchRequestID = UUID()
+            searching = false
+            errorMessage = nil
+            return
+        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         searchTask?.cancel()

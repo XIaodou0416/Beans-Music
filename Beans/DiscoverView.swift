@@ -138,6 +138,13 @@ struct DiscoverView: View {
     }
 
     var body: some View {
+        Group {
+            if source == .bilibili { BilibiliHomePage() }
+            else { musicHomeContent }
+        }
+    }
+
+    private var musicHomeContent: some View {
         let _ = theme.accent
         BeansNavigationStackWithPath(path: $navigationPath) {
         ZStack {

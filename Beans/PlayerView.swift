@@ -5761,6 +5761,7 @@ struct LyricsSection: View {
     @State private var selected: Set<Int> = []
     /// 用户手动滚动时暂停自动跟随，停手后延迟恢复。
     @State private var isUserScrolling = false
+    @GestureState private var lyricDragActive = false
     @State private var resumeScrollTask: Task<Void, Never>?
     /// 歌词手动滚动时，以视口中心最近的一行作为视觉焦点。
     @State private var focusedIndex: Int?
@@ -5816,7 +5817,7 @@ struct LyricsSection: View {
                                 if selectionMode {
                                     withAnimation(.easeInOut(duration: 0.2)) { toggleSelect(index) }
                                 } else {
-                                    scheduleLyricSelection(index)
+                                    scheduleLyricSelection(index, proxy: proxy)
                                 }
                             }
                             .simultaneousGesture(
@@ -5828,6 +5829,10 @@ struct LyricsSection: View {
                                     }
                             )
                             .onLongPressGesture(minimumDuration: 0.35) {
+                                lyricTapTask?.cancel()
+                                resumeScrollTask?.cancel()
+                                isUserScrolling = false
+                                selectedLyricIndex = nil
                                 BeansHaptics.medium()
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     if !selectionMode {
@@ -5890,11 +5895,15 @@ struct LyricsSection: View {
                 focusedIndex = nextFocusedIndex
                 if isUserScrolling {
                     selectedLyricIndex = nextFocusedIndex
+                    if !lyricDragActive { scheduleLyricResume(proxy) }
                 }
             }
             .simultaneousGesture(
                 DragGesture(minimumDistance: 4)
+                    .updating($lyricDragActive) { _, active, _ in active = true }
                     .onChanged { _ in
+                        guard !selectionMode else { return }
+                        lyricTapTask?.cancel()
                         isUserScrolling = true
                         resumeScrollTask?.cancel()
                     }
@@ -5907,11 +5916,7 @@ struct LyricsSection: View {
                                 proxy.scrollTo(selectedIndex, anchor: .center)
                             }
                         }
-                        resumeScrollTask = Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 3_000_000_000)
-                            guard !Task.isCancelled else { return }
-                            isUserScrolling = false
-                        }
+                        if !selectionMode { scheduleLyricResume(proxy) }
                     }
             )
             .onAppear {
@@ -5919,6 +5924,17 @@ struct LyricsSection: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
                     scrollToCurrent(proxy)
                 }
+            }
+            .onChange(of: lyricDragActive) { active in
+                if !active, isUserScrolling, !selectionMode { scheduleLyricResume(proxy) }
+            }
+            .onChange(of: lyrics.first?.id) { _ in
+                lyricTapTask?.cancel()
+                resumeScrollTask?.cancel()
+                isUserScrolling = false
+                selectedLyricIndex = nil
+                focusedIndex = nil
+                scrollToCurrent(proxy)
             }
             .onChange(of: currentIndex) { newIndex in
                 guard let newIndex, !isUserScrolling else { return }
@@ -5938,6 +5954,9 @@ struct LyricsSection: View {
             .onDisappear {
                 lyricTapTask?.cancel()
                 resumeScrollTask?.cancel()
+                isUserScrolling = false
+                selectedLyricIndex = nil
+                focusedIndex = nil
             }
         }
     }
@@ -6030,20 +6049,36 @@ struct LyricsSection: View {
         .animation(.easeInOut(duration: 0.25), value: visualIndex)
     }
 
-    private func scheduleLyricSelection(_ index: Int) {
+    private func scheduleLyricResume(_ proxy: ScrollViewProxy) {
+        resumeScrollTask?.cancel()
+        resumeScrollTask = Task { @MainActor in
+            do { try await Task.sleep(nanoseconds: 3_000_000_000) }
+            catch { return }
+            guard !Task.isCancelled, !lyricDragActive, !selectionMode else { return }
+            lyricTapTask?.cancel()
+            isUserScrolling = false
+            selectedLyricIndex = nil
+            focusedIndex = nil
+            withAnimation(.easeInOut(duration: 0.3)) { scrollToCurrent(proxy) }
+        }
+    }
+
+    private func scheduleLyricSelection(_ index: Int, proxy: ScrollViewProxy) {
         lyricTapTask?.cancel()
         lyricTapTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 220_000_000)
             guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 selectedLyricIndex = index
+                isUserScrolling = true
             }
+            scheduleLyricResume(proxy)
             BeansHaptics.tap()
         }
     }
 
     private func playLyric(index: Int, line: LyricLine, proxy: ScrollViewProxy) {
-        selectedLyricIndex = index
+        selectedLyricIndex = nil
         resumeScrollTask?.cancel()
         isUserScrolling = false
         focusedIndex = nil

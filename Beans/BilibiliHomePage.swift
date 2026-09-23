@@ -1,0 +1,201 @@
+import SwiftUI
+import UIKit
+
+struct BilibiliHomePage: View {
+    @EnvironmentObject private var theme: ThemeStore
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var player: PlayerManager
+    @ObservedObject private var platforms = PlatformPreferenceStore.shared
+    @AppStorage("beans.homeSource") private var source = SearchProvider.bilibili.rawValue
+    @AppStorage(BilibiliExperience.key) private var mode = BilibiliExperience.listen.rawValue
+    @AppStorage("beans.homeWallpaperBlur") private var wallpaperBlur = 0.0
+    @State private var searchText = ""
+    @State private var submittedQuery = ""
+    @State private var resultType: SearchResultType = .song
+    @State private var channel = BilibiliChannel.recommended
+    @State private var showProfile = false
+    @State private var searchRefresh = UUID()
+    @ObservedObject private var feed = BilibiliHomeFeedStore.shared
+
+    private var usesAudioFeed: Bool {
+        mode == BilibiliExperience.listen.rawValue && (channel == .recommended || !submittedQuery.isEmpty)
+    }
+    private var officialURL: URL {
+        submittedQuery.isEmpty ? channel.officialURL : BilibiliOfficialPage.search(submittedQuery).url
+    }
+
+    var body: some View {
+        BeansNavigationStack {
+            ZStack {
+                GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(wallpaperBlur))
+                VStack(spacing: 0) {
+                    channels
+                    if usesAudioFeed {
+                        if !submittedQuery.isEmpty {
+                            Picker("搜索类型", selection: $resultType) {
+                                ForEach([SearchResultType.song, .artist, .playlist]) { item in
+                                    Text(item.bilibiliTitle).tag(item)
+                                }
+                            }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.bottom, 8)
+                        }
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 16) {
+                                if !submittedQuery.isEmpty && resultType != .song {
+                                    BilibiliSearchResults(keyword: submittedQuery, type: resultType)
+                                        .id(searchRefresh)
+                                } else {
+                                    BilibiliHomeFeed()
+                                }
+                            }
+                            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 190)
+                            .beansAdaptiveContentWidth()
+                            .background {
+                                BilibiliPullRefresh {
+                                    if !submittedQuery.isEmpty && resultType != .song { searchRefresh = UUID() }
+                                    else { await feed.search(submittedQuery) }
+                                }
+                                    .frame(width: 0, height: 0)
+                            }
+                        }
+                        .beansScrollIndicatorsHidden()
+                        .beansScrollDismissesKeyboard()
+                    } else {
+                        BilibiliOfficialContent(url: officialURL)
+                            .padding(.bottom, 92)
+                    }
+                }
+            }
+            .navigationTitle("哔哩哔哩")
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索视频、UP主或合集")
+            .onSubmit(of: .search) { submit() }
+            .onChange(of: searchText) { value in
+                if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !submittedQuery.isEmpty {
+                    submittedQuery = ""
+                    if mode == BilibiliExperience.listen.rawValue { Task { await feed.search("") } }
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Menu {
+                        ForEach(platforms.enabledSearchProviders.filter { $0 != .qishui }) { provider in
+                            Button(provider.rawValue) { source = provider.rawValue }
+                        }
+                    } label: { Image("BrandBilibili").resizable().scaledToFit().frame(width: 28, height: 28) }
+                    .accessibilityLabel("切换主页平台")
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    BeansProfileShortcutButton { showProfile = true }
+                }
+            }
+            .beansHomeNavigationBarTransparent()
+        }
+        .task {
+            searchText = feed.query
+            submittedQuery = feed.query
+            if mode == BilibiliExperience.listen.rawValue { await feed.loadFirst() }
+            else { player.pauseForBilibiliWeb() }
+        }
+        .onChange(of: mode) { value in
+            if value == BilibiliExperience.video.rawValue { player.pauseForBilibiliWeb() }
+            else if channel == .recommended { Task { await feed.search(submittedQuery) } }
+        }
+        .sheet(isPresented: $showProfile) {
+            ProfileView(forceHomeBackdrop: true)
+                .environmentObject(theme).environmentObject(auth).environmentObject(player)
+                .modifier(BeansProfileSheetBackground())
+        }
+    }
+
+    private var channels: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 20) {
+                ForEach(BilibiliChannel.allCases) { item in
+                    Button {
+                        BeansHaptics.select()
+                        channel = item
+                        searchText = ""
+                        submittedQuery = ""
+                        if item == .recommended, mode == BilibiliExperience.listen.rawValue {
+                            Task { await feed.search("") }
+                        } else {
+                            player.pauseForBilibiliWeb()
+                        }
+                    } label: {
+                        VStack(spacing: 7) {
+                            Text(item.title).font(BeansFont.appFont(15, channel == item ? .bold : .regular))
+                            Capsule().fill(channel == item ? Color.beansAmber : .clear).frame(height: 3)
+                        }
+                        .foregroundStyle(channel == item ? Color.beansAmber : Color.beansComment)
+                        .frame(minHeight: 44)
+                    }.buttonStyle(.plain)
+                }
+            }.padding(.horizontal, 16)
+        }
+    }
+
+    private func submit() {
+        submittedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if mode == BilibiliExperience.listen.rawValue {
+            searchRefresh = UUID()
+            Task { await feed.search(submittedQuery) }
+        }
+    }
+}
+
+/// UIRefreshControl works for UIScrollView on iOS 15 as well as newer systems.
+private struct BilibiliPullRefresh: UIViewRepresentable {
+    let refresh: () async -> Void
+    func makeCoordinator() -> Coordinator { Coordinator(refresh: refresh) }
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        DispatchQueue.main.async { context.coordinator.attach(from: view) }
+        return view
+    }
+    func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.refresh = refresh
+        DispatchQueue.main.async { context.coordinator.attach(from: view) }
+    }
+    static func dismantleUIView(_ view: UIView, coordinator: Coordinator) { coordinator.detach() }
+    final class Coordinator: NSObject {
+        var refresh: () async -> Void
+        private weak var scroll: UIScrollView?
+        private let control = UIRefreshControl()
+        private var task: Task<Void, Never>?
+        private var disposed = false
+        init(refresh: @escaping () async -> Void) {
+            self.refresh = refresh
+            super.init()
+            control.addTarget(self, action: #selector(pulled), for: .valueChanged)
+        }
+        func attach(from view: UIView) {
+            guard !disposed else { return }
+            var ancestor = view.superview
+            while let next = ancestor {
+                if let candidate = next as? UIScrollView {
+                    if scroll !== candidate {
+                        if scroll?.refreshControl === control { scroll?.refreshControl = nil }
+                        scroll = candidate
+                        candidate.refreshControl = control
+                    }
+                    return
+                }
+                ancestor = next.superview
+            }
+        }
+        @objc private func pulled() {
+            guard task == nil else { return }
+            task = Task { @MainActor [weak self] in
+                guard let self else { return }
+                await refresh()
+                control.endRefreshing()
+                task = nil
+            }
+        }
+        func detach() {
+            disposed = true
+            task?.cancel()
+            if scroll?.refreshControl === control { scroll?.refreshControl = nil }
+        }
+    }
+}
