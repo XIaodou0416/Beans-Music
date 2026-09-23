@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// Explicit write actions share one request contract. This builder does not send
 /// network traffic and can be verified with fixture credentials in CI.

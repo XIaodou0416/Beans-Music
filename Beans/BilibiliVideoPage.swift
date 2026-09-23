@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 struct BilibiliVideoPage: View {
     let song: Song

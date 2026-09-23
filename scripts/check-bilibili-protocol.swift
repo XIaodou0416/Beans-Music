@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 @main
 struct BilibiliProtocolChecks {
