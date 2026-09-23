@@ -12,7 +12,7 @@ enum BilibiliProtocol {
             let name = pair[0].trimmingCharacters(in: .whitespacesAndNewlines)
             let value = pair[1].trimmingCharacters(in: .whitespacesAndNewlines)
             guard cookieNames.contains(name), !value.isEmpty,
-                  !value.contains("\r"), !value.contains("\n") else { continue }
+                  !value.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { continue }
             values[name] = value
         }
         return values
