@@ -53,7 +53,7 @@ jobs:
 
       - name: Verify Bilibili login and playback parsing
         run: |
-          xcrun swiftc Beans/BilibiliProtocol.swift scripts/check-bilibili-protocol.swift -o /tmp/beans-bilibili-checks
+          xcrun swiftc Beans/BilibiliProtocol.swift Beans/BilibiliNativeRequestPolicy.swift scripts/check-bilibili-protocol.swift -o /tmp/beans-bilibili-checks
           /tmp/beans-bilibili-checks
 
       - name: Build (unsigned)

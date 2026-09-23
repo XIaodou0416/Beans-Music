@@ -51,7 +51,6 @@ struct CommentsSheet: View {
     private var limit: Int { song.source == .bilibili ? 20 : 30 }
     @State private var lastBilibiliPageCount = 0
     @State private var loadingNextPage = false
-    @State private var officialComments: BilibiliOfficialPage?
     /// QQ 音乐每页条数（接口单页上限 25）
     private let qqPageSize = 25
 
@@ -76,14 +75,15 @@ struct CommentsSheet: View {
 
     var body: some View {
         Group {
-            if presentation == .reference {
+            if song.source == .bilibili {
+                BilibiliAudioCommentsPage(song: song)
+            } else if presentation == .reference {
                 referenceCommentsView
             } else {
                 standardCommentsView
             }
         }
-        .task { await load(reset: true) }
-        .sheet(item: $officialComments) { page in BilibiliOfficialBrowser(page: page) }
+        .task { if song.source != .bilibili { await load(reset: true) } }
     }
 
     private var standardCommentsView: some View {
@@ -94,13 +94,7 @@ struct CommentsSheet: View {
                 commentsContent
                     .navigationTitle("评论")
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            if song.source == .bilibili {
-                                Button("官方评论") { officialComments = BilibiliOfficialPage.video(song) }
-                            }
-                        }
-                    }
+
             }
         }
     }
@@ -153,11 +147,6 @@ struct CommentsSheet: View {
             .navigationTitle("评论")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if song.source == .bilibili {
-                        Button("官方评论") { officialComments = BilibiliOfficialPage.video(song) }
-                    }
-                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
                 }

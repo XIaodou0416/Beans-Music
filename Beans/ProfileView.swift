@@ -1612,7 +1612,12 @@ struct AccountHubSheet: View {
                         if platformPrefs.isEnabled(SearchProvider.netease) { neteaseCard }
                         if platformPrefs.isEnabled(SearchProvider.qq) { qqCard }
                         if platformPrefs.isEnabled(SearchProvider.kugou) { kugouCard }
-                        if platformPrefs.isEnabled(SearchProvider.bilibili) { bilibiliCard }
+                        if platformPrefs.isEnabled(SearchProvider.bilibili) {
+                            VStack(spacing: 0) {
+                                bilibiliCard
+                                BilibiliModeSettings().padding(.horizontal, 14)
+                            }
+                        }
                     }
                     .padding(16)
                 }
@@ -2448,19 +2453,11 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private var bilibiliSettingsGroup: some View {
-        if settingsMatches("哔哩哔哩 B站 视频 UP主 合集 模式") {
-            SettingsCatalogGroup { BilibiliModeSettings() }
-        }
-    }
-
     private var settingsScrollContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 AnyView(settingsSearchField)
                 AnyView(coreSettingsGroup)
-                AnyView(bilibiliSettingsGroup)
                 AnyView(dynamicWallpaperSettingsGroup)
                 AnyView(playbackSettingsGroup)
                 AnyView(utilitySettingsGroup)
@@ -2533,7 +2530,7 @@ struct SettingsView: View {
     private var showChangelogSettings: Bool { settingsMatches("更新 日志 版本") }
     private var showSupportSettings: Bool { settingsMatches("帮助 反馈 声明 检查更新") }
     private var hasSettingsSearchResults: Bool {
-        settingsMatches("哔哩哔哩 B站 视频 UP主 合集 模式") || showAccountSettings || showAppearanceSettings || showPlatformSettings
+        showAccountSettings || showAppearanceSettings || showPlatformSettings
             || showDynamicWallpaperSettings || showAudioSettings || showPlaybackSettings || showEqualizerSettings
             || showBackupSettings || showChangelogSettings || showSupportSettings
     }

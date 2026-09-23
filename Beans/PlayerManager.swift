@@ -724,7 +724,7 @@ final class PlayerManager: NSObject, ObservableObject {
         return String(format: "%d:%02d", sleepTimerRemaining / 60, sleepTimerRemaining % 60)
     }
 
-    func pauseForBilibiliWeb() {
+    func pauseForBilibiliVideo() {
         guard isPlaying || isBuffering else { return }
         loadGeneration += 1
         isBuffering = false

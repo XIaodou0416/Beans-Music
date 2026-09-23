@@ -40,6 +40,22 @@ struct BilibiliProtocolChecks {
         check(BilibiliProtocol.progressiveURLs(["format": "mp4", "durl": [["url": "https://a.bilivideo.com/movie.mp4"]]]).count == 1, "single progressive MP4 accepted")
         check(BilibiliProtocol.progressiveURLs(["format": "flv", "durl": [["url": "https://a.bilivideo.com/movie.flv"]]]).isEmpty, "FLV not given to AVPlayer")
         check(BilibiliProtocol.progressiveURLs(["format": "mp4", "durl": [["url": "https://a.bilivideo.com/1.mp4"], ["url": "https://a.bilivideo.com/2.mp4"]]]).isEmpty, "multi-segment response never silently truncated")
+        check(!BeansWindowLayoutPolicy.usesSidebar(isPad: true, window: CGSize(width: 820, height: 1180), proposed: CGSize(width: 820, height: 510)), "portrait keyboard does not summon sidebar")
+        check(BeansWindowLayoutPolicy.usesSidebar(isPad: true, window: CGSize(width: 1180, height: 820), proposed: CGSize(width: 1180, height: 380)), "landscape keeps sidebar with keyboard")
+        check(!BeansWindowLayoutPolicy.usesSidebar(isPad: true, window: CGSize(width: 600, height: 900), proposed: CGSize(width: 600, height: 300)), "narrow multitasking window stays compact")
+        check(!BeansWindowLayoutPolicy.usesSidebar(isPad: false, window: CGSize(width: 900, height: 400), proposed: .zero), "iPhone never adopts iPad sidebar")
+        check(BeansWindowLayoutPolicy.usesSidebar(isPad: true, window: .zero, proposed: CGSize(width: 1180, height: 820)), "initial layout uses proposed bounds before window attaches")
+        let post = try! BilibiliNativeRequestPolicy.request(path: "/x/v2/reply/add", fields: ["message": "测试 + &= emoji 🎵", "csrf": "wrong", "oid": "123", "type": "1"], cookie: "SESSDATA=fixture%2Ctoken; bili_jct=testcsrf")
+        check(post.httpMethod == "POST" && post.url?.host == "api.bilibili.com", "mutations use fixed API host and POST")
+        let body = String(data: post.httpBody!, encoding: .utf8)!
+        var parsed = URLComponents(); parsed.percentEncodedQuery = body
+        let values = Dictionary(parsed.queryItems!.map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { _, new in new })
+        check(values["message"] == "测试 + &= emoji 🎵", "comment text round-trips form encoding")
+        check(values["csrf"] == "testcsrf" && values["csrf_token"] == "testcsrf", "CSRF always comes from current account")
+        check(post.value(forHTTPHeaderField: "Cookie")?.contains("SESSDATA=fixture%2Ctoken") == true, "cookie token is not decoded into header")
+        check((try? BilibiliNativeRequestPolicy.request(path: "https://example.com", fields: [:], cookie: raw)) == nil, "write host cannot be changed by caller")
+        check((try? BilibiliNativeRequestPolicy.request(path: "/x/v2/reply/add", fields: [:], cookie: "SESSDATA=fixture")) == nil, "write without CSRF is rejected before network")
+        check((try? BilibiliNativeRequestPolicy.request(path: "/x/v2/reply/add", fields: [:], cookie: "bili_jct=fixture")) == nil, "write without session is rejected before network")
         print("Bilibili protocol: \(count) checks passed")
     }
 }

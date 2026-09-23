@@ -162,6 +162,10 @@ struct RootView: View {
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var selection: RootTab = .discover
+    @State private var unoccludedWindowSize: CGSize = {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })?.windows.first(where: \.isKeyWindow)?.bounds.size ?? .zero
+    }()
     @State private var showPlayer = false
     @Namespace private var nowPlayingTransition
     @AppStorage("beans.disclaimerAccepted") private var disclaimerAccepted = false
@@ -285,7 +289,9 @@ struct RootView: View {
     var body: some View {
         let _ = theme.accent
         GeometryReader { proxy in
-            let isPadLandscape = usesPadSidebar && proxy.size.width > proxy.size.height
+            let isPadLandscape = BeansWindowLayoutPolicy.usesSidebar(
+                isPad: usesPadSidebar, window: unoccludedWindowSize, proposed: proxy.size
+            )
 
             ZStack {
                 if isPadLandscape {
@@ -319,6 +325,11 @@ struct RootView: View {
                     : nil,
                 value: isPadLandscape
             )
+        }
+        .background {
+            BeansWindowSizeProbe { size in
+                if unoccludedWindowSize != size { unoccludedWindowSize = size }
+            }
         }
         .background {
             TabBarAppearanceConfigurator(
@@ -650,6 +661,7 @@ struct RootView: View {
                 .tabViewStyle(.sidebarAdaptable)
         } else {
             nativeTabContent(isPadLandscape: false)
+                .tabViewStyle(.tabBar)
         }
     }
 

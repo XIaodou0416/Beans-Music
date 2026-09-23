@@ -15,14 +15,8 @@ struct BilibiliHomePage: View {
     @State private var channel = BilibiliChannel.recommended
     @State private var showProfile = false
     @State private var searchRefresh = UUID()
+    @State private var searchTask: Task<Void, Never>?
     @ObservedObject private var feed = BilibiliHomeFeedStore.shared
-
-    private var usesAudioFeed: Bool {
-        mode == BilibiliExperience.listen.rawValue && (channel == .recommended || !submittedQuery.isEmpty)
-    }
-    private var officialURL: URL {
-        submittedQuery.isEmpty ? channel.officialURL : BilibiliOfficialPage.search(submittedQuery).url
-    }
 
     var body: some View {
         BeansNavigationStack {
@@ -30,7 +24,7 @@ struct BilibiliHomePage: View {
                 GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(wallpaperBlur))
                 VStack(spacing: 0) {
                     channels
-                    if usesAudioFeed {
+                    if channel != .live || !submittedQuery.isEmpty {
                         if !submittedQuery.isEmpty {
                             Picker("搜索类型", selection: $resultType) {
                                 ForEach([SearchResultType.song, .artist, .playlist]) { item in
@@ -60,8 +54,7 @@ struct BilibiliHomePage: View {
                         .beansScrollIndicatorsHidden()
                         .beansScrollDismissesKeyboard()
                     } else {
-                        BilibiliOfficialContent(url: officialURL)
-                            .padding(.bottom, 92)
+                        BilibiliLiveList()
                     }
                 }
             }
@@ -70,9 +63,17 @@ struct BilibiliHomePage: View {
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索视频、UP主或合集")
             .onSubmit(of: .search) { submit() }
             .onChange(of: searchText) { value in
+                searchTask?.cancel()
+                if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    searchTask = Task { @MainActor in
+                        do { try await Task.sleep(nanoseconds: 600_000_000) } catch { return }
+                        guard !Task.isCancelled else { return }
+                        submit()
+                    }
+                }
                 if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !submittedQuery.isEmpty {
                     submittedQuery = ""
-                    if mode == BilibiliExperience.listen.rawValue { Task { await feed.search("") } }
+                    if channel != .live { Task { await feed.select(channel: channel, query: "") } }
                 }
             }
             .toolbar {
@@ -93,13 +94,10 @@ struct BilibiliHomePage: View {
         .task {
             searchText = feed.query
             submittedQuery = feed.query
-            if mode == BilibiliExperience.listen.rawValue { await feed.loadFirst() }
-            else { player.pauseForBilibiliWeb() }
+            await feed.select(channel: channel, query: submittedQuery)
         }
-        .onChange(of: mode) { value in
-            if value == BilibiliExperience.video.rawValue { player.pauseForBilibiliWeb() }
-            else if channel == .recommended { Task { await feed.search(submittedQuery) } }
-        }
+
+        .onDisappear { searchTask?.cancel() }
         .sheet(isPresented: $showProfile) {
             ProfileView(forceHomeBackdrop: true)
                 .environmentObject(theme).environmentObject(auth).environmentObject(player)
@@ -116,11 +114,7 @@ struct BilibiliHomePage: View {
                         channel = item
                         searchText = ""
                         submittedQuery = ""
-                        if item == .recommended, mode == BilibiliExperience.listen.rawValue {
-                            Task { await feed.search("") }
-                        } else {
-                            player.pauseForBilibiliWeb()
-                        }
+                        if item != .live { Task { await feed.select(channel: item, query: "") } }
                     } label: {
                         VStack(spacing: 7) {
                             Text(item.title).font(BeansFont.appFont(15, channel == item ? .bold : .regular))
@@ -135,11 +129,10 @@ struct BilibiliHomePage: View {
     }
 
     private func submit() {
+        searchTask?.cancel()
         submittedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if mode == BilibiliExperience.listen.rawValue {
-            searchRefresh = UUID()
-            Task { await feed.search(submittedQuery) }
-        }
+        searchRefresh = UUID()
+        Task { await feed.select(channel: channel == .live ? .recommended : channel, query: submittedQuery, force: true) }
     }
 }
 

@@ -23,123 +23,82 @@ final class BilibiliHomeFeedStore: ObservableObject {
     @Published private(set) var error: String?
     @Published private(set) var hasMore = true
     @Published private(set) var query = ""
-    private var searchLimit = 30
+    @Published private(set) var channel = BilibiliChannel.recommended
     private var page = 0
     private var failedPage = 1
     private var generation = UUID()
     private var loadedAt = Date.distantPast
     private let cacheKey = "beans.bilibili.home.videos.v1"
-
     private struct Snapshot: Codable {
         let videos: [BilibiliFeedVideo]
         let page: Int
         let hasMore: Bool
         let savedAt: Date
     }
-
     private init() {
         if let data = UserDefaults.standard.data(forKey: cacheKey),
            let cached = try? JSONDecoder().decode(Snapshot.self, from: data) {
-            videos = cached.videos
-            page = cached.page
-            hasMore = cached.hasMore
-            loadedAt = cached.savedAt
+            videos = cached.videos; page = cached.page; hasMore = cached.hasMore; loadedAt = cached.savedAt
         }
     }
-
-    func loadFirst(force: Bool = false) async {
-        guard !isLoading else { return }
-        if !force, !videos.isEmpty, Date().timeIntervalSince(loadedAt) < 900 { return }
-        let token = UUID()
-        generation = token
-        isLoading = true
-        isLoadingMore = false
-        error = nil
-        defer { if generation == token { isLoading = false } }
-        do {
-            let result: (videos: [BilibiliFeedVideo], hasMore: Bool)
-            if query.isEmpty {
-                result = try await BilibiliAPI.shared.popularVideos(page: 1, force: force)
-            } else {
-                let songs = try await BilibiliAPI.shared.searchSongs(keyword: query, limit: searchLimit)
-                result = (songs.map { BilibiliFeedVideo(song: $0, ownerAvatarURL: nil, playCount: 0, danmakuCount: 0) }, songs.count >= searchLimit && searchLimit < 200)
-            }
-            try Task.checkCancellation()
-            guard generation == token else { return }
-            if result.videos.isEmpty, query.isEmpty { throw BilibiliError(message: "暂时没有推荐视频，请稍后刷新") }
-            var seen = Set<String>()
-            videos = result.videos.filter { seen.insert($0.id).inserted }
-            page = 1
-            hasMore = result.hasMore
-            loadedAt = Date()
-            persist()
-        } catch is CancellationError { }
-        catch { if generation == token { failedPage = 1; self.error = error.localizedDescription } }
+    func select(channel nextChannel: BilibiliChannel, query text: String = "", force: Bool = false) async {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let changed = nextChannel != channel || text != query
+        if changed {
+            generation = UUID(); channel = nextChannel; query = text
+            isLoading = false; isLoadingMore = false
+            videos = []; page = 0; hasMore = true; error = nil; loadedAt = .distantPast
+        }
+        if force || changed || videos.isEmpty || Date().timeIntervalSince(loadedAt) > 900 {
+            await loadFirst(force: force || changed)
+        }
     }
-
+    func search(_ query: String) async { await select(channel: channel, query: query, force: true) }
+    func loadFirst(force: Bool = false) async {
+        guard !isLoading || force else { return }
+        if !force, !videos.isEmpty, Date().timeIntervalSince(loadedAt) < 900 { return }
+        await load(page: 1, reset: true, force: force)
+    }
     func loadMore() async {
         guard !isLoading, !isLoadingMore, hasMore, page > 0 else { return }
-        let token = generation
-        isLoadingMore = true
+        await load(page: page + 1, reset: false, force: false)
+    }
+    private func load(page next: Int, reset: Bool, force: Bool) async {
+        if reset { generation = UUID(); isLoading = true; isLoadingMore = false }
+        else { isLoadingMore = true }
+        let token = generation, requestedQuery = query, requestedChannel = channel
         error = nil
-        defer { if generation == token { isLoadingMore = false } }
+        defer {
+            if token == generation {
+                if reset { isLoading = false } else { isLoadingMore = false }
+            }
+        }
         do {
-            let result: (videos: [BilibiliFeedVideo], hasMore: Bool)
-            if query.isEmpty {
-                result = try await BilibiliAPI.shared.popularVideos(page: page + 1)
+            let result: (items: [BilibiliFeedVideo], more: Bool)
+            if requestedQuery.isEmpty {
+                result = try await BilibiliAPI.shared.channelVideos(requestedChannel, page: next, force: force)
             } else {
-                let limit = min(searchLimit + 30, 200)
-                let songs = try await BilibiliAPI.shared.searchSongs(keyword: query, limit: limit)
-                try Task.checkCancellation()
-                guard generation == token else { return }
-                searchLimit = limit
-                result = (songs.map { BilibiliFeedVideo(song: $0, ownerAvatarURL: nil, playCount: 0, danmakuCount: 0) }, songs.count >= limit && limit < 200)
+                result = try await BilibiliAPI.shared.videoSearch(requestedQuery, page: next)
             }
             try Task.checkCancellation()
-            guard generation == token else { return }
-            var seen = Set(videos.map(\.id))
-            let additions = result.videos.filter { seen.insert($0.id).inserted }
-            videos += additions
-            page += 1
-            hasMore = result.hasMore && !additions.isEmpty
-            persist()
+            guard token == generation else { return }
+            var seen = Set(reset ? [] : videos.map(\.id))
+            let additions = result.items.filter { seen.insert($0.id).inserted }
+            videos = reset ? additions : videos + additions
+            page = next; hasMore = result.more; loadedAt = Date()
+            if reset && query.isEmpty && channel == .recommended {
+                let snapshot = Snapshot(videos: videos, page: 1, hasMore: hasMore, savedAt: loadedAt)
+                if let data = try? JSONEncoder().encode(snapshot) { UserDefaults.standard.set(data, forKey: cacheKey) }
+            }
         } catch is CancellationError { }
-        catch { if generation == token { failedPage = page + 1; self.error = error.localizedDescription } }
+        catch { if token == generation { failedPage = next; error = error.localizedDescription } }
     }
-
-    func search(_ text: String) async {
-        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text != query {
-            generation = UUID()
-            isLoading = false
-            isLoadingMore = false
-            query = text
-            searchLimit = 30
-            videos = []
-            page = 0
-            hasMore = true
-            error = nil
-        }
-        await loadFirst(force: true)
-    }
-
     func loadMoreIfNeeded(id: String) async {
         guard error == nil, videos.suffix(6).contains(where: { $0.id == id }) else { return }
         await loadMore()
     }
-
     func retry() async {
-        if failedPage == 1 { await loadFirst(force: true) }
-        else { await loadMore() }
-    }
-
-    private func persist() {
-        guard query.isEmpty else { return }
-        // Keep a small first-page snapshot; pagination always resumes from page 2
-        // after restarting, without skipping pages removed by the cache cap.
-        let snapshot = Snapshot(videos: Array(videos.prefix(20)), page: 1,
-                                hasMore: videos.count > 20 || hasMore, savedAt: loadedAt)
-        if let data = try? JSONEncoder().encode(snapshot) { UserDefaults.standard.set(data, forKey: cacheKey) }
+        if failedPage == 1 { await loadFirst(force: true) } else { await loadMore() }
     }
 }
 
@@ -148,6 +107,8 @@ struct BilibiliHomeFeed: View {
     @ObservedObject private var store = BilibiliHomeFeedStore.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.sizeCategory) private var sizeCategory
+    @AppStorage(BilibiliExperience.key) private var mode = BilibiliExperience.listen.rawValue
+    @State private var route: BilibiliNativeRoute?
 
     private var columns: [GridItem] {
         if sizeCategory.isAccessibilityCategory { return [GridItem(.flexible())] }
@@ -157,7 +118,7 @@ struct BilibiliHomeFeed: View {
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 16) {
-            Text(store.query.isEmpty ? "热门推荐" : "搜索结果")
+            Text(store.query.isEmpty ? (store.channel == .recommended ? "热门推荐" : store.channel.title) : "搜索结果")
                 .font(BeansFont.appFont(20, .bold)).foregroundStyle(Color.beansLabel)
             if store.videos.isEmpty {
                 if let error = store.error {
@@ -183,12 +144,13 @@ struct BilibiliHomeFeed: View {
                         BilibiliFeedCard(video: video) {
                             BeansHaptics.tap()
                             let tracks = store.videos.map(\.song)
-                            player.play(songs: tracks, startAt: tracks.firstIndex(where: { $0.identityKey == video.id }) ?? 0)
+                            if mode == BilibiliExperience.video.rawValue { route = .video(video.song) }
+                            else { player.play(songs: tracks, startAt: tracks.firstIndex(where: { $0.identityKey == video.id }) ?? 0) }
                         }
                         .onAppear { Task { await store.loadMoreIfNeeded(id: video.id) } }
                         .contextMenu {
                             Button { player.playNext(video.song) } label: { Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward") }
-                            if let url = video.song.officialURL { Link(destination: url) { Label("在哔哩哔哩打开", systemImage: "arrow.up.right.square") } }
+                            Button { route = .video(video.song) } label: { Label("视频详情与评论", systemImage: "play.rectangle") }
                         }
                     }
                 }
@@ -209,7 +171,7 @@ struct BilibiliHomeFeed: View {
                 }
             }
         }
-        .task { if store.videos.isEmpty && store.error == nil { await store.loadFirst() } }
+        .sheet(item: $route) { AnyView(BilibiliNativeSheet(route: $0)) }
     }
 }
 

@@ -7,154 +7,139 @@ extension SearchResultType {
         case .all: return "综合"
         case .song: return "视频"
         case .artist: return "UP主"
-        case .playlist: return "合集"
-        case .album: return "合集"
+        case .album, .playlist: return "合集"
         }
     }
 }
 
-/// Bilibili results have their own identity and navigation. In particular an UP
-/// account ID must never be synthesized from the title of a music result.
 struct BilibiliSearchResults: View {
     let keyword: String
     let type: SearchResultType
-    @EnvironmentObject private var player: PlayerManager
-    @AppStorage(BilibiliExperience.key) private var mode = BilibiliExperience.listen.rawValue
-    @State private var songs: [Song] = []
+    @State private var videos: [BilibiliFeedVideo] = []
     @State private var creators: [Artist] = []
+    @State private var collections: [BilibiliSeries] = []
+    @State private var page = 0
+    @State private var more = true
     @State private var loading = true
     @State private var error: String?
-    @State private var officialPage: BilibiliOfficialPage?
-    @State private var requestID = UUID()
+    @State private var token = UUID()
+    @State private var route: BilibiliNativeRoute?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if loading && songs.isEmpty && creators.isEmpty {
-                ProgressView("正在搜索").frame(maxWidth: .infinity, minHeight: 120)
-            } else {
-                if let error {
-                    Text(error).font(.footnote).foregroundStyle(.secondary)
-                    Button("重新搜索") { Task { await load() } }.frame(minHeight: 44)
-                }
-                if type == .playlist || type == .album {
-                    Text("按UP主浏览合集")
-                        .font(BeansFont.appFont(19, .bold)).foregroundStyle(Color.beansLabel)
-                    Text("选择下方UP主，打开其官方合集列表。当前不提供独立合集搜索。")
-                        .font(BeansFont.appFont(12)).foregroundStyle(Color.beansComment)
-                }
-                if !creators.isEmpty {
-                    if type == .all {
-                        Text("UP主").font(BeansFont.appFont(19, .bold)).foregroundStyle(Color.beansLabel)
-                    }
-                    ForEach(creators) { creator in creatorRow(creator) }
-                }
-                if !songs.isEmpty {
-                    if type == .all {
-                        Text("视频").font(BeansFont.appFont(19, .bold)).foregroundStyle(Color.beansLabel)
-                    }
-                    ForEach(songs, id: \.identityKey) { song in
-                        Button { open(song) } label: {
-                            HStack(alignment: .top, spacing: 12) {
-                                CoverImage(url: song.coverURL, size: 64, aspectRatio: 16.0 / 9.0, cornerRadius: 8)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(song.name).font(BeansFont.appFont(14, .medium))
-                                        .foregroundStyle(Color.beansLabel).lineLimit(2)
-                                    Text(song.artists).font(BeansFont.appFont(12))
-                                        .foregroundStyle(Color.beansComment).lineLimit(1)
-                                    Text(song.formattedDuration).font(BeansFont.appFont(11))
-                                        .foregroundStyle(Color.beansComment)
-                                }
-                                Spacer(minLength: 0)
+        LazyVStack(alignment: .leading, spacing: 18) {
+            if type == .playlist || type == .album {
+                Text("相关视频所属的合集").font(.headline)
+                Text("根据当前搜索结果中的视频查找真实合集；也可进入UP主页浏览全部合集。")
+                    .font(.caption).foregroundStyle(Color.beansComment)
+            }
+            if !creators.isEmpty {
+                if type == .all { Text("UP主").font(.headline) }
+                ForEach(creators) { creator in
+                    Button { route = .up(creator) } label: {
+                        HStack(spacing: 12) {
+                            CoverImage(url: creator.coverURL, size: 50, cornerRadius: 25)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(creator.name).font(BeansFont.appFont(15, .semibold)).foregroundStyle(Color.beansLabel)
+                                Text("UP主主页 · 投稿与合集").font(.caption).foregroundStyle(Color.beansComment)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                        }.buttonStyle(.plain)
-                        .contextMenu {
-                            Button { player.playNext(song) } label: { Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward") }
-                            Button { officialPage = BilibiliOfficialPage.video(song) } label: { Label("视频详情与互动", systemImage: "play.rectangle") }
-                        }
-                    }
-                }
-                if songs.isEmpty && creators.isEmpty && error == nil {
-                    Text("没有找到相关结果").font(.subheadline).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 90)
-                }
-                Button {
-                    officialPage = BilibiliOfficialPage.search(keyword, up: type == .artist || type == .playlist)
-                } label: {
-                    Label("在官方网页继续搜索", systemImage: "arrow.up.right.square")
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.beansComment)
+                        }.contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                        .onAppear { if type == .artist && creator.id == creators.last?.id { nextIfNeeded() } }
                 }
             }
-        }
-        .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 180)
-        .task(id: "\(type.rawValue)|\(keyword)") {
-            do { try await Task.sleep(nanoseconds: 350_000_000) }
-            catch { return }
-            await load()
-        }
-        .sheet(item: $officialPage) { page in
-            BilibiliOfficialBrowser(page: page).onAppear { player.pauseForBilibiliWeb() }
-        }
-    }
-
-    private func creatorRow(_ creator: Artist) -> some View {
-        Button {
-            if type == .playlist || type == .album { officialPage = BilibiliOfficialPage.collections(creator.id) }
-            else { officialPage = BilibiliOfficialPage.up(creator.id) }
-        } label: {
-            HStack(spacing: 12) {
-                CoverImage(url: creator.coverURL, size: 52, cornerRadius: 26)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(creator.name).font(BeansFont.appFont(15, .medium)).foregroundStyle(Color.beansLabel)
-                    Text(type == .playlist || type == .album ? "查看TA的合集" : "UP主主页")
-                        .font(BeansFont.appFont(12)).foregroundStyle(Color.beansComment)
+            if !collections.isEmpty {
+                ForEach(collections) { collection in
+                    Button { route = .collection(collection) } label: { BilibiliCollectionRow(collection: collection) }.buttonStyle(.plain)
                 }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.beansComment)
-            }.frame(maxWidth: .infinity, minHeight: 60).contentShape(Rectangle())
-        }.buttonStyle(.plain)
-    }
-
-    private func open(_ song: Song) {
-        if mode == BilibiliExperience.video.rawValue {
-            officialPage = BilibiliOfficialPage.video(song)
-        } else {
-            player.play(songs: songs, startAt: songs.firstIndex(where: { $0.identityKey == song.identityKey }) ?? 0)
+            }
+            if !videos.isEmpty {
+                if type == .all { Text("视频").font(.headline) }
+                BilibiliVideoRows(items: videos, onAppearItem: { id in
+                    if id == videos.last?.id { nextIfNeeded() }
+                })
+            }
+            if loading { ProgressView("正在搜索").frame(maxWidth: .infinity, minHeight: 90) }
+            if let error { BilibiliInlineError(message: error) { Task { await load(reset: page == 0) } } }
+            if !loading && error == nil && videos.isEmpty && creators.isEmpty && collections.isEmpty {
+                Text("当前页未找到相关\(type.bilibiliTitle)").font(.subheadline).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 90)
+            }
+            if !loading && error == nil && more && (type == .playlist || type == .album) {
+                Button("继续查找下一页合集") { Task { await load(reset: false) } }.frame(maxWidth: .infinity, minHeight: 44)
+            }
         }
+        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 100)
+        .task(id: "\(type.rawValue)|\(keyword)") {
+            token = UUID()
+            videos = []; creators = []; collections = []; page = 0; more = true; error = nil; loading = true
+            do { try await Task.sleep(nanoseconds: 350_000_000) } catch { return }
+            await load(reset: true)
+        }
+        .sheet(item: $route) { AnyView(BilibiliNativeSheet(route: $0)) }
     }
-
-    @MainActor
-    private func load() async {
+    private func nextIfNeeded() {
+        guard more, !loading, error == nil else { return }
+        Task { await load(reset: false) }
+    }
+    @MainActor private func load(reset: Bool) async {
+        if !reset && (loading || !more) { return }
         let text = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { loading = false; return }
-        let token = UUID()
-        requestID = token
-        songs = []; creators = []; loading = true; error = nil
-        defer { if requestID == token { loading = false } }
+        let request = token
+        loading = true; error = nil
+        let next = reset ? 1 : page + 1
+        defer { if token == request { loading = false } }
         do {
             switch type {
-            case .song:
-                let result = try await BilibiliAPI.shared.searchSongs(keyword: text, limit: 60)
+            case .all, .song:
+                let result = try await BilibiliAPI.shared.videoSearch(text, page: next)
                 try Task.checkCancellation()
-                guard requestID == token else { return }
-                songs = result
-            case .artist, .album, .playlist:
-                let result = try await BilibiliAPI.shared.searchArtists(keyword: text, limit: 30)
+                guard token == request else { return }
+                var seen = Set(reset ? [] : videos.map(\.id))
+                let additions = result.items.filter { seen.insert($0.id).inserted }
+                videos = reset ? additions : videos + additions
+                more = result.more
+                if type == .all && reset {
+                    if let users = try? await BilibiliAPI.shared.upSearch(text, page: 1) {
+                        try Task.checkCancellation()
+                        guard token == request else { return }
+                        creators = Array(users.items.prefix(4))
+                    }
+                }
+            case .artist:
+                let result = try await BilibiliAPI.shared.upSearch(text, page: next)
                 try Task.checkCancellation()
-                guard requestID == token else { return }
-                creators = result
-            case .all:
-                async let videoResult = BilibiliAPI.shared.searchSongs(keyword: text, limit: 20)
-                async let upResult = BilibiliAPI.shared.searchArtists(keyword: text, limit: 6)
-                let tracks = try? await videoResult
-                let accounts = try? await upResult
+                guard token == request else { return }
+                var seen = Set(reset ? [] : creators.map(\.id))
+                let additions = result.items.filter { seen.insert($0.id).inserted }
+                creators = reset ? additions : creators + additions
+                more = result.more
+            case .album, .playlist:
+                let result = try await BilibiliAPI.shared.videoSearch(text, page: next)
                 try Task.checkCancellation()
-                guard requestID == token else { return }
-                songs = tracks ?? []
-                creators = accounts ?? []
-                if tracks == nil && accounts == nil { error = "B站搜索暂不可用，请稍后重试或打开官方网页" }
+                // Bounded to the visible search page. Each result must resolve
+                // to an actual season, never a video renamed as an album.
+                var found: [BilibiliSeries] = []
+                var resolved = 0
+                for item in result.items.prefix(6) {
+                    if let info = try? await BilibiliAPI.shared.nativeVideo(item.song) {
+                        resolved += 1
+                        if let collection = info.collection { found.append(collection) }
+                    }
+                    try Task.checkCancellation()
+                    guard token == request else { return }
+                }
+                if !result.items.isEmpty && resolved == 0 { throw BilibiliError(message: "合集信息加载失败，请重试") }
+                var seen = Set(reset ? [] : collections.map(\.id))
+                let additions = found.filter { seen.insert($0.id).inserted }
+                collections = reset ? additions : collections + additions
+                more = result.more
             }
+            guard token == request else { return }
+            page = next
         } catch is CancellationError { }
-        catch { if requestID == token { self.error = error.localizedDescription } }
+        catch { if token == request { self.error = error.localizedDescription } }
     }
 }

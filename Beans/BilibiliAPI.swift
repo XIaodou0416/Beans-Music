@@ -41,7 +41,7 @@ actor BilibiliAPI {
         cache.removeAll()
         wbiKey = ""
     }
-    private func raw(_ url: URL, cookieOverride: String? = nil) async throws -> ([String: Any], HTTPURLResponse) {
+    func raw(_ url: URL, cookieOverride: String? = nil) async throws -> ([String: Any], HTTPURLResponse) {
         if cookieOverride == nil, !restoredSession {
             let saved = await BilibiliAuth.shared.cookieHeader
             if !restoredSession {
@@ -62,7 +62,7 @@ actor BilibiliAPI {
         }
         return (object, http)
     }
-    private func get(_ path: String, _ query: [String: String] = [:], signed: Bool = false, identity: Bool = false, ttl: Double = 0) async throws -> [String: Any] {
+    func get(_ path: String, _ query: [String: String] = [:], signed: Bool = false, identity: Bool = false, ttl: Double = 0) async throws -> [String: Any] {
         let key = path + query.keys.sorted().map { $0 + "=" + query[$0]! }.joined(separator: "&")
         if ttl > 0, let entry = cache[key], Date().timeIntervalSince(entry.0) < ttl { return entry.1 }
         if identity && fingerprint.isEmpty {
@@ -131,11 +131,11 @@ actor BilibiliAPI {
         if let range = input.range(of: "av[0-9]+", options: [.regularExpression, .caseInsensitive]) { return String(input[range]).lowercased() }
         return nil
     }
-    private func video(_ id: String) async throws -> [String: Any] {
+    func video(_ id: String) async throws -> [String: Any] {
         guard let videoID = Self.videoID(id) else { throw BilibiliError(message: "B站视频编号无效") }
         return try await get("/x/web-interface/view", videoID.hasPrefix("BV") ? ["bvid":videoID] : ["aid":String(videoID.dropFirst(2))], ttl: 300)
     }
-    private func song(_ item: [String: Any], part: [String: Any]? = nil) -> Song? {
+    func song(_ item: [String: Any], part: [String: Any]? = nil) -> Song? {
         let bvid = Self.text(item["bvid"])
         let aid = Self.text(item["aid"] ?? item["id"])
         guard !bvid.isEmpty || !aid.isEmpty else { return nil }

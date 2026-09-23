@@ -339,6 +339,11 @@ struct SearchView: View {
         }
         .onChange(of: keyword) { newValue in
             debounceTask?.cancel()
+            searchTask?.cancel()
+            playlistSearchTask?.cancel()
+            searchRequestID = UUID()
+            playlistSearchRequestID = UUID()
+            if searchController.textField?.markedTextRange != nil { return }
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {
                 songResults = []
@@ -346,6 +351,7 @@ struct SearchView: View {
                 albumResults = []
                 playlistResults = []
                 errorMessage = nil
+                searching = false
                 return
             }
             debounceTask = Task {
@@ -398,8 +404,8 @@ struct SearchView: View {
                 .environmentObject(theme)
         }
         .sheet(item: $selectedArtist) { artist in
-            if artist.source == .bilibili, let page = BilibiliOfficialPage.up(artist.id) {
-                BilibiliOfficialBrowser(page: page).onAppear { player.pauseForBilibiliWeb() }
+            if artist.source == .bilibili {
+                BilibiliNativeSheet(route: .up(artist))
             } else {
                 ArtistHomeSheet(artist: artist).environmentObject(player)
             }
@@ -2593,7 +2599,7 @@ struct NativeSearchBar: UIViewRepresentable {
 
     func updateUIView(_ uiView: UISearchBar, context: Context) {
         context.coordinator.parent = self
-        if uiView.text != text {
+        if uiView.searchTextField.markedTextRange == nil, uiView.text != text {
             uiView.text = text
         }
         uiView.placeholder = NSLocalizedString(placeholder, comment: "")
@@ -2660,9 +2666,11 @@ struct SearchTextField: UIViewRepresentable {
     func updateUIView(_ uiView: UITextField, context: Context) {
         // 同步最新绑定值；同时刷新 coordinator 持有的父视图，保证闭包/绑定始终是最新实例
         context.coordinator.parent = self
-        if uiView.text != text {
+        if uiView.markedTextRange == nil, uiView.text != text {
             uiView.text = text
         }
+        controller.textField = uiView
+        uiView.placeholder = NSLocalizedString(placeholder, comment: "")
         uiView.font = BeansFont.appUIFont(15)
         uiView.textColor = textColor
         uiView.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -2686,6 +2694,7 @@ struct SearchTextField: UIViewRepresentable {
                 field.unmarkText()
             }
             let text = field.text ?? ""
+            parent.text = text
             parent.onSubmit(text)
             field.resignFirstResponder()
             return true
