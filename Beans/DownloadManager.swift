@@ -66,12 +66,25 @@ struct ResolvedDownloadURL {
     let sourceName: String?
 }
 
+struct SongDownloadProgress: Equatable {
+    let title: String
+    let fractionCompleted: Double?
+}
+
 // MARK: - 歌曲下载
 
 /// 下载歌曲到临时目录（不自动保存到本地）：下载完成后交给播放页弹原生分享，由用户自行选择保存或转发
 @MainActor
-final class DownloadManager {
+final class DownloadManager: ObservableObject {
     static let shared = DownloadManager()
+
+    @Published private(set) var songProgress: [String: SongDownloadProgress] = [:]
+    private var progressOrder: [String] = []
+    private var transferTokens: [String: UUID] = [:]
+
+    var visibleProgress: SongDownloadProgress? {
+        progressOrder.lazy.compactMap { self.songProgress[$0] }.first
+    }
 
     private init() {}
 
@@ -81,6 +94,17 @@ final class DownloadManager {
         quality: DownloadQuality,
         destinationDirectory: URL? = nil
     ) async -> Result<DownloadResult, Error> {
+        let progressKey = song.identityKey
+        guard songProgress[progressKey] == nil else {
+            return .failure(NetEaseError.unknown("这首歌正在下载"))
+        }
+        progressOrder.append(progressKey)
+        songProgress[progressKey] = SongDownloadProgress(title: song.name, fractionCompleted: nil)
+        defer {
+            transferTokens.removeValue(forKey: progressKey)
+            progressOrder.removeAll { $0 == progressKey }
+            songProgress.removeValue(forKey: progressKey)
+        }
         let chain = quality.fallbackChain
         var lastError: Error = NetEaseError.unknown("下载失败")
         BeansLogger.shared.log(
@@ -89,21 +113,43 @@ final class DownloadManager {
         )
 
         for (index, current) in chain.enumerated() {
+            guard !Task.isCancelled else { return .failure(CancellationError()) }
+            transferTokens.removeValue(forKey: progressKey)
+            songProgress[progressKey] = SongDownloadProgress(title: song.name, fractionCompleted: nil)
             // 1) 解析播放地址（与播放共用同一套接口，仅指定当前下载音质）
             guard let resolved = await resolveURL(song: song, quality: current) else {
                 lastError = NetEaseError.unknown("无法解析播放地址（可能为 VIP 歌曲或音源不可用）")
                 continue
             }
+            guard !Task.isCancelled else { return .failure(CancellationError()) }
 
             // 2) 下载到临时文件
             let tempURL: URL
             let response: URLResponse
             do {
                 let request = downloadRequest(for: resolved.url, song: song)
-                let (downloaded, downloadResponse) = try await URLSession.shared.download(for: request)
+                let token = UUID()
+                transferTokens[progressKey] = token
+                let transfer = SongFileDownloadTransfer { [weak self] progress in
+                    guard let self, self.transferTokens[progressKey] == token else { return }
+                    let next = SongDownloadProgress(
+                        title: song.name,
+                        fractionCompleted: progress
+                    )
+                    if self.songProgress[progressKey] != next {
+                        self.songProgress[progressKey] = next
+                    }
+                }
+                let (downloaded, downloadResponse) = try await transfer.download(for: request)
+                transferTokens.removeValue(forKey: progressKey)
                 response = downloadResponse
+                if Task.isCancelled {
+                    try? FileManager.default.removeItem(at: downloaded)
+                    return .failure(CancellationError())
+                }
                 if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
                     lastError = NetEaseError.unknown("下载失败（HTTP \(http.statusCode)）")
+                    try? FileManager.default.removeItem(at: downloaded)
                     continue
                 }
                 guard isUsableAudioFile(at: downloaded, response: response) else {
@@ -117,6 +163,7 @@ final class DownloadManager {
                 }
                 tempURL = downloaded
             } catch {
+                if Task.isCancelled { return .failure(error) }
                 lastError = NetEaseError.unknown("下载失败：\(error.localizedDescription)")
                 continue
             }
@@ -138,6 +185,7 @@ final class DownloadManager {
             do {
                 try FileManager.default.moveItem(at: tempURL, to: dest)
             } catch {
+                try? FileManager.default.removeItem(at: tempURL)
                 lastError = NetEaseError.unknown("保存失败：\(error.localizedDescription)")
                 continue
             }
@@ -350,6 +398,112 @@ final class DownloadManager {
     }
 }
 
+private final class SongFileDownloadTransfer: NSObject, URLSessionDownloadDelegate {
+    private let onProgress: @MainActor (Double?) -> Void
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<(URL, URLResponse), Error>?
+    private var session: URLSession?
+    private var downloadTask: URLSessionDownloadTask?
+    private var cancellationRequested = false
+    private var lastProgressUpdate = Date.distantPast
+
+    init(onProgress: @escaping @MainActor (Double?) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    func download(for request: URLRequest) async throws -> (URL, URLResponse) {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(URL, URLResponse), Error>) in
+                lock.lock()
+                self.continuation = continuation
+                let delegateQueue = OperationQueue()
+                delegateQueue.name = "com.beans.music.song-download"
+                delegateQueue.qualityOfService = .utility
+                delegateQueue.maxConcurrentOperationCount = 1
+                let session = URLSession(configuration: .default, delegate: self, delegateQueue: delegateQueue)
+                let task = session.downloadTask(with: request)
+                self.session = session
+                self.downloadTask = task
+                let cancelImmediately = cancellationRequested
+                lock.unlock()
+
+                task.resume()
+                if cancelImmediately { task.cancel() }
+            }
+        } onCancel: {
+            cancel()
+        }
+    }
+
+    private func cancel() {
+        lock.lock()
+        cancellationRequested = true
+        let task = downloadTask
+        lock.unlock()
+        task?.cancel()
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        let now = Date()
+        guard now.timeIntervalSince(lastProgressUpdate) >= 0.1
+                || (totalBytesExpectedToWrite > 0 && totalBytesWritten >= totalBytesExpectedToWrite) else { return }
+        lastProgressUpdate = now
+        let progress: Double? = totalBytesExpectedToWrite > 0
+            ? min(1, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+            : nil
+        publishProgress(progress)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        guard let response = downloadTask.response else {
+            finish(.failure(NetEaseError.unknown("下载服务器没有返回响应")))
+            return
+        }
+        let stagedURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("BeansSongDownload-\(UUID().uuidString).tmp")
+        do {
+            try FileManager.default.moveItem(at: location, to: stagedURL)
+            publishProgress(1)
+            finish(.success((stagedURL, response)))
+        } catch {
+            finish(.failure(error))
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error { finish(.failure(error)) }
+    }
+
+    private func publishProgress(_ progress: Double?) {
+        let handler = onProgress
+        Task { @MainActor in handler(progress) }
+    }
+
+    private func finish(_ result: Result<(URL, URLResponse), Error>) {
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        let session = self.session
+        self.session = nil
+        self.downloadTask = nil
+        lock.unlock()
+
+        guard let continuation else { return }
+        session?.finishTasksAndInvalidate()
+        continuation.resume(with: result)
+    }
+}
+
 // MARK: - 批量下载
 
 /// 批量下载顺序保存到应用 Documents 中，避免多个音源请求同时抢占网络和内存。
@@ -362,6 +516,7 @@ final class BatchDownloadManager: ObservableObject {
     @Published private(set) var succeededCount = 0
     @Published private(set) var failedSongs: [String] = []
     @Published private(set) var currentSongName = ""
+    @Published private(set) var currentSongKey = ""
     @Published private(set) var downloadedFiles: [URL] = []
     @Published private(set) var isDownloading = false
     @Published private(set) var wasCancelled = false
@@ -396,6 +551,7 @@ final class BatchDownloadManager: ObservableObject {
         succeededCount = 0
         failedSongs = []
         currentSongName = ""
+        currentSongKey = ""
         downloadedFiles = []
         wasCancelled = false
         isDownloading = true
@@ -416,6 +572,7 @@ final class BatchDownloadManager: ObservableObject {
             for song in uniqueSongs {
                 guard !Task.isCancelled else { break }
                 self.currentSongName = song.name
+                self.currentSongKey = song.identityKey
 
                 let result = await DownloadManager.shared.download(
                     song: song,
@@ -436,6 +593,7 @@ final class BatchDownloadManager: ObservableObject {
 
             self.wasCancelled = Task.isCancelled
             self.currentSongName = ""
+            self.currentSongKey = ""
             self.isDownloading = false
             self.downloadTask = nil
             if self.wasCancelled {

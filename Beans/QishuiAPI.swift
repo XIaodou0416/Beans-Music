@@ -1,35 +1,18 @@
 import Foundation
-import Security
 import Combine
 
 enum QishuiAPIError: LocalizedError {
     case invalidURL
     case invalidResponse
     case server(String)
-    case notLoggedIn
 
     var errorDescription: String? {
         switch self {
         case .invalidURL: return "汽水音乐接口地址无效"
         case .invalidResponse: return "汽水音乐返回了无法识别的数据"
         case .server(let message): return message
-        case .notLoggedIn: return "请先登录汽水音乐"
         }
     }
-}
-
-struct QishuiQRCode: Equatable {
-    let token: String
-    let image: String
-    let expiresAt: TimeInterval
-    let copywriting: String
-}
-
-struct QishuiAccount: Equatable {
-    let id: String
-    let nickname: String
-    let avatarURL: URL?
-    let isVIP: Bool
 }
 
 struct QishuiPlaylistDetails {
@@ -195,15 +178,11 @@ struct QishuiSearchPageState {
 final class QishuiAPI: ObservableObject {
     static let shared = QishuiAPI()
 
-    private static let sessionKeychainService = "com.beans.app.qishui"
-    private static let sessionKeychainAccount = "sessionid"
     private static let baseURLKey = "beans.qishui.apiBaseURL"
     private static let defaultBaseURL = "http://189.24.78.193/qishui"
     private static let fastCatalogPaths: Set<String> = [
         "/search/mixed", "/search", "/search/playlist", "/recommend/playlist"
     ]
-
-    @Published private(set) var isLoggedIn = false
 
     private let session: URLSession
     private let songSearchCache = NSCache<NSString, QishuiCacheBox<[Song]>>()
@@ -226,21 +205,6 @@ final class QishuiAPI: ObservableObject {
         playlistSearchCache.countLimit = 40
         recommendationCache.countLimit = 8
         playlistDetailsCache.countLimit = 24
-        isLoggedIn = !(readSessionID() ?? "").isEmpty
-    }
-
-    var sessionID: String? {
-        readSessionID()
-    }
-
-    func clearSession() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.sessionKeychainService,
-            kSecAttrAccount as String: Self.sessionKeychainAccount,
-        ]
-        SecItemDelete(query as CFDictionary)
-        isLoggedIn = false
     }
 
     // MARK: - Search
@@ -373,8 +337,7 @@ final class QishuiAPI: ObservableObject {
 
     func recommendedPlaylists(limit: Int = 18) async throws -> [Playlist] {
         let targetCount = min(max(limit, 1), 50)
-        let accountKey = Self.stableID(sessionID ?? "guest")
-        let cacheKey = catalogCacheKey("recommendations", query: accountKey, limit: targetCount)
+        let cacheKey = catalogCacheKey("recommendations", query: "guest", limit: targetCount)
         let (cached, stale) = cacheLookup(recommendationCache, key: cacheKey, ttl: recommendationTTL, staleTTL: 7 * 24 * 3600)
         if let cached { return cached }
         do {
@@ -550,58 +513,6 @@ final class QishuiAPI: ObservableObject {
         return NetEaseAPI.SongCommentPage(total: comments.count, hot: [], comments: comments)
     }
 
-    // MARK: - Login and account playlists
-
-    func requestQRCode() async throws -> QishuiQRCode {
-        let data = try await requestObject("/auth/qrcode")
-        let token = firstString(data, keys: ["token"]) ?? ""
-        let image = firstString(data, keys: ["qrcode", "qr_code", "image"]) ?? ""
-        guard !token.isEmpty, !image.isEmpty else { throw QishuiAPIError.invalidResponse }
-        return QishuiQRCode(
-            token: token,
-            image: image,
-            expiresAt: number(data["expire_time"]),
-            copywriting: firstString(data, keys: ["copywriting", "message"]) ?? "请使用抖音 App 扫码确认"
-        )
-    }
-
-    func pollQRCode(token: String) async throws -> Bool {
-        let data = try await requestObject("/auth/qrcode/status", method: "POST", body: ["token": token])
-        let session = dictionary(data["auth"])?["sessionid"] as? String
-            ?? firstString(data, keys: ["sessionid", "session_id"])
-        if let session, !session.isEmpty {
-            saveSessionID(session)
-            return true
-        }
-        let status = firstString(data, keys: ["status", "state"])?.lowercased() ?? ""
-        return ["success", "confirmed", "ok", "1"].contains(status)
-    }
-
-    func account() async throws -> QishuiAccount {
-        guard let session = readSessionID(), !session.isEmpty else { throw QishuiAPIError.notLoggedIn }
-        let data = try await requestObject("/auth/me", method: "POST", body: ["sessionid": session])
-        let source = dictionary(data["profile"] ?? data["user"] ?? data) ?? data
-        return QishuiAccount(
-            id: firstString(source, keys: ["id", "user_id"]) ?? "",
-            nickname: firstString(source, keys: ["nickname", "name"]) ?? "汽水音乐用户",
-            avatarURL: firstString(source, keys: ["avatar_url", "avatarUrl", "avatar"]).flatMap(URL.init(string:)),
-            isVIP: bool(source["is_vip"] ?? source["vip"])
-        )
-    }
-
-    func accountPlaylists() async throws -> [Playlist] {
-        guard let session = readSessionID(), !session.isEmpty else { throw QishuiAPIError.notLoggedIn }
-        let data = try await requestObject("/me/playlists", method: "POST", body: ["sessionid": session])
-        return playlistDictionaries(data["playlists"] ?? data["data"] ?? data).compactMap(makePlaylist)
-    }
-
-    func accountCollection() async throws -> [Playlist] {
-        guard let session = readSessionID(), !session.isEmpty else { throw QishuiAPIError.notLoggedIn }
-        let data = try await requestObject("/me/collection/mixed", method: "POST", body: ["sessionid": session])
-        let collections = dictionaryArray(data["mixed_collections"] ?? data["collections"] ?? data["data"])
-        return collections.compactMap { dictionary($0["playlist"] ?? $0).flatMap(makePlaylist) }
-    }
-
     // MARK: - HTTP
 
     private func requestObject(
@@ -635,9 +546,6 @@ final class QishuiAPI: ObservableObject {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
-        if let session = readSessionID(), !session.isEmpty {
-            request.setValue("sessionid=\(session)", forHTTPHeaderField: "Cookie")
-        }
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -860,35 +768,6 @@ final class QishuiAPI: ObservableObject {
             }
         }
         return nil
-    }
-
-    private func readSessionID() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.sessionKeychainService,
-            kSecAttrAccount as String: Self.sessionKeychainAccount,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data,
-              let value = String(data: data, encoding: .utf8),
-              !value.isEmpty else { return nil }
-        return value
-    }
-
-    private func saveSessionID(_ value: String) {
-        let data = Data(value.utf8)
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.sessionKeychainService,
-            kSecAttrAccount as String: Self.sessionKeychainAccount,
-        ]
-        SecItemDelete(base as CFDictionary)
-        let attributes = base.merging([kSecValueData as String: data]) { _, new in new }
-        SecItemAdd(attributes as CFDictionary, nil)
-        isLoggedIn = true
     }
 
     static func stableID(_ value: String) -> Int {

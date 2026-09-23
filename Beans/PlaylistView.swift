@@ -51,7 +51,7 @@ struct PlaylistView: View {
         case .kuwo, .migu:
             accountID = ""
         case .qishui:
-            accountID = QishuiAPI.shared.sessionID ?? ""
+            accountID = ""
         }
         return SyncedPlaylistCache.shared.cachedSongs(playlist: playlist, accountID: accountID)
     }
@@ -72,7 +72,7 @@ struct PlaylistView: View {
         case .kuwo, .migu:
             return ""
         case .qishui:
-            return QishuiAPI.shared.sessionID ?? ""
+            return ""
         }
     }
 

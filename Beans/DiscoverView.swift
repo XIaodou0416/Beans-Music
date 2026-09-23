@@ -81,8 +81,10 @@ struct DiscoverView: View {
     @AppStorage("beans.remoteAnnouncement.mediaURL") private var remoteAnnouncementMediaURL = ""
     @AppStorage("beans.remoteAnnouncement.mediaType") private var remoteAnnouncementMediaType = ""
     @AppStorage("beans.remoteAnnouncement.textColor") private var remoteAnnouncementTextColor = ""
+    @AppStorage("beans.remoteAnnouncement.updatedAt") private var remoteAnnouncementUpdatedAt = ""
+    @AppStorage("beans.remoteAnnouncement.homeBannerDismissedKey") private var remoteAnnouncementBannerDismissedKey = ""
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
-    private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders }
+    private var homeProviders: [SearchProvider] { platformPrefs.enabledSearchProviders.filter { $0 != .qishui } }
     /// 首页数据源：网易云 / QQ音乐（与搜索页同一控件样式）
     private var source: SearchProvider {
         guard let saved = SearchProvider(rawValue: homeSourceRaw), homeProviders.contains(saved) else {
@@ -162,8 +164,7 @@ struct DiscoverView: View {
                     ScrollViewReader { proxy in
                     VStack(alignment: .leading, spacing: isNativeClean ? 34 : 26) {
                         header
-                        if remoteAnnouncementEnabled,
-                           !remoteAnnouncementText.isEmpty || !remoteAnnouncementMediaURL.isEmpty || !remoteAnnouncementImageURL.isEmpty {
+                        if shouldShowRemoteAnnouncementBanner {
                             remoteAnnouncementBanner
                         }
                         if !hidePlatformPicker && !isNativeClean {
@@ -262,11 +263,6 @@ struct DiscoverView: View {
                 guard !homeRenderingPaused else { return }
                 guard platformPrefs.isEnabled(SearchProvider.kugou) else { return }
                 reloadAfterLoginUpdate(.kugou)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .beansQishuiLoginDidUpdate)) { _ in
-                guard !homeRenderingPaused else { return }
-                guard platformPrefs.isEnabled(SearchProvider.qishui) else { return }
-                reloadAfterLoginUpdate(.qishui)
             }
             .sheet(isPresented: $showSectionSort) {
                 SectionOrderSheet(
@@ -368,7 +364,18 @@ struct DiscoverView: View {
             }
                 .font(BeansFont.appFont(13, .medium))
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+            Button {
+                BeansHaptics.tap()
+                remoteAnnouncementBannerDismissedKey = remoteAnnouncementBannerKey
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.beansComment)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("关闭公告")
         }
         .padding(14)
         .background {
@@ -379,6 +386,16 @@ struct DiscoverView: View {
 
     private var remoteAnnouncementColor: Color {
         Color(hex: remoteAnnouncementTextColor) ?? Color.beansLabel
+    }
+
+    private var remoteAnnouncementBannerKey: String {
+        "\(remoteAnnouncementUpdatedAt)|\(remoteAnnouncementText)|\(remoteAnnouncementMediaURL)|\(remoteAnnouncementImageURL)|\(remoteAnnouncementMediaType)"
+    }
+
+    private var shouldShowRemoteAnnouncementBanner: Bool {
+        remoteAnnouncementEnabled
+            && (!remoteAnnouncementText.isEmpty || !remoteAnnouncementMediaURL.isEmpty || !remoteAnnouncementImageURL.isEmpty)
+            && remoteAnnouncementBannerDismissedKey != remoteAnnouncementBannerKey
     }
 
     /// 顶部问候区：大标题 + 刷新按钮
@@ -2039,9 +2056,7 @@ struct DiscoverView: View {
             snapshot.topArtists = topArtists
             snapshot.personalized = personalized
         case .qishui:
-            async let playlists = QishuiAPI.shared.recommendedPlaylists(limit: 18)
-            let personalized = (try? await playlists) ?? []
-            snapshot.personalized = personalized
+            break
         }
         return snapshot
     }
@@ -2423,8 +2438,8 @@ struct DailySongsSheet: View {
             )
         case .qishui:
             return beansLocalized(
-                "汽水音乐推荐歌单，发现更多适合你的内容。",
-                "Recommended Qishui playlists for discovering more music."
+                "汽水音乐暂不提供每日推荐。",
+                "Qishui daily recommendations are unavailable."
             )
         }
     }
@@ -2460,7 +2475,7 @@ struct DailySongsSheet: View {
                     refreshed = try await KugouMusicAPI.shared.searchSongs(keyword: "热门歌曲", limit: 30)
                 }
             case .qishui:
-                refreshed = (try? await QishuiAPI.shared.searchSongs(keyword: "热门歌曲", limit: 30)) ?? []
+                refreshed = []
             }
             guard !refreshed.isEmpty else { throw BeansDailyRecommendError.empty }
             displayedSongs = refreshed

@@ -88,15 +88,15 @@ struct LibraryView: View {
     @State private var kugouPlaylists: [Playlist] = []
     @State private var kugouLoading = false
     @State private var kugouSavedAt = Date.distantPast
-    @State private var qishuiPlaylists: [Playlist] = []
-    @State private var qishuiLoading = false
-    @State private var qishuiSavedAt = Date.distantPast
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     private var libraryProviders: [LibraryProvider] { platformPrefs.enabledLibraryProviders }
 
     private var source: LibraryProvider {
         get {
-            LibraryProvider(rawValue: librarySourceRaw) ?? .netease
+            guard let saved = LibraryProvider(rawValue: librarySourceRaw), libraryProviders.contains(saved) else {
+                return libraryProviders.first ?? .netease
+            }
+            return saved
         }
         nonmutating set {
             librarySourceRaw = newValue.rawValue
@@ -115,10 +115,6 @@ struct LibraryView: View {
         SyncedPlaylistOrderStore.shared.ordered(kugouPlaylists, source: .kugou)
     }
 
-    private var orderedQishuiPlaylists: [Playlist] {
-        SyncedPlaylistOrderStore.shared.ordered(qishuiPlaylists, source: .qishui)
-    }
-
     private var qqCacheAccountID: String {
         let raw = qqAuth.rawUin
         return raw.isEmpty ? qqAuth.playlistUin : raw
@@ -128,10 +124,6 @@ struct LibraryView: View {
         kugouAuth.userId
     }
 
-    private var qishuiCacheAccountID: String {
-        QishuiAPI.shared.sessionID ?? ""
-    }
-
     private var syncedPlaylistBinding: Binding<[Playlist]> {
         Binding(
             get: {
@@ -139,7 +131,7 @@ struct LibraryView: View {
                 case .netease: return orderedNeteasePlaylists
                 case .qq: return orderedQQPlaylists
                 case .kugou: return orderedKugouPlaylists
-                case .qishui: return orderedQishuiPlaylists
+                case .qishui: return []
                 }
             },
             set: { value in
@@ -147,7 +139,7 @@ struct LibraryView: View {
                 case .netease: auth.playlists = value
                 case .qq: qqPlaylists = value
                 case .kugou: kugouPlaylists = value
-                case .qishui: qishuiPlaylists = value
+                case .qishui: break
                 }
                 SyncedPlaylistOrderStore.shared.save(value, source: source.songSource)
             }
@@ -197,7 +189,7 @@ struct LibraryView: View {
                             case .netease: playlistsSection
                             case .qq: qqSection
                             case .kugou: kugouSection
-                            case .qishui: qishuiSection
+                            case .qishui: EmptyView()
                             }
                         case "最近播放":
                             historySection
@@ -240,11 +232,6 @@ struct LibraryView: View {
             guard platformPrefs.isEnabled(SearchProvider.kugou) else { return }
             guard source == .kugou else { return }
             Task { await loadKugouPlaylists(force: true) }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .beansQishuiLoginDidUpdate)) { _ in
-            guard platformPrefs.isEnabled(SearchProvider.qishui) else { return }
-            guard source == .qishui else { return }
-            Task { await loadQishuiPlaylists(force: true) }
         }
         .sheet(isPresented: $showHistory) {
             HistoryView()
@@ -643,7 +630,7 @@ struct LibraryView: View {
         case .kugou:
             await loadKugouPlaylists(force: force)
         case .qishui:
-            await loadQishuiPlaylists(force: force)
+            break
         }
     }
 
@@ -658,12 +645,6 @@ struct LibraryView: View {
     private var kugouSection: some View {
         VStack(alignment: .leading, spacing: 24) {
             kugouPlaylistsSection
-        }
-    }
-
-    private var qishuiSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            qishuiPlaylistsSection
         }
     }
 
@@ -780,63 +761,6 @@ struct LibraryView: View {
         }
     }
 
-    private var qishuiPlaylistsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "我的汽水歌单", trailing: QishuiAPI.shared.isLoggedIn ? "\(qishuiPlaylists.count) 个" : nil)
-            if !QishuiAPI.shared.isLoggedIn {
-                EmptyStateView(icon: "music.note.list", text: "登录汽水音乐后即可同步云端歌单")
-            } else if qishuiLoading {
-                LoadingStateView()
-            } else if qishuiPlaylists.isEmpty {
-                EmptyStateView(icon: "music.note.list", text: "暂未同步到汽水音乐歌单，请稍后重试")
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(orderedQishuiPlaylists) { playlist in
-                        Button {
-                            openRoute(LibraryRoute.playlist(playlist))
-                        } label: {
-                            HStack(spacing: 12) {
-                                CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(playlist.name)
-                                        .font(BeansFont.appFont(15, .medium))
-                                        .foregroundStyle(Color.beansLabel)
-                                        .lineLimit(1)
-                                    Text(beansSongCountText(playlist.trackCount))
-                                        .font(BeansFont.appFont(12))
-                                        .foregroundStyle(Color.beansComment)
-                                }
-                                Spacer(minLength: 8)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(Color.beansComment.opacity(0.6))
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button {
-                                BeansHaptics.tap()
-                                requestDelete(playlist)
-                            } label: {
-                                Label("删除歌单", systemImage: "trash")
-                            }
-                        }
-                        Divider().overlay(Color.beansComment.opacity(0.12))
-                    }
-                }
-                .padding(.vertical, 6)
-                .background {
-                    BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .beansCardShadow(radius: 8, y: 3)
-            }
-        }
-    }
-
     // MARK: - 歌单新建 / 删除
 
     private func loadQQPlaylists(force: Bool = false) async {
@@ -895,33 +819,6 @@ struct LibraryView: View {
             if kugouPlaylists.isEmpty { kugouPlaylists = [] }
         }
         kugouLoading = false
-    }
-
-    private func loadQishuiPlaylists(force: Bool = false) async {
-        guard QishuiAPI.shared.isLoggedIn else {
-            qishuiPlaylists = []
-            qishuiLoading = false
-            return
-        }
-        let cache = SyncedPlaylistCache.shared
-        if qishuiPlaylists.isEmpty,
-           let cached = cache.cachedPlaylists(source: .qishui, accountID: qishuiCacheAccountID) {
-            qishuiPlaylists = cached.playlists
-            qishuiSavedAt = cached.savedAt
-        }
-        if !force, !qishuiPlaylists.isEmpty, Date().timeIntervalSince(qishuiSavedAt) < cache.playlistTTL { return }
-        qishuiLoading = qishuiPlaylists.isEmpty
-        do {
-            let list = try await QishuiAPI.shared.accountPlaylists()
-            if !list.isEmpty {
-                qishuiPlaylists = list
-                cache.savePlaylists(list, source: .qishui, accountID: qishuiCacheAccountID)
-            }
-            qishuiSavedAt = Date()
-        } catch {
-            BeansLogger.shared.log("汽水音乐歌单同步失败：\(error.localizedDescription)", level: .error)
-        }
-        qishuiLoading = false
     }
 
     private func fillQQPlaylistCovers(_ list: [Playlist]) async {

@@ -5,6 +5,7 @@ struct BatchDownloadSheet: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var downloader = BatchDownloadManager.shared
+    @ObservedObject private var transfers = DownloadManager.shared
 
     let songs: [Song]
     let title: String
@@ -62,6 +63,23 @@ struct BatchDownloadSheet: View {
                                     .font(BeansFont.appFont(13))
                                     .foregroundStyle(Color.beansLabel)
                                     .lineLimit(1)
+                            }
+                            if let transfer = transfers.songProgress[downloader.currentSongKey] {
+                                if let fraction = transfer.fractionCompleted {
+                                    ProgressView(value: fraction)
+                                        .tint(Color.beansAmber)
+                                    Text("当前歌曲 \(Int((fraction * 100).rounded()))%")
+                                        .font(BeansFont.appFont(12, .medium))
+                                        .foregroundStyle(Color.beansComment)
+                                        .monospacedDigit()
+                                } else {
+                                    HStack(spacing: 8) {
+                                        ProgressView().controlSize(.small)
+                                        Text("正在获取歌曲…")
+                                            .font(BeansFont.appFont(12))
+                                            .foregroundStyle(Color.beansComment)
+                                    }
+                                }
                             }
                         }
                         .padding(.vertical, 4)

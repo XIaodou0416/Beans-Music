@@ -1,9 +1,11 @@
 import SwiftUI
+import Combine
 
 struct SongCell: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var auth: AuthStore
+    @State private var downloadProgress: SongDownloadProgress?
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
     @AppStorage(ThirdPartyAudioQuality.downloadStorageKey) private var downloadQualityRaw = ThirdPartyAudioQuality.kb320.rawValue
@@ -74,7 +76,25 @@ struct SongCell: View {
             }
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 0)
-            if isCurrent && player.isPlaying {
+            if let download = downloadProgress {
+                VStack(spacing: 3) {
+                    if let fraction = download.fractionCompleted {
+                        ProgressView(value: fraction)
+                            .tint(Color.beansAmber)
+                        Text("\(Int((fraction * 100).rounded()))%")
+                            .font(BeansFont.appFont(10, .medium, .monospaced))
+                            .foregroundStyle(Color.beansComment)
+                            .monospacedDigit()
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Color.beansAmber)
+                    }
+                }
+                .frame(width: 46, height: 32)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("正在下载 \(download.title)")
+            } else if isCurrent && player.isPlaying {
                 NowPlayingIndicator()
             } else {
                 Text(song.formattedDuration)
@@ -92,6 +112,9 @@ struct SongCell: View {
         .onTapGesture {
             onTap?()
         }
+        .onReceive(DownloadManager.shared.$songProgress
+            .map { $0[song.identityKey] }
+            .removeDuplicates()) { downloadProgress = $0 }
         .contextMenu {
             Button {
                 player.playNext(song)
@@ -109,6 +132,7 @@ struct SongCell: View {
                 } label: {
                     Label("下载歌曲", systemImage: "arrow.down.circle")
                 }
+                .disabled(downloadProgress != nil)
             }
             if !isCurrent {
                 Button {

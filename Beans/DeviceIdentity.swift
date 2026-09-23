@@ -24,19 +24,21 @@ enum DeviceIdentity {
     /// through the device keychain. The developer device starts with its
     /// familiar ID, but it can be changed through developer tools as well.
     static var publicID: String {
+        // Prefer the app's current persisted value during this install.
+        // Keychain can retain an older value if an update races or fails; using
+        // it first made some devices keep showing the previous ID indefinitely.
+        if let value = UserDefaults.standard.string(forKey: "beans.stablePublicID"),
+           isValidPublicID(value) {
+            // This property is read while rendering profile rows. Do not do
+            // synchronous Keychain writes on every SwiftUI body evaluation.
+            return value
+        }
         if let value = loadFromKeychain(account: publicIDAccount),
            isValidPublicID(value) {
             if loadFromKeychain(account: originalPublicIDAccount) == nil {
                 saveToKeychain(value, account: originalPublicIDAccount)
             }
-            return value
-        }
-        if let value = UserDefaults.standard.string(forKey: "beans.stablePublicID"),
-           isValidPublicID(value) {
-            saveToKeychain(value, account: publicIDAccount)
-            if loadFromKeychain(account: originalPublicIDAccount) == nil {
-                saveToKeychain(value, account: originalPublicIDAccount)
-            }
+            UserDefaults.standard.set(value, forKey: "beans.stablePublicID")
             return value
         }
         let generated = isDeveloperInstallation ? "5201314" : String(Int.random(in: 100000...500000))
@@ -64,8 +66,10 @@ enum DeviceIdentity {
         guard isValidPublicID(value) else {
             return
         }
-        saveToKeychain(value, account: publicIDAccount)
+        guard publicID != value else { return }
+        _ = originalPublicID
         UserDefaults.standard.set(value, forKey: "beans.stablePublicID")
+        saveToKeychain(value, account: publicIDAccount)
     }
 
     static func isValidPublicID(_ value: String) -> Bool {
@@ -137,7 +141,12 @@ enum DeviceIdentity {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        SecItemDelete(query as CFDictionary)
+        let updateStatus = SecItemUpdate(
+            query as CFDictionary,
+            [kSecValueData as String: data] as CFDictionary
+        )
+        guard updateStatus == errSecItemNotFound else { return }
+
         let attributes: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -145,6 +154,12 @@ enum DeviceIdentity {
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
-        SecItemAdd(attributes as CFDictionary, nil)
+        let addStatus = SecItemAdd(attributes as CFDictionary, nil)
+        if addStatus == errSecDuplicateItem {
+            SecItemUpdate(
+                query as CFDictionary,
+                [kSecValueData as String: data] as CFDictionary
+            )
+        }
     }
 }

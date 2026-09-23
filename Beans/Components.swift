@@ -686,7 +686,7 @@ private final class BeansScrollFadeObserver: NSObject {
         lastTopFade = showTopFade
         lastBottomFade = showBottomFade
         lastSize = size
-        WCLGFadeContentMaskApply(scrollView, 0, showTopFade ? 22 : 0, 0, showBottomFade ? 30 : 0)
+        WCLGFadeContentMaskApply(scrollView, 0, showTopFade ? 42 : 0, 0, showBottomFade ? 54 : 0)
     }
 }
 
@@ -1882,31 +1882,74 @@ final class ToastCenter: ObservableObject {
 
 struct ToastView: View {
     @ObservedObject var center: ToastCenter
+    @ObservedObject private var downloads = DownloadManager.shared
     @EnvironmentObject private var theme: ThemeStore
 
     var body: some View {
         let _ = theme.accent
-        Text(center.message ?? "")
-            .font(BeansFont.appFont(14, .medium))
-            .foregroundStyle(Color.beansLabel)
-            .lineLimit(2)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 0.8)
+        Group {
+            if let progress = downloads.visibleProgress {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundStyle(Color.beansAmber)
+                        Text("正在下载：\(progress.title)")
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 8)
+                        if let fraction = progress.fractionCompleted {
+                            Text("\(Int((fraction * 100).rounded()))%")
+                                .monospacedDigit()
+                        } else {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
                     }
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(Color.beansLabel)
+
+                    if let fraction = progress.fractionCompleted {
+                        ProgressView(value: fraction)
+                            .tint(Color.beansAmber)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: 340)
+                .background {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(.white.opacity(0.18), lineWidth: 0.8)
+                        }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                Text(center.message ?? "")
+                    .font(BeansFont.appFont(14, .medium))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background {
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 0.8)
+                            }
+                    }
+                    .clipShape(Capsule())
             }
-            .clipShape(Capsule())
+        }
             .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
             .padding(.horizontal, 30)
             .padding(.bottom, 92)
-            .opacity(center.message == nil ? 0 : 1)
-            .offset(y: center.message == nil ? 16 : 0)
+            .opacity(center.message == nil && downloads.visibleProgress == nil ? 0 : 1)
+            .offset(y: center.message == nil && downloads.visibleProgress == nil ? 16 : 0)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: center.message)
+            .animation(.easeOut(duration: 0.16), value: downloads.visibleProgress != nil)
             .allowsHitTesting(false)
     }
 }

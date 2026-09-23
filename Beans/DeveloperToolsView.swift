@@ -627,7 +627,12 @@ private struct DeveloperExclusiveIDSheet: View {
                             .font(BeansFont.appFont(13))
                             .foregroundStyle(Color.beansComment)
                             .fixedSize(horizontal: false, vertical: true)
-                        inputField("目标设备码", text: $targetUserID)
+                        inputField(
+                            "目标设备码",
+                            placeholder: "粘贴设备码",
+                            detail: "用于定位设备，不会修改设备码。",
+                            text: $targetUserID
+                        )
                         HStack {
                             Spacer()
                             Button("编辑当前设备") {
@@ -637,7 +642,13 @@ private struct DeveloperExclusiveIDSheet: View {
                             .foregroundStyle(Color.beansAmber)
                             .buttonStyle(.plain)
                         }
-                        inputField("新的公开 ID（可不填）", text: $assignedPublicID)
+                        inputField(
+                            "公开显示 ID",
+                            placeholder: "支持中文，最多 24 个字符",
+                            detail: "中文也会显示在 ID 铭牌中，不影响昵称；留空保留当前 ID。",
+                            text: $assignedPublicID,
+                            isPublicID: true
+                        )
                         badgeStyleSelector
                         Toggle("启用专属铭牌", isOn: $enabled)
                             .tint(Color.beansAmber)
@@ -677,14 +688,28 @@ private struct DeveloperExclusiveIDSheet: View {
         .task { await reloadRecords() }
     }
 
-    private func inputField(_ title: String, text: Binding<String>) -> some View {
-        TextField(title, text: text)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .font(.system(size: 13, design: .monospaced))
-            .padding(.horizontal, 14)
-            .frame(height: 48)
-            .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), forceLiquid: true) }
+    private func inputField(
+        _ title: String,
+        placeholder: String,
+        detail: String,
+        text: Binding<String>,
+        isPublicID: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(BeansFont.appFont(13, .semibold))
+                .foregroundStyle(Color.beansLabel)
+            Text(detail)
+                .font(BeansFont.appFont(11))
+                .foregroundStyle(Color.beansComment)
+            TextField(placeholder, text: text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(isPublicID ? BeansFont.appFont(14) : .system(size: 13, design: .monospaced))
+                .padding(.horizontal, 14)
+                .frame(height: 48)
+                .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), forceLiquid: true) }
+        }
     }
 
     private var badgeStyleSelector: some View {
@@ -797,7 +822,7 @@ private struct DeveloperExclusiveIDSheet: View {
     }
 
     private var isValidTargetID: Bool {
-        let value = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return value.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil
     }
 
@@ -837,7 +862,9 @@ private struct DeveloperExclusiveIDSheet: View {
         let current = records[index]
         records[index] = BeansExclusiveAccessRecord(
             userID: current.userID,
-            publicUserID: current.publicUserID,
+            publicUserID: assignedPublicID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? current.publicUserID
+                : assignedPublicID.trimmingCharacters(in: .whitespacesAndNewlines),
             deviceModel: current.deviceModel,
             deviceName: current.deviceName,
             systemName: current.systemName,

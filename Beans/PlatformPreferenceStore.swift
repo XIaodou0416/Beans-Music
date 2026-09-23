@@ -35,9 +35,10 @@ final class PlatformPreferenceStore: ObservableObject {
     }
 
     var enabledLibraryProviders: [LibraryProvider] {
-        enabledSearchProviders.compactMap { provider in
+        let providers = enabledSearchProviders.filter { $0 != .qishui }.compactMap { provider in
             LibraryProvider(rawValue: provider.rawValue)
         }
+        return providers.isEmpty ? [.netease] : providers
     }
 
     var summaryText: String {
@@ -67,7 +68,7 @@ final class PlatformPreferenceStore: ObservableObject {
     }
 
     func ensureVisible(_ provider: LibraryProvider) -> LibraryProvider {
-        isEnabled(provider) ? provider : enabledLibraryProviders.first ?? .netease
+        enabledLibraryProviders.contains(provider) ? provider : enabledLibraryProviders.first ?? .netease
     }
 
     func resetToDefault() {

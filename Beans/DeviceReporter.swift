@@ -125,15 +125,16 @@ final class DeviceReporter {
         defer { startHeartbeatLoop() }
         var payload = devicePayload()
         payload["event"] = "register"
+        let publicIDRevision = UserDefaults.standard.integer(forKey: BeansBackendSettings.publicIDRevisionKey)
 
         do {
             let data = try await postJSON(to: endpoint(for: "register"), payload: payload)
-            applyServerState(from: data)
+            applyServerState(from: data, allowPublicIDUpdate: true, expectedPublicIDRevision: publicIDRevision)
         } catch {
             // 保留已有心跳接口作为兼容兜底；新后端部署前不影响原有启动上报。
             do {
                 let data = try await postJSON(to: legacyHeartbeatEndpoint, payload: payload)
-                applyServerState(from: data)
+                applyServerState(from: data, allowPublicIDUpdate: true, expectedPublicIDRevision: publicIDRevision)
             } catch {
                 BeansLogger.shared.log("设备启动信息上报失败：\(error.localizedDescription)", level: .debug)
             }
@@ -145,9 +146,10 @@ final class DeviceReporter {
         guard !heartbeatInFlight else { return }
         heartbeatInFlight = true
         defer { heartbeatInFlight = false }
+        let publicIDRevision = UserDefaults.standard.integer(forKey: BeansBackendSettings.publicIDRevisionKey)
         do {
             let data = try await postJSON(to: endpoint(for: "heartbeat"), payload: devicePayload())
-            applyServerState(from: data)
+            applyServerState(from: data, allowPublicIDUpdate: true, expectedPublicIDRevision: publicIDRevision)
         } catch {
             BeansLogger.shared.log("在线心跳上报失败：\(error.localizedDescription)", level: .debug)
         }
@@ -510,7 +512,7 @@ final class DeviceReporter {
         guard BeansDeveloperAccess.isAuthorized else {
             throw BackendRequestError.server("当前设备没有开发者权限")
         }
-        let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedTarget = targetUserID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let normalizedAssignedID = assignedPublicID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalizedTarget.range(of: #"^[a-f0-9-]{16,80}$"#, options: .regularExpression) != nil else {
             throw BackendRequestError.server("设备码格式不正确")
@@ -547,14 +549,25 @@ final class DeviceReporter {
             guard result.ok != false else {
                 throw BackendRequestError.server(result.message ?? "专属 ID 操作失败")
             }
-            applyServerState(
-                result,
-                allowPublicIDUpdate: normalizedTarget.lowercased() == DeviceIdentity.userID.lowercased()
-            )
+            guard normalizedAssignedID.isEmpty || result.publicUserID == normalizedAssignedID else {
+                throw BackendRequestError.invalidResponse
+            }
+            // This response describes the target device, not the developer.
+            if normalizedTarget == DeviceIdentity.userID.lowercased() {
+                applyServerState(result, allowPublicIDUpdate: true)
+            }
         } catch {
             if isRecoverableGrantError(error),
-               await serverConfirmsExclusiveAccess(target: normalizedTarget, enabled: enabled) {
+               await serverConfirmsExclusiveAccess(
+                   target: normalizedTarget,
+                   enabled: enabled,
+                   assignedPublicID: normalizedAssignedID,
+                   badgeStyle: badgeStyle
+               ) {
                 BeansLogger.shared.log("专属 ID 请求未收到完整响应，但后台状态已确认，按成功处理", level: .debug)
+                if normalizedTarget.lowercased() == DeviceIdentity.userID.lowercased() {
+                    await reportHeartbeat()
+                }
                 return
             }
             throw error
@@ -589,15 +602,23 @@ final class DeviceReporter {
         return false
     }
 
-    private func serverConfirmsExclusiveAccess(target: String, enabled: Bool) async -> Bool {
+    private func serverConfirmsExclusiveAccess(
+        target: String,
+        enabled: Bool,
+        assignedPublicID: String,
+        badgeStyle: BeansExclusiveIDBadgeStyle
+    ) async -> Bool {
         let normalizedTarget = target.lowercased()
-        for attempt in 0..<2 {
+        let expectedPublicID = assignedPublicID.trimmingCharacters(in: .whitespacesAndNewlines)
+        for attempt in 0..<3 {
             if let record = try? await fetchExclusiveAccessStatus(for: normalizedTarget),
-               record.enabled == enabled {
+               record.enabled == enabled,
+               record.badgeStyle == nil || record.badgeStyle == badgeStyle,
+               expectedPublicID.isEmpty || record.publicUserID == expectedPublicID {
                 return true
             }
-            if attempt == 0 {
-                try? await Task.sleep(nanoseconds: 300_000_000)
+            if attempt < 2 {
+                try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 300_000_000)
             }
         }
         return false
@@ -730,17 +751,27 @@ final class DeviceReporter {
         }
     }
 
-    private func applyServerState(from data: Data) {
+    private func applyServerState(
+        from data: Data,
+        allowPublicIDUpdate: Bool = false,
+        expectedPublicIDRevision: Int? = nil
+    ) {
         guard let response = try? decodeResponse(data) else { return }
-        applyServerState(response)
+        applyServerState(
+            response,
+            allowPublicIDUpdate: allowPublicIDUpdate,
+            expectedPublicIDRevision: expectedPublicIDRevision
+        )
     }
 
-    private func applyServerState(_ response: BackendResponse, allowPublicIDUpdate: Bool = false) {
-        // Normal register/heartbeat responses describe the server's copy of
-        // this device. Never replace the local public ID from a stale response.
-        // An explicit developer rename for this device is the only operation
-        // allowed to update the local label.
-        if allowPublicIDUpdate, let publicUserID = response.publicUserID {
+    private func applyServerState(
+        _ response: BackendResponse,
+        allowPublicIDUpdate: Bool = false,
+        expectedPublicIDRevision: Int? = nil
+    ) {
+        let currentPublicIDRevision = UserDefaults.standard.integer(forKey: BeansBackendSettings.publicIDRevisionKey)
+        let responseIsCurrent = expectedPublicIDRevision == nil || expectedPublicIDRevision == currentPublicIDRevision
+        if allowPublicIDUpdate, responseIsCurrent, let publicUserID = response.publicUserID {
             let previous = DeviceIdentity.publicID
             DeviceIdentity.updatePublicID(publicUserID)
             if previous != DeviceIdentity.publicID {

@@ -204,8 +204,9 @@ struct ProfileView: View {
     private var isEnglish: Bool { languageRaw == AppLanguage.english.rawValue }
 
     private var displayPlatformSummary: String {
-        if !isEnglish { return platformPrefs.summaryText }
-        return platformPrefs.enabledSearchProviders.map { provider in
+        let providers = platformPrefs.enabledSearchProviders.filter { $0 != .qishui }
+        if !isEnglish { return providers.map(\.rawValue).joined(separator: " / ") }
+        return providers.map { provider in
             switch provider {
             case .netease: return "NetEase Cloud Music"
             case .qq: return "QQ Music"
@@ -237,7 +238,7 @@ struct ProfileView: View {
                 parts.append(kugouAuth.nickname.isEmpty ? (isEnglish ? "Kugou Music Logged In" : "酷狗已登录") : kugouAuth.nickname)
         }
         if parts.isEmpty {
-            return isEnglish ? "Sign in to sync \(displayPlatformSummary) playlists" : "登录后可同步 \(platformPrefs.summaryText) 歌单"
+            return isEnglish ? "Sign in to sync \(displayPlatformSummary) playlists" : "登录后可同步 \(displayPlatformSummary) 歌单"
         }
         return parts.joined(separator: " · ")
     }
@@ -960,7 +961,7 @@ struct ProfileView: View {
                 featureCell(icon: "clock.arrow.circlepath", title: "播放历史", subtitle: String(format: NSLocalizedString("最近播放 %d 首", comment: ""), player.history.count)) {
                     showHistory = true
                 }
-                featureCell(icon: hasVisibleAccountLogin ? "checkmark.seal.fill" : "globe", title: isEnglish ? "Accounts and Sign-in" : "账号与登录", subtitle: hasVisibleAccountLogin ? accountStatusLine : (isEnglish ? "Sign in to \(displayPlatformSummary)" : "登录 \(platformPrefs.summaryText)")) {
+                featureCell(icon: hasVisibleAccountLogin ? "checkmark.seal.fill" : "globe", title: isEnglish ? "Accounts and Sign-in" : "账号与登录", subtitle: hasVisibleAccountLogin ? accountStatusLine : (isEnglish ? "Sign in to \(displayPlatformSummary)" : "登录 \(displayPlatformSummary)")) {
                     BeansHaptics.tap()
                     showAccountHub = true
                 }
@@ -1572,7 +1573,6 @@ struct AccountHubSheet: View {
     @EnvironmentObject private var auth: AuthStore
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
-    @ObservedObject private var qishuiAPI = QishuiAPI.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @Environment(\.dismiss) private var dismiss
@@ -1580,8 +1580,6 @@ struct AccountHubSheet: View {
     @State private var showNeteaseLogin = false
     @State private var showQQLogin = false
     @State private var showKugouLogin = false
-    @State private var showQishuiLogin = false
-    @State private var qishuiAccount: QishuiAccount?
     @State private var confirmNeteaseLogout = false
     @State private var confirmQQLogout = false
     @State private var confirmKugouLogout = false
@@ -1609,7 +1607,6 @@ struct AccountHubSheet: View {
                         if platformPrefs.isEnabled(SearchProvider.netease) { neteaseCard }
                         if platformPrefs.isEnabled(SearchProvider.qq) { qqCard }
                         if platformPrefs.isEnabled(SearchProvider.kugou) { kugouCard }
-                        if platformPrefs.isEnabled(SearchProvider.qishui) { qishuiCard }
                     }
                     .padding(16)
                 }
@@ -1635,14 +1632,6 @@ struct AccountHubSheet: View {
         .sheet(isPresented: $showKugouLogin) {
             KugouLoginSheet()
                 .environmentObject(theme)
-        }
-        .sheet(isPresented: $showQishuiLogin) {
-            QishuiLoginSheet()
-                .environmentObject(theme)
-        }
-        .onAppear { loadQishuiAccount() }
-        .onReceive(NotificationCenter.default.publisher(for: .beansQishuiLoginDidUpdate)) { _ in
-            loadQishuiAccount()
         }
         .confirmationDialog("退出网易云登录？", isPresented: $confirmNeteaseLogout, titleVisibility: .visible) {
             Button("退出登录", role: .destructive) {
@@ -1828,59 +1817,6 @@ struct AccountHubSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-    }
-
-    private var qishuiCard: some View {
-        Button {
-            BeansHaptics.tap()
-            if qishuiAPI.isLoggedIn {
-                QishuiAPI.shared.clearSession()
-                qishuiAccount = nil
-                NotificationCenter.default.post(name: .beansQishuiLoginDidUpdate, object: nil)
-                ToastCenter.shared.show("已退出汽水音乐")
-            } else {
-                showQishuiLogin = true
-            }
-        } label: {
-            HStack(spacing: 14) {
-                Image("BrandQishui")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 48, height: 48)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("汽水音乐")
-                        .font(BeansFont.appFont(15, .semibold))
-                        .foregroundStyle(Color.beansLabel)
-                    Text(qishuiAccount?.nickname ?? (qishuiAPI.isLoggedIn ? "已登录" : "未登录 · 扫码登录同步歌单"))
-                        .font(BeansFont.appFont(12))
-                        .foregroundStyle(Color.beansComment)
-                        .lineLimit(2)
-                }
-                Spacer()
-                Text(qishuiAPI.isLoggedIn ? "退出" : "登录")
-                    .font(BeansFont.appFont(13, .medium))
-                    .foregroundStyle(qishuiAPI.isLoggedIn ? Color.red : Color.beansAmber)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background { BeansSurface(shape: Capsule()) }
-            }
-            .padding(14)
-            .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous)) }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
-    }
-
-    private func loadQishuiAccount() {
-        guard QishuiAPI.shared.isLoggedIn else {
-            qishuiAccount = nil
-            return
-        }
-        Task {
-            let account = try? await QishuiAPI.shared.account()
-            await MainActor.run { qishuiAccount = account }
-        }
     }
 
 }

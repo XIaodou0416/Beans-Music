@@ -613,9 +613,11 @@ struct RootView: View {
 
     @ViewBuilder
     private var platformSelectionMenu: some View {
-        let current = SearchProvider(rawValue: homeSourceRaw) ?? platformPrefs.enabledSearchProviders.first ?? .netease
+        let providers = platformPrefs.enabledSearchProviders.filter { $0 != .qishui }
+        let saved = SearchProvider(rawValue: homeSourceRaw)
+        let current = saved.flatMap { providers.contains($0) ? $0 : nil } ?? providers.first ?? .netease
         Text("主页平台")
-        ForEach(platformPrefs.enabledSearchProviders) { provider in
+        ForEach(providers) { provider in
             Button {
                 BeansHaptics.select()
                 homeSourceRaw = provider.rawValue
