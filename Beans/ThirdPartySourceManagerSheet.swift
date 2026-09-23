@@ -587,6 +587,7 @@ private enum ThirdPartySourcePlatform: String, CaseIterable, Identifiable {
     case kuwo
     case migu
     case qishui
+    case bilibili
 
     var id: String { rawValue }
 
@@ -630,6 +631,8 @@ private enum ThirdPartySourcePlatform: String, CaseIterable, Identifiable {
             self = .migu
         case "qs", "qishui":
             self = .qishui
+        case "bili", "bilibili":
+            self = .bilibili
         default:
             self = .all
         }

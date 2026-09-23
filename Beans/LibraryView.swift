@@ -97,6 +97,7 @@ struct LibraryView: View {
     @State private var kugouSavedAt = Date.distantPast
     @State private var bilibiliPlaylists: [Playlist] = []
     @State private var bilibiliLoading = false
+    @State private var bilibiliSavedAt = Date.distantPast
     @State private var showBilibiliLogin = false
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     private var libraryProviders: [LibraryProvider] { platformPrefs.enabledLibraryProviders }

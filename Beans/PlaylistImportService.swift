@@ -382,12 +382,12 @@ enum BeansPlaylistImportService {
                 ?? defaultSource?.rawValue
         )
         let rawBilibiliID = firstString(value["bilibiliID"], value["bvid"], value["aid"], value["av"]) ?? rawID
-        let bilibiliID = source == .bilibili ? rawBilibiliID.flatMap { raw -> String? in
-            let videoID = BilibiliAPI.videoID(raw) ?? (raw.allSatisfy(\.isNumber) ? "av\(raw)" : nil)
+        let bilibiliID: String? = source == .bilibili ? {
+            let videoID = BilibiliAPI.videoID(rawBilibiliID) ?? (rawBilibiliID.allSatisfy(\.isNumber) ? "av\(rawBilibiliID)" : nil)
             guard let videoID else { return nil }
             let cid = firstString(value["cid"], value["pageCid"])
             return cid.map { "\(videoID):\($0)" } ?? videoID
-        } : nil
+        }() : nil
         let qqMid = firstString(value["qqMid"], value["songmid"], value["mid"], metadata["songmid"], metadata["songMid"])
         let qqMediaMid = firstString(value["qqMediaMid"], value["media_mid"], value["strMediaMid"], metadata["strMediaMid"])
         let kugouHash = firstString(value["kugouHash"], value["FileHash"], value["hash"], metadata["FileHash"], metadata["hash"])
