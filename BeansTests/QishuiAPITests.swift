@@ -16,6 +16,34 @@ final class QishuiAPITests: XCTestCase {
         XCTAssertEqual(QishuiResourceURL.first(in: "//cdn.example.com/cover.jpg")?.absoluteString, "https://cdn.example.com/cover.jpg")
     }
 
+    func testQishuiPlaylistCoverCombinesURIAndConvertsImagePrefixToObjectPath() {
+        let playlist: [String: Any] = [
+            "cover_url": "https://p3-luna.douyinpic.com/img/",
+            "raw": [
+                "url_cover": [
+                    "uri": "ies-music/pgc_cover_123",
+                    "urls": [
+                        "https://p3-luna.douyinpic.com/img/",
+                        "https://p6-luna.douyinpic.com/img/",
+                    ],
+                    "template_prefix": "tplv-b829550vbb",
+                ],
+            ],
+        ]
+
+        XCTAssertEqual(
+            QishuiResourceURL.playlistCover(in: playlist)?.absoluteString,
+            "https://p3-luna.douyinpic.com/obj/ies-music/pgc_cover_123"
+        )
+    }
+
+    func testQishuiImagePrefixIsRepairedWhenOnlyNormalizedCoverURLExists() {
+        XCTAssertEqual(
+            QishuiResourceURL.first(in: "https://p3-luna.douyinpic.com/img/ies-music/pgc_cover_123")?.absoluteString,
+            "https://p3-luna.douyinpic.com/obj/ies-music/pgc_cover_123"
+        )
+    }
+
     func testSearchPageStateUsesPublicCatalogOffset() {
         let state = QishuiSearchPageState.resolve(
             ["has_more": true, "next_offset": 50],

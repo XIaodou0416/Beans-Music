@@ -59,7 +59,7 @@ final class PlaylistSquareCache {
 
     private func cacheKey(provider: SearchProvider, category: PlaylistSquareCategory, loggedIn: Bool) -> String {
         let safeID = category.id.replacingOccurrences(of: "[^A-Za-z0-9_-]", with: "_", options: .regularExpression)
-        let version = provider == .qishui ? "v6" : "v5"
+        let version = provider == .qishui ? "v7" : "v5"
         return "beans.playlistSquare.cache.\(version).\(provider.rawValue).\(loggedIn ? "login" : "guest").\(safeID)"
     }
 }
