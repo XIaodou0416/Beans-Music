@@ -146,7 +146,7 @@ struct DiscoverView: View {
 
     private var musicHomeContent: some View {
         let _ = theme.accent
-        BeansNavigationStackWithPath(path: $navigationPath) {
+        return BeansNavigationStackWithPath(path: $navigationPath) {
         ZStack {
             if !usesSharedRootBackdrop {
                 // 主页背景：壁纸/背景色永远在发现页生效（homeMode），同步开启时其他页面也生效

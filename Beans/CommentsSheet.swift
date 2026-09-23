@@ -95,8 +95,8 @@ struct CommentsSheet: View {
                     .navigationTitle("评论")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        if song.source == .bilibili {
-                            ToolbarItem(placement: .navigationBarTrailing) {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            if song.source == .bilibili {
                                 Button("官方评论") { officialComments = BilibiliOfficialPage.video(song) }
                             }
                         }
@@ -153,8 +153,8 @@ struct CommentsSheet: View {
             .navigationTitle("评论")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if song.source == .bilibili {
-                    ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if song.source == .bilibili {
                         Button("官方评论") { officialComments = BilibiliOfficialPage.video(song) }
                     }
                 }
