@@ -1345,7 +1345,24 @@ struct SearchView: View {
             do {
                 switch selectedType {
                 case .all:
-                    async let songsTask = catalogSongs(keyword: trimmed, provider: selectedProvider, limit: 12)
+                    let partialSongHandler: (@MainActor ([Song]) -> Void)?
+                    if selectedProvider == .qishui {
+                        partialSongHandler = { partial in
+                            guard searchRequestID == requestID else { return }
+                            songResults = partial
+                            let metadata = catalogMetadata(from: partial)
+                            artistResults = metadata.artists
+                            albumResults = metadata.albums
+                        }
+                    } else {
+                        partialSongHandler = nil
+                    }
+                    async let songsTask = catalogSongs(
+                        keyword: trimmed,
+                        provider: selectedProvider,
+                        limit: 12,
+                        onPartialResults: partialSongHandler
+                    )
                     async let playlistsTask = catalogPlaylists(keyword: trimmed, provider: selectedProvider, limit: 12)
                     // 网易云单曲结果只携带关联专辑封面，且没有可用于详情页的歌手、
                     // 专辑标识。综合页改用对应目录接口，避免把歌曲封面或拼接名称误当作

@@ -374,7 +374,7 @@ final class QishuiAPI: ObservableObject {
     func recommendedPlaylists(limit: Int = 18) async throws -> [Playlist] {
         let targetCount = min(max(limit, 1), 50)
         let accountKey = Self.stableID(sessionID ?? "guest")
-        let cacheKey = "recommendations|\(accountKey)|\(targetCount)"
+        let cacheKey = catalogCacheKey("recommendations", query: accountKey, limit: targetCount)
         let (cached, stale) = cacheLookup(recommendationCache, key: cacheKey, ttl: recommendationTTL, staleTTL: 7 * 24 * 3600)
         if let cached { return cached }
         do {
@@ -400,15 +400,18 @@ final class QishuiAPI: ObservableObject {
     func playlistDetails(
         id: String,
         count: Int = 1000,
+        forceRefresh: Bool = false,
         onPartialSongs: (@MainActor ([Song]) -> Void)? = nil
     ) async throws -> QishuiPlaylistDetails {
         let targetCount = min(max(count, 1), 1000)
-        let cacheKey = "details|\(id)|\(targetCount)"
+        let baseURL = UserDefaults.standard.string(forKey: Self.baseURLKey) ?? Self.defaultBaseURL
+        let cacheKey = "details|\(baseURL)|\(id)|\(targetCount)"
         let (cached, stale) = cacheLookup(playlistDetailsCache, key: cacheKey, ttl: playlistDetailsTTL, staleTTL: 7 * 24 * 3600)
-        if let cached {
+        if let cached, !forceRefresh {
             if let onPartialSongs { await onPartialSongs(cached.songs) }
             return cached
         }
+        let fallback = cached ?? stale
         let pageSize = min(targetCount, 100)
         var cursor = ""
         var sessionID = ""
@@ -448,8 +451,7 @@ final class QishuiAPI: ObservableObject {
             }
         } catch {
             if Task.isCancelled { throw error }
-            if !songs.isEmpty { throw error }
-            if let stale { return stale }
+            if let fallback { return fallback }
             throw error
         }
         let result = QishuiPlaylistDetails(playlist: playlist, songs: Array(songs.prefix(targetCount)))
@@ -457,15 +459,21 @@ final class QishuiAPI: ObservableObject {
             cache(result, in: playlistDetailsCache, key: cacheKey)
             return result
         }
-        return stale ?? result
+        return fallback ?? result
     }
 
     func playlistSongs(
         id: String,
         count: Int = 1000,
+        forceRefresh: Bool = false,
         onPartialSongs: (@MainActor ([Song]) -> Void)? = nil
     ) async throws -> [Song] {
-        try await playlistDetails(id: id, count: count, onPartialSongs: onPartialSongs).songs
+        try await playlistDetails(
+            id: id,
+            count: count,
+            forceRefresh: forceRefresh,
+            onPartialSongs: onPartialSongs
+        ).songs
     }
 
     func artistSongs(name: String, limit: Int = 300) async throws -> [Song] {

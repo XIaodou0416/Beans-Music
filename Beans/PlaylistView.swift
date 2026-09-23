@@ -327,8 +327,10 @@ struct PlaylistView: View {
                 }
             } else if playlist.source == .qishui {
                 let identifier = playlist.qishuiID ?? String(playlist.id)
-                tracks = try await QishuiAPI.shared.playlistSongs(id: identifier) { partialSongs in
+                let preserveVisibleTracks = !tracks.isEmpty
+                tracks = try await QishuiAPI.shared.playlistSongs(id: identifier, forceRefresh: force) { partialSongs in
                     guard !partialSongs.isEmpty else { return }
+                    guard !preserveVisibleTracks else { return }
                     tracks = partialSongs
                     loading = false
                 }

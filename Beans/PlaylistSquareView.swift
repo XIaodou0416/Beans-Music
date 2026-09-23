@@ -517,7 +517,10 @@ struct PlaylistSquareView: View {
                 loadedPlaylists = try await QishuiAPI.shared.recommendedPlaylists(limit: 18)
             }
             guard isCurrent(requestedID, source: requestedSource, categoryID: category.id) else { return }
-            playlists = loadedPlaylists
+            let keepVisiblePlaylists = loadedPlaylists.isEmpty && !playlists.isEmpty
+            if !keepVisiblePlaylists {
+                playlists = loadedPlaylists
+            }
             if requestedSource == .netease {
                 neteaseHasMore = hasMore
                 neteaseOffset = nextOffset
@@ -528,11 +531,11 @@ struct PlaylistSquareView: View {
             )
             if loadedPlaylists.isEmpty {
                 BeansLogger.shared.log(
-                    "歌单广场返回空内容：平台=\(requestedSource.rawValue) 分类=\(category.name)，保留空状态供用户重试",
+                    "歌单广场返回空内容：平台=\(requestedSource.rawValue) 分类=\(category.name) 保留已有内容=\(keepVisiblePlaylists)",
                     level: .warn
                 )
             }
-            if requestedSource != .netease {
+            if requestedSource != .netease, !loadedPlaylists.isEmpty {
                 cache.save(
                     loadedPlaylists,
                     provider: requestedSource,
@@ -544,9 +547,11 @@ struct PlaylistSquareView: View {
             }
         } catch {
             guard isCurrent(requestedID, source: requestedSource, categoryID: category.id) else { return }
-            errorMessage = error.localizedDescription
+            if playlists.isEmpty {
+                errorMessage = error.localizedDescription
+            }
             BeansLogger.shared.log(
-                "歌单广场加载失败：平台=\(requestedSource.rawValue) 分类=\(category.name) error=\(error.localizedDescription)",
+                "歌单广场加载失败：平台=\(requestedSource.rawValue) 分类=\(category.name) 保留已有内容=\(!playlists.isEmpty) error=\(error.localizedDescription)",
                 level: .warn
             )
         }
