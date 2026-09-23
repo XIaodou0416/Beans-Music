@@ -839,6 +839,7 @@ struct DiscoverView: View {
         case .qq: return qqTopLists.count
         case .kugou: return kugouTopLists.count
         case .qishui: return 0
+        case .bilibili: return 0
         }
     }
 
@@ -853,6 +854,7 @@ struct DiscoverView: View {
         case .qq: return !qqTopLists.isEmpty
         case .kugou: return !kugouTopLists.isEmpty
         case .qishui: return false
+        case .bilibili: return false
         }
     }
 
@@ -1594,6 +1596,7 @@ struct DiscoverView: View {
         case .qq: return "QQ音乐热门歌单"
         case .kugou: return "歌单广场"
         case .qishui: return "汽水音乐歌单"
+        case .bilibili: return "哔哩哔哩音乐"
         }
     }
 
@@ -1606,6 +1609,7 @@ struct DiscoverView: View {
         case .qq: return "QQ音乐热门歌单暂未加载成功\n请稍后重试"
         case .kugou: return "歌单广场暂时没有内容"
         case .qishui: return "汽水音乐歌单暂时没有内容"
+        case .bilibili: return "哔哩哔哩音乐暂时没有内容"
         }
     }
 
@@ -1803,6 +1807,8 @@ struct DiscoverView: View {
                     results = []
                 case .qishui:
                     results = (try? await QishuiAPI.shared.searchPlaylists(keyword: keyword, limit: 30)) ?? []
+                case .bilibili:
+                    results = (try? await BilibiliAPI.shared.searchPlaylists(keyword: keyword, limit: 30)) ?? []
                 }
                 guard !Task.isCancelled else { return }
                 playlistSearchResults = results
@@ -1824,6 +1830,8 @@ struct DiscoverView: View {
             return ""
         case .qishui:
             return beansLocalized("搜索汽水音乐歌单", "Search Qishui playlists")
+        case .bilibili:
+            return beansLocalized("搜索哔哩哔哩音乐", "Search Bilibili music")
         }
     }
 
@@ -2057,6 +2065,11 @@ struct DiscoverView: View {
             snapshot.personalized = personalized
         case .qishui:
             break
+        case .bilibili:
+            async let songs: [Song] = (try? await BilibiliAPI.shared.recommendedSongs(limit: 30)) ?? []
+            async let playlists: [Playlist] = (try? await BilibiliAPI.shared.recommendedPlaylists(limit: 18)) ?? []
+            snapshot.dailySongs = await songs
+            snapshot.personalized = await playlists
         }
         return snapshot
     }
@@ -2441,6 +2454,11 @@ struct DailySongsSheet: View {
                 "汽水音乐暂不提供每日推荐。",
                 "Qishui daily recommendations are unavailable."
             )
+        case .bilibili:
+            return beansLocalized(
+                "来自哔哩哔哩音乐榜单的热门视频音轨。",
+                "Popular video audio from Bilibili's music ranking."
+            )
         }
     }
 
@@ -2476,6 +2494,8 @@ struct DailySongsSheet: View {
                 }
             case .qishui:
                 refreshed = []
+            case .bilibili:
+                refreshed = try await BilibiliAPI.shared.recommendedSongs(limit: 30)
             }
             guard !refreshed.isEmpty else { throw BeansDailyRecommendError.empty }
             displayedSongs = refreshed
@@ -2516,6 +2536,7 @@ private struct ChartPlatformBadge: View {
         case .qq: return "BrandQQ"
         case .kugou: return "BrandKugou"
         case .qishui: return "BrandQishui"
+        case .bilibili: return "BrandBilibili"
         default: return ""
         }
     }
@@ -3264,6 +3285,8 @@ private struct HomeUnifiedSearchSheet: View {
             return (try? await KugouMusicAPI.shared.searchSongs(keyword: keyword, limit: 30)) ?? []
         case .qishui:
             return (try? await QishuiAPI.shared.searchSongs(keyword: keyword, limit: 30)) ?? []
+        case .bilibili:
+            return (try? await BilibiliAPI.shared.searchSongs(keyword: keyword, limit: 30)) ?? []
         }
     }
 

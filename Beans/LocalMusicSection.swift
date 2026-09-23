@@ -725,6 +725,7 @@ struct LocalPlaylistDetailSheet: View {
         case .kuwo: return "酷我音乐"
         case .migu: return "咪咕音乐"
         case .qishui: return "汽水音乐"
+        case .bilibili: return "哔哩哔哩"
         }
     }
 }
@@ -846,6 +847,8 @@ struct LocalSearchAddSheet: View {
                     songs = try await KugouMusicAPI.shared.searchSongs(keyword: trimmed)
                 case .qishui:
                     songs = try await QishuiAPI.shared.searchSongs(keyword: trimmed)
+                case .bilibili:
+                    songs = try await BilibiliAPI.shared.searchSongs(keyword: trimmed)
                 }
                 guard !Task.isCancelled else { return }
                 results = songs

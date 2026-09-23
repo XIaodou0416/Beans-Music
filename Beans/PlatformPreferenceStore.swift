@@ -22,6 +22,10 @@ final class PlatformPreferenceStore: ObservableObject {
             selectedRaw = Set(SearchProvider.allCases.map(\.rawValue))
         } else {
             selectedRaw = Set(saved.map(Self.migrateRawValue))
+            if !UserDefaults.standard.bool(forKey: "beans.platforms.migrated.bilibili.v1") {
+                selectedRaw.insert(SearchProvider.bilibili.rawValue)
+                UserDefaults.standard.set(true, forKey: "beans.platforms.migrated.bilibili.v1")
+            }
         }
         orderedRaw = UserDefaults.standard.stringArray(forKey: Self.orderKey)?
             .map(Self.migrateRawValue) ?? []
@@ -140,6 +144,7 @@ extension LibraryProvider {
         case .qq: return .qq
         case .kugou: return .kugou
         case .qishui: return .qishui
+        case .bilibili: return .bilibili
         }
     }
 }

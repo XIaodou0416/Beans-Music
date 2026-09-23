@@ -234,6 +234,8 @@ enum AdditionalCatalogSearchAPI {
             return dictionaries(in: root["songList"] ?? root["songlist"] ?? root["tracks"] ?? root["list"] ?? root["data"]).compactMap(miguSong)
         case .qishui:
             throw AdditionalCatalogSearchError.invalidResponse
+        case .bilibili:
+            throw AdditionalCatalogSearchError.invalidResponse
         default:
             throw AdditionalCatalogSearchError.invalidResponse
         }

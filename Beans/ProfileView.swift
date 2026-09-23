@@ -212,6 +212,7 @@ struct ProfileView: View {
             case .qq: return "QQ Music"
             case .kugou: return "Kugou Music"
             case .qishui: return "Qishui Music"
+            case .bilibili: return "Bilibili"
             }
         }.joined(separator: " / ")
     }
@@ -1573,6 +1574,7 @@ struct AccountHubSheet: View {
     @EnvironmentObject private var auth: AuthStore
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
+    @ObservedObject private var bilibiliAuth = BilibiliAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
     @AppStorage("beans.language") private var languageRaw = AppLanguage.chinese.rawValue
     @Environment(\.dismiss) private var dismiss
@@ -1580,9 +1582,11 @@ struct AccountHubSheet: View {
     @State private var showNeteaseLogin = false
     @State private var showQQLogin = false
     @State private var showKugouLogin = false
+    @State private var showBilibiliLogin = false
     @State private var confirmNeteaseLogout = false
     @State private var confirmQQLogout = false
     @State private var confirmKugouLogout = false
+    @State private var confirmBilibiliLogout = false
 
     private var isEnglish: Bool { languageRaw == AppLanguage.english.rawValue }
     private var displayPlatformSummary: String {
@@ -1593,6 +1597,7 @@ struct AccountHubSheet: View {
             case .qq: return "QQ Music"
             case .kugou: return "Kugou Music"
             case .qishui: return "Qishui Music"
+            case .bilibili: return "Bilibili"
             }
         }.joined(separator: " / ")
     }
@@ -1607,6 +1612,7 @@ struct AccountHubSheet: View {
                         if platformPrefs.isEnabled(SearchProvider.netease) { neteaseCard }
                         if platformPrefs.isEnabled(SearchProvider.qq) { qqCard }
                         if platformPrefs.isEnabled(SearchProvider.kugou) { kugouCard }
+                        if platformPrefs.isEnabled(SearchProvider.bilibili) { bilibiliCard }
                     }
                     .padding(16)
                 }
@@ -1633,6 +1639,9 @@ struct AccountHubSheet: View {
             KugouLoginSheet()
                 .environmentObject(theme)
         }
+        .sheet(isPresented: $showBilibiliLogin) {
+            BilibiliLoginSheet().environmentObject(theme)
+        }
         .confirmationDialog("退出网易云登录？", isPresented: $confirmNeteaseLogout, titleVisibility: .visible) {
             Button("退出登录", role: .destructive) {
                 auth.logout()
@@ -1654,6 +1663,13 @@ struct AccountHubSheet: View {
                 kugouAuth.logout()
                 WebLoginDataCleaner.clearKugou()
                 ToastCenter.shared.show("已退出酷狗音乐")
+            }
+            Button("取消", role: .cancel) {}
+        }
+        .confirmationDialog("退出哔哩哔哩？", isPresented: $confirmBilibiliLogout, titleVisibility: .visible) {
+            Button("退出登录", role: .destructive) {
+                bilibiliAuth.logout()
+                ToastCenter.shared.show("已退出哔哩哔哩账号")
             }
             Button("取消", role: .cancel) {}
         }
@@ -1819,6 +1835,41 @@ struct AccountHubSheet: View {
         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
     }
 
+    private var bilibiliCard: some View {
+        Button {
+            BeansHaptics.tap()
+            if bilibiliAuth.isLoggedIn { confirmBilibiliLogout = true } else { showBilibiliLogin = true }
+        } label: {
+            HStack(spacing: 14) {
+                Image("BrandBilibili")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("哔哩哔哩")
+                        .font(BeansFont.appFont(15, .semibold))
+                        .foregroundStyle(Color.beansLabel)
+                    Text(bilibiliAuth.isLoggedIn ? (bilibiliAuth.nickname.isEmpty ? "已登录" : bilibiliAuth.nickname) : "未登录 · 扫码同步收藏夹")
+                        .font(BeansFont.appFont(12))
+                        .foregroundStyle(Color.beansComment)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer()
+                Text(bilibiliAuth.isLoggedIn ? "退出" : "登录")
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(bilibiliAuth.isLoggedIn ? Color.red : Color.beansAmber)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background { BeansSurface(shape: Capsule()) }
+            }
+            .padding(14)
+            .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous)) }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+    }
 }
 
 // MARK: - 设置页（外观 + 歌词翻译，从「我的」右上角齿轮进入）

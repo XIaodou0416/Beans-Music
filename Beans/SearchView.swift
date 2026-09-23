@@ -43,6 +43,7 @@ enum SearchProvider: String, CaseIterable, Identifiable, Hashable {
     case qq = "QQ音乐"
     case kugou = "酷狗音乐"
     case qishui = "汽水音乐"
+    case bilibili = "哔哩哔哩"
 
     var id: String { rawValue }
 
@@ -61,6 +62,9 @@ enum SearchProvider: String, CaseIterable, Identifiable, Hashable {
         case .qishui: return LinearGradient(
             colors: [Color(red: 0.27, green: 0.37, blue: 0.98), Color(red: 0.12, green: 0.18, blue: 0.72)],
             startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .bilibili: return LinearGradient(
+            colors: [Color(red: 1.0, green: 0.39, blue: 0.58), Color(red: 0.92, green: 0.22, blue: 0.42)],
+            startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
 
@@ -70,6 +74,7 @@ enum SearchProvider: String, CaseIterable, Identifiable, Hashable {
         case .qq: return "play.rectangle.fill"
         case .kugou: return "music.note"
         case .qishui: return "drop.fill"
+        case .bilibili: return "play.rectangle.fill"
         }
     }
 
@@ -79,6 +84,7 @@ enum SearchProvider: String, CaseIterable, Identifiable, Hashable {
         case .qq: return "BrandQQ"
         case .kugou: return "BrandKugou"
         case .qishui: return "BrandQishui"
+        case .bilibili: return "BrandBilibili"
         }
     }
 }
@@ -116,6 +122,7 @@ private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable
     case kuwo = "酷我音乐"
     case migu = "咪咕音乐"
     case qishui = "汽水音乐"
+    case bilibili = "哔哩哔哩"
 
     var id: String { rawValue }
 
@@ -128,6 +135,7 @@ private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable
         case .kuwo: return "Kuwo Music"
         case .migu: return "Migu Music"
         case .qishui: return "Qishui Music"
+        case .bilibili: return "Bilibili"
         }
     }
 
@@ -140,6 +148,7 @@ private enum SearchCatalogProvider: String, CaseIterable, Identifiable, Hashable
         case .kuwo: return .kuwo
         case .migu: return .migu
         case .qishui: return .qishui
+        case .bilibili: return .bilibili
         }
     }
 
@@ -1262,6 +1271,8 @@ struct SearchView: View {
                             return (try? await AdditionalCatalogSearchAPI.hotKeywords(for: source)) ?? []
                         case .qishui:
                             return []
+                        case .bilibili:
+                            return []
                         case .aggregate:
                             return []
                         }
@@ -1653,7 +1664,7 @@ struct SearchView: View {
     ) async -> [Song] {
         switch provider {
         case .aggregate:
-            let providers: [SearchCatalogProvider] = [.netease, .qq, .kugou, .kuwo, .migu, .qishui]
+            let providers: [SearchCatalogProvider] = [.netease, .qq, .kugou, .kuwo, .migu, .qishui, .bilibili]
             let completedResults = await withTaskGroup(of: [Song].self, returning: [[Song]].self) { group in
                 for candidate in providers {
                     group.addTask {
@@ -1675,6 +1686,8 @@ struct SearchView: View {
                 limit: limit,
                 onPartialResults: onPartialResults
             )) ?? []
+        case .bilibili:
+            return (try? await BilibiliAPI.shared.searchSongs(keyword: keyword, limit: limit)) ?? []
         case .netease:
             return (try? await NetEaseAPI.shared.search(keyword: keyword, limit: limit)) ?? []
         case .qq:
@@ -1687,7 +1700,7 @@ struct SearchView: View {
     private func catalogArtists(keyword: String, provider: SearchCatalogProvider, limit: Int) async -> [Artist] {
         switch provider {
         case .aggregate:
-            let providers: [SearchCatalogProvider] = [.netease, .qq, .kugou, .kuwo, .migu, .qishui]
+            let providers: [SearchCatalogProvider] = [.netease, .qq, .kugou, .kuwo, .migu, .qishui, .bilibili]
             let groups = await withTaskGroup(of: [Artist].self, returning: [[Artist]].self) { group in
                 for candidate in providers {
                     group.addTask { await self.catalogArtists(keyword: keyword, provider: candidate, limit: limit) }
@@ -1712,13 +1725,15 @@ struct SearchView: View {
             return (try? await AdditionalCatalogSearchAPI.searchMiguArtists(keyword: keyword, limit: limit)) ?? []
         case .qishui:
             return (try? await QishuiAPI.shared.searchArtists(keyword: keyword, limit: limit)) ?? []
+        case .bilibili:
+            return (try? await BilibiliAPI.shared.searchArtists(keyword: keyword, limit: limit)) ?? []
         }
     }
 
     private func catalogAlbums(keyword: String, provider: SearchCatalogProvider, limit: Int) async -> [Album] {
         switch provider {
         case .aggregate:
-            let providers: [SearchCatalogProvider] = [.netease, .qq, .kugou, .kuwo, .migu, .qishui]
+            let providers: [SearchCatalogProvider] = [.netease, .qq, .kugou, .kuwo, .migu, .qishui, .bilibili]
             let groups = await withTaskGroup(of: [Album].self, returning: [[Album]].self) { group in
                 for candidate in providers {
                     group.addTask { await self.catalogAlbums(keyword: keyword, provider: candidate, limit: limit) }
@@ -1743,6 +1758,8 @@ struct SearchView: View {
             return (try? await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: keyword, limit: limit)) ?? []
         case .qishui:
             return (try? await QishuiAPI.shared.searchAlbums(keyword: keyword, limit: limit)) ?? []
+        case .bilibili:
+            return (try? await BilibiliAPI.shared.searchAlbums(keyword: keyword, limit: limit)) ?? []
         }
     }
 
@@ -1759,13 +1776,15 @@ struct SearchView: View {
             async let kuwo = AdditionalCatalogSearchAPI.searchKuwoPlaylists(keyword: keyword, limit: limit)
             async let migu = AdditionalCatalogSearchAPI.searchMiguPlaylists(keyword: keyword, limit: limit)
             async let qishui = QishuiAPI.shared.searchPlaylists(keyword: keyword, limit: limit)
+            async let bilibili = BilibiliAPI.shared.searchPlaylists(keyword: keyword, limit: limit)
             let neteaseItems = (try? await netease) ?? []
             let qqItems = (try? await qq) ?? []
             let kugouItems = (try? await kugou) ?? []
             let kuwoItems = (try? await kuwo) ?? []
             let miguItems = (try? await migu) ?? []
             let qishuiItems = (try? await qishui) ?? []
-            let all = neteaseItems + qqItems + kugouItems + kuwoItems + miguItems + qishuiItems
+            let bilibiliItems = (try? await bilibili) ?? []
+            let all = neteaseItems + qqItems + kugouItems + kuwoItems + miguItems + qishuiItems + bilibiliItems
             var seen = Set<String>()
             return all.filter {
                 let key = "\($0.name.localizedLowercase)|\($0.creatorName.localizedLowercase)"
@@ -1783,6 +1802,8 @@ struct SearchView: View {
             return try await AdditionalCatalogSearchAPI.searchMiguPlaylists(keyword: keyword, limit: limit)
         case .qishui:
             return try await QishuiAPI.shared.searchPlaylists(keyword: keyword, limit: limit)
+        case .bilibili:
+            return try await BilibiliAPI.shared.searchPlaylists(keyword: keyword, limit: limit)
         }
     }
 
@@ -1794,6 +1815,7 @@ struct SearchView: View {
         case .kuwo: return "酷我音乐"
         case .migu: return "咪咕音乐"
         case .qishui: return "汽水音乐"
+        case .bilibili: return "哔哩哔哩"
         }
     }
 
@@ -1852,6 +1874,7 @@ private struct BeansSearchSongRow: View {
         case .kuwo: return "酷我"
         case .migu: return "咪咕"
         case .qishui: return "汽水"
+        case .bilibili: return "哔哩哔哩"
         }
     }
 
@@ -2274,6 +2297,8 @@ struct AlbumDetailView: View {
                         (try? await QishuiAPI.shared.searchSongs(keyword: query, limit: 100)) ?? []
                     }
                 )
+            case .bilibili:
+                result = (try? await BilibiliAPI.shared.collection(album.id).songs) ?? []
             }
             if !result.isEmpty {
                 cache.save(result, for: cacheKey)
@@ -2337,6 +2362,8 @@ struct AlbumDetailView: View {
             candidates = (try? await AdditionalCatalogSearchAPI.searchMiguAlbums(keyword: name, limit: 30)) ?? []
         case .qishui:
             candidates = (try? await QishuiAPI.shared.searchAlbums(keyword: name, limit: 30)) ?? []
+        case .bilibili:
+            candidates = (try? await BilibiliAPI.shared.searchAlbums(keyword: name, limit: 30)) ?? []
         }
 
         let expected = normalizedArtist(name)

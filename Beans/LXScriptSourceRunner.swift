@@ -978,6 +978,7 @@ final class LXScriptSourceRunner {
         case .kuwo: return "kw"
         case .migu: return "mg"
         case .qishui: return "qs"
+        case .bilibili: return "bili"
         }
     }
 

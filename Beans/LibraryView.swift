@@ -9,6 +9,7 @@ enum LibraryProvider: String, CaseIterable, Identifiable {
     case qq = "QQ音乐"
     case kugou = "酷狗音乐"
     case qishui = "汽水音乐"
+    case bilibili = "哔哩哔哩"
 
     var id: String { rawValue }
 
@@ -22,6 +23,8 @@ enum LibraryProvider: String, CaseIterable, Identifiable {
             return LinearGradient(colors: [Color(red: 0.12, green: 0.58, blue: 0.95), Color(red: 0.02, green: 0.32, blue: 0.72)], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .qishui:
             return LinearGradient(colors: [Color(red: 0.27, green: 0.37, blue: 0.98), Color(red: 0.12, green: 0.18, blue: 0.72)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .bilibili:
+            return LinearGradient(colors: [Color(red: 1.0, green: 0.39, blue: 0.58), Color(red: 0.92, green: 0.22, blue: 0.42)], startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
 
@@ -31,6 +34,7 @@ enum LibraryProvider: String, CaseIterable, Identifiable {
         case .qq: return "play.rectangle.fill"
         case .kugou: return "music.note"
         case .qishui: return "drop.fill"
+        case .bilibili: return "play.rectangle.fill"
         }
     }
 
@@ -40,6 +44,7 @@ enum LibraryProvider: String, CaseIterable, Identifiable {
         case .qq: return "BrandQQ"
         case .kugou: return "BrandKugou"
         case .qishui: return "BrandQishui"
+        case .bilibili: return "BrandBilibili"
         }
     }
 }
@@ -51,6 +56,7 @@ private extension LibraryProvider {
         case .qq: return .qq
         case .kugou: return .kugou
         case .qishui: return .qishui
+        case .bilibili: return .bilibili
         }
     }
 }
@@ -63,6 +69,7 @@ struct LibraryView: View {
     @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
+    @ObservedObject private var bilibiliAuth = BilibiliAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
     @State private var showHistory = false
@@ -88,6 +95,9 @@ struct LibraryView: View {
     @State private var kugouPlaylists: [Playlist] = []
     @State private var kugouLoading = false
     @State private var kugouSavedAt = Date.distantPast
+    @State private var bilibiliPlaylists: [Playlist] = []
+    @State private var bilibiliLoading = false
+    @State private var showBilibiliLogin = false
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
     private var libraryProviders: [LibraryProvider] { platformPrefs.enabledLibraryProviders }
 
@@ -115,6 +125,10 @@ struct LibraryView: View {
         SyncedPlaylistOrderStore.shared.ordered(kugouPlaylists, source: .kugou)
     }
 
+    private var orderedBilibiliPlaylists: [Playlist] {
+        SyncedPlaylistOrderStore.shared.ordered(bilibiliPlaylists, source: .bilibili)
+    }
+
     private var qqCacheAccountID: String {
         let raw = qqAuth.rawUin
         return raw.isEmpty ? qqAuth.playlistUin : raw
@@ -132,6 +146,7 @@ struct LibraryView: View {
                 case .qq: return orderedQQPlaylists
                 case .kugou: return orderedKugouPlaylists
                 case .qishui: return []
+                case .bilibili: return orderedBilibiliPlaylists
                 }
             },
             set: { value in
@@ -140,6 +155,7 @@ struct LibraryView: View {
                 case .qq: qqPlaylists = value
                 case .kugou: kugouPlaylists = value
                 case .qishui: break
+                case .bilibili: bilibiliPlaylists = value
                 }
                 SyncedPlaylistOrderStore.shared.save(value, source: source.songSource)
             }
@@ -190,6 +206,7 @@ struct LibraryView: View {
                             case .qq: qqSection
                             case .kugou: kugouSection
                             case .qishui: EmptyView()
+                            case .bilibili: bilibiliSection
                             }
                         case "最近播放":
                             historySection
@@ -270,12 +287,19 @@ struct LibraryView: View {
             Button("删除", role: .destructive) { confirmDeletePlaylist() }
             Button("取消", role: .cancel) {}
         }
+        .onReceive(NotificationCenter.default.publisher(for: .beansBilibiliLoginDidUpdate)) { _ in
+            guard source == .bilibili else { return }
+            Task { await loadBilibiliPlaylists(force: true) }
+        }
         .sheet(isPresented: $showProfile) {
             ProfileView(forceHomeBackdrop: true)
                 .environmentObject(theme)
                 .environmentObject(auth)
                 .environmentObject(player)
                 .modifier(BeansProfileSheetBackground())
+        }
+        .sheet(isPresented: $showBilibiliLogin) {
+            BilibiliLoginSheet().environmentObject(theme)
         }
         .confirmationDialog("音乐库平台", isPresented: $showLibraryPlatformMenu, titleVisibility: .visible) {
             ForEach(libraryProviders) { candidate in
@@ -379,6 +403,7 @@ struct LibraryView: View {
         case .qq: return "QQ 音乐收藏与歌单"
         case .kugou: return "酷狗云端歌单"
         case .qishui: return "汽水音乐云端歌单"
+        case .bilibili: return "哔哩哔哩收藏夹"
         }
     }
 
@@ -631,6 +656,8 @@ struct LibraryView: View {
             await loadKugouPlaylists(force: force)
         case .qishui:
             break
+        case .bilibili:
+            await loadBilibiliPlaylists(force: force)
         }
     }
 
@@ -645,6 +672,45 @@ struct LibraryView: View {
     private var kugouSection: some View {
         VStack(alignment: .leading, spacing: 24) {
             kugouPlaylistsSection
+        }
+    }
+
+    private var bilibiliSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "哔哩哔哩收藏夹", trailing: bilibiliAuth.isLoggedIn ? "刷新" : nil) {
+                Task { await loadBilibiliPlaylists(force: true) }
+            }
+            if !bilibiliAuth.isLoggedIn {
+                VStack(spacing: 12) {
+                    EmptyStateView(icon: "play.rectangle", text: "登录哔哩哔哩后查看收藏夹")
+                    Button("扫码登录") { showBilibiliLogin = true }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color(red: 0.96, green: 0.31, blue: 0.50))
+                }
+            } else if bilibiliLoading {
+                LoadingStateView()
+            } else if orderedBilibiliPlaylists.isEmpty {
+                EmptyStateView(icon: "text.badge.plus", text: "暂无可显示的收藏夹")
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(orderedBilibiliPlaylists) { playlist in
+                        Button { openRoute(LibraryRoute.playlist(playlist)) } label: {
+                            HStack(spacing: 12) {
+                                CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(playlist.name).font(BeansFont.appFont(15, .semibold)).foregroundStyle(Color.beansLabel).lineLimit(1)
+                                    Text("\(playlist.trackCount) 个视频 · \(playlist.creatorName)").font(BeansFont.appFont(12)).foregroundStyle(Color.beansComment).lineLimit(1)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.beansComment)
+                            }
+                            .padding(.vertical, 9)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
         }
     }
 
@@ -821,6 +887,35 @@ struct LibraryView: View {
         kugouLoading = false
     }
 
+    private func loadBilibiliPlaylists(force: Bool = false) async {
+        guard bilibiliAuth.isLoggedIn else {
+            bilibiliPlaylists = []
+            bilibiliLoading = false
+            return
+        }
+        let cache = SyncedPlaylistCache.shared
+        let accountID = bilibiliAuth.accountID
+        if bilibiliPlaylists.isEmpty,
+           let cached = cache.cachedPlaylists(source: .bilibili, accountID: accountID) {
+            bilibiliPlaylists = cached.playlists
+            bilibiliSavedAt = cached.savedAt
+        }
+        if !force, !bilibiliPlaylists.isEmpty, Date().timeIntervalSince(bilibiliSavedAt) < cache.playlistTTL { return }
+        bilibiliLoading = bilibiliPlaylists.isEmpty
+        do {
+            let list = try await BilibiliAPI.shared.personalPlaylists()
+            if !list.isEmpty {
+                bilibiliPlaylists = list
+                bilibiliSavedAt = Date()
+                cache.savePlaylists(list, source: .bilibili, accountID: accountID)
+            }
+        } catch {
+            BeansLogger.shared.log("哔哩哔哩收藏夹同步失败：\(error.localizedDescription)", level: .error)
+            if bilibiliPlaylists.isEmpty { ToastCenter.shared.show(error.localizedDescription) }
+        }
+        bilibiliLoading = false
+    }
+
     private func fillQQPlaylistCovers(_ list: [Playlist]) async {
         let missing = list.filter { $0.coverURL == nil }
         guard !missing.isEmpty else { return }
@@ -886,6 +981,8 @@ struct LibraryView: View {
             ToastCenter.shared.show("酷狗歌单暂不支持新建")
         case .qishui:
             ToastCenter.shared.show("汽水音乐歌单创建暂未开放")
+        case .bilibili:
+            ToastCenter.shared.show("哔哩哔哩收藏夹暂不支持在 Beans 内创建")
         }
     }
 
@@ -929,6 +1026,8 @@ struct LibraryView: View {
             ToastCenter.shared.show("酷狗歌单暂不支持删除")
         case .qishui:
             ToastCenter.shared.show("汽水音乐歌单删除暂未开放")
+        case .bilibili:
+            ToastCenter.shared.show("哔哩哔哩收藏夹暂不支持在 Beans 内删除")
         }
     }
 

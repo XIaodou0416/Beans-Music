@@ -52,6 +52,8 @@ struct PlaylistView: View {
             accountID = ""
         case .qishui:
             accountID = ""
+        case .bilibili:
+            accountID = BilibiliAuth.shared.accountID
         }
         return SyncedPlaylistCache.shared.cachedSongs(playlist: playlist, accountID: accountID)
     }
@@ -73,6 +75,8 @@ struct PlaylistView: View {
             return ""
         case .qishui:
             return ""
+        case .bilibili:
+            return BilibiliAuth.shared.accountID
         }
     }
 
@@ -334,6 +338,10 @@ struct PlaylistView: View {
                     tracks = partialSongs
                     loading = false
                 }
+            } else if playlist.source == .bilibili {
+                let identifier = playlist.bilibiliID ?? String(playlist.id)
+                let result = try await BilibiliAPI.shared.collection(identifier, force: force)
+                tracks = result.songs
             } else if playlist.source == .kuwo || playlist.source == .migu {
                 tracks = try await AdditionalCatalogSearchAPI.playlistSongs(source: playlist.source, id: playlist.id)
             } else {

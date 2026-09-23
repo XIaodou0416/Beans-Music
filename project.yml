@@ -18,11 +18,14 @@ targets:
       - Beans/en.lproj
       - Beans/zh-Hans.lproj
       - Beans/Resources/XProfile.html
+      - Beans/Resources/CeruBilibili-LICENSE.txt
+      - Beans/Resources/SimpleIcons-LICENSE.txt
+      - Beans/Resources/CeruBilibili-NOTICE.md
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app
         MARKETING_VERSION: "1.8.1"
-        CURRENT_PROJECT_VERSION: "9"
+        CURRENT_PROJECT_VERSION: "10"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_OBJC_BRIDGING_HEADER: Beans/Beans-Bridging-Header.h
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

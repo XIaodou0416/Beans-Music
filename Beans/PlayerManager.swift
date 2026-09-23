@@ -843,7 +843,9 @@ final class PlayerManager: NSObject, ObservableObject {
                 resolvedThirdParty = nil
                 qqOfficialBR = nil
                 attemptedQQOfficialBRs = []
-                if sourcePreference == .thirdParty {
+                if song.source == .bilibili {
+                    urlString = (try? await BilibiliAPI.shared.playbackURL(for: song, quality: quality))?.absoluteString
+                } else if sourcePreference == .thirdParty {
                     resolvedThirdParty = await resolveThirdParty(
                         song: song,
                         quality: thirdPartyQuality,
@@ -1351,6 +1353,12 @@ final class PlayerManager: NSObject, ObservableObject {
                 "AVURLAssetHTTPHeaderFieldsKey": playbackHeaders
             ])
             item = AVPlayerItem(asset: asset)
+        } else if isBilibiliAudioHost(url.host) {
+            playbackHeaders = BilibiliAPI.headers
+            let asset = AVURLAsset(url: url, options: [
+                "AVURLAssetHTTPHeaderFieldsKey": playbackHeaders
+            ])
+            item = AVPlayerItem(asset: asset)
         } else {
             item = AVPlayerItem(url: url)
         }
@@ -1695,6 +1703,8 @@ final class PlayerManager: NSObject, ObservableObject {
             candidates = (try? await AdditionalCatalogSearchAPI.searchMigu(keyword: keyword, limit: 12)) ?? []
         case .qishui:
             candidates = (try? await QishuiAPI.shared.searchSongs(keyword: keyword, limit: 12)) ?? []
+        case .bilibili:
+            candidates = (try? await BilibiliAPI.shared.searchSongs(keyword: keyword, limit: 12)) ?? []
         }
         return bestMatchingSong(for: sourceSong, in: candidates)
     }
@@ -1746,6 +1756,7 @@ final class PlayerManager: NSObject, ObservableObject {
         case .kuwo: return "酷我音乐"
         case .migu: return "咪咕音乐"
         case .qishui: return "汽水音乐"
+        case .bilibili: return "哔哩哔哩"
         }
     }
 
@@ -1869,6 +1880,8 @@ final class PlayerManager: NSObject, ObservableObject {
             )
         case .qishui:
             return nil
+        case .bilibili:
+            return nil
         }
     }
 
@@ -1934,6 +1947,12 @@ final class PlayerManager: NSObject, ObservableObject {
     private func resetListeningProgress() {
         lastListeningProgress = nil
         lastListeningSongKey = nil
+    }
+
+    private func isBilibiliAudioHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return host == "bilivideo.com" || host.hasSuffix(".bilivideo.com")
+            || host == "bilivideo.cn" || host.hasSuffix(".bilivideo.cn")
     }
 
     private func startListeningSegment() {
@@ -2059,6 +2078,8 @@ final class PlayerManager: NSObject, ObservableObject {
             }
             return user.vipBadge != nil
         case .kuwo, .migu, .qishui:
+            return false
+        case .bilibili:
             return false
         }
     }

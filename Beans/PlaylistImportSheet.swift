@@ -23,7 +23,7 @@ struct PlaylistImportSheet: View {
                             .font(BeansFont.appFont(15))
                             .overlay(alignment: .topLeading) {
                                 if input.isEmpty {
-                                    Text("粘贴网易云公开歌单链接，或粘贴其他音乐软件导出的歌单 JSON。网易云歌曲仍由已选音源负责播放。")
+                                    Text("粘贴网易云歌单链接、B站视频/收藏夹链接或 BV 号，也可粘贴其他平台导出的歌单 JSON。B站私人收藏夹需先登录账号。")
                                         .font(BeansFont.appFont(14))
                                         .foregroundStyle(Color.beansComment)
                                         .padding(.top, 8)
@@ -57,7 +57,7 @@ struct PlaylistImportSheet: View {
                     }
 
                     Section("说明") {
-                        Text("歌单只保存到本机，不会修改原音乐软件。支持网易云公开歌单链接和 JSON；在线目录只读取公开信息，实际播放仍使用 Beans 已启用的音源。")
+                        Text("歌单只保存到本机，不会修改原音乐软件。支持网易云歌单、B站视频/收藏夹和 JSON；B站视频会导入全部分P，实际播放仍由平台提供音频。")
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                     }

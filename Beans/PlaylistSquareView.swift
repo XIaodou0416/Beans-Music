@@ -376,6 +376,7 @@ struct PlaylistSquareView: View {
         case .kuwo: return "酷我"
         case .migu: return "咪咕"
         case .qishui: return "汽水"
+        case .bilibili: return "哔哩哔哩"
         }
     }
 
@@ -464,6 +465,7 @@ struct PlaylistSquareView: View {
         case .qq: return beansLocalized("QQ音乐热门歌单暂时没有内容", "No QQ Music playlists available")
         case .kugou: return beansLocalized("酷狗歌单广场暂时没有内容", "No Kugou playlists available")
         case .qishui: return beansLocalized("汽水音乐歌单暂时没有内容", "No Qishui playlists available")
+        case .bilibili: return beansLocalized("哔哩哔哩音乐暂时没有内容", "No Bilibili music available")
         }
     }
 
@@ -489,7 +491,7 @@ struct PlaylistSquareView: View {
             errorMessage = nil
             isLoading = false
             if cache.isFresh(entry),
-               requestedSource == .qishui || !BeansNetworkStatus.shared.isReachable { return }
+               requestedSource == .qishui || requestedSource == .bilibili || !BeansNetworkStatus.shared.isReachable { return }
         }
 
         isLoading = true
@@ -515,6 +517,11 @@ struct PlaylistSquareView: View {
                     : try await KugouMusicAPI.shared.playlists(categoryID: category.remoteID ?? 0, limit: 30)
             case .qishui:
                 loadedPlaylists = try await QishuiAPI.shared.recommendedPlaylists(limit: 18)
+            case .bilibili:
+                loadedPlaylists = try await BilibiliAPI.shared.recommendedPlaylists(
+                    limit: 18,
+                    category: category.id == "bilibili-popular" ? "popular" : "music"
+                )
             }
             guard isCurrent(requestedID, source: requestedSource, categoryID: category.id) else { return }
             let keepVisiblePlaylists = loadedPlaylists.isEmpty && !playlists.isEmpty
@@ -640,6 +647,12 @@ struct PlaylistSquareView: View {
                 loadedCategories = try await KugouMusicAPI.shared.playlistCategories()
             case .qishui:
                 loadedCategories = [.all]
+            case .bilibili:
+                loadedCategories = [
+                    .all,
+                    PlaylistSquareCategory(id: "bilibili-music", name: "音乐", remoteID: nil),
+                    PlaylistSquareCategory(id: "bilibili-popular", name: "热门", remoteID: nil)
+                ]
             }
         } catch {
             loadedCategories = [.all]
@@ -678,6 +691,8 @@ struct PlaylistSquareView: View {
                 results = []
             case .qishui:
                 results = (try? await QishuiAPI.shared.searchPlaylists(keyword: keyword, limit: 30)) ?? []
+            case .bilibili:
+                results = (try? await BilibiliAPI.shared.searchPlaylists(keyword: keyword, limit: 30)) ?? []
             }
             guard !Task.isCancelled, requestedSource == source else { return }
             searchResults = results

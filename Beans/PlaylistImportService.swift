@@ -19,7 +19,7 @@ enum BeansPlaylistImportError: LocalizedError {
         case .emptyInput:
             return "请输入歌单链接或歌单 JSON 文件内容"
         case .unsupportedLink:
-            return "只支持网易云公开歌单链接；其他音乐软件请导出 JSON 后导入"
+            return "支持网易云歌单、哔哩哔哩视频/收藏夹链接，或其他平台导出的 JSON"
         case .invalidFormat:
             return "无法识别歌单格式"
         case .noSongs:
@@ -37,7 +37,19 @@ enum BeansPlaylistImportService {
 
         if let url = URL(string: value), let scheme = url.scheme?.lowercased(),
            scheme == "http" || scheme == "https" {
+            let resolved = (try? await resolveRedirect(from: url)) ?? url
+            let host = resolved.host?.lowercased() ?? url.host?.lowercased() ?? ""
+            if host == "b23.tv" || host.hasSuffix(".bilibili.com") || host == "bilibili.com" {
+                return try await importBilibiliCollection(resolved.absoluteString)
+            }
             return try await importNetEasePlaylist(from: url)
+        }
+
+        if BilibiliAPI.videoID(value) != nil || value.hasPrefix("fav:") {
+            return try await importBilibiliCollection(value)
+        }
+        if value.allSatisfy(\.isNumber) {
+            return try await importBilibiliCollection("fav:\(value)")
         }
 
         if let data = value.data(using: .utf8),
@@ -46,6 +58,17 @@ enum BeansPlaylistImportService {
         }
 
         throw BeansPlaylistImportError.invalidFormat
+    }
+
+    private static func importBilibiliCollection(_ input: String) async throws -> BeansImportedPlaylist {
+        let collection = try await BilibiliAPI.shared.collection(input)
+        guard !collection.songs.isEmpty else { throw BeansPlaylistImportError.noSongs }
+        return BeansImportedPlaylist(
+            name: collection.playlist.name,
+            coverURL: collection.playlist.coverURL,
+            sourceName: "哔哩哔哩",
+            songs: collection.songs
+        )
     }
 
     private static func importNetEasePlaylist(from url: URL) async throws -> BeansImportedPlaylist {
@@ -339,6 +362,9 @@ enum BeansPlaylistImportService {
             value["songid"],
             value["songId"],
             value["songmid"],
+            value["bilibiliID"],
+            value["bvid"],
+            value["aid"],
             value["mid"],
             value["hash"],
             value["FileHash"],
@@ -355,6 +381,13 @@ enum BeansPlaylistImportService {
             firstString(value["source"], value["platform"], value["sourceName"])
                 ?? defaultSource?.rawValue
         )
+        let rawBilibiliID = firstString(value["bilibiliID"], value["bvid"], value["aid"], value["av"]) ?? rawID
+        let bilibiliID = source == .bilibili ? rawBilibiliID.flatMap { raw -> String? in
+            let videoID = BilibiliAPI.videoID(raw) ?? (raw.allSatisfy(\.isNumber) ? "av\(raw)" : nil)
+            guard let videoID else { return nil }
+            let cid = firstString(value["cid"], value["pageCid"])
+            return cid.map { "\(videoID):\($0)" } ?? videoID
+        } : nil
         let qqMid = firstString(value["qqMid"], value["songmid"], value["mid"], metadata["songmid"], metadata["songMid"])
         let qqMediaMid = firstString(value["qqMediaMid"], value["media_mid"], value["strMediaMid"], metadata["strMediaMid"])
         let kugouHash = firstString(value["kugouHash"], value["FileHash"], value["hash"], metadata["FileHash"], metadata["hash"])
@@ -378,6 +411,7 @@ enum BeansPlaylistImportService {
             kugouAlbumId: kugouAlbumID,
             miguCopyrightId: miguCopyrightID,
             miguLyricURL: miguLyricURL,
+            bilibiliID: bilibiliID,
             fee: integer(value["fee"] ?? value["pay"] ?? value["payplay"]) ?? 0
         )
     }
@@ -406,6 +440,7 @@ enum BeansPlaylistImportService {
         case "kw", "kuwo", "kuwomusic", "酷我", "酷我音乐": return .kuwo
         case "mg", "migu", "migumusic", "咪咕", "咪咕音乐": return .migu
         case "qs", "qishui", "qishuimusic", "汽水", "汽水音乐": return .qishui
+        case "bili", "bilibili", "哔哩哔哩", "b站": return .bilibili
         default: return .netease
         }
     }
@@ -418,6 +453,7 @@ enum BeansPlaylistImportService {
         case .kuwo: return "酷我音乐"
         case .migu: return "咪咕音乐"
         case .qishui: return "汽水音乐"
+        case .bilibili: return "哔哩哔哩"
         }
     }
 

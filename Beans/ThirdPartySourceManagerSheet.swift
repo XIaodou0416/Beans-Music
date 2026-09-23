@@ -599,6 +599,7 @@ private enum ThirdPartySourcePlatform: String, CaseIterable, Identifiable {
         case .kuwo: return beansLocalized("酷我音乐", "Kuwo Music")
         case .migu: return beansLocalized("咪咕音乐", "Migu Music")
         case .qishui: return beansLocalized("汽水音乐", "Qishui Music")
+        case .bilibili: return "哔哩哔哩"
         }
     }
 
@@ -611,6 +612,7 @@ private enum ThirdPartySourcePlatform: String, CaseIterable, Identifiable {
         case .kuwo: return "kw"
         case .migu: return "mg"
         case .qishui: return "qs"
+        case .bilibili: return "bili"
         }
     }
 

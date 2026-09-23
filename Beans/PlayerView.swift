@@ -363,7 +363,7 @@ struct PlayerView: View {
             return try await KugouMusicAPI.shared.userPlaylists()
         case .qq:
             return []
-        case .kuwo, .migu, .qishui:
+        case .kuwo, .migu, .qishui, .bilibili:
             return []
         }
     }
@@ -410,7 +410,7 @@ struct PlayerView: View {
             }
         case .qq:
             ToastCenter.shared.show("当前仅支持网易云音乐和酷狗音乐官方收藏")
-        case .kuwo, .migu, .qishui:
+        case .kuwo, .migu, .qishui, .bilibili:
             ToastCenter.shared.show("当前平台仅支持本地收藏")
         }
     }
@@ -439,7 +439,7 @@ struct PlayerView: View {
             }
         case .qq:
             ToastCenter.shared.show("当前不支持 QQ 官方歌单收藏")
-        case .kuwo, .migu, .qishui:
+        case .kuwo, .migu, .qishui, .bilibili:
             ToastCenter.shared.show("当前平台仅支持本地收藏")
         }
         favoriteCandidate = nil
@@ -460,7 +460,7 @@ struct PlayerView: View {
                     ToastCenter.shared.show("已创建酷狗歌单")
                 case .qq:
                     ToastCenter.shared.show("当前不支持 QQ 官方歌单")
-                case .kuwo, .migu, .qishui:
+                case .kuwo, .migu, .qishui, .bilibili:
                     ToastCenter.shared.show("当前平台不支持官方歌单")
                 }
             } catch {
@@ -481,7 +481,7 @@ struct PlayerView: View {
                     success = try await KugouMusicAPI.shared.deletePlaylist(playlistID: playlist.id)
                 case .qq:
                     success = false
-                case .kuwo, .migu, .qishui:
+                case .kuwo, .migu, .qishui, .bilibili:
                     success = false
                 }
                 if success {
@@ -5089,6 +5089,8 @@ struct PlayerView: View {
             return URL(string: "https://music.migu.cn/v3/music/song/\(song.id)")
         case .qishui:
             return song.officialURL
+        case .bilibili:
+            return song.officialURL
         }
     }
 
@@ -5290,6 +5292,8 @@ struct PlayerView: View {
             cacheKey = "\(song.source.rawValue):\(song.id)"
         } else if song.source == .qishui {
             cacheKey = "qishui:\(song.qishuiID ?? song.identityKey)"
+        } else if song.source == .bilibili {
+            cacheKey = "bilibili:\(song.bilibiliID ?? song.identityKey)"
         } else {
             cacheKey = "netease:\(song.id)"
         }
@@ -5335,6 +5339,14 @@ struct PlayerView: View {
                         wordFormat: isKRC ? .kugouKRC : nil,
                         for: cacheKey
                     )
+                }
+            }
+        } else if song.source == .bilibili {
+            if let raw = try? await BilibiliAPI.shared.lyric(for: song), !raw.isEmpty {
+                let parsed = LyricParser.parse(raw)
+                if !parsed.isEmpty {
+                    apply(parsed)
+                    LyricsCache.shared.save(lyric: raw, translation: nil, for: cacheKey)
                 }
             }
         } else {

@@ -212,6 +212,10 @@ final class DownloadManager: ObservableObject {
     }
 
     private func resolveURL(song: Song, quality: DownloadQuality) async -> ResolvedDownloadURL? {
+        if song.source == .bilibili,
+           let url = try? await BilibiliAPI.shared.playbackURL(for: song, quality: quality.beansQuality) {
+            return ResolvedDownloadURL(url: url, actualQuality: quality, sourceName: "哔哩哔哩")
+        }
         // 汽水音乐使用独立的字符串曲目 ID，下载时先走汽水专用接口，
         // 避免把它误送到网易云数字 ID 接口。
         if song.source == .qishui,
@@ -284,6 +288,10 @@ final class DownloadManager: ObservableObject {
             if !cookie.isEmpty {
                 request.setValue(cookie, forHTTPHeaderField: "Cookie")
             }
+        } else if let host = url.host?.lowercased(),
+                  host == "bilivideo.com" || host.hasSuffix(".bilivideo.com")
+                    || host == "bilivideo.cn" || host.hasSuffix(".bilivideo.cn") {
+            BilibiliAPI.headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         }
         return request
     }
