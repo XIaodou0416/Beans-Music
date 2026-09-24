@@ -3,6 +3,7 @@ import SwiftUI
 struct BilibiliVideoRows: View {
     let items: [BilibiliFeedVideo]
     var onAppearItem: (String) -> Void = { _ in }
+    var onVideo: ((Song) -> Void)? = nil
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var navigation: BilibiliNavigationState
     @AppStorage(BilibiliExperience.key) private var mode = BilibiliExperience.listen.rawValue
@@ -10,13 +11,17 @@ struct BilibiliVideoRows: View {
         LazyVStack(spacing: 16) {
             ForEach(items) { item in
                 Button {
-                    if mode == BilibiliExperience.video.rawValue { navigation.push(.video(item.song)) }
+                    if mode == BilibiliExperience.video.rawValue {
+                        if let onVideo { onVideo(item.song) } else { navigation.push(.video(item.song)) }
+                    }
                     else { player.play(songs: items.map(\.song), startAt: items.firstIndex(where: { $0.id == item.id }) ?? 0) }
                 } label: { BilibiliVideoRow(item: item) }
                 .buttonStyle(.plain)
                 .onAppear { onAppearItem(item.id) }
                 .contextMenu {
-                    Button { navigation.push(.video(item.song)) } label: { Label("视频详情", systemImage: "play.rectangle") }
+                    Button {
+                        if let onVideo { onVideo(item.song) } else { navigation.push(.video(item.song)) }
+                    } label: { Label("视频详情", systemImage: "play.rectangle") }
                     Button { player.playNext(item.song) } label: { Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward") }
                 }
             }
