@@ -16,7 +16,7 @@ final class CiliCiliPortUITests: XCTestCase {
             let channel = app.buttons["beans.bilibili.channel.\(tab)"]
             XCTAssertTrue(channel.isHittable)
             channel.tap()
-            XCTAssertTrue(app.buttons["beans.bilibili.channel.\(tab)"].isSelected)
+            XCTAssertTrue(app.buttons["beans.bilibili.channel.\(tab)"].firstMatch.isSelected)
         }
         XCTAssertEqual(app.tabBars.count, 1, "Beans 应只有一套底栏")
         let attachment = XCTAttachment(screenshot: app.screenshot())
