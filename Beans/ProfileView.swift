@@ -164,7 +164,6 @@ struct ProfileView: View {
     @State private var loadingRemoteDonors = false
     @State private var showWeChatOpenError = false
     @State private var showFeedback = false
-    @State private var showDiagnostics = false
     @State private var showAvatarPicker = false
     @State private var showProfileNameBackgroundPicker = false
     @State private var easterEggStep = 0
@@ -1989,6 +1988,7 @@ struct SettingsView: View {
     @State private var clearingImageCache = false
     @State private var showAccountHub = false
     @State private var showFeedback = false
+    @State private var showDiagnostics = false
     @State private var checkingUpdate = false
     @State private var updateResult: UpdateChecker.CheckResult?
     @State private var showUpdateResult = false
