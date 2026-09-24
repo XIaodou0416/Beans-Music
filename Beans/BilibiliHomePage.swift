@@ -16,6 +16,7 @@ struct BilibiliHomePage: View {
     @StateObject private var navigation = BilibiliNavigationState()
     @State private var searchRefresh = UUID()
     @State private var searchTask: Task<Void, Never>?
+    @State private var presentedVideo: Song?
     @ObservedObject private var feed = BilibiliHomeFeedStore.shared
 
     var body: some View {
@@ -35,10 +36,14 @@ struct BilibiliHomePage: View {
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 16) {
                                 if !submittedQuery.isEmpty && resultType != .song {
-                                    BilibiliSearchResults(keyword: submittedQuery, type: resultType)
+                                    BilibiliSearchResults(keyword: submittedQuery, type: resultType) { song in
+                                        presentedVideo = song
+                                    }
                                         .id(searchRefresh)
                                 } else {
-                                    BilibiliHomeFeed()
+                                    BilibiliHomeFeed { song in
+                                        presentedVideo = song
+                                    }
                                 }
                             }
                             .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 190)
@@ -106,6 +111,11 @@ struct BilibiliHomePage: View {
         }
 
         .onDisappear { searchTask?.cancel() }
+        .fullScreenCover(item: $presentedVideo) { song in
+            BilibiliNativeStandaloneStack(initialRoute: .video(song))
+                .environmentObject(player)
+                .environmentObject(theme)
+        }
     }
 
     private var channels: some View {
