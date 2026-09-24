@@ -95,6 +95,38 @@ final class BilibiliDetailTests: XCTestCase {
         XCTAssertFalse(store.more)
     }
 
+    func testRefreshDuringPaginationRunsAfterPageCompletes() async {
+        let pageStarted = expectation(description: "page request started")
+        let refreshStarted = expectation(description: "refresh requested")
+        var finishPage: CheckedContinuation<BilibiliReplies, Never>?
+        var firstPageRequests = 0
+        let old = reply("old")
+        let new = reply("new")
+        let store = BilibiliReplyStore { _, page, _, _ in
+            if page == 1 {
+                firstPageRequests += 1
+                return BilibiliReplies(items: [firstPageRequests == 1 ? old : new], total: 2, hasMore: true)
+            }
+            return await withCheckedContinuation { continuation in
+                finishPage = continuation
+                pageStarted.fulfill()
+            }
+        }
+        await store.load(aid: "1", hot: true, root: nil, reset: true)
+        let paging = Task { await store.load(aid: "1", hot: true, root: nil, reset: false) }
+        await fulfillment(of: [pageStarted], timeout: 2)
+        let refresh = Task {
+            refreshStarted.fulfill()
+            await store.load(aid: "1", hot: true, root: nil, reset: true)
+        }
+        await fulfillment(of: [refreshStarted], timeout: 2)
+        finishPage?.resume(returning: BilibiliReplies(items: [reply("page2")], total: 2, hasMore: false))
+        await paging.value
+        await refresh.value
+        XCTAssertEqual(firstPageRequests, 2)
+        XCTAssertEqual(store.rows.map(\.id), ["new"])
+    }
+
     func testReplyParsingKeepsImagesAndBoundedPreviews() {
         let fixture: [String: Any] = [
             "rpid_str": "100", "rcount": 2,

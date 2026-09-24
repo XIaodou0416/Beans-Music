@@ -15,6 +15,7 @@ final class BilibiliReplyStore: ObservableObject {
     private var context: String?
     private var loadedContext: String?
     private var request: Task<Void, Never>?
+    private var refreshing = false
     private let fetch: (String, Int, Bool, String?) async throws -> BilibiliReplies
 
     init(fetch: @escaping (String, Int, Bool, String?) async throws -> BilibiliReplies = { aid, page, hot, root in
@@ -26,7 +27,11 @@ final class BilibiliReplyStore: ObservableObject {
         let nextContext = "\(aid)|\(hot)|\(root ?? "")|\(BilibiliAuth.shared.accountID)|\(BilibiliAuth.shared.isLoggedIn)"
         if ifNeeded && context == nextContext && loadedContext == nextContext { return }
         if loading && context == nextContext {
+            let needsRefreshAfterPage = reset && !refreshing
             await request?.value
+            if needsRefreshAfterPage && context == nextContext {
+                await load(aid: aid, hot: hot, root: root, reset: true)
+            }
             return
         }
         if !reset && (loading || !more) { return }
@@ -38,6 +43,7 @@ final class BilibiliReplyStore: ObservableObject {
         context = nextContext
         let token = generation
         loading = true; error = nil
+        refreshing = reset
         let next = reset ? 1 : page + 1
         // The store owns the request. Cancelling a view task during navigation
         // must not discard its data or launch a second request on return.
@@ -67,6 +73,7 @@ struct BilibiliNativeComments: View {
     private let externalComposer: Binding<Bool>?
     let refreshID: Int
     let isActive: Bool
+    private let onOpenAuthor: ((Artist) -> Void)?
     @StateObject private var store = BilibiliReplyStore()
     @ObservedObject private var account = BilibiliAuth.shared
     @Environment(\.bilibiliNavigate) private var navigate
@@ -74,6 +81,7 @@ struct BilibiliNativeComments: View {
     @State private var fallbackRoute: BilibiliNativeRoute?
     @State private var sheet: BilibiliCommentSheet?
     @State private var pendingComposer: BilibiliCommentTarget?
+    @State private var pendingAuthor: Artist?
     @State private var mutation: String?
     @State private var mutationError: String?
     @State private var likedOverrides: [String: Bool] = [:]
@@ -84,7 +92,8 @@ struct BilibiliNativeComments: View {
         showsComposerBar: Bool = true,
         composer: Binding<Bool>? = nil,
         refreshID: Int = 0,
-        isActive: Bool = true
+        isActive: Bool = true,
+        onOpenAuthor: ((Artist) -> Void)? = nil
     ) {
         self.aid = aid
         self.root = root
@@ -92,6 +101,7 @@ struct BilibiliNativeComments: View {
         self.externalComposer = composer
         self.refreshID = refreshID
         self.isActive = isActive
+        self.onOpenAuthor = onOpenAuthor
     }
 
     private var loadKey: String {
@@ -165,7 +175,7 @@ struct BilibiliNativeComments: View {
         .fullScreenCover(item: $fallbackRoute) { route in
             BilibiliNativeStandaloneStack(initialRoute: route)
         }
-        .sheet(item: $sheet, onDismiss: resumePendingComposer) { route in
+        .sheet(item: $sheet, onDismiss: finishSheetDismissal) { route in
             switch route {
             case .login:
                 BilibiliLoginSheet()
@@ -175,7 +185,10 @@ struct BilibiliNativeComments: View {
                 }
             case .thread(let reply):
                 BeansNavigationStack {
-                    AnyView(BilibiliNativeComments(aid: aid, root: reply))
+                    AnyView(BilibiliNativeComments(aid: aid, root: reply, onOpenAuthor: { author in
+                        pendingAuthor = author
+                        sheet = nil
+                    }))
                         .navigationTitle("评论回复").navigationBarTitleDisplayMode(.inline)
                         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { sheet = nil } } }
                 }
@@ -230,13 +243,19 @@ struct BilibiliNativeComments: View {
         if account.isLoggedIn { sheet = .compose(target) }
         else { pendingComposer = target; sheet = .login }
     }
-    private func resumePendingComposer() {
+    private func finishSheetDismissal() {
+        if let author = pendingAuthor {
+            pendingAuthor = nil
+            openAuthor(author)
+            return
+        }
         guard let target = pendingComposer else { return }
         pendingComposer = nil
         if account.isLoggedIn { sheet = .compose(target) }
     }
     private func openAuthor(_ author: Artist) {
-        if root == nil, let navigate { navigate(.up(author)) }
+        if let onOpenAuthor { onOpenAuthor(author) }
+        else if let navigate { navigate(.up(author)) }
         else { fallbackRoute = .up(author) }
     }
     private func like(_ reply: BilibiliReply, current: Bool) {
