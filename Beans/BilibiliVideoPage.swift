@@ -1,11 +1,12 @@
 import SwiftUI
 import AVFoundation
 
+// Adapted from CiliCili's GPL-3.0 video-detail composition.
 struct BilibiliVideoPage: View {
     let song: Song
     @EnvironmentObject private var music: PlayerManager
     @EnvironmentObject private var navigation: BilibiliNavigationState
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var videoPlayer = BilibiliNativePlayer()
     @ObservedObject private var account = BilibiliAuth.shared
     @State private var detail: BilibiliVideoInfo?
@@ -29,22 +30,51 @@ struct BilibiliVideoPage: View {
     @State private var presentingChild = false
     @State private var routeDepth = 0
 
+    private let ciliPink = Color(red: 0.98, green: 0.31, blue: 0.53)
+
     var body: some View {
-        GeometryReader { geometry in
-            let wide = sizeClass == .regular && geometry.size.width > geometry.size.height
-            Group {
-                if wide {
-                    HStack(alignment: .top, spacing: 0) {
-                        playback.frame(width: geometry.size.width * 0.56)
-                        content.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                } else {
-                    VStack(spacing: 0) { playback; content }
+        Group {
+            if tab == 1, let detail {
+                VStack(spacing: 0) {
+                    playback
+                    BilibiliNativeComments(aid: detail.aid)
                 }
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        playback
+                        if let detail {
+                            detailContent(detail)
+                        } else if let loadError {
+                            BilibiliInlineError(message: loadError) { Task { await load() } }
+                                .padding(24)
+                        } else {
+                            ProgressView("加载视频信息")
+                                .frame(maxWidth: .infinity, minHeight: 280)
+                        }
+                    }
+                    .padding(.bottom, 92)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) { detailTabs }
             }
         }
-        .background(Color(uiColor: .systemBackground))
-        .navigationTitle("视频详情").navigationBarTitleDisplayMode(.inline)
+        .background(Color.white)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: closePage) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(.black)
+                        .frame(width: 42, height: 42)
+                        .background(Color.white, in: Circle())
+                        .overlay(Circle().stroke(Color.black.opacity(0.12), lineWidth: 1))
+                }
+                .accessibilityLabel("返回")
+            }
+        }
         .task(id: song.identityKey) {
             routeDepth = navigation.path.count
             music.pauseForBilibiliVideo()
@@ -54,7 +84,7 @@ struct BilibiliVideoPage: View {
         }
         .onDisappear {
             rememberPosition()
-            if !presentingChild { videoPlayer.stop() }
+            if !presentingChild && !showFullscreenPlayer { videoPlayer.stop() }
         }
         .onChange(of: navigation.path.count) { count in
             if presentingChild && count <= routeDepth {
@@ -67,206 +97,213 @@ struct BilibiliVideoPage: View {
             rememberPosition()
             play()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .beansBilibiliLoginDidUpdate)) { _ in Task { await updateInteraction() } }
+        .onReceive(NotificationCenter.default.publisher(for: .beansBilibiliLoginDidUpdate)) { _ in
+            Task { await updateInteraction() }
+        }
         .sheet(isPresented: $showLogin) { BilibiliLoginSheet() }
         .sheet(isPresented: $showFavorites) {
             if let detail {
                 BilibiliFavoritePicker(aid: detail.aid) { Task { await updateInteraction() } }
             }
         }
-        .sheet(isPresented: $share) { if let url = song.officialURL { ShareSheet(items: [url]) } }
+        .sheet(isPresented: $share) {
+            if let url = song.officialURL { ShareSheet(items: [url]) }
+        }
         .fullScreenCover(isPresented: $showFullscreenPlayer) {
-            BilibiliFullscreenPlayer(
-                model: videoPlayer,
-                quality: $quality,
-                onDismiss: {
-                    rememberPosition()
-                    showFullscreenPlayer = false
-                    videoPlayer.player?.play()
-                },
-                onQualityChanged: {
-                    rememberPosition()
-                    play()
-                }
-            )
-            .onAppear {
+            BilibiliFullscreenPlayer(model: videoPlayer, quality: $quality, onDismiss: {
+                rememberPosition()
+                showFullscreenPlayer = false
                 videoPlayer.player?.play()
-            }
+            }, onQualityChanged: {
+                rememberPosition()
+                play()
+            })
+            .onAppear { videoPlayer.player?.play() }
         }
         .confirmationDialog("选择投币数量", isPresented: $showCoins, titleVisibility: .visible) {
             Button("投 1 枚硬币") { coin(1) }
             Button("投 2 枚硬币") { coin(2) }
             Button("取消", role: .cancel) {}
-        } message: { Text("将消耗当前B站账号的硬币，投币后不能撤回。") }
+        } message: { Text("将消耗当前 B 站账号的硬币，投币后不能撤回。") }
         .alert("操作提示", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("知道了") { message = nil }
         } message: { Text(message ?? "") }
     }
+
     private var playback: some View {
-        VStack(spacing: 0) {
-            BilibiliVideoSurface(model: videoPlayer, retry: play)
-            HStack {
-                Menu {
-                    Button("流畅") { quality = 16 }
-                    Button("高清") { quality = 64 }
-                    Button("超清") { quality = 80 }
-                } label: { Label(quality == 16 ? "流畅" : quality == 80 ? "超清" : "高清", systemImage: "gearshape") }
-                Spacer()
-                Button {
-                    rememberPosition()
-                    showFullscreenPlayer = true
-                } label: {
-                    Label("全屏", systemImage: "arrow.up.left.and.arrow.down.right")
-                }
-                Button { videoPlayer.stop(); music.play(songs: [selectedPart ?? song]); message = "已切换到音频播放器" } label: {
-                    Label("听视频", systemImage: "headphones")
-                }
-            }.font(.caption).padding(.horizontal, 16).frame(height: 40)
-        }
+        BilibiliDetailVideoSurface(model: videoPlayer, quality: $quality, onBack: closePage, onExpand: {
+            rememberPosition()
+            showFullscreenPlayer = true
+        })
+        .background(Color.black)
     }
-    private var content: some View {
-        VStack(spacing: 0) {
-            Picker("详情", selection: $tab) { Text("简介").tag(0); Text("评论").tag(1) }
-                .pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 10)
-            if let detail {
-                if tab == 1 { BilibiliNativeComments(aid: detail.aid) }
-                else { summary(detail) }
-            } else if let loadError { BilibiliInlineError(message: loadError) { Task { await load() } } }
-            else { ProgressView("加载视频信息").frame(maxWidth: .infinity, maxHeight: .infinity) }
-        }
-    }
-    private func summary(_ info: BilibiliVideoInfo) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+
+    private func detailContent(_ info: BilibiliVideoInfo) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
                 Button { expanded.toggle() } label: {
-                    HStack(alignment: .top) {
-                        Text(info.song.name).font(BeansFont.appFont(19, .semibold)).lineLimit(expanded ? nil : 2)
-                        Spacer(minLength: 4)
-                        Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption)
-                    }.foregroundStyle(Color.beansLabel)
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(info.song.name).font(.system(size: 22, weight: .bold)).foregroundStyle(.black)
+                            .lineLimit(expanded ? nil : 2).multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 15, weight: .bold)).foregroundStyle(.gray).padding(.top, 4)
+                    }
                 }.buttonStyle(.plain)
-                Text("\(BilibiliFeedVideo.countLabel(info.views)) 次播放 · \(info.published.formatted(date: .abbreviated, time: .omitted))")
-                    .font(.caption).foregroundStyle(Color.beansComment)
+                HStack(spacing: 10) {
+                    Text("\(BilibiliFeedVideo.countLabel(info.views)) 次播放")
+                    Text("·")
+                    Text(info.published.formatted(date: .abbreviated, time: .omitted))
+                }.font(.system(size: 14, weight: .medium)).foregroundStyle(Color.gray)
                 if expanded && !info.description.isEmpty {
-                    Text(info.description).font(.subheadline).foregroundStyle(Color.beansComment).textSelection(.enabled)
+                    Text(info.description).font(.system(size: 15)).foregroundStyle(Color.gray)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                 }
-                HStack(spacing: 8) {
-                    action("点赞", icon: interaction?.liked == true ? "hand.thumbsup.fill" : "hand.thumbsup", selected: interaction?.liked == true) { like() }
-                    action("投币", icon: "c.circle", selected: (interaction?.coins ?? 0) > 0) {
-                        if account.isLoggedIn { showCoins = true } else { showLogin = true }
-                    }
-                    action("收藏", icon: interaction?.favorited == true ? "star.fill" : "star", selected: interaction?.favorited == true) {
-                        if account.isLoggedIn { showFavorites = true } else { showLogin = true }
-                    }
-                    action("评论", icon: "text.bubble", selected: false) { tab = 1 }
-                    action("分享", icon: "square.and.arrow.up", selected: false) { share = true }
-                }
-                if busy { ProgressView().frame(maxWidth: .infinity) }
-                HStack(spacing: 12) {
-                    Button { navigate(.up(info.owner)) } label: {
-                        HStack(spacing: 12) {
-                            CoverImage(url: info.owner.coverURL, size: 46, cornerRadius: 23)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(info.owner.name).font(.headline).foregroundStyle(Color.beansLabel)
-                                Text("查看UP主主页").font(.caption).foregroundStyle(Color.beansComment)
-                            }
+            }.padding(.horizontal, 28).padding(.top, 22)
+
+            actionStrip(info).padding(.horizontal, 28).padding(.top, 18)
+            if busy { ProgressView().frame(maxWidth: .infinity).padding(.top, 8) }
+
+            if info.parts.count > 1 {
+                sectionTitle("分集")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(info.parts.enumerated()), id: \.element.identityKey) { index, part in
+                            Button {
+                                savedProgress = 0
+                                selectedPart = part
+                                play()
+                            } label: {
+                                Text("P\(index + 1) · \(part.name)").font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(selectedPart?.identityKey == part.identityKey ? ciliPink : .black)
+                                    .lineLimit(1).padding(.horizontal, 13).padding(.vertical, 10)
+                                    .background(Color(white: 0.95), in: Capsule())
+                            }.buttonStyle(.plain)
                         }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    Spacer(minLength: 8)
-                    Button(followingBusy ? "处理中" : following == true ? "已关注" : "+ 关注") {
-                        followOwner(info.owner)
-                    }
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.bordered)
-                    .disabled(followingBusy)
-                }
-                if info.parts.count > 1 {
-                    Text("分集（\(info.parts.count)）").font(.headline)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(Array(info.parts.enumerated()), id: \.element.identityKey) { index, part in
-                                Button { savedProgress = 0; selectedPart = part; play() } label: {
-                                    Text("P\(index + 1) · \(part.name)").font(.caption).lineLimit(1)
-                                        .frame(maxWidth: 180).padding(12)
-                                        .background(selectedPart?.identityKey == part.identityKey ? Color.beansAmber.opacity(0.18) : Color.beansGlassFill, in: RoundedRectangle(cornerRadius: 9))
-                                }.buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-                if let collection = info.collection {
-                    Text("所属合集").font(.headline)
-                    Button { navigate(.collection(collection)) } label: { BilibiliCollectionRow(collection: collection) }.buttonStyle(.plain)
-                }
-                if !relatedVideos.isEmpty {
-                    Text("相关推荐").font(.headline)
-                    LazyVStack(spacing: 16) {
-                        ForEach(relatedVideos) { item in
-                            Button { navigate(.video(item.song)) } label: {
-                                BilibiliVideoRow(item: item)
-                            }
+                    }.padding(.horizontal, 28)
+                }.padding(.top, 2)
+            }
+
+            if let collection = info.collection {
+                sectionTitle("所属合集")
+                Button { navigate(.collection(collection)) } label: {
+                    BilibiliCollectionRow(collection: collection).padding(.horizontal, 28)
+                }.buttonStyle(.plain)
+            }
+
+            if !relatedVideos.isEmpty {
+                sectionTitle("相关推荐")
+                LazyVStack(spacing: 0) {
+                    ForEach(relatedVideos) { item in
+                        Button { navigate(.video(item.song)) } label: { CiliCiliRelatedRow(item: item) }
                             .buttonStyle(.plain)
-                        }
+                        Divider().padding(.leading, 188)
                     }
-                }
-            }.padding(16)
-        }.refreshable { await load() }
+                }.padding(.horizontal, 28)
+            }
+        }
+        .refreshable { await load() }
     }
-    private func action(_ title: String, icon: String, selected: Bool, perform: @escaping () -> Void) -> some View {
-        Button(action: perform) {
-            VStack(spacing: 7) { Image(systemName: icon).font(.system(size: 22)); Text(title).font(.caption) }
-                .foregroundStyle(selected ? Color.beansAmber : Color.beansComment).frame(maxWidth: .infinity, minHeight: 58)
+
+    private func actionStrip(_ info: BilibiliVideoInfo) -> some View {
+        HStack(spacing: 8) {
+            Button { navigate(.up(info.owner)) } label: {
+                CoverImage(url: info.owner.coverURL, size: 38, cornerRadius: 19).frame(width: 48, height: 42)
+            }.buttonStyle(.plain)
+            Button { followOwner(info.owner) } label: {
+                Text(following == true ? "已关注" : "关注").font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white).frame(width: 70, height: 36).background(ciliPink, in: Capsule())
+            }.buttonStyle(.plain).disabled(followingBusy)
+            detailAction("hand.thumbsup.fill", "点赞", selected: interaction?.liked == true) { like() }
+            detailAction("bitcoinsign.circle.fill", "投币", selected: (interaction?.coins ?? 0) > 0) {
+                if account.isLoggedIn { showCoins = true } else { showLogin = true }
+            }
+            detailAction("star.fill", "收藏", selected: interaction?.favorited == true) {
+                if account.isLoggedIn { showFavorites = true } else { showLogin = true }
+            }
+            detailAction("square.and.arrow.up", "分享", selected: false) { share = true }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func detailAction(_ icon: String, _ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 21, weight: .medium))
+                Text(title).font(.system(size: 11, weight: .medium))
+            }.foregroundStyle(selected ? ciliPink : .black).frame(width: 48, height: 48)
         }.buttonStyle(.plain).disabled(busy)
     }
+
+    private var detailTabs: some View {
+        HStack(spacing: 0) {
+            Button("简介") { tab = 0 }.frame(maxWidth: .infinity)
+            Button("评论") { tab = 1 }.frame(maxWidth: .infinity)
+        }.font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
+            .frame(width: 270, height: 52).background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
+            .shadow(color: .black.opacity(0.12), radius: 12, y: 4).padding(.bottom, 10)
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title).font(.system(size: 22, weight: .bold)).foregroundStyle(.black)
+            .padding(.horizontal, 28).padding(.top, 28).padding(.bottom, 12)
+    }
+
+    private func closePage() {
+        if routeDepth > 0 { navigation.pop(to: routeDepth - 1) } else { dismiss() }
+    }
+
     private func rememberPosition() {
         if let seconds = videoPlayer.player?.currentTime().seconds, seconds.isFinite { savedProgress = seconds }
     }
+
     private func play() {
-        let part = selectedPart ?? song, value = quality
+        let part = selectedPart ?? song
         music.pauseForBilibiliVideo()
-        videoPlayer.open(resumeAt: savedProgress) { try await BilibiliAPI.shared.nativeVideoURLs(part, quality: value) }
+        videoPlayer.open(resumeAt: savedProgress) { try await BilibiliAPI.shared.nativeVideoURLs(part, quality: quality) }
     }
+
     private func navigate(_ route: BilibiliNativeRoute) {
         presentingChild = true
         rememberPosition()
         videoPlayer.pause()
         navigation.push(route)
     }
+
     private func load() async {
         loadError = nil
-        do { detail = try await BilibiliAPI.shared.nativeVideo(song); await updateInteraction() }
-        catch { loadError = error.localizedDescription }
+        do {
+            detail = try await BilibiliAPI.shared.nativeVideo(song)
+            await updateInteraction()
+        } catch { loadError = error.localizedDescription }
         if let detail, let videos = try? await BilibiliAPI.shared.relatedVideos(aid: detail.aid) {
             relatedVideos = videos.filter { $0.song.identityKey != song.identityKey }
         }
     }
+
     private func updateInteraction() async {
-        guard account.isLoggedIn, let detail else {
-            interaction = nil
-            following = nil
-            return
-        }
-        do { interaction = try await BilibiliAPI.shared.nativeInteraction(aid: detail.aid) }
-        catch { interaction = nil }
+        guard account.isLoggedIn, let detail else { interaction = nil; following = nil; return }
+        interaction = try? await BilibiliAPI.shared.nativeInteraction(aid: detail.aid)
         if let profile = try? await BilibiliAPI.shared.upProfile(detail.owner.id) {
             following = profile.following
+        } else {
+            following = nil
         }
     }
+
     private func like() {
         guard account.isLoggedIn else { showLogin = true; return }
-        guard let detail, !busy else { return }
-        guard let interaction else { message = "正在确认点赞状态，请下拉刷新后再操作"; return }
+        guard let detail, let interaction, !busy else { return }
         busy = true
         Task { @MainActor in
             defer { busy = false }
             do {
                 try await BilibiliAPI.shared.nativeLike(aid: detail.aid, liked: !interaction.liked)
-                self.interaction?.liked = !interaction.liked
+                self.interaction?.liked.toggle()
             } catch { message = error.localizedDescription; await updateInteraction() }
         }
     }
+
     private func coin(_ count: Int) {
         guard let detail, !busy else { return }
         busy = true
@@ -285,15 +322,36 @@ struct BilibiliVideoPage: View {
         Task { @MainActor in
             defer { followingBusy = false }
             do {
-                let current: Bool
-                if let following { current = following }
-                else { current = try await BilibiliAPI.shared.upProfile(owner.id).following }
+                let current = following ?? (try await BilibiliAPI.shared.upProfile(owner.id).following)
                 try await BilibiliAPI.shared.nativeFollow(id: owner.id, follow: !current)
                 following = !current
-            } catch {
-                message = error.localizedDescription
-            }
+            } catch { message = error.localizedDescription }
         }
+    }
+}
+
+private struct CiliCiliRelatedRow: View {
+    let item: BilibiliFeedVideo
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            CoverImage(url: item.song.coverURL, size: 88, aspectRatio: 16.0 / 9.0, cornerRadius: 9)
+                .frame(width: 148, height: 84)
+                .overlay(alignment: .bottomTrailing) {
+                    Text(item.song.formattedDuration).font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 3)
+                        .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 4)).padding(5)
+                }
+            VStack(alignment: .leading, spacing: 8) {
+                Text(item.song.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
+                    .lineLimit(2).multilineTextAlignment(.leading)
+                Text(item.song.artists).font(.system(size: 13)).foregroundStyle(.gray).lineLimit(1)
+                if item.playCount > 0 {
+                    Label(BilibiliFeedVideo.countLabel(item.playCount), systemImage: "play.fill")
+                        .font(.system(size: 12)).foregroundStyle(.gray)
+                }
+            }
+            Spacer(minLength: 0)
+        }.padding(.vertical, 12).contentShape(Rectangle())
     }
 }
 
@@ -304,12 +362,7 @@ private struct BilibiliFullscreenPlayer: View {
     let onQualityChanged: () -> Void
     @State private var lastQuality: Int
 
-    init(
-        model: BilibiliNativePlayer,
-        quality: Binding<Int>,
-        onDismiss: @escaping () -> Void,
-        onQualityChanged: @escaping () -> Void
-    ) {
+    init(model: BilibiliNativePlayer, quality: Binding<Int>, onDismiss: @escaping () -> Void, onQualityChanged: @escaping () -> Void) {
         self.model = model
         _quality = quality
         self.onDismiss = onDismiss
@@ -319,18 +372,10 @@ private struct BilibiliFullscreenPlayer: View {
 
     var body: some View {
         GeometryReader { geometry in
-            BilibiliDetailVideoSurface(
-                model: model,
-                quality: $quality,
-                onBack: onDismiss,
-                onExpand: {}
-            )
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .background(Color.black)
-            .ignoresSafeArea()
+            BilibiliDetailVideoSurface(model: model, quality: $quality, onBack: onDismiss, onExpand: {})
+                .frame(width: geometry.size.width, height: geometry.size.height).background(Color.black).ignoresSafeArea()
         }
-        .background(Color.black)
-        .statusBarHidden(true)
+        .background(Color.black).statusBarHidden(true)
         .onChange(of: quality) { value in
             guard value != lastQuality else { return }
             lastQuality = value
@@ -349,16 +394,24 @@ struct BilibiliFavoritePicker: View {
     @State private var loading = true
     @State private var saving = false
     @State private var error: String?
+
     var body: some View {
         BeansNavigationStack {
             List {
                 if loading { ProgressView("加载收藏夹") }
-                if let error { Text(error).foregroundStyle(.red).font(.footnote); Button("重新加载") { Task { await load() } } }
+                if let error {
+                    Text(error).foregroundStyle(.red).font(.footnote)
+                    Button("重新加载") { Task { await load() } }
+                }
                 ForEach(folders) { folder in
                     Button {
                         if selected.contains(folder.id) { selected.remove(folder.id) } else { selected.insert(folder.id) }
                     } label: {
-                        HStack { Text(folder.title).foregroundStyle(Color.beansLabel); Spacer(); Image(systemName: selected.contains(folder.id) ? "checkmark.circle.fill" : "circle") }
+                        HStack {
+                            Text(folder.title).foregroundStyle(Color.beansLabel)
+                            Spacer()
+                            Image(systemName: selected.contains(folder.id) ? "checkmark.circle.fill" : "circle")
+                        }
                     }.disabled(saving)
                 }
                 if !loading && folders.isEmpty && error == nil { Text("账号还没有收藏夹") }
@@ -368,7 +421,8 @@ struct BilibiliFavoritePicker: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(saving) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(saving ? "保存中" : "保存") {
-                        saving = true; error = nil
+                        saving = true
+                        error = nil
                         Task { @MainActor in
                             defer { saving = false }
                             do {
@@ -381,12 +435,15 @@ struct BilibiliFavoritePicker: View {
             }
         }.task { await load() }.interactiveDismissDisabled(saving)
     }
+
     private func load() async {
-        loading = true; error = nil
+        loading = true
+        error = nil
         defer { loading = false }
         do {
             folders = try await BilibiliAPI.shared.nativeFolders(aid: aid)
-            original = Set(folders.filter(\.containsVideo).map(\.id)); selected = original
+            original = Set(folders.filter(\.containsVideo).map(\.id))
+            selected = original
         } catch { self.error = error.localizedDescription }
     }
 }
