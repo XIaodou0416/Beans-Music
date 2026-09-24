@@ -2,7 +2,7 @@ name: Beans
 
 options:
   deploymentTarget:
-    iOS: "15.0"
+    iOS: "16.0"
 
 settings:
   base:
@@ -25,7 +25,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app
         MARKETING_VERSION: "1.8.1"
-        CURRENT_PROJECT_VERSION: "14"
+        CURRENT_PROJECT_VERSION: "16"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_OBJC_BRIDGING_HEADER: Beans/Beans-Bridging-Header.h
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -43,6 +43,8 @@ targets:
           UIColorName: LaunchBackgroundColor
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         "UISupportedInterfaceOrientations~ipad":
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
@@ -84,3 +86,4 @@ schemes:
     test:
       targets:
         - BeansTests
+

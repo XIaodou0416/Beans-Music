@@ -22,11 +22,13 @@ final class BilibiliDetailPresentation: ObservableObject {
     @Published var presentedVideo: Song?
 
     func present(_ song: Song) {
+        guard presentedVideo?.identityKey != song.identityKey else { return }
         BilibiliDetailDiagnostics.record("present request: \(song.identityKey)")
         presentedVideo = song
     }
 
     func dismiss() {
+        guard presentedVideo != nil else { return }
         BilibiliDetailDiagnostics.record("presenter dismiss")
         presentedVideo = nil
     }
@@ -54,10 +56,6 @@ private struct BilibiliDismissVideoKey: EnvironmentKey {
     static let defaultValue: (() -> Void)? = nil
 }
 
-private struct BilibiliNavigationObjectKey: EnvironmentKey {
-    static let defaultValue: BilibiliNavigationState? = nil
-}
-
 extension EnvironmentValues {
     var bilibiliNavigate: ((BilibiliNativeRoute) -> Void)? {
         get { self[BilibiliNavigationActionKey.self] }
@@ -69,15 +67,10 @@ extension EnvironmentValues {
         set { self[BilibiliDismissVideoKey.self] = newValue }
     }
 
-    var bilibiliNavigationObject: BilibiliNavigationState? {
-        get { self[BilibiliNavigationObjectKey.self] }
-        set { self[BilibiliNavigationObjectKey.self] = newValue }
-    }
 }
 
 struct BilibiliNativeDestination: View {
     let route: BilibiliNativeRoute
-    let legacyDepth: Int
 
     @ViewBuilder
     private var page: some View {
@@ -93,7 +86,6 @@ struct BilibiliNativeDestination: View {
 
     var body: some View {
         page
-            .background { BilibiliLegacyRouteLink(depth: legacyDepth) }
     }
 }
 
@@ -103,52 +95,13 @@ struct BilibiliNativeStandaloneStack: View {
 
     var body: some View {
         BeansNavigationStackWithPath(path: $navigation.path) {
-            BilibiliNativeDestination(route: initialRoute, legacyDepth: 0)
+            BilibiliNativeDestination(route: initialRoute)
                 .environmentObject(navigation)
-                .environment(\.bilibiliNavigationObject, navigation)
                 .environment(\.bilibiliNavigate, navigation.push)
                 .beansNavigationDestination(for: BilibiliNativeRoute.self) { route in
-                    BilibiliNativeDestination(route: route, legacyDepth: 1)
+                    BilibiliNativeDestination(route: route)
                         .environmentObject(navigation)
-                        .environment(\.bilibiliNavigationObject, navigation)
                 }
-        }
-    }
-}
-
-/// iOS 15 fallback: each visible level owns a hidden link into the same stack.
-struct BilibiliLegacyRouteLink: View {
-    let depth: Int
-    @Environment(\.bilibiliNavigationObject) private var navigation
-
-    var body: some View {
-        if #available(iOS 16, *) {
-            EmptyView()
-        } else if let navigation {
-            NavigationLink(
-                destination: AnyView(destination(for: navigation)),
-                isActive: Binding(
-                    get: { navigation.path.count > depth },
-                    set: { if !$0 { navigation.pop(to: depth) } }
-                )
-            ) {
-                EmptyView()
-            }
-            .frame(width: 0, height: 0)
-            .hidden()
-        } else {
-            EmptyView()
-        }
-    }
-
-    @ViewBuilder
-    private func destination(for navigation: BilibiliNavigationState) -> some View {
-        if navigation.path.indices.contains(depth) {
-            BilibiliNativeDestination(route: navigation.path[depth], legacyDepth: depth + 1)
-                .environmentObject(navigation)
-                .environment(\.bilibiliNavigationObject, navigation)
-        } else {
-            EmptyView()
         }
     }
 }

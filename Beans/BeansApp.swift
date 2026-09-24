@@ -17,6 +17,7 @@ struct BeansApp: App {
         // 闪退检测：优先初始化，检测上次异常退出并安装崩溃捕获
         _ = CrashReporter.shared
         CrashMetricCollector.shared.start()
+        BeansDiagnostics.shared.start()
         // 主页暂停只应在设置页打开期间生效，避免异常退出后把暂停状态永久写入本地。，
         UserDefaults.standard.set(false, forKey: "beans.pauseHomeRendering")
         // 应用始终按设备能力请求最高刷新率，不再读取可导致重入的旧开关。
@@ -94,3 +95,4 @@ struct BeansApp: App {
         }
     }
 }
+

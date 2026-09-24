@@ -164,6 +164,7 @@ struct ProfileView: View {
     @State private var loadingRemoteDonors = false
     @State private var showWeChatOpenError = false
     @State private var showFeedback = false
+    @State private var showDiagnostics = false
     @State private var showAvatarPicker = false
     @State private var showProfileNameBackgroundPicker = false
     @State private var easterEggStep = 0
@@ -2525,7 +2526,7 @@ struct SettingsView: View {
     private var showEqualizerSettings: Bool { settingsMatches("均衡器 音效") }
     private var showBackupSettings: Bool { settingsMatches("备份 恢复 导出 导入 缓存") }
     private var showChangelogSettings: Bool { settingsMatches("更新 日志 版本") }
-    private var showSupportSettings: Bool { settingsMatches("帮助 反馈 声明 检查更新") }
+    private var showSupportSettings: Bool { settingsMatches("帮助 反馈 声明 检查更新 诊断 日志 崩溃 卡死") }
     private var hasSettingsSearchResults: Bool {
         showAccountSettings || showAppearanceSettings || showPlatformSettings
             || showDynamicWallpaperSettings || showAudioSettings || showPlaybackSettings || showEqualizerSettings
@@ -4604,6 +4605,14 @@ struct SettingsView: View {
                 ) {
                     showFeedback = true
                 }
+                Divider().overlay(Color.beansComment.opacity(0.14))
+                settingsSupportButton(
+                    icon: "stethoscope",
+                    title: "诊断与日志",
+                    tint: Color.beansAmber
+                ) {
+                    showDiagnostics = true
+                }
             }
             catalogDivider
             VStack(alignment: .leading, spacing: 8) {
@@ -4638,6 +4647,10 @@ struct SettingsView: View {
             .padding(.vertical, 14)
             catalogDivider
             runtimeEnvironmentFooter
+        }
+        .sheet(isPresented: $showDiagnostics) {
+            BeansDiagnosticsSettingsView()
+                .environmentObject(theme)
         }
     }
 
@@ -5594,3 +5607,4 @@ struct BackupDocumentPicker: UIViewControllerRepresentable {
         func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {}
     }
 }
+

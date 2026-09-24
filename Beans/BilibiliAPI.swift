@@ -54,14 +54,22 @@ actor BilibiliAPI {
         Self.headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         let cookies = [cookieOverride ?? cookie, fingerprint].filter { !$0.isEmpty }.joined(separator: "; ")
         if !cookies.isEmpty { request.setValue(cookies, forHTTPHeaderField: "Cookie") }
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw BilibiliError(message: "哔哩哔哩请求失败（HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)）")
+        let started = Date()
+        do {
+            let (data, response) = try await session.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode
+            BeansDiagnostics.shared.recordNetwork(url: url, method: request.httpMethod ?? "GET", status: status, duration: Date().timeIntervalSince(started))
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                throw BilibiliError(message: "哔哩哔哩请求失败（HTTP \(status ?? 0)）")
+            }
+            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw BilibiliError(message: "哔哩哔哩返回了无法识别的数据")
+            }
+            return (object, http)
+        } catch {
+            BeansDiagnostics.shared.recordNetwork(url: url, method: request.httpMethod ?? "GET", duration: Date().timeIntervalSince(started), error: error.localizedDescription)
+            throw error
         }
-        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw BilibiliError(message: "哔哩哔哩返回了无法识别的数据")
-        }
-        return (object, http)
     }
     func get(_ path: String, _ query: [String: String] = [:], signed: Bool = false, identity: Bool = false, ttl: Double = 0) async throws -> [String: Any] {
         let key = path + query.keys.sorted().map { $0 + "=" + query[$0]! }.joined(separator: "&")
@@ -124,7 +132,8 @@ actor BilibiliAPI {
     nonisolated static func image(_ value: Any?) -> URL? {
         let s = text(value)
         guard !s.isEmpty else { return nil }
-        return URL(string: s.hasPrefix("//") ? "https:" + s : s)
+        let normalized = s.hasPrefix("//") ? "https:" + s : s.replacingOccurrences(of: "http://", with: "https://")
+        return URL(string: normalized)
     }
     nonisolated static func stableID(_ s: String) -> Int { QishuiAPI.stableID("bilibili:" + s) }
     nonisolated static func videoID(_ input: String) -> String? {
@@ -430,19 +439,26 @@ actor BilibiliAPI {
 
     func sendSMSCode(phone: String, countryCode: String = "86") async throws -> String {
         let profile = BilibiliAppLoginProfile.androidHD
+        if fingerprint.isEmpty {
+            let fp = try await get("/x/frontend/finger/spi")
+            if let b3 = fp["b_3"] as? String, let b4 = fp["b_4"] as? String {
+                fingerprint = "buvid3=\(b3); buvid4=\(b4)"
+            }
+        }
         let buvid = fingerprintValue(named: "buvid3") ?? "0"
         let now = Int(Date().timeIntervalSince1970)
+        let milliseconds = Int(Date().timeIntervalSince1970 * 1000)
         let fields = BilibiliAppLoginProfile.sign([
             "build": profile.build,
             "buvid": buvid,
             "c_locale": "zh_CN",
-            "channel": "master",
+            "channel": profile.channel,
             "cid": countryCode,
             "disable_rcmd": "0",
             "local_id": buvid,
-            "login_session_id": Self.md5("\(buvid)\(now * 1000)"),
+            "login_session_id": Self.md5("\(buvid)\(milliseconds)"),
             "mobi_app": profile.mobiApp,
-            "platform": "android",
+            "platform": profile.platform,
             "s_locale": "zh_CN",
             "statistics": profile.statistics,
             "tel": phone
@@ -519,6 +535,7 @@ actor BilibiliAPI {
         Self.headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         request.setValue(profile.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        if !fingerprint.isEmpty { request.setValue(fingerprint, forHTTPHeaderField: "Cookie") }
         request.httpBody = fields.keys.sorted().map { "\(Self.encode($0))=\(Self.encode(fields[$0] ?? ""))" }.joined(separator: "&").data(using: .utf8)
         let (data, response) = try await session.data(for: request)
         return try Self.passportObject(data, response: response)
@@ -576,9 +593,11 @@ private struct BilibiliAppLoginProfile {
     let build: String
     let mobiApp: String
     let statistics: String
+    let channel: String
+    let platform: String
     let userAgent: String
 
-    static let androidHD = Self(appKey: "dfca71928277209b", secret: "b5475a8825547a4fc26c7d518eaaa02e", build: "2001100", mobiApp: "android_hd", statistics: #"{"appId":5,"platform":3,"version":"2.0.1","abtest":""}"#, userAgent: "Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android model/android_hd mobi_app/android_hd build/2001100 channel/master innerVer/2001100 osVer/15 network/2")
+    static let androidHD = Self(appKey: "dfca71928277209b", secret: "b5475a8825547a4fc26c7d518eaaa02e", build: "2001100", mobiApp: "android_hd", statistics: #"{"appId":5,"platform":3,"version":"2.0.1","abtest":""}"#, channel: "master", platform: "android", userAgent: "Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android model/android_hd mobi_app/android_hd build/2001100 channel/master innerVer/2001100 osVer/15 network/2")
 
     static func sign(_ values: [String: String], profile: Self, timestamp: Int = Int(Date().timeIntervalSince1970)) -> [String: String] {
         var all = values; all["appkey"] = profile.appKey; all["ts"] = String(timestamp)

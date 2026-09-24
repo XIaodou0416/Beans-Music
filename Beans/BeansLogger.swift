@@ -8,6 +8,7 @@ enum BeansLogLevel: String, CaseIterable {
     case info = "INFO"
     case warn = "WARN"
     case error = "ERROR"
+    case fatal = "FATAL"
 
     var tint: Color {
         switch self {
@@ -15,6 +16,7 @@ enum BeansLogLevel: String, CaseIterable {
         case .info: return .blue
         case .warn: return .orange
         case .error: return .red
+        case .fatal: return .red
         }
     }
 }
@@ -148,3 +150,4 @@ extension BeansLogEntry {
         "[\(BeansLogger.dateString(date))] [\(level.rawValue)] \(message)"
     }
 }
+

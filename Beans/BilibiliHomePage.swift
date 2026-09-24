@@ -14,23 +14,12 @@ struct BilibiliHomePage: View {
     @State private var resultType: SearchResultType = .song
     @State private var channel = BilibiliChannel.recommended
     @StateObject private var navigation = BilibiliNavigationState()
-    @StateObject private var legacyAccountNavigation = BilibiliNavigationState()
     @State private var searchRefresh = UUID()
     @State private var searchTask: Task<Void, Never>?
-    @State private var showingLegacyAccount = false
     @ObservedObject private var detailPresentation = BilibiliDetailPresentation.shared
     @ObservedObject private var feed = BilibiliHomeFeedStore.shared
 
-    @ViewBuilder
     var body: some View {
-        if #available(iOS 16, *) {
-            modernBody
-        } else {
-            legacyBody
-        }
-    }
-
-    private var modernBody: some View {
         BeansNavigationStackWithPath(path: $navigation.path) {
             ZStack {
                 GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(wallpaperBlur))
@@ -107,11 +96,9 @@ struct BilibiliHomePage: View {
             }
             .beansHomeNavigationBarTransparent()
             .environmentObject(navigation)
-            .environment(\.bilibiliNavigationObject, navigation)
             .environment(\.bilibiliNavigate, navigation.push)
-            .background { BilibiliLegacyRouteLink(depth: 0) }
             .beansNavigationDestination(for: BilibiliNativeRoute.self) { route in
-                BilibiliNativeDestination(route: route, legacyDepth: 1)
+                BilibiliNativeDestination(route: route)
                     .environmentObject(navigation)
             }
         }
@@ -121,105 +108,22 @@ struct BilibiliHomePage: View {
         }
 
         .onAppear {
+            BeansDiagnostics.shared.route("哔哩哔哩主页")
             Task { await feed.select(channel: channel, query: submittedQuery, force: true) }
         }
 
         .onDisappear { searchTask?.cancel() }
-        .overlay {
-            if let presentedVideo = detailPresentation.presentedVideo {
-                BilibiliNativeStandaloneStack(initialRoute: .video(presentedVideo))
-                    .environmentObject(player)
-                    .environmentObject(theme)
-                    .environment(\.bilibiliDismissVideo) {
-                        detailPresentation.dismiss()
-                    }
-                    .background(Color.black)
-                    .ignoresSafeArea()
-            } else {
-                EmptyView()
-            }
+        .fullScreenCover(item: $detailPresentation.presentedVideo) { presentedVideo in
+            BeansDiagnostics.shared.route("哔哩哔哩视频详情")
+            BilibiliNativeStandaloneStack(initialRoute: .video(presentedVideo))
+                .environmentObject(player)
+                .environmentObject(theme)
+                .environment(\.bilibiliDismissVideo) { detailPresentation.dismiss() }
+                .background(Color.black)
+                .ignoresSafeArea()
         }
         .onChange(of: detailPresentation.presentedVideo?.identityKey) { value in
             BilibiliDetailDiagnostics.record(value.map { "overlay state: \($0)" } ?? "overlay state: nil")
-        }
-    }
-
-    /// iOS 15 avoids the NavigationStack fallback, hidden route links and search drawer.
-    /// The page still supports pull-to-refresh and opens details through the stable overlay.
-    private var legacyBody: some View {
-        NavigationView {
-            ZStack {
-                GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(wallpaperBlur))
-                VStack(spacing: 0) {
-                    channels
-                    if channel != .live {
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 16) {
-                                BilibiliHomeFeed { song in
-                                    detailPresentation.present(song)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.top, 14)
-                            .padding(.bottom, 190)
-                            .beansAdaptiveContentWidth()
-                        }
-                        .refreshable {
-                            await feed.select(channel: channel, query: "", force: true)
-                        }
-                        .beansScrollIndicatorsHidden()
-                        .beansScrollDismissesKeyboard()
-                    } else {
-                        BilibiliLiveList()
-                    }
-                }
-            }
-            .navigationTitle("哔哩哔哩")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Menu {
-                        ForEach(platforms.enabledSearchProviders.filter { $0 != .qishui }) { provider in
-                            Button(provider.rawValue) { source = provider.rawValue }
-                        }
-                    } label: {
-                        Image("BrandBilibili")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 28, height: 28)
-                    }
-                    .accessibilityLabel("切换主页平台")
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    BilibiliAccountShortcutButton { showingLegacyAccount = true }
-                }
-            }
-            .beansHomeNavigationBarTransparent()
-        }
-        .navigationViewStyle(.stack)
-        .task {
-            await feed.select(channel: channel, query: "", force: true)
-        }
-        .sheet(isPresented: $showingLegacyAccount) {
-            BeansNavigationStack {
-                BilibiliAccountPage()
-                    .environmentObject(legacyAccountNavigation)
-            }
-            .environmentObject(theme)
-        }
-        .overlay {
-            if let presentedVideo = detailPresentation.presentedVideo {
-                BilibiliNativeStandaloneStack(initialRoute: .video(presentedVideo))
-                    .environmentObject(player)
-                    .environmentObject(theme)
-                    .environment(\.bilibiliDismissVideo) {
-                        detailPresentation.dismiss()
-                    }
-                    .background(Color.black)
-                    .ignoresSafeArea()
-            } else {
-                EmptyView()
-            }
         }
     }
 
@@ -251,63 +155,6 @@ struct BilibiliHomePage: View {
         submittedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         searchRefresh = UUID()
         Task { await feed.select(channel: channel == .live ? .recommended : channel, query: submittedQuery, force: true) }
-    }
-}
-
-/// UIRefreshControl works for UIScrollView on iOS 15 as well as newer systems.
-private struct BilibiliPullRefresh: UIViewRepresentable {
-    let refresh: () async -> Void
-    func makeCoordinator() -> Coordinator { Coordinator(refresh: refresh) }
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-        DispatchQueue.main.async { context.coordinator.attach(from: view) }
-        return view
-    }
-    func updateUIView(_ view: UIView, context: Context) {
-        context.coordinator.refresh = refresh
-        DispatchQueue.main.async { context.coordinator.attach(from: view) }
-    }
-    static func dismantleUIView(_ view: UIView, coordinator: Coordinator) { coordinator.detach() }
-    final class Coordinator: NSObject {
-        var refresh: () async -> Void
-        private weak var scroll: UIScrollView?
-        private let control = UIRefreshControl()
-        private var task: Task<Void, Never>?
-        private var disposed = false
-        init(refresh: @escaping () async -> Void) {
-            self.refresh = refresh
-            super.init()
-            control.addTarget(self, action: #selector(pulled), for: .valueChanged)
-        }
-        func attach(from view: UIView) {
-            guard !disposed else { return }
-            var ancestor = view.superview
-            while let next = ancestor {
-                if let candidate = next as? UIScrollView {
-                    if scroll !== candidate {
-                        if scroll?.refreshControl === control { scroll?.refreshControl = nil }
-                        scroll = candidate
-                        candidate.refreshControl = control
-                    }
-                    return
-                }
-                ancestor = next.superview
-            }
-        }
-        @objc private func pulled() {
-            guard task == nil else { return }
-            task = Task { @MainActor [weak self] in
-                guard let self else { return }
-                await refresh()
-                control.endRefreshing()
-                task = nil
-            }
-        }
-        func detach() {
-            disposed = true
-            task?.cancel()
-            if scroll?.refreshControl === control { scroll?.refreshControl = nil }
-        }
     }
 }
 

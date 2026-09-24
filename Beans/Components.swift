@@ -585,24 +585,15 @@ struct PlayPauseMorphIcon: View {
 }
 
 
-// MARK: - iOS 15 兼容包装（低版本自动降级）
+// MARK: - Native navigation
 
-/// iOS 16+ 使用 NavigationStack，iOS 15 回退 NavigationView（堆栈样式）
 struct BeansNavigationStack<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        if #available(iOS 16, *) {
-            NavigationStack {
-                content()
-                    .background(BeansNavigationSurfaceClearer())
-            }
-        } else {
-            NavigationView {
-                content()
-                    .background(BeansNavigationSurfaceClearer())
-            }
-            .navigationViewStyle(.stack)
+        NavigationStack {
+            content()
+                .background(BeansNavigationSurfaceClearer())
         }
     }
 }
@@ -613,17 +604,9 @@ struct BeansNavigationStackWithPath<Route: Hashable, Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        if #available(iOS 16, *) {
-            NavigationStack(path: $path) {
-                content()
-                    .background(BeansNavigationSurfaceClearer())
-            }
-        } else {
-            NavigationView {
-                content()
-                    .background(BeansNavigationSurfaceClearer())
-            }
-            .navigationViewStyle(.stack)
+        NavigationStack(path: $path) {
+            content()
+                .background(BeansNavigationSurfaceClearer())
         }
     }
 }
@@ -777,17 +760,12 @@ private struct BeansNavigationSurfaceClearer: UIViewControllerRepresentable {
 }
 
 extension View {
-    /// iOS 16+ 的类型化导航目的地，低版本保持原有页面结构。
-    @ViewBuilder
+    /// 类型化导航目的地。
     func beansNavigationDestination<Route: Hashable, Destination: View>(
         for route: Route.Type,
         @ViewBuilder destination: @escaping (Route) -> Destination
     ) -> some View {
-        if #available(iOS 16, *) {
-            navigationDestination(for: route, destination: destination)
-        } else {
-            self
-        }
+        navigationDestination(for: route, destination: destination)
     }
 }
 
@@ -1953,3 +1931,4 @@ struct ToastView: View {
             .allowsHitTesting(false)
     }
 }
+

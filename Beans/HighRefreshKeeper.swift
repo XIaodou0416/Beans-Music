@@ -40,16 +40,11 @@ final class HighRefreshKeeper {
         isStarting = true
         defer { isStarting = false }
         let link = CADisplayLink(target: self, selector: #selector(tick))
-        if #available(iOS 15.0, *) {
-            link.preferredFrameRateRange = preferredFrameRateRange
-        } else {
-            link.preferredFramesPerSecond = 60
-        }
+        link.preferredFrameRateRange = preferredFrameRateRange
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
 
-    @available(iOS 15.0, *)
     private var preferredFrameRateRange: CAFrameRateRange {
         let maximum = Float(min(120, max(60, UIScreen.main.maximumFramesPerSecond)))
         let minimum: Float = maximum >= 120 ? 120 : 60
@@ -81,3 +76,4 @@ struct HighRefreshConfigurator: UIViewRepresentable {
         }
     }
 }
+

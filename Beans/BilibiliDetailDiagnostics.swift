@@ -11,6 +11,7 @@ enum BilibiliDetailDiagnostics {
     }()
 
     static func record(_ event: String) {
+        BeansDiagnostics.shared.recordAction("B站详情：\(event)")
         queue.async {
             let formatter = ISO8601DateFormatter()
             let line = "[\(formatter.string(from: Date()))] \(event)\n"
