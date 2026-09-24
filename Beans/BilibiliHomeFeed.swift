@@ -104,11 +104,11 @@ final class BilibiliHomeFeedStore: ObservableObject {
 
 struct BilibiliHomeFeed: View {
     @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var navigation: BilibiliNavigationState
     @ObservedObject private var store = BilibiliHomeFeedStore.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.sizeCategory) private var sizeCategory
     @AppStorage(BilibiliExperience.key) private var mode = BilibiliExperience.listen.rawValue
-    @State private var route: BilibiliNativeRoute?
 
     private var columns: [GridItem] {
         if sizeCategory.isAccessibilityCategory { return [GridItem(.flexible())] }
@@ -144,13 +144,13 @@ struct BilibiliHomeFeed: View {
                         BilibiliFeedCard(video: video) {
                             BeansHaptics.tap()
                             let tracks = store.videos.map(\.song)
-                            if mode == BilibiliExperience.video.rawValue { route = .video(video.song) }
+                            if mode == BilibiliExperience.video.rawValue { navigation.push(.video(video.song)) }
                             else { player.play(songs: tracks, startAt: tracks.firstIndex(where: { $0.identityKey == video.id }) ?? 0) }
                         }
                         .onAppear { Task { await store.loadMoreIfNeeded(id: video.id) } }
                         .contextMenu {
                             Button { player.playNext(video.song) } label: { Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward") }
-                            Button { route = .video(video.song) } label: { Label("视频详情与评论", systemImage: "play.rectangle") }
+                            Button { navigation.push(.video(video.song)) } label: { Label("视频详情与评论", systemImage: "play.rectangle") }
                         }
                     }
                 }
@@ -171,7 +171,6 @@ struct BilibiliHomeFeed: View {
                 }
             }
         }
-        .sheet(item: $route) { AnyView(BilibiliNativeSheet(route: $0)) }
     }
 }
 

@@ -3,6 +3,7 @@ import SwiftUI
 struct BilibiliUPPage: View {
     let owner: Artist
     @ObservedObject private var account = BilibiliAuth.shared
+    @EnvironmentObject private var navigation: BilibiliNavigationState
     @State private var profile: BilibiliUPProfile?
     @State private var videos: [BilibiliFeedVideo] = []
     @State private var collections: [BilibiliSeries] = []
@@ -16,7 +17,6 @@ struct BilibiliUPPage: View {
     @State private var following: Bool?
     @State private var followingBusy = false
     @State private var showLogin = false
-    @State private var route: BilibiliNativeRoute?
     @State private var message: String?
     private var creator: Artist { profile?.artist ?? owner }
     var body: some View {
@@ -32,7 +32,7 @@ struct BilibiliUPPage: View {
                     if !loading && error == nil && videos.isEmpty { empty("暂无投稿") }
                 } else {
                     ForEach(collections) { collection in
-                        Button { route = .collection(collection) } label: { BilibiliCollectionRow(collection: collection) }
+                        Button { navigation.push(.collection(collection)) } label: { BilibiliCollectionRow(collection: collection) }
                             .buttonStyle(.plain)
                             .onAppear { if collection.id == collections.last?.id && seriesMore && error == nil { Task { await loadMore() } } }
                     }
@@ -60,7 +60,6 @@ struct BilibiliUPPage: View {
         .onReceive(NotificationCenter.default.publisher(for: .beansBilibiliLoginDidUpdate)) { _ in
             Task { if let info = try? await BilibiliAPI.shared.upProfile(owner.id) { profile = info; following = info.following } }
         }
-        .sheet(item: $route) { BilibiliNativeSheet(route: $0) }
         .sheet(isPresented: $showLogin) { BilibiliLoginSheet() }
         .alert("关注提示", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("知道了") { message = nil }
@@ -133,19 +132,19 @@ struct BilibiliUPPage: View {
 
 struct BilibiliCollectionPage: View {
     let collection: BilibiliSeries
+    @EnvironmentObject private var navigation: BilibiliNavigationState
     @State private var items: [BilibiliFeedVideo] = []
     @State private var page = 0
     @State private var more = true
     @State private var loading = false
     @State private var error: String?
-    @State private var route: BilibiliNativeRoute?
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
                 BilibiliCollectionRow(collection: collection)
                 if !collection.description.isEmpty { Text(collection.description).font(.subheadline).foregroundStyle(Color.beansComment) }
                 Button {
-                    route = .up(Artist(id: collection.ownerID, name: collection.ownerName, coverURL: nil, source: .bilibili))
+                    navigation.push(.up(Artist(id: collection.ownerID, name: collection.ownerName, coverURL: nil, source: .bilibili)))
                 } label: { Label(collection.ownerName, systemImage: "person.crop.circle") }
                 Divider()
                 BilibiliVideoRows(items: items, onAppearItem: { id in
@@ -160,7 +159,6 @@ struct BilibiliCollectionPage: View {
         .background(Color(uiColor: .systemBackground))
         .task { await load() }
         .refreshable { page = 0; more = true; await load() }
-        .sheet(item: $route) { BilibiliNativeSheet(route: $0) }
     }
     @MainActor private func load() async {
         guard !loading, more else { return }

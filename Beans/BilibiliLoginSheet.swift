@@ -14,6 +14,7 @@ final class BilibiliAuth: ObservableObject {
     @Published private(set) var isLoggedIn = false
     @Published private(set) var nickname = ""
     @Published private(set) var accountID = ""
+    @Published private(set) var avatarURL: URL?
 
     private static let service = "com.beans.music.bilibili"
     private static let cookieAccount = "account-cookie-v1"
@@ -22,6 +23,7 @@ final class BilibiliAuth: ObservableObject {
     private init() {
         nickname = defaults.string(forKey: "beans.bilibili.nickname.v1") ?? ""
         accountID = defaults.string(forKey: "beans.bilibili.mid.v1") ?? ""
+        avatarURL = defaults.string(forKey: "beans.bilibili.avatar.v1").flatMap { URL(string: $0) }
         if let cookie = Self.readCookie(), !cookie.isEmpty {
             isLoggedIn = true
         }
@@ -40,8 +42,10 @@ final class BilibiliAuth: ObservableObject {
         nickname = info.nickname
         accountID = info.mid
         isLoggedIn = true
+        avatarURL = info.avatar
         defaults.set(info.nickname, forKey: "beans.bilibili.nickname.v1")
         defaults.set(info.mid, forKey: "beans.bilibili.mid.v1")
+        defaults.set(info.avatar?.absoluteString, forKey: "beans.bilibili.avatar.v1")
         NotificationCenter.default.post(name: .beansBilibiliLoginDidUpdate, object: nil)
     }
 
@@ -49,9 +53,11 @@ final class BilibiliAuth: ObservableObject {
         Self.deleteCookie()
         nickname = ""
         accountID = ""
+        avatarURL = nil
         isLoggedIn = false
         defaults.removeObject(forKey: "beans.bilibili.nickname.v1")
         defaults.removeObject(forKey: "beans.bilibili.mid.v1")
+        defaults.removeObject(forKey: "beans.bilibili.avatar.v1")
         Task { await BilibiliAPI.shared.setCookie("") }
         NotificationCenter.default.post(name: .beansBilibiliLoginDidUpdate, object: nil)
     }

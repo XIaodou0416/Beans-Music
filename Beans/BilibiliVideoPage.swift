@@ -4,6 +4,7 @@ import AVFoundation
 struct BilibiliVideoPage: View {
     let song: Song
     @EnvironmentObject private var music: PlayerManager
+    @EnvironmentObject private var navigation: BilibiliNavigationState
     @Environment(\.horizontalSizeClass) private var sizeClass
     @StateObject private var videoPlayer = BilibiliNativePlayer()
     @ObservedObject private var account = BilibiliAuth.shared
@@ -13,16 +14,18 @@ struct BilibiliVideoPage: View {
     @State private var quality = 64
     @State private var selectedPart: Song?
     @State private var expanded = false
-    @State private var route: BilibiliNativeRoute?
     @State private var showLogin = false
     @State private var showCoins = false
     @State private var showFavorites = false
     @State private var interaction: BilibiliInteractionState?
     @State private var busy = false
+    @State private var following: Bool?
+    @State private var followingBusy = false
     @State private var message: String?
     @State private var share = false
     @State private var savedProgress = 0.0
     @State private var presentingChild = false
+    @State private var routeDepth = 0
 
     var body: some View {
         GeometryReader { geometry in
@@ -41,17 +44,24 @@ struct BilibiliVideoPage: View {
         .background(Color(uiColor: .systemBackground))
         .navigationTitle("视频详情").navigationBarTitleDisplayMode(.inline)
         .task(id: song.identityKey) {
+            routeDepth = navigation.path.count
             music.pauseForBilibiliVideo()
             if selectedPart == nil { selectedPart = song }
             if !presentingChild { play() }
             if detail == nil { await load() }
         }
-        .onDisappear { rememberPosition(); videoPlayer.stop() }
+        .onDisappear {
+            rememberPosition()
+            if !presentingChild { videoPlayer.stop() }
+        }
+        .onChange(of: navigation.path.count) { count in
+            if presentingChild && count <= routeDepth {
+                presentingChild = false
+                videoPlayer.player?.play()
+            }
+        }
         .onChange(of: quality) { _ in rememberPosition(); play() }
         .onReceive(NotificationCenter.default.publisher(for: .beansBilibiliLoginDidUpdate)) { _ in Task { await updateInteraction() } }
-        .sheet(item: $route, onDismiss: { presentingChild = false; play() }) { next in
-            AnyView(BilibiliNativeSheet(route: next)).onAppear { presentingChild = true; rememberPosition(); videoPlayer.pause() }
-        }
         .sheet(isPresented: $showLogin) { BilibiliLoginSheet() }
         .sheet(isPresented: $showFavorites) {
             if let detail {
@@ -122,17 +132,26 @@ struct BilibiliVideoPage: View {
                     action("分享", icon: "square.and.arrow.up", selected: false) { share = true }
                 }
                 if busy { ProgressView().frame(maxWidth: .infinity) }
-                Button { route = .up(info.owner) } label: {
-                    HStack(spacing: 12) {
-                        CoverImage(url: info.owner.coverURL, size: 46, cornerRadius: 23)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(info.owner.name).font(.headline).foregroundStyle(Color.beansLabel)
-                            Text("查看UP主主页").font(.caption).foregroundStyle(Color.beansComment)
+                HStack(spacing: 12) {
+                    Button { navigate(.up(info.owner)) } label: {
+                        HStack(spacing: 12) {
+                            CoverImage(url: info.owner.coverURL, size: 46, cornerRadius: 23)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(info.owner.name).font(.headline).foregroundStyle(Color.beansLabel)
+                                Text("查看UP主主页").font(.caption).foregroundStyle(Color.beansComment)
+                            }
                         }
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.beansComment)
+                        .contentShape(Rectangle())
                     }
-                }.buttonStyle(.plain)
+                    .buttonStyle(.plain)
+                    Spacer(minLength: 8)
+                    Button(followingBusy ? "处理中" : following == true ? "已关注" : "+ 关注") {
+                        followOwner(info.owner)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.bordered)
+                    .disabled(followingBusy)
+                }
                 if info.parts.count > 1 {
                     Text("分集（\(info.parts.count)）").font(.headline)
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -149,7 +168,7 @@ struct BilibiliVideoPage: View {
                 }
                 if let collection = info.collection {
                     Text("所属合集").font(.headline)
-                    Button { route = .collection(collection) } label: { BilibiliCollectionRow(collection: collection) }.buttonStyle(.plain)
+                    Button { navigate(.collection(collection)) } label: { BilibiliCollectionRow(collection: collection) }.buttonStyle(.plain)
                 }
             }.padding(16)
         }.refreshable { await load() }
@@ -168,15 +187,28 @@ struct BilibiliVideoPage: View {
         music.pauseForBilibiliVideo()
         videoPlayer.open(resumeAt: savedProgress) { try await BilibiliAPI.shared.nativeVideoURLs(part, quality: value) }
     }
+    private func navigate(_ route: BilibiliNativeRoute) {
+        presentingChild = true
+        rememberPosition()
+        videoPlayer.pause()
+        navigation.push(route)
+    }
     private func load() async {
         loadError = nil
         do { detail = try await BilibiliAPI.shared.nativeVideo(song); await updateInteraction() }
         catch { loadError = error.localizedDescription }
     }
     private func updateInteraction() async {
-        guard account.isLoggedIn, let detail else { interaction = nil; return }
+        guard account.isLoggedIn, let detail else {
+            interaction = nil
+            following = nil
+            return
+        }
         do { interaction = try await BilibiliAPI.shared.nativeInteraction(aid: detail.aid) }
         catch { interaction = nil }
+        if let profile = try? await BilibiliAPI.shared.upProfile(detail.owner.id) {
+            following = profile.following
+        }
     }
     private func like() {
         guard account.isLoggedIn else { showLogin = true; return }
@@ -199,6 +231,24 @@ struct BilibiliVideoPage: View {
             do { try await BilibiliAPI.shared.nativeCoin(aid: detail.aid, count: count); message = "投币成功" }
             catch { message = "\(error.localizedDescription)。请刷新确认结果，勿重复投币。" }
             await updateInteraction()
+        }
+    }
+
+    private func followOwner(_ owner: Artist) {
+        guard account.isLoggedIn else { showLogin = true; return }
+        guard !followingBusy else { return }
+        followingBusy = true
+        Task { @MainActor in
+            defer { followingBusy = false }
+            do {
+                let current: Bool
+                if let following { current = following }
+                else { current = try await BilibiliAPI.shared.upProfile(owner.id).following }
+                try await BilibiliAPI.shared.nativeFollow(id: owner.id, follow: !current)
+                following = !current
+            } catch {
+                message = error.localizedDescription
+            }
         }
     }
 }

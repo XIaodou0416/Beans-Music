@@ -34,10 +34,11 @@ struct BilibiliNativeComments: View {
     var root: BilibiliReply? = nil
     @StateObject private var store = BilibiliReplyStore()
     @ObservedObject private var account = BilibiliAuth.shared
+    @Environment(\.bilibiliNavigate) private var navigate
     @State private var hot = true
     @State private var composer = false
     @State private var showLogin = false
-    @State private var route: BilibiliNativeRoute?
+    @State private var fallbackRoute: BilibiliNativeRoute?
     @State private var thread: BilibiliReply?
     @State private var mutation: String?
     @State private var mutationError: String?
@@ -90,7 +91,9 @@ struct BilibiliNativeComments: View {
         .sheet(isPresented: $composer) {
             BilibiliCommentComposer(aid: aid, root: root?.id) { Task { await reload(reset: true) } }
         }
-        .sheet(item: $route) { BilibiliNativeSheet(route: $0) }
+        .fullScreenCover(item: $fallbackRoute) { route in
+            BilibiliNativeStandaloneStack(initialRoute: route)
+        }
         .sheet(item: $thread) { reply in
             BeansNavigationStack {
                 AnyView(BilibiliNativeComments(aid: aid, root: reply))
@@ -103,10 +106,10 @@ struct BilibiliNativeComments: View {
     }
     private func replyRow(_ reply: BilibiliReply, isRoot: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Button { route = .up(reply.author) } label: { CoverImage(url: reply.author.coverURL, size: 36, cornerRadius: 18) }
+            Button { openAuthor(reply.author) } label: { CoverImage(url: reply.author.coverURL, size: 36, cornerRadius: 18) }
                 .buttonStyle(.plain).accessibilityLabel("打开\(reply.author.name)主页")
             VStack(alignment: .leading, spacing: 7) {
-                Button { route = .up(reply.author) } label: {
+                Button { openAuthor(reply.author) } label: {
                     Text(reply.author.name).font(BeansFont.appFont(13, .medium)).foregroundStyle(Color.beansComment)
                 }.buttonStyle(.plain)
                 Text(reply.message).font(BeansFont.appFont(15)).foregroundStyle(Color.beansLabel)
@@ -130,6 +133,10 @@ struct BilibiliNativeComments: View {
         }
     }
     private func reload(reset: Bool) async { await store.load(aid: aid, hot: hot, root: root?.id, reset: reset) }
+    private func openAuthor(_ author: Artist) {
+        if let navigate { navigate(.up(author)) }
+        else { fallbackRoute = .up(author) }
+    }
     private func like(_ reply: BilibiliReply, current: Bool) {
         guard account.isLoggedIn else { showLogin = true; return }
         guard mutation == nil else { return }

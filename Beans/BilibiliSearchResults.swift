@@ -23,7 +23,7 @@ struct BilibiliSearchResults: View {
     @State private var loading = true
     @State private var error: String?
     @State private var token = UUID()
-    @State private var route: BilibiliNativeRoute?
+    @EnvironmentObject private var navigation: BilibiliNavigationState
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 18) {
@@ -35,7 +35,7 @@ struct BilibiliSearchResults: View {
             if !creators.isEmpty {
                 if type == .all { Text("UP主").font(.headline) }
                 ForEach(creators) { creator in
-                    Button { route = .up(creator) } label: {
+                    Button { navigation.push(.up(creator)) } label: {
                         HStack(spacing: 12) {
                             CoverImage(url: creator.coverURL, size: 50, cornerRadius: 25)
                             VStack(alignment: .leading, spacing: 5) {
@@ -51,7 +51,7 @@ struct BilibiliSearchResults: View {
             }
             if !collections.isEmpty {
                 ForEach(collections) { collection in
-                    Button { route = .collection(collection) } label: { BilibiliCollectionRow(collection: collection) }.buttonStyle(.plain)
+                    Button { navigation.push(.collection(collection)) } label: { BilibiliCollectionRow(collection: collection) }.buttonStyle(.plain)
                 }
             }
             if !videos.isEmpty {
@@ -77,7 +77,6 @@ struct BilibiliSearchResults: View {
             do { try await Task.sleep(nanoseconds: 350_000_000) } catch { return }
             await load(reset: true)
         }
-        .sheet(item: $route) { AnyView(BilibiliNativeSheet(route: $0)) }
     }
     private func nextIfNeeded() {
         guard more, !loading, error == nil else { return }

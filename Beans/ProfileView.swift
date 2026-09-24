@@ -1613,10 +1613,7 @@ struct AccountHubSheet: View {
                         if platformPrefs.isEnabled(SearchProvider.qq) { qqCard }
                         if platformPrefs.isEnabled(SearchProvider.kugou) { kugouCard }
                         if platformPrefs.isEnabled(SearchProvider.bilibili) {
-                            VStack(spacing: 0) {
-                                bilibiliCard
-                                BilibiliModeSettings().padding(.horizontal, 14)
-                            }
+                            bilibiliCard
                         }
                     }
                     .padding(16)

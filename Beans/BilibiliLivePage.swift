@@ -6,7 +6,7 @@ struct BilibiliLiveList: View {
     @State private var more = true
     @State private var page = 0
     @State private var error: String?
-    @State private var route: BilibiliNativeRoute?
+    @EnvironmentObject private var navigation: BilibiliNavigationState
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var columns: [GridItem] {
         sizeClass == .regular ? [GridItem(.adaptive(minimum: 230), spacing: 12)] : [GridItem(.flexible()), GridItem(.flexible())]
@@ -15,7 +15,7 @@ struct BilibiliLiveList: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(rooms) { room in
-                    Button { route = .live(room) } label: {
+                    Button { navigation.push(.live(room)) } label: {
                         VStack(alignment: .leading, spacing: 8) {
                             Rectangle().fill(.clear).aspectRatio(16.0 / 9.0, contentMode: .fit)
                                 .overlay {
@@ -41,7 +41,6 @@ struct BilibiliLiveList: View {
         }
         .task { if rooms.isEmpty { await load() } }
         .refreshable { page = 0; more = true; await load() }
-        .sheet(item: $route) { BilibiliNativeSheet(route: $0) }
     }
     private func load() async {
         guard !loading, more else { return }
@@ -63,13 +62,19 @@ struct BilibiliLiveList: View {
 struct BilibiliLivePage: View {
     let room: BilibiliLiveRoom
     @EnvironmentObject private var music: PlayerManager
+    @EnvironmentObject private var navigation: BilibiliNavigationState
     @StateObject private var video = BilibiliNativePlayer()
-    @State private var route: BilibiliNativeRoute?
+    @State private var pausedForChild = false
+    @State private var routeDepth = 0
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             BilibiliVideoSurface(model: video, retry: play)
             Text(room.title).font(.title3.bold()).padding(.horizontal, 16)
-            Button { route = .up(room.owner) } label: {
+            Button {
+                pausedForChild = true
+                video.pause()
+                navigation.push(.up(room.owner))
+            } label: {
                 HStack(spacing: 12) {
                     CoverImage(url: room.owner.coverURL, size: 44, cornerRadius: 22)
                     Text(room.owner.name).font(.headline)
@@ -81,9 +86,17 @@ struct BilibiliLivePage: View {
             Spacer()
         }
         .navigationTitle("直播").navigationBarTitleDisplayMode(.inline)
-        .task { play() }
-        .onDisappear { video.stop() }
-        .sheet(item: $route, onDismiss: play) { next in BilibiliNativeSheet(route: next).onAppear { video.pause() } }
+        .task {
+            routeDepth = navigation.path.count
+            play()
+        }
+        .onDisappear { if !pausedForChild { video.stop() } }
+        .onChange(of: navigation.path.count) { count in
+            if pausedForChild && count <= routeDepth {
+                pausedForChild = false
+                video.player?.play()
+            }
+        }
     }
     private func play() {
         music.pauseForBilibiliVideo()

@@ -55,21 +55,23 @@ struct BilibiliInteractionState {
     var coins: Int
     var favorited: Bool
 }
-struct BilibiliLiveRoom: Identifiable, Codable {
+struct BilibiliLiveRoom: Identifiable, Codable, Hashable {
     let id: String
     let title: String
     let cover: URL?
     let owner: Artist
     let viewers: String
 }
-enum BilibiliNativeRoute: Identifiable {
-    case video(Song), up(Artist), collection(BilibiliSeries), live(BilibiliLiveRoom)
+enum BilibiliNativeRoute: Hashable, Identifiable {
+    case video(Song), up(Artist), collection(BilibiliSeries), live(BilibiliLiveRoom), playlist(Playlist), account
     var id: String {
         switch self {
         case .video(let s): return s.identityKey
         case .up(let a): return "up:" + a.id
         case .collection(let s): return s.id
         case .live(let r): return "live:" + r.id
+        case .playlist(let playlist): return "playlist:\(playlist.source.rawValue):\(playlist.id)"
+        case .account: return "account"
         }
     }
 }

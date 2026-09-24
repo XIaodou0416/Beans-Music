@@ -1,46 +1,26 @@
 import SwiftUI
 
-struct BilibiliNativeSheet: View {
-    let route: BilibiliNativeRoute
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        BeansNavigationStack {
-            destination
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("关闭") { dismiss() } } }
-        }
-    }
-    private var destination: AnyView {
-        switch route {
-        case .video(let song): return AnyView(BilibiliVideoPage(song: song))
-        case .up(let owner): return AnyView(BilibiliUPPage(owner: owner))
-        case .collection(let collection): return AnyView(BilibiliCollectionPage(collection: collection))
-        case .live(let room): return AnyView(BilibiliLivePage(room: room))
-        }
-    }
-}
-
 struct BilibiliVideoRows: View {
     let items: [BilibiliFeedVideo]
     var onAppearItem: (String) -> Void = { _ in }
     @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var navigation: BilibiliNavigationState
     @AppStorage(BilibiliExperience.key) private var mode = BilibiliExperience.listen.rawValue
-    @State private var route: BilibiliNativeRoute?
     var body: some View {
         LazyVStack(spacing: 16) {
             ForEach(items) { item in
                 Button {
-                    if mode == BilibiliExperience.video.rawValue { route = .video(item.song) }
+                    if mode == BilibiliExperience.video.rawValue { navigation.push(.video(item.song)) }
                     else { player.play(songs: items.map(\.song), startAt: items.firstIndex(where: { $0.id == item.id }) ?? 0) }
                 } label: { BilibiliVideoRow(item: item) }
                 .buttonStyle(.plain)
                 .onAppear { onAppearItem(item.id) }
                 .contextMenu {
-                    Button { route = .video(item.song) } label: { Label("视频详情", systemImage: "play.rectangle") }
+                    Button { navigation.push(.video(item.song)) } label: { Label("视频详情", systemImage: "play.rectangle") }
                     Button { player.playNext(item.song) } label: { Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward") }
                 }
             }
         }
-        .sheet(item: $route) { BilibiliNativeSheet(route: $0) }
     }
 }
 

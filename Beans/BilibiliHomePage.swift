@@ -13,13 +13,13 @@ struct BilibiliHomePage: View {
     @State private var submittedQuery = ""
     @State private var resultType: SearchResultType = .song
     @State private var channel = BilibiliChannel.recommended
-    @State private var showProfile = false
+    @StateObject private var navigation = BilibiliNavigationState()
     @State private var searchRefresh = UUID()
     @State private var searchTask: Task<Void, Never>?
     @ObservedObject private var feed = BilibiliHomeFeedStore.shared
 
     var body: some View {
-        BeansNavigationStack {
+        BeansNavigationStackWithPath(path: $navigation.path) {
             ZStack {
                 GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(wallpaperBlur))
                 VStack(spacing: 0) {
@@ -86,10 +86,17 @@ struct BilibiliHomePage: View {
                     .accessibilityLabel("切换主页平台")
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    BeansProfileShortcutButton { showProfile = true }
+                    BilibiliAccountShortcutButton { navigation.push(.account) }
                 }
             }
             .beansHomeNavigationBarTransparent()
+            .environmentObject(navigation)
+            .environment(\.bilibiliNavigate, navigation.push)
+            .background { BilibiliLegacyRouteLink(depth: 0) }
+            .beansNavigationDestination(for: BilibiliNativeRoute.self) { route in
+                BilibiliNativeDestination(route: route, legacyDepth: 1)
+                    .environmentObject(navigation)
+            }
         }
         .task {
             searchText = feed.query
@@ -98,11 +105,6 @@ struct BilibiliHomePage: View {
         }
 
         .onDisappear { searchTask?.cancel() }
-        .sheet(isPresented: $showProfile) {
-            ProfileView(forceHomeBackdrop: true)
-                .environmentObject(theme).environmentObject(auth).environmentObject(player)
-                .modifier(BeansProfileSheetBackground())
-        }
     }
 
     private var channels: some View {

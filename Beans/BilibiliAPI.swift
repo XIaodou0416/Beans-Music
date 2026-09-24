@@ -329,10 +329,10 @@ actor BilibiliAPI {
     func account(cookie value: String) async throws -> String {
         try await accountInfo(cookie: value).nickname
     }
-    func accountInfo(cookie value: String) async throws -> (nickname: String, mid: String) {
+    func accountInfo(cookie value: String) async throws -> (nickname: String, mid: String, avatar: URL?) {
         let (root,_) = try await raw(URL(string:"https://api.bilibili.com/x/web-interface/nav")!,cookieOverride:value)
         guard let data = root["data"] as? [String:Any], data["isLogin"] as? Bool == true else { throw BilibiliError(message:"B站登录凭据已过期或无效") }
-        return (Self.text(data["uname"]), Self.text(data["mid"]))
+        return (Self.text(data["uname"]), Self.text(data["mid"]), Self.image(data["face"]))
     }
     func personalPlaylists() async throws -> [Playlist] {
         let nav = try await get("/x/web-interface/nav",identity:true)
