@@ -16,8 +16,7 @@ struct BilibiliHomePage: View {
     @StateObject private var navigation = BilibiliNavigationState()
     @State private var searchRefresh = UUID()
     @State private var searchTask: Task<Void, Never>?
-    @State private var presentedVideo: Song?
-    @State private var showingPresentedVideo = false
+    @ObservedObject private var detailPresentation = BilibiliDetailPresentation.shared
     @ObservedObject private var feed = BilibiliHomeFeedStore.shared
 
     var body: some View {
@@ -38,12 +37,12 @@ struct BilibiliHomePage: View {
                             LazyVStack(alignment: .leading, spacing: 16) {
                                 if !submittedQuery.isEmpty && resultType != .song {
                                     BilibiliSearchResults(keyword: submittedQuery, type: resultType) { song in
-                                        presentVideo(song)
+                                        detailPresentation.present(song)
                                     }
                                         .id(searchRefresh)
                                 } else {
                                     BilibiliHomeFeed { song in
-                                        presentedVideo = song
+                                        detailPresentation.present(song)
                                     }
                                 }
                             }
@@ -113,13 +112,13 @@ struct BilibiliHomePage: View {
 
         .onDisappear { searchTask?.cancel() }
         .overlay {
-            if let presentedVideo {
+            if let presentedVideo = detailPresentation.presentedVideo {
+                BilibiliDetailDiagnostics.record("overlay appeared: \(presentedVideo.identityKey)")
                 BilibiliNativeStandaloneStack(initialRoute: .video(presentedVideo))
                     .environmentObject(player)
                     .environmentObject(theme)
                     .environment(\.bilibiliDismissVideo) {
-                        self.presentedVideo = nil
-                        self.showingPresentedVideo = false
+                        detailPresentation.dismiss()
                     }
                     .background(Color.black)
                     .ignoresSafeArea()
@@ -127,11 +126,6 @@ struct BilibiliHomePage: View {
                 EmptyView()
             }
         }
-    }
-
-    private func presentVideo(_ song: Song) {
-        presentedVideo = song
-        showingPresentedVideo = true
     }
 
     private var channels: some View {
