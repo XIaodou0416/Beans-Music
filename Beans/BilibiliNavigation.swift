@@ -54,6 +54,10 @@ private struct BilibiliDismissVideoKey: EnvironmentKey {
     static let defaultValue: (() -> Void)? = nil
 }
 
+private struct BilibiliNavigationObjectKey: EnvironmentKey {
+    static let defaultValue: BilibiliNavigationState? = nil
+}
+
 extension EnvironmentValues {
     var bilibiliNavigate: ((BilibiliNativeRoute) -> Void)? {
         get { self[BilibiliNavigationActionKey.self] }
@@ -63,6 +67,11 @@ extension EnvironmentValues {
     var bilibiliDismissVideo: (() -> Void)? {
         get { self[BilibiliDismissVideoKey.self] }
         set { self[BilibiliDismissVideoKey.self] = newValue }
+    }
+
+    var bilibiliNavigationObject: BilibiliNavigationState? {
+        get { self[BilibiliNavigationObjectKey.self] }
+        set { self[BilibiliNavigationObjectKey.self] = newValue }
     }
 }
 
@@ -96,10 +105,12 @@ struct BilibiliNativeStandaloneStack: View {
         BeansNavigationStackWithPath(path: $navigation.path) {
             BilibiliNativeDestination(route: initialRoute, legacyDepth: 0)
                 .environmentObject(navigation)
+                .environment(\.bilibiliNavigationObject, navigation)
                 .environment(\.bilibiliNavigate, navigation.push)
                 .beansNavigationDestination(for: BilibiliNativeRoute.self) { route in
                     BilibiliNativeDestination(route: route, legacyDepth: 1)
                         .environmentObject(navigation)
+                        .environment(\.bilibiliNavigationObject, navigation)
                 }
         }
     }
@@ -108,14 +119,14 @@ struct BilibiliNativeStandaloneStack: View {
 /// iOS 15 fallback: each visible level owns a hidden link into the same stack.
 struct BilibiliLegacyRouteLink: View {
     let depth: Int
-    @EnvironmentObject private var navigation: BilibiliNavigationState
+    @Environment(\.bilibiliNavigationObject) private var navigation
 
     var body: some View {
         if #available(iOS 16, *) {
             EmptyView()
-        } else {
+        } else if let navigation {
             NavigationLink(
-                destination: AnyView(destination),
+                destination: AnyView(destination(for: navigation)),
                 isActive: Binding(
                     get: { navigation.path.count > depth },
                     set: { if !$0 { navigation.pop(to: depth) } }
@@ -125,14 +136,17 @@ struct BilibiliLegacyRouteLink: View {
             }
             .frame(width: 0, height: 0)
             .hidden()
+        } else {
+            EmptyView()
         }
     }
 
     @ViewBuilder
-    private var destination: some View {
+    private func destination(for navigation: BilibiliNavigationState) -> some View {
         if navigation.path.indices.contains(depth) {
             BilibiliNativeDestination(route: navigation.path[depth], legacyDepth: depth + 1)
                 .environmentObject(navigation)
+                .environment(\.bilibiliNavigationObject, navigation)
         } else {
             EmptyView()
         }
@@ -163,24 +177,17 @@ struct BilibiliAccountShortcutButton: View {
                 EmptyView()
             }
         }
+        .task { await auth.refreshProfileIfNeeded() }
     }
 
     @ViewBuilder
     private var avatar: some View {
-        if #available(iOS 26, *) {
-            BeansAvatarView(remoteURL: auth.avatarURL, size: 38)
-                .overlay { Circle().strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8) }
-                .frame(width: 46, height: 46)
-                .contentShape(Circle())
-        } else {
-            BeansAvatarView(remoteURL: auth.avatarURL, size: 38)
-                .overlay { Circle().strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8) }
-                .padding(4)
-                .background { BeansGlass(shape: Circle(), forceLiquid: true) }
-                .clipShape(Circle())
-                .frame(width: 46, height: 46)
-                .contentShape(Circle())
-        }
+        // The navigation bar already supplies the single liquid container.
+        // A second glass background here created the two nested capsules.
+        BeansAvatarView(remoteURL: auth.avatarURL, size: 38)
+            .overlay { Circle().strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8) }
+            .frame(width: 46, height: 46)
+            .contentShape(Circle())
     }
 }
 
