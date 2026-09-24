@@ -1,6 +1,22 @@
 import SwiftUI
 
 @MainActor
+final class BilibiliPresentationState: ObservableObject {
+    static let shared = BilibiliPresentationState()
+    @Published private(set) var activeVideoIDs = Set<String>()
+
+    func enterVideo(_ id: String) {
+        activeVideoIDs.insert(id)
+    }
+
+    func leaveVideo(_ id: String) {
+        activeVideoIDs.remove(id)
+    }
+
+    var isVideoDetailActive: Bool { !activeVideoIDs.isEmpty }
+}
+
+@MainActor
 final class BilibiliNavigationState: ObservableObject {
     @Published var path: [BilibiliNativeRoute] = []
 
@@ -151,6 +167,8 @@ struct BilibiliAccountPage: View {
     @State private var loadingPlaylists = false
     @State private var playlistsError: String?
     @State private var showingLogin = false
+    @State private var showingWebLogin = false
+    @State private var showingSMSLogin = false
 
     var body: some View {
         List {
@@ -181,12 +199,25 @@ struct BilibiliAccountPage: View {
                         Text("登录后可收藏视频、关注 UP 主并查看个人收藏夹。")
                             .font(BeansFont.appFont(13))
                             .foregroundStyle(Color.beansComment)
-                        Button { showingLogin = true } label: {
-                            Label("扫码登录", systemImage: "qrcode")
-                                .frame(maxWidth: .infinity, minHeight: 42)
+                        HStack(spacing: 10) {
+                            Button { showingLogin = true } label: {
+                                Label("扫码登录", systemImage: "qrcode")
+                                    .frame(maxWidth: .infinity, minHeight: 42)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color(red: 0.96, green: 0.31, blue: 0.50))
+
+                            Button { showingWebLogin = true } label: {
+                                Label("网页登录", systemImage: "safari")
+                                    .frame(maxWidth: .infinity, minHeight: 42)
+                            }
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color(red: 0.96, green: 0.31, blue: 0.50))
+                        Button { showingSMSLogin = true } label: {
+                            Label("手机号登录", systemImage: "iphone")
+                                .frame(maxWidth: .infinity, minHeight: 38)
+                        }
+                        .buttonStyle(.bordered)
                     }
                     .padding(.vertical, 6)
                 }
@@ -194,6 +225,18 @@ struct BilibiliAccountPage: View {
 
             if auth.isLoggedIn {
                 Section("账号内容") {
+                    NavigationLink {
+                        BilibiliAccountHistoryPage()
+                    } label: {
+                        Label("观看记录", systemImage: "clock.arrow.circlepath")
+                    }
+
+                    NavigationLink {
+                        BilibiliPlaybackPreferencesPage()
+                    } label: {
+                        Label("播放设置", systemImage: "gearshape")
+                    }
+
                     if loadingPlaylists && playlists.isEmpty {
                         ProgressView("正在加载收藏夹")
                     } else if let playlistsError {
@@ -241,6 +284,12 @@ struct BilibiliAccountPage: View {
         .sheet(isPresented: $showingLogin) {
             BilibiliLoginSheet().environmentObject(theme)
         }
+        .sheet(isPresented: $showingWebLogin) {
+            BilibiliWebLoginSheet()
+        }
+        .sheet(isPresented: $showingSMSLogin) {
+            BilibiliSMSLoginSheet()
+        }
     }
 
     @MainActor
@@ -256,3 +305,4 @@ struct BilibiliAccountPage: View {
         }
     }
 }
+
