@@ -14,12 +14,23 @@ struct BilibiliHomePage: View {
     @State private var resultType: SearchResultType = .song
     @State private var channel = BilibiliChannel.recommended
     @StateObject private var navigation = BilibiliNavigationState()
+    @StateObject private var legacyAccountNavigation = BilibiliNavigationState()
     @State private var searchRefresh = UUID()
     @State private var searchTask: Task<Void, Never>?
+    @State private var showingLegacyAccount = false
     @ObservedObject private var detailPresentation = BilibiliDetailPresentation.shared
     @ObservedObject private var feed = BilibiliHomeFeedStore.shared
 
+    @ViewBuilder
     var body: some View {
+        if #available(iOS 16, *) {
+            modernBody
+        } else {
+            legacyBody
+        }
+    }
+
+    private var modernBody: some View {
         BeansNavigationStackWithPath(path: $navigation.path) {
             ZStack {
                 GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(wallpaperBlur))
@@ -48,12 +59,12 @@ struct BilibiliHomePage: View {
                             }
                             .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 190)
                             .beansAdaptiveContentWidth()
-                            .background {
-                                BilibiliPullRefresh {
-                                    if !submittedQuery.isEmpty && resultType != .song { searchRefresh = UUID() }
-                                    else { await feed.search(submittedQuery) }
-                                }
-                                    .frame(width: 0, height: 0)
+                        }
+                        .refreshable {
+                            if !submittedQuery.isEmpty && resultType != .song {
+                                searchRefresh = UUID()
+                            } else {
+                                await feed.select(channel: channel, query: submittedQuery, force: true)
                             }
                         }
                         .beansScrollIndicatorsHidden()
@@ -106,8 +117,10 @@ struct BilibiliHomePage: View {
         .task {
             searchText = feed.query
             submittedQuery = feed.query
-            // Refresh Bilibili content whenever the app surface appears.
-            await feed.select(channel: channel, query: submittedQuery, force: true)
+        }
+
+        .onAppear {
+            Task { await feed.select(channel: channel, query: submittedQuery, force: true) }
         }
 
         .onDisappear { searchTask?.cancel() }
@@ -127,6 +140,85 @@ struct BilibiliHomePage: View {
         }
         .onChange(of: detailPresentation.presentedVideo?.identityKey) { value in
             BilibiliDetailDiagnostics.record(value.map { "overlay state: \($0)" } ?? "overlay state: nil")
+        }
+    }
+
+    /// iOS 15 avoids the NavigationStack fallback, hidden route links and search drawer.
+    /// The page still supports pull-to-refresh and opens details through the stable overlay.
+    private var legacyBody: some View {
+        NavigationView {
+            ZStack {
+                GlassBackdrop(customColor: theme.customBackground, homeMode: true, wallpaperBlur: CGFloat(wallpaperBlur))
+                VStack(spacing: 0) {
+                    channels
+                    if channel != .live {
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 16) {
+                                BilibiliHomeFeed { song in
+                                    detailPresentation.present(song)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 14)
+                            .padding(.bottom, 190)
+                            .beansAdaptiveContentWidth()
+                        }
+                        .refreshable {
+                            await feed.select(channel: channel, query: "", force: true)
+                        }
+                        .beansScrollIndicatorsHidden()
+                        .beansScrollDismissesKeyboard()
+                    } else {
+                        BilibiliLiveList()
+                    }
+                }
+            }
+            .navigationTitle("哔哩哔哩")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Menu {
+                        ForEach(platforms.enabledSearchProviders.filter { $0 != .qishui }) { provider in
+                            Button(provider.rawValue) { source = provider.rawValue }
+                        }
+                    } label: {
+                        Image("BrandBilibili")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 28, height: 28)
+                    }
+                    .accessibilityLabel("切换主页平台")
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    BilibiliAccountShortcutButton { showingLegacyAccount = true }
+                }
+            }
+            .beansHomeNavigationBarTransparent()
+        }
+        .navigationViewStyle(.stack)
+        .task {
+            await feed.select(channel: channel, query: "", force: true)
+        }
+        .sheet(isPresented: $showingLegacyAccount) {
+            BeansNavigationStack {
+                BilibiliAccountPage()
+                    .environmentObject(legacyAccountNavigation)
+            }
+            .environmentObject(theme)
+        }
+        .overlay {
+            if let presentedVideo = detailPresentation.presentedVideo {
+                BilibiliNativeStandaloneStack(initialRoute: .video(presentedVideo))
+                    .environmentObject(player)
+                    .environmentObject(theme)
+                    .environment(\.bilibiliDismissVideo) {
+                        detailPresentation.dismiss()
+                    }
+                    .background(Color.black)
+                    .ignoresSafeArea()
+            } else {
+                EmptyView()
+            }
         }
     }
 
