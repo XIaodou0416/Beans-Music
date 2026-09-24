@@ -31,6 +31,27 @@ final class BilibiliAuth: ObservableObject {
 
     var cookieHeader: String { BilibiliProtocol.normalizeCookie(Self.readCookie() ?? "") }
 
+    /// Restore the visible account header after a cold launch. The cookie is
+    /// persisted securely, but the profile image is only a cache and may be
+    /// missing after reinstall or an older login.
+    func refreshProfileIfNeeded() async {
+        guard isLoggedIn, !cookieHeader.isEmpty else { return }
+        do {
+            let info = try await BilibiliAPI.shared.accountInfo(cookie: cookieHeader)
+            nickname = info.nickname
+            accountID = info.mid
+            avatarURL = info.avatar
+            defaults.set(info.nickname, forKey: "beans.bilibili.nickname.v1")
+            defaults.set(info.mid, forKey: "beans.bilibili.mid.v1")
+            if let avatar = info.avatar?.absoluteString {
+                defaults.set(avatar, forKey: "beans.bilibili.avatar.v1")
+            }
+            objectWillChange.send()
+        } catch {
+            BilibiliDetailDiagnostics.record("account refresh failed: \(error.localizedDescription)")
+        }
+    }
+
     func login(cookie: String) async throws {
         let normalized = BilibiliProtocol.normalizeCookie(cookie)
         guard BilibiliProtocol.hasSession(normalized) else {
@@ -259,3 +280,4 @@ struct BilibiliLoginSheet: View {
         }
     }
 }
+
