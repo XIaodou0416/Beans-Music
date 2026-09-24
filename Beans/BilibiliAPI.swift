@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import Security
 
 // API mapping adapted from CeruMusic ceru.bilibili 1.0.2 (MIT).
 // See Beans/Resources/CeruBilibili-LICENSE.txt for attribution.
@@ -343,6 +344,23 @@ actor BilibiliAPI {
             return Playlist(id:Self.stableID(id),name:Self.text(item["title"]),coverURL:Self.image(item["cover"]),trackCount:item["media_count"] as? Int ?? 0,creatorName:Self.text(nav["uname"]),playlistDescription:Self.text(item["intro"]),source:.bilibili,bilibiliID:id)
         }
     }
+
+    func accountHistoryVideos(limit: Int = 30) async throws -> [Song] {
+        let data = try await get(
+            "/x/web-interface/history/cursor",
+            ["type": "archive", "ps": String(min(max(limit, 1), 30)), "max": "0", "view_at": "0"],
+            identity: true,
+            ttl: 120
+        )
+        let rows = data["list"] as? [[String: Any]] ?? []
+        return rows.prefix(limit).compactMap { row in
+            var item = row
+            if let history = row["history"] as? [String: Any] {
+                for (key, value) in history where item[key] == nil { item[key] = value }
+            }
+            return song(item)
+        }
+    }
     func loginQR() async throws -> (url: String, key: String) {
         let (root,_) = try await raw(URL(string:"https://passport.bilibili.com/x/passport-login/web/qrcode/generate")!)
         guard let data=root["data"] as? [String:Any],let url=data["url"] as? String, let key=data["qrcode_key"] as? String,
@@ -409,4 +427,165 @@ actor BilibiliAPI {
         }
         return values
     }
+
+    func sendSMSCode(phone: String, countryCode: String = "86") async throws -> String {
+        let profile = BilibiliAppLoginProfile.androidHD
+        let buvid = fingerprintValue(named: "buvid3") ?? "0"
+        let now = Int(Date().timeIntervalSince1970)
+        let fields = BilibiliAppLoginProfile.sign([
+            "build": profile.build,
+            "buvid": buvid,
+            "c_locale": "zh_CN",
+            "channel": "master",
+            "cid": countryCode,
+            "disable_rcmd": "0",
+            "local_id": buvid,
+            "login_session_id": Self.md5("\(buvid)\(now * 1000)"),
+            "mobi_app": profile.mobiApp,
+            "platform": "android",
+            "s_locale": "zh_CN",
+            "statistics": profile.statistics,
+            "tel": phone
+        ], profile: profile, timestamp: now)
+        let root = try await passportForm(path: "/x/passport-login/sms/send", fields: fields, profile: profile)
+        let data = root["data"] as? [String: Any] ?? [:]
+        guard let key = data["captcha_key"] as? String, !key.isEmpty else {
+            let message = root["message"] as? String ?? "验证码发送失败，可能需要先完成安全验证"
+            throw BilibiliError(message: message)
+        }
+        if let recaptcha = data["recaptcha_url"] as? String, !recaptcha.isEmpty {
+            throw BilibiliError(message: "需要人机验证，请先使用扫码登录")
+        }
+        return key
+    }
+
+    func loginSMS(phone: String, countryCode: String = "86", code: String, captchaKey: String) async throws -> String {
+        let profile = BilibiliAppLoginProfile.androidHD
+        let buvid = fingerprintValue(named: "buvid3") ?? "0"
+        let webKey = try await passportGET(path: "/x/passport-login/web/key")
+        guard let pem = (webKey["data"] as? [String: Any])?["key"] as? String else {
+            throw BilibiliError(message: "无法取得登录公钥")
+        }
+        let deviceID = Self.appLoginDeviceID()
+        let encrypted = try Self.rsaEncrypt(Self.randomAlphaNumeric(length: 16), pem: pem)
+        let fields = BilibiliAppLoginProfile.sign([
+            "bili_local_id": deviceID,
+            "build": profile.build,
+            "buvid": buvid,
+            "c_locale": "zh_CN",
+            "captcha_key": captchaKey,
+            "channel": "master",
+            "cid": countryCode,
+            "code": code,
+            "device": "phone",
+            "device_id": deviceID,
+            "device_name": "vivo",
+            "device_platform": "Android14vivo",
+            "disable_rcmd": "0",
+            "dt": encrypted,
+            "from_pv": "main.my-information.my-login.0.click",
+            "from_url": "bilibili://user_center/mine",
+            "local_id": buvid,
+            "mobi_app": profile.mobiApp,
+            "platform": "android",
+            "s_locale": "zh_CN",
+            "statistics": profile.statistics,
+            "tel": phone
+        ], profile: profile)
+        let root = try await passportForm(path: "/x/passport-login/login/sms", fields: fields, profile: profile)
+        let data = root["data"] as? [String: Any] ?? [:]
+        let cookieInfo = data["cookie_info"] as? [String: Any] ?? [:]
+        let cookies = cookieInfo["cookies"] as? [[String: Any]] ?? []
+        let values = cookies.reduce(into: [String: String]()) { result, item in
+            if let name = item["name"] as? String, let value = item["value"] as? String { result[name] = value }
+        }
+        let cookie = BilibiliProtocol.cookieHeader(values)
+        guard BilibiliProtocol.hasSession(cookie) else { throw BilibiliError(message: "登录成功但没有取得登录凭据") }
+        return cookie
+    }
+
+    private func passportGET(path: String) async throws -> [String: Any] {
+        let url = URL(string: "https://passport.bilibili.com\(path)")!
+        var request = URLRequest(url: url)
+        Self.headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+        let (data, response) = try await session.data(for: request)
+        return try Self.passportObject(data, response: response)
+    }
+
+    private func passportForm(path: String, fields: [String: String], profile: BilibiliAppLoginProfile) async throws -> [String: Any] {
+        let url = URL(string: "https://passport.bilibili.com\(path)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        Self.headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+        request.setValue(profile.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = fields.keys.sorted().map { "\(Self.encode($0))=\(Self.encode(fields[$0] ?? ""))" }.joined(separator: "&").data(using: .utf8)
+        let (data, response) = try await session.data(for: request)
+        return try Self.passportObject(data, response: response)
+    }
+
+    private nonisolated static func passportObject(_ data: Data, response: URLResponse) throws -> [String: Any] {
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw BilibiliError(message: "登录服务返回了无法识别的数据")
+        }
+        let code = (root["code"] as? NSNumber)?.intValue ?? -1
+        guard code == 0 else { throw BilibiliError(message: root["message"] as? String ?? "登录请求失败（\(code)）") }
+        return root
+    }
+
+    private func fingerprintValue(named name: String) -> String? {
+        BilibiliProtocol.cookieValues(fingerprint)[name]
+    }
+
+    private static func md5(_ value: String) -> String {
+        Insecure.MD5.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func randomAlphaNumeric(length: Int) -> String {
+        let alphabet = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        return String((0..<length).compactMap { _ in alphabet.randomElement() })
+    }
+
+    private static func appLoginDeviceID() -> String {
+        let key = "beans.bilibili.appLoginDeviceID"
+        if let value = UserDefaults.standard.string(forKey: key), !value.isEmpty { return value }
+        let value = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        UserDefaults.standard.set(value, forKey: key)
+        return value
+    }
+
+    private static func rsaEncrypt(_ value: String, pem: String) throws -> String {
+        let base64 = pem.replacingOccurrences(of: "-----BEGIN PUBLIC KEY-----", with: "")
+            .replacingOccurrences(of: "-----END PUBLIC KEY-----", with: "")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        guard let keyData = Data(base64Encoded: base64) else { throw BilibiliError(message: "登录公钥格式无效") }
+        let attributes: [CFString: Any] = [kSecAttrKeyType: kSecAttrKeyTypeRSA, kSecAttrKeyClass: kSecAttrKeyClassPublic, kSecAttrKeySizeInBits: 1024]
+        var error: Unmanaged<CFError>?
+        guard let key = SecKeyCreateWithData(keyData as CFData, attributes as CFDictionary, &error),
+              let encrypted = SecKeyCreateEncryptedData(key, .rsaEncryptionPKCS1, Data(value.utf8) as CFData, &error) as Data? else {
+            throw BilibiliError(message: error?.takeRetainedValue().localizedDescription ?? "短信登录加密失败")
+        }
+        return encrypted.base64EncodedString().addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? encrypted.base64EncodedString()
+    }
 }
+
+private struct BilibiliAppLoginProfile {
+    let appKey: String
+    let secret: String
+    let build: String
+    let mobiApp: String
+    let statistics: String
+    let userAgent: String
+
+    static let androidHD = Self(appKey: "dfca71928277209b", secret: "b5475a8825547a4fc26c7d518eaaa02e", build: "2001100", mobiApp: "android_hd", statistics: #"{"appId":5,"platform":3,"version":"2.0.1","abtest":""}"#, userAgent: "Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android model/android_hd mobi_app/android_hd build/2001100 channel/master innerVer/2001100 osVer/15 network/2")
+
+    static func sign(_ values: [String: String], profile: Self, timestamp: Int = Int(Date().timeIntervalSince1970)) -> [String: String] {
+        var all = values; all["appkey"] = profile.appKey; all["ts"] = String(timestamp)
+        let query = all.keys.sorted().map { key in "\(key)=\((all[key] ?? "").addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")" }.joined(separator: "&")
+        let sign = Insecure.MD5.hash(data: Data((query + profile.secret).utf8)).map { String(format: "%02x", $0) }.joined()
+        all["sign"] = sign
+        return all
+    }
+}
+
