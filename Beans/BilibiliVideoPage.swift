@@ -80,6 +80,7 @@ struct BilibiliVideoPage: View {
         }
         .background { BilibiliVideoTabBarHider() }
         .task(id: song.identityKey) {
+            BilibiliDetailDiagnostics.record("video page task: \(song.identityKey)")
             BilibiliPresentationState.shared.enterVideo(song.identityKey)
             routeDepth = navigation.path.count
             music.pauseForBilibiliVideo()
@@ -88,6 +89,7 @@ struct BilibiliVideoPage: View {
             if detail == nil { await load() }
         }
         .onDisappear {
+            BilibiliDetailDiagnostics.record("video page disappear: \(song.identityKey)")
             BilibiliPresentationState.shared.leaveVideo(song.identityKey)
             rememberPosition()
             if !presentingChild && !showFullscreenPlayer { videoPlayer.stop() }
