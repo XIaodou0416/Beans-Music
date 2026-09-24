@@ -101,7 +101,8 @@ struct BilibiliHomePage: View {
         .task {
             searchText = feed.query
             submittedQuery = feed.query
-            await feed.select(channel: channel, query: submittedQuery)
+            // Refresh Bilibili content whenever the app surface appears.
+            await feed.select(channel: channel, query: submittedQuery, force: true)
         }
 
         .onDisappear { searchTask?.cancel() }
@@ -194,3 +195,4 @@ private struct BilibiliPullRefresh: UIViewRepresentable {
         }
     }
 }
+
