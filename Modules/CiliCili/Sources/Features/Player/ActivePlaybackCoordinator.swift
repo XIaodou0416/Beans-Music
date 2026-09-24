@@ -19,6 +19,7 @@ final class ActivePlaybackCoordinator {
         registeredPlayers[ObjectIdentifier(player)] = nil
         if activePlayer === player {
             activePlayer = nil
+            CiliCiliPlaybackOwnership.shared.value = false
             activeGeneration = UUID()
         }
         cleanupRegisteredPlayers()
@@ -32,6 +33,7 @@ final class ActivePlaybackCoordinator {
             activePlayer.pauseForNavigation()
         }
         activePlayer = player
+        CiliCiliPlaybackOwnership.shared.value = true
         activeGeneration = UUID()
         return activeGeneration
     }
@@ -39,12 +41,14 @@ final class ActivePlaybackCoordinator {
     func deactivate(_ player: PlayerStateViewModel) {
         guard activePlayer === player else { return }
         activePlayer = nil
+        CiliCiliPlaybackOwnership.shared.value = false
         activeGeneration = UUID()
     }
 
     func stopActivePlayback() {
         let players = registeredPlayersIncludingActive()
         activePlayer = nil
+        CiliCiliPlaybackOwnership.shared.value = false
         activeGeneration = UUID()
         players.forEach { $0.stop(reason: .navigation) }
         cleanupRegisteredPlayers()

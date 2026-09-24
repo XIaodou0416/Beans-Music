@@ -664,7 +664,7 @@ struct SearchView: View {
     private var typeTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(provider == .bilibili ? SearchResultType.bilibiliCases : SearchResultType.allCases) { type in
+                ForEach(SearchResultType.allCases) { type in
                     Button {
                         guard resultType != type else { return }
                         BeansHaptics.tap()

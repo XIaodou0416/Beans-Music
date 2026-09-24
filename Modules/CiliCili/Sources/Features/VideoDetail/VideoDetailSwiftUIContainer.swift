@@ -745,6 +745,14 @@ struct VideoDetailSwiftUIContainer: View {
             }
         }
         .background(.black)
+        // A separately-created UIHostingController does not inherit the
+        // outer SwiftUI environment. Comment buttons and image sheets require
+        // these exact stores, not newly-created dependencies.
+        .environmentObject(dependencies)
+        .environmentObject(dependencies.sessionStore)
+        .environmentObject(dependencies.libraryStore)
+        .environmentObject(dependencies.homeRecommendDiagnosticsStore)
+        .environment(\.appThemeTintColor, dependencies.libraryStore.appTintColor)
     }
 }
 

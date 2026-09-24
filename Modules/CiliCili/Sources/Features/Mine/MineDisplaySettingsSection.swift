@@ -6,30 +6,8 @@ struct MineDisplaySettingsSection: View {
 
     var body: some View {
         Section("显示") {
-            Picker(selection: Binding(
-                get: { libraryStore.appearanceMode },
-                set: { libraryStore.setAppearanceMode($0) }
-            )) {
-                ForEach(AppAppearanceMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            } label: {
-                MineSettingsLabel("外观", systemImage: "sun.max")
-            }
-            .tint(libraryStore.appTintColor)
-            .pickerStyle(.menu)
-
-            Picker(selection: Binding(
-                get: { libraryStore.appIconPreference },
-                set: { libraryStore.setAppIconPreference($0) }
-            )) {
-                ForEach(AppIconPreference.allCases) { preference in
-                    Text(preference.title).tag(preference)
-                }
-            } label: {
-                MineSettingsLabel("应用图标", systemImage: "app")
-            }
-            .pickerStyle(.menu)
+            Text("应用外观、图标和底栏由 Beans 的设置统一管理。")
+                .font(.footnote).foregroundStyle(.secondary)
 
             MineThemeColorControl(libraryStore: libraryStore)
 
@@ -144,13 +122,6 @@ struct MineDisplaySettingsSection: View {
                 )
             }
             .disabled(!libraryStore.showsVideoCoverDurationBadges)
-
-            Toggle(isOn: Binding(
-                get: { libraryStore.minimizesTabBarOnScroll },
-                set: { libraryStore.setMinimizesTabBarOnScroll($0) }
-            )) {
-                MineSettingsLabel("滑动时缩小底部 Tab", systemImage: "arrow.down.right.and.arrow.up.left")
-            }
 
             Picker(selection: Binding(
                 get: { libraryStore.videoDetailSegmentedPickerGlassStyle },

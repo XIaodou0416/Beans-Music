@@ -93,7 +93,7 @@ struct BeansApp: App {
                 await DeviceReporter.shared.reportLaunch()
                 await RemoteControlStore.shared.refreshIfNeeded(force: true)
             }
-            .onChange(of: scenePhase) { phase in
+            .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
                 HighRefreshKeeper.shared.startIfNeeded()
                 Task {

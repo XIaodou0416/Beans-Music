@@ -40,7 +40,7 @@ public final class CiliCiliRuntime: ObservableObject {
         ActivePlaybackCoordinator.shared.stopActivePlayback()
     }
 
-    public var ownsPlayback: Bool { ActivePlaybackCoordinator.shared.currentActivePlayer() != nil }
+    public nonisolated static var hasActivePlayback: Bool { CiliCiliPlaybackOwnership.shared.value }
 
     public func pauseForBackground() {
         ActivePlaybackCoordinator.shared.pauseActivePlaybackForAppBackground()
@@ -111,6 +111,19 @@ public final class CiliCiliRuntime: ObservableObject {
     }
 }
 
+/// Beans' existing player publishes from callback queues as well as main.
+/// A locked snapshot crosses that boundary without accessing MainActor state.
+final class CiliCiliPlaybackOwnership: @unchecked Sendable {
+    nonisolated static let shared = CiliCiliPlaybackOwnership()
+    private nonisolated let lock = NSLock()
+    private nonisolated(unsafe) var active = false
+    nonisolated init() {}
+    nonisolated var value: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return active }
+        set { lock.lock(); defer { lock.unlock() }; active = newValue }
+    }
+}
+
 public struct CiliCiliHomeView: View {
     private let platforms: [String]
     private let selectPlatform: (String) -> Void
@@ -139,6 +152,7 @@ struct CiliCiliEnvironment: ViewModifier {
             .environmentObject(runtime.dependencies.homeRecommendDiagnosticsStore)
             .environment(\.appThemeTintColor, runtime.dependencies.libraryStore.appTintColor)
             .environment(\.showsVideoCoverDurationBadges, runtime.dependencies.libraryStore.showsVideoCoverDurationBadges)
+            .modifier(CiliCiliFontPreference(library: runtime.dependencies.libraryStore))
             .safeAreaInset(edge: .top) {
                 if let error = runtime.integrationError {
                     HStack {
@@ -149,6 +163,28 @@ struct CiliCiliEnvironment: ViewModifier {
                 }
             }
             .task { runtime.dependencies.scheduleStartupWorkIfNeeded() }
+    }
+}
+
+private struct CiliCiliFontPreference: ViewModifier {
+    @ObservedObject var library: LibraryStore
+    @Environment(\.dynamicTypeSize) private var systemSize
+
+    func body(content: Content) -> some View {
+        content.environment(\.dynamicTypeSize, library.followsSystemFontSize ? systemSize : manualSize)
+    }
+
+    private var manualSize: DynamicTypeSize {
+        switch library.manualFontSize {
+        case .extraSmall: return .xSmall
+        case .small: return .small
+        case .medium: return .medium
+        case .standard: return .large
+        case .large: return .xLarge
+        case .extraLarge: return .xxLarge
+        case .extraExtraLarge: return .xxxLarge
+        case .accessibility: return .accessibility1
+        }
     }
 }
 
