@@ -24,6 +24,17 @@ extension BilibiliAPI {
         let rows = data["result"] as? [[String: Any]] ?? []
         return (rows.compactMap { feedItem($0) }, !rows.isEmpty && page < Self.number(data["numPages"]))
     }
+    func relatedVideos(aid: String) async throws -> [BilibiliFeedVideo] {
+        var components = URLComponents(string: "https://api.bilibili.com/x/web-interface/archive/related")!
+        components.queryItems = [URLQueryItem(name: "aid", value: aid)]
+        let (root, _) = try await raw(components.url!)
+        let code = Self.number(root["code"])
+        guard code == 0 else {
+            let message = Self.text(root["message"] ?? root["msg"])
+            throw BilibiliError(message: "\(message.isEmpty ? "无法加载相关推荐" : message)（\(code)）")
+        }
+        return (root["data"] as? [[String: Any]] ?? []).compactMap { feedItem($0) }
+    }
     func upSearch(_ query: String, page: Int) async throws -> (items: [Artist], more: Bool) {
         let data = try await searchPage(query, kind: "bili_user", page: page)
         let rows = data["result"] as? [[String: Any]] ?? []
@@ -57,3 +68,4 @@ extension BilibiliAPI {
         return (rows.compactMap { feedItem($0, owner: owner) }, !rows.isEmpty && page * 30 < total)
     }
 }
+
