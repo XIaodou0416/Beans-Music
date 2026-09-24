@@ -27,6 +27,7 @@ struct BilibiliVideoPage: View {
     @State private var share = false
     @State private var savedProgress = 0.0
     @State private var showFullscreenPlayer = false
+    @State private var showPlaybackSettings = false
     @State private var presentingChild = false
     @State private var routeDepth = 0
 
@@ -39,6 +40,7 @@ struct BilibiliVideoPage: View {
                     playback
                     BilibiliNativeComments(aid: detail.aid)
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) { detailTabs }
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -75,7 +77,9 @@ struct BilibiliVideoPage: View {
                 .accessibilityLabel("返回")
             }
         }
+        .background { BilibiliVideoTabBarHider() }
         .task(id: song.identityKey) {
+            BilibiliPresentationState.shared.enterVideo(song.identityKey)
             routeDepth = navigation.path.count
             music.pauseForBilibiliVideo()
             if selectedPart == nil { selectedPart = song }
@@ -83,6 +87,7 @@ struct BilibiliVideoPage: View {
             if detail == nil { await load() }
         }
         .onDisappear {
+            BilibiliPresentationState.shared.leaveVideo(song.identityKey)
             rememberPosition()
             if !presentingChild && !showFullscreenPlayer { videoPlayer.stop() }
         }
@@ -105,6 +110,9 @@ struct BilibiliVideoPage: View {
             if let detail {
                 BilibiliFavoritePicker(aid: detail.aid) { Task { await updateInteraction() } }
             }
+        }
+        .sheet(isPresented: $showPlaybackSettings) {
+            BilibiliPlaybackSettings(quality: $quality)
         }
         .sheet(isPresented: $share) {
             if let url = song.officialURL { ShareSheet(items: [url]) }
@@ -134,7 +142,7 @@ struct BilibiliVideoPage: View {
         BilibiliDetailVideoSurface(model: videoPlayer, quality: $quality, onBack: closePage, onExpand: {
             rememberPosition()
             showFullscreenPlayer = true
-        })
+        }, onSettings: { showPlaybackSettings = true })
         .background(Color.black)
     }
 
@@ -231,17 +239,24 @@ struct BilibiliVideoPage: View {
                 Image(systemName: icon).font(.system(size: 21, weight: .medium))
                 Text(title).font(.system(size: 11, weight: .medium))
             }.foregroundStyle(selected ? ciliPink : .black).frame(width: 48, height: 48)
-        }.buttonStyle(.plain).disabled(busy)
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+            .background { BeansGlass(shape: Circle(), forceLiquid: true) }
     }
 
     private var detailTabs: some View {
         HStack(spacing: 0) {
             Button("简介") { tab = 0 }.frame(maxWidth: .infinity)
             Button("评论") { tab = 1 }.frame(maxWidth: .infinity)
-        }.font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
-            .frame(width: 270, height: 52).background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
-            .shadow(color: .black.opacity(0.12), radius: 12, y: 4).padding(.bottom, 10)
+        }
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundStyle(.black)
+        .frame(width: 270, height: 52)
+        .background { BeansGlass(shape: Capsule(), forceLiquid: true) }
+        .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .padding(.bottom, 10)
     }
 
     private func sectionTitle(_ title: String) -> some View {
