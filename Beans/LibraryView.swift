@@ -73,6 +73,7 @@ struct LibraryView: View {
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
 
     @State private var showHistory = false
+    @State private var selectedBilibiliVideo: Song?
     @State private var showLibraryPlatformMenu = false
     @State private var showProfile = false
     @State private var showSectionSort = false
@@ -255,6 +256,11 @@ struct LibraryView: View {
             HistoryView()
                 .environmentObject(player)
                 .environmentObject(auth)
+                .environmentObject(theme)
+        }
+        .sheet(item: $selectedBilibiliVideo) { song in
+            BilibiliNativeStandaloneStack(initialRoute: .video(song))
+                .environmentObject(player)
                 .environmentObject(theme)
         }
         .sheet(isPresented: $showSectionSort) {
@@ -1034,8 +1040,13 @@ struct LibraryView: View {
 
     private func playFromHistory(_ song: Song) {
         if let index = player.history.firstIndex(of: song) {
-            player.play(songs: player.history, startAt: index)
+            if song.source == .bilibili, BilibiliExperience.current == .video {
+                selectedBilibiliVideo = song
+            } else {
+                player.play(songs: player.history, startAt: index)
+            }
         }
     }
 }
+
 
