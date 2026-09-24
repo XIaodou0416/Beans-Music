@@ -285,7 +285,7 @@ private struct BilibiliPlayerLayerView: UIViewRepresentable {
         view.playerLayer.player = nil
     }
 
-    private final class PlayerLayerHostView: UIView {
+    final class PlayerLayerHostView: UIView {
         override class var layerClass: AnyClass { AVPlayerLayer.self }
         var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 
