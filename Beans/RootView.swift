@@ -159,6 +159,7 @@ struct RootView: View {
     @ObservedObject private var localLibrary = LocalLibraryStore.shared
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
+    @ObservedObject private var bilibiliPresentation = BilibiliPresentationState.shared
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var selection: RootTab = .discover
@@ -300,12 +301,16 @@ struct RootView: View {
                     nativeTabs(isPadLandscape: false)
                         .modifier(
                             MiniPlayerAccessoryModifier(
-                                isActive: player.currentSong != nil && !queueOverlayPresented,
+                                isActive: player.currentSong != nil && !queueOverlayPresented && !bilibiliPresentation.isVideoDetailActive,
                                 showPlayer: $showPlayer,
                                 clock: player.clock,
                                 colorScheme: colorScheme,
                                 transitionNamespace: nowPlayingTransition
                             )
+                        )
+                        .toolbar(
+                            bilibiliPresentation.isVideoDetailActive ? .hidden : .visible,
+                            for: .tabBar
                         )
                 } else {
                     legacyRootTabs
@@ -1243,8 +1248,10 @@ struct RootView: View {
         ZStack(alignment: .bottom) {
             activeTabPage()
 
-            legacyFloatingTabBar
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+            if !bilibiliPresentation.isVideoDetailActive {
+                legacyFloatingTabBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .animation(
             rootLayoutSettled ? .easeInOut(duration: 0.25) : nil,
@@ -2051,3 +2058,4 @@ struct AnnouncementVideoView: View {
             .onDisappear { player.pause() }
     }
 }
+
