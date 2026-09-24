@@ -15,6 +15,7 @@ extension SearchResultType {
 struct BilibiliSearchResults: View {
     let keyword: String
     let type: SearchResultType
+    var onVideo: ((Song) -> Void)? = nil
     @State private var videos: [BilibiliFeedVideo] = []
     @State private var creators: [Artist] = []
     @State private var collections: [BilibiliSeries] = []
@@ -58,7 +59,7 @@ struct BilibiliSearchResults: View {
                 if type == .all { Text("视频").font(.headline) }
                 BilibiliVideoRows(items: videos, onAppearItem: { id in
                     if id == videos.last?.id { nextIfNeeded() }
-                })
+                }, onVideo: onVideo)
             }
             if loading { ProgressView("正在搜索").frame(maxWidth: .infinity, minHeight: 90) }
             if let error { BilibiliInlineError(message: error) { Task { await load(reset: page == 0) } } }
