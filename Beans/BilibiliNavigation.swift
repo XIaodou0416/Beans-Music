@@ -34,10 +34,19 @@ private struct BilibiliNavigationActionKey: EnvironmentKey {
     static let defaultValue: ((BilibiliNativeRoute) -> Void)? = nil
 }
 
+private struct BilibiliDismissVideoKey: EnvironmentKey {
+    static let defaultValue: (() -> Void)? = nil
+}
+
 extension EnvironmentValues {
     var bilibiliNavigate: ((BilibiliNativeRoute) -> Void)? {
         get { self[BilibiliNavigationActionKey.self] }
         set { self[BilibiliNavigationActionKey.self] = newValue }
+    }
+
+    var bilibiliDismissVideo: (() -> Void)? {
+        get { self[BilibiliDismissVideoKey.self] }
+        set { self[BilibiliDismissVideoKey.self] = newValue }
     }
 }
 
