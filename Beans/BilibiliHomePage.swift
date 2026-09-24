@@ -113,7 +113,6 @@ struct BilibiliHomePage: View {
         .onDisappear { searchTask?.cancel() }
         .overlay {
             if let presentedVideo = detailPresentation.presentedVideo {
-                BilibiliDetailDiagnostics.record("overlay appeared: \(presentedVideo.identityKey)")
                 BilibiliNativeStandaloneStack(initialRoute: .video(presentedVideo))
                     .environmentObject(player)
                     .environmentObject(theme)
@@ -125,6 +124,9 @@ struct BilibiliHomePage: View {
             } else {
                 EmptyView()
             }
+        }
+        .onChange(of: detailPresentation.presentedVideo?.identityKey) { value in
+            BilibiliDetailDiagnostics.record(value.map { "overlay state: \($0)" } ?? "overlay state: nil")
         }
     }
 
