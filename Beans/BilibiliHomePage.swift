@@ -107,6 +107,7 @@ struct BilibiliHomePage: View {
             }
             .beansHomeNavigationBarTransparent()
             .environmentObject(navigation)
+            .environment(\.bilibiliNavigationObject, navigation)
             .environment(\.bilibiliNavigate, navigation.push)
             .background { BilibiliLegacyRouteLink(depth: 0) }
             .beansNavigationDestination(for: BilibiliNativeRoute.self) { route in
