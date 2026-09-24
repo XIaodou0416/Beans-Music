@@ -13,7 +13,7 @@ final class CiliCiliPortUITests: XCTestCase {
         XCTAssertTrue(app.buttons["beans.bilibili.channel.home"].waitForExistence(timeout: 20))
         for tab in ["dynamic", "live", "search", "mine", "home"] {
             dismissStartupOverlays(in: app)
-            let channel = app.buttons["beans.bilibili.channel.\(tab)"]
+            let channel = app.buttons.matching(identifier: "beans.bilibili.channel.\(tab)").allElementsBoundByIndex.first(where: { $0.isHittable }) ?? app.buttons["beans.bilibili.channel.\(tab)"].firstMatch
             XCTAssertTrue(channel.isHittable)
             channel.tap()
             XCTAssertTrue(app.buttons["beans.bilibili.channel.\(tab)"].firstMatch.isSelected)
