@@ -292,6 +292,7 @@ struct SearchView: View {
     @State private var errorMessage: String?
     @State private var showAddToPlaylist: Song?
     @State private var selectedArtist: Artist?
+    @State private var selectedBilibiliArtist: Artist?
     @State private var selectedAlbum: Album?
     @State private var selectedPlaylist: Playlist?
     @ObservedObject private var historyStore = SearchHistoryStore.shared
@@ -404,11 +405,13 @@ struct SearchView: View {
                 .environmentObject(theme)
         }
         .sheet(item: $selectedArtist) { artist in
-            if artist.source == .bilibili {
-                BilibiliNativeSheet(route: .up(artist))
-            } else {
-                ArtistHomeSheet(artist: artist).environmentObject(player)
-            }
+            ArtistHomeSheet(artist: artist).environmentObject(player)
+        }
+        .fullScreenCover(item: $selectedBilibiliArtist) { artist in
+            BilibiliNativeStandaloneStack(initialRoute: .up(artist))
+                .environmentObject(theme)
+                .environmentObject(auth)
+                .environmentObject(player)
         }
         .sheet(item: $selectedAlbum) { album in
             AlbumDetailView(album: album)
@@ -979,7 +982,7 @@ struct SearchView: View {
         Button {
             BeansHaptics.tap()
             searchController.dismissKeyboard()
-            selectedArtist = artist
+            openArtist(artist)
         } label: {
             VStack(spacing: 10) {
                 CoverImage(url: artist.coverURL ?? artistCoverCache[artist.id], size: 124, cornerRadius: 62)
@@ -1606,7 +1609,7 @@ struct SearchView: View {
         Button {
             BeansHaptics.tap()
             searchController.dismissKeyboard()
-            selectedArtist = artist
+            openArtist(artist)
         } label: {
             VStack(spacing: 10) {
                 ZStack {
@@ -1626,6 +1629,14 @@ struct SearchView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(GlassPressButtonStyle(scale: 0.97))
+    }
+
+    private func openArtist(_ artist: Artist) {
+        if artist.source == .bilibili {
+            selectedBilibiliArtist = artist
+        } else {
+            selectedArtist = artist
+        }
     }
 
     private func albumSearchResultCard(_ album: Album) -> some View {
