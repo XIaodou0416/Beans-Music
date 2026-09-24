@@ -18,4 +18,3 @@ final class TaskDebouncer {
         task = nil
     }
 }
-
