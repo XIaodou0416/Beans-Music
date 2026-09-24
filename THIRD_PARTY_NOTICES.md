@@ -119,3 +119,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Bilibili video and live-detail surfaces
+
+The Bilibili video and live-detail surfaces are adapted from the public layout
+and interaction structure of these GPL-3.0 projects:
+
+- CiliCili, by Rone89: https://github.com/Rone89/cilicili
+- PiliPlus, by bggRGjQaUbCoE: https://github.com/bggRGjQaUbCoE/PiliPlus
+
+The adapted Swift source files are marked with comments. The upstream GPL-3.0
+terms and copyright notices apply to the adapted code. The full license text
+is available in each upstream repository's `LICENSE` file.
+
