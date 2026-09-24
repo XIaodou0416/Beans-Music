@@ -114,13 +114,13 @@ struct BilibiliHomePage: View {
 
         .onDisappear { searchTask?.cancel() }
         .fullScreenCover(item: $detailPresentation.presentedVideo) { presentedVideo in
-            BeansDiagnostics.shared.route("哔哩哔哩视频详情")
             BilibiliNativeStandaloneStack(initialRoute: .video(presentedVideo))
                 .environmentObject(player)
                 .environmentObject(theme)
                 .environment(\.bilibiliDismissVideo) { detailPresentation.dismiss() }
                 .background(Color.black)
                 .ignoresSafeArea()
+                .onAppear { BeansDiagnostics.shared.route("哔哩哔哩视频详情") }
         }
         .onChange(of: detailPresentation.presentedVideo?.identityKey) { value in
             BilibiliDetailDiagnostics.record(value.map { "overlay state: \($0)" } ?? "overlay state: nil")
