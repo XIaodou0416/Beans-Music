@@ -9,7 +9,7 @@ on:
         default: 'false'
         type: boolean
   push:
-    branches: [main]
+    branches: [main, codex/build-bilibili-detail-20260924]
 
 permissions:
   contents: write
@@ -141,3 +141,4 @@ jobs:
             git commit -m "chore: bump build to $(cat version.txt) [skip ci]"
             git push
           fi
+
