@@ -112,15 +112,19 @@ struct BilibiliHomePage: View {
         }
 
         .onDisappear { searchTask?.cancel() }
-        .fullScreenCover(isPresented: $showingPresentedVideo, onDismiss: {
-            presentedVideo = nil
-        }) {
+        .overlay {
             if let presentedVideo {
                 BilibiliNativeStandaloneStack(initialRoute: .video(presentedVideo))
                     .environmentObject(player)
                     .environmentObject(theme)
+                    .environment(\.bilibiliDismissVideo) {
+                        self.presentedVideo = nil
+                        self.showingPresentedVideo = false
+                    }
+                    .background(Color.black)
+                    .ignoresSafeArea()
             } else {
-                Color.black.ignoresSafeArea()
+                EmptyView()
             }
         }
     }
