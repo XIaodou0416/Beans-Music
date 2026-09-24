@@ -17,6 +17,22 @@ final class BilibiliPresentationState: ObservableObject {
 }
 
 @MainActor
+final class BilibiliDetailPresentation: ObservableObject {
+    static let shared = BilibiliDetailPresentation()
+    @Published var presentedVideo: Song?
+
+    func present(_ song: Song) {
+        BilibiliDetailDiagnostics.record("present request: \(song.identityKey)")
+        presentedVideo = song
+    }
+
+    func dismiss() {
+        BilibiliDetailDiagnostics.record("presenter dismiss")
+        presentedVideo = nil
+    }
+}
+
+@MainActor
 final class BilibiliNavigationState: ObservableObject {
     @Published var path: [BilibiliNativeRoute] = []
 
@@ -178,6 +194,7 @@ struct BilibiliAccountPage: View {
     @State private var showingLogin = false
     @State private var showingWebLogin = false
     @State private var showingSMSLogin = false
+    @State private var showingDetailLog = false
 
     var body: some View {
         List {
@@ -279,6 +296,14 @@ struct BilibiliAccountPage: View {
             Section("观看与播放") {
                 BilibiliModeSettings()
             }
+
+            Section("问题诊断") {
+                Button {
+                    showingDetailLog = true
+                } label: {
+                    Label("查看视频详情诊断日志", systemImage: "doc.text.magnifyingglass")
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .background(Color(uiColor: .systemBackground))
@@ -298,6 +323,9 @@ struct BilibiliAccountPage: View {
         }
         .sheet(isPresented: $showingSMSLogin) {
             BilibiliSMSLoginSheet()
+        }
+        .sheet(isPresented: $showingDetailLog) {
+            BilibiliDetailLogSheet()
         }
     }
 
