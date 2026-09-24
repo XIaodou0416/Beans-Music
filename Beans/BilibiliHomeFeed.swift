@@ -144,9 +144,16 @@ struct BilibiliHomeFeed: View {
                     ForEach(store.videos) { video in
                         BilibiliFeedCard(video: video) {
                             BeansHaptics.tap()
+                            BilibiliDetailDiagnostics.record("feed tap mode=\(mode) id=\(video.song.identityKey)")
                             let tracks = store.videos.map(\.song)
                             if mode == BilibiliExperience.video.rawValue {
-                                if let onVideo { onVideo(video.song) } else { navigation.push(.video(video.song)) }
+                                if let onVideo {
+                                    BilibiliDetailDiagnostics.record("feed onVideo callback")
+                                    onVideo(video.song)
+                                } else {
+                                    BilibiliDetailDiagnostics.record("feed navigation fallback")
+                                    navigation.push(.video(video.song))
+                                }
                             }
                             else { player.play(songs: tracks, startAt: tracks.firstIndex(where: { $0.identityKey == video.id }) ?? 0) }
                         }
