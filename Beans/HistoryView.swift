@@ -3,7 +3,6 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var theme: ThemeStore
-    @AppStorage(BilibiliExperience.key) private var bilibiliMode = BilibiliExperience.listen.rawValue
     @State private var selectedBilibiliVideo: Song?
 
     var body: some View {
@@ -38,7 +37,7 @@ struct HistoryView: View {
                     }
                 }
             }
-            .sheet(item: $selectedBilibiliVideo) { song in
+            .fullScreenCover(item: $selectedBilibiliVideo) { song in
                 BilibiliNativeStandaloneStack(initialRoute: .video(song))
                     .environmentObject(player)
                     .environmentObject(theme)
@@ -52,7 +51,7 @@ struct HistoryView: View {
     }
 
     private func open(_ song: Song, index: Int) {
-        if song.source == .bilibili, bilibiliMode == BilibiliExperience.video.rawValue {
+        if song.source == .bilibili {
             selectedBilibiliVideo = song
         } else {
             player.play(songs: player.history, startAt: index)

@@ -1,4 +1,5 @@
 import SwiftUI
+import CiliCiliKit
 
 // MARK: - 流式标签布局（热搜标签云）
 
@@ -318,6 +319,16 @@ struct SearchView: View {
     }
 
     var body: some View {
+        if provider == .bilibili {
+            CiliCiliHomeView(platforms: searchProviders.map(\.rawValue), startsWithSearch: true) { name in
+                if let selected = SearchCatalogProvider(rawValue: name) { provider = selected }
+            }
+        } else {
+            musicSearchBody
+        }
+    }
+
+    private var musicSearchBody: some View {
         BeansNavigationStack {
             if #available(iOS 26, *) {
                 pageContent
@@ -659,7 +670,7 @@ struct SearchView: View {
                         BeansHaptics.tap()
                         resultType = type
                     } label: {
-                        Text(LocalizedStringKey(provider == .bilibili ? type.bilibiliTitle : type.rawValue))
+                        Text(LocalizedStringKey(type.rawValue))
                             .font(BeansFont.appFont(13, .semibold))
                             .foregroundStyle(resultType == type ? Color.beansAmber : Color.beansLabel)
                             .frame(minWidth: 58, minHeight: 40)
@@ -821,9 +832,7 @@ struct SearchView: View {
 
     @ViewBuilder
     private var resultsArea: some View {
-        if provider == .bilibili {
-            BilibiliSearchResults(keyword: keyword, type: resultType)
-        } else {
+        Group {
             switch resultType {
             case .all: allResultsArea
             case .song: songResultsArea

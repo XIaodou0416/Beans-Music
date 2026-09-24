@@ -1,5 +1,16 @@
 # Third-Party Notices
 
+## Complete CiliCili module (2026-09-25)
+
+`Modules/CiliCili/Sources` is a direct copy of Rone89/cilicili at
+`c61b0d33966c5d8e87ea20527b8ba48c702c10c1`, with the integration changes
+listed in `Modules/CiliCili/PORTING.md`. This replaces the earlier adapted
+Beans Bilibili UI described below. The combined test distribution is provided
+under GPL-3.0-only; existing MIT copyright notices remain intact.
+See `Modules/CiliCili/LICENSE` and `Beans/Resources/CiliCili-NOTICE.md`.
+Matching complete source is uploaded alongside every test IPA as an Actions
+artifact. No Release publication is performed.
+
 ## Playback page layout
 
 The optional reference playback style is adapted from the Kumone project by missuo.

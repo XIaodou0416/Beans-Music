@@ -258,7 +258,7 @@ struct LibraryView: View {
                 .environmentObject(auth)
                 .environmentObject(theme)
         }
-        .sheet(item: $selectedBilibiliVideo) { song in
+        .fullScreenCover(item: $selectedBilibiliVideo) { song in
             BilibiliNativeStandaloneStack(initialRoute: .video(song))
                 .environmentObject(player)
                 .environmentObject(theme)
@@ -1040,7 +1040,7 @@ struct LibraryView: View {
 
     private func playFromHistory(_ song: Song) {
         if let index = player.history.firstIndex(of: song) {
-            if song.source == .bilibili, BilibiliExperience.current == .video {
+            if song.source == .bilibili {
                 selectedBilibiliVideo = song
             } else {
                 player.play(songs: player.history, startAt: index)

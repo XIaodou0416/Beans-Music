@@ -78,7 +78,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee xcodebuild.log
 
-      - name: Test Bilibili detail regressions
+      - name: Test CiliCili upstream and Beans integration regressions
         run: |
           set -o pipefail
           SIMULATOR=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if x.get("isAvailable") and "iPhone" in x["name"]))')
@@ -90,6 +90,7 @@ jobs:
             -derivedDataPath build-tests \
             -resultBundlePath BilibiliTests.xcresult \
             -only-testing:BeansTests/BilibiliDetailTests \
+            -only-testing:CiliCiliTests \
             CODE_SIGNING_ALLOWED=NO \
             test 2>&1 | tee bilibili-tests.log
 
@@ -122,6 +123,16 @@ jobs:
           test -d Payload/Beans.app
           test -f Payload/Beans.app/Info.plist
           test -x Payload/Beans.app/Beans
+          test -x Payload/Beans.app/Frameworks/CiliCiliKit.framework/CiliCiliKit
+
+      - name: Package corresponding GPL source
+        run: git archive --format=zip --output=Beans-CiliCili-source.zip HEAD
+
+      - name: Upload corresponding source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Beans-CiliCili-source
+          path: Beans-CiliCili-source.zip
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4

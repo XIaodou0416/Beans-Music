@@ -182,7 +182,7 @@ struct DiscoverView: View {
                             providerPicker
                         }
                         if source == .bilibili {
-                            BilibiliHomeFeed()
+                            BilibiliHomePage()
                         } else if let errorMessage {
                             ErrorStateView(message: errorMessage) {
                                 Task { await load(force: true) }
@@ -1881,7 +1881,6 @@ struct DiscoverView: View {
         if requestedSource == .bilibili {
             loading = false
             errorMessage = nil
-            if force { await BilibiliHomeFeedStore.shared.loadFirst(force: true) }
             return
         }
         // 网易云非「全部」分类的歌单不缓存（切换分类即重新拉取）

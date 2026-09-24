@@ -1,18 +1,27 @@
-# CiliCili attribution
+# CiliCili in Beans Music
 
-Upstream: CiliCili, Rone89 and contributors
-Source: https://github.com/Rone89/cilicili
-License: GNU General Public License version 3 (GPL-3.0)
-Reference commit: c61b0d33966c5d8e87ea20527b8ba48c702c10c1 (2026-09-15)
+Copyright: Rone89 and the CiliCili contributors.
+Upstream: https://github.com/Rone89/cilicili
+Revision: c61b0d33966c5d8e87ea20527b8ba48c702c10c1 (2026-09-15)
+License: GNU General Public License version 3 only (GPL-3.0-only).
+The full, unmodified license is included as CiliCili-LICENSE.txt.
 
-Beans changes dated 2026-09-25 adapt the video detail/tab composition,
-comment section/header/state/row layout and full-row reply target to Beans'
-existing SwiftUI navigation, AVPlayer and Bilibili models.
+On 2026-09-25 the entire upstream Swift source tree was copied into
+Modules/CiliCili/Sources. The former Beans video/detail/comments/player,
+uploader, live, search and login screens were removed, not used as fallbacks.
 
-Adapted files: BilibiliVideoPage.swift, BilibiliNativeComments.swift,
-BilibiliCommentRow.swift. The upstream attribution and GPL-3.0 terms continue
-to apply to these portions. See CiliCili-LICENSE.txt for the unmodified license.
+Beans modifications: embedded framework build target; app-entry exclusion;
+top channel navigation to retain Beans' bottom tabs; music playback and
+account bridges; secure Keychain-only storage; music-only comment host.
+The video detail UIKit shell, player, rich comment/reply/composer views,
+recommendations, search, dynamic feed, live and uploader implementations
+come from the copied source, not screenshot-derived recreations.
 
-Corresponding Beans source and modifications:
+Corresponding source:
 https://github.com/XIaodou0416/Beans-Music/tree/codex/build-bilibili-detail-20260924
-The GitHub Actions run that produced the IPA records its exact source commit.
+Each Actions run identifies the exact commit and includes a matching
+Beans-CiliCili-source artifact with all source, licenses and build files.
+Build instructions: Modules/CiliCili/PORTING.md.
+This combined distribution is under GPL-3.0-only; original MIT notices
+for Beans and other third parties remain preserved. No GitHub Release
+is published for this test build.

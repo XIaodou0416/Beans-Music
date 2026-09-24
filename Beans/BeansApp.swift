@@ -1,8 +1,10 @@
 import SwiftUI
 import UIKit
+import CiliCiliKit
 
 @main
 struct BeansApp: App {
+    @UIApplicationDelegateAdaptor(CiliCiliHostAppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var auth = AuthStore()
     @StateObject private var player = PlayerManager()
@@ -74,6 +76,7 @@ struct BeansApp: App {
             }
             .onAppear {
                 BeansCarPlayCoordinator.shared.configure(player: player)
+                BilibiliCiliCiliBridge.shared.configure(player: player)
             }
             .task {
                 // 直接进入主页，首帧完成后恢复已安装用户的数据与媒体偏好。

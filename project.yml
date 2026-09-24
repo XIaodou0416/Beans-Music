@@ -2,7 +2,7 @@ name: Beans
 
 options:
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "26.1"
 
 settings:
   base:
@@ -25,11 +25,13 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app
         MARKETING_VERSION: "1.8.1"
-        CURRENT_PROJECT_VERSION: "17"
+        CURRENT_PROJECT_VERSION: "19"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_OBJC_BRIDGING_HEADER: Beans/Beans-Bridging-Header.h
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: Beans/Beans.entitlements
+    dependencies:
+      - target: CiliCiliKit
     info:
       path: Beans/Info.plist
       properties:
@@ -38,6 +40,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UIBackgroundModes: [audio]
+        NSPhotoLibraryAddUsageDescription: 用于将哔哩哔哩动态和评论图片保存到系统照片图库。
         UILaunchScreen:
           UIImageName: LaunchBackground
           UIColorName: LaunchBackgroundColor
@@ -63,6 +66,35 @@ targets:
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+  CiliCiliKit:
+    type: framework
+    platform: iOS
+    sources:
+      - path: Modules/CiliCili/Sources
+        excludes:
+          - App/JKBiliApp.swift
+      - Modules/CiliCili/Integration
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.cilicili
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        SWIFT_VERSION: "5.0"
+  CiliCiliTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Modules/CiliCili/Tests
+    dependencies:
+      - target: CiliCiliKit
+      - target: Beans
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.cilicili.tests
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
   BeansTests:
     type: bundle.unit-test
     platform: iOS
@@ -70,6 +102,7 @@ targets:
       - BeansTests
     dependencies:
       - target: Beans
+      - target: CiliCiliKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.tests
@@ -86,4 +119,5 @@ schemes:
     test:
       targets:
         - BeansTests
+        - CiliCiliTests
 
