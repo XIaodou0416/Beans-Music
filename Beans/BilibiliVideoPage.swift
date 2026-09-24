@@ -18,12 +18,14 @@ struct BilibiliVideoPage: View {
     @State private var showCoins = false
     @State private var showFavorites = false
     @State private var interaction: BilibiliInteractionState?
+    @State private var relatedVideos: [BilibiliFeedVideo] = []
     @State private var busy = false
     @State private var following: Bool?
     @State private var followingBusy = false
     @State private var message: String?
     @State private var share = false
     @State private var savedProgress = 0.0
+    @State private var showFullscreenPlayer = false
     @State private var presentingChild = false
     @State private var routeDepth = 0
 
@@ -60,7 +62,11 @@ struct BilibiliVideoPage: View {
                 videoPlayer.player?.play()
             }
         }
-        .onChange(of: quality) { _ in rememberPosition(); play() }
+        .onChange(of: quality) { _ in
+            guard !showFullscreenPlayer else { return }
+            rememberPosition()
+            play()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .beansBilibiliLoginDidUpdate)) { _ in Task { await updateInteraction() } }
         .sheet(isPresented: $showLogin) { BilibiliLoginSheet() }
         .sheet(isPresented: $showFavorites) {
@@ -69,6 +75,24 @@ struct BilibiliVideoPage: View {
             }
         }
         .sheet(isPresented: $share) { if let url = song.officialURL { ShareSheet(items: [url]) } }
+        .fullScreenCover(isPresented: $showFullscreenPlayer) {
+            BilibiliFullscreenPlayer(
+                model: videoPlayer,
+                quality: $quality,
+                onDismiss: {
+                    rememberPosition()
+                    showFullscreenPlayer = false
+                    videoPlayer.player?.play()
+                },
+                onQualityChanged: {
+                    rememberPosition()
+                    play()
+                }
+            )
+            .onAppear {
+                videoPlayer.player?.play()
+            }
+        }
         .confirmationDialog("选择投币数量", isPresented: $showCoins, titleVisibility: .visible) {
             Button("投 1 枚硬币") { coin(1) }
             Button("投 2 枚硬币") { coin(2) }
@@ -88,6 +112,12 @@ struct BilibiliVideoPage: View {
                     Button("超清") { quality = 80 }
                 } label: { Label(quality == 16 ? "流畅" : quality == 80 ? "超清" : "高清", systemImage: "gearshape") }
                 Spacer()
+                Button {
+                    rememberPosition()
+                    showFullscreenPlayer = true
+                } label: {
+                    Label("全屏", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
                 Button { videoPlayer.stop(); music.play(songs: [selectedPart ?? song]); message = "已切换到音频播放器" } label: {
                     Label("听视频", systemImage: "headphones")
                 }
@@ -170,6 +200,17 @@ struct BilibiliVideoPage: View {
                     Text("所属合集").font(.headline)
                     Button { navigate(.collection(collection)) } label: { BilibiliCollectionRow(collection: collection) }.buttonStyle(.plain)
                 }
+                if !relatedVideos.isEmpty {
+                    Text("相关推荐").font(.headline)
+                    LazyVStack(spacing: 16) {
+                        ForEach(relatedVideos) { item in
+                            Button { navigate(.video(item.song)) } label: {
+                                BilibiliVideoRow(item: item)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }.padding(16)
         }.refreshable { await load() }
     }
@@ -197,6 +238,9 @@ struct BilibiliVideoPage: View {
         loadError = nil
         do { detail = try await BilibiliAPI.shared.nativeVideo(song); await updateInteraction() }
         catch { loadError = error.localizedDescription }
+        if let detail, let videos = try? await BilibiliAPI.shared.relatedVideos(aid: detail.aid) {
+            relatedVideos = videos.filter { $0.song.identityKey != song.identityKey }
+        }
     }
     private func updateInteraction() async {
         guard account.isLoggedIn, let detail else {
@@ -253,6 +297,48 @@ struct BilibiliVideoPage: View {
     }
 }
 
+private struct BilibiliFullscreenPlayer: View {
+    @ObservedObject var model: BilibiliNativePlayer
+    @Binding var quality: Int
+    let onDismiss: () -> Void
+    let onQualityChanged: () -> Void
+    @State private var lastQuality: Int
+
+    init(
+        model: BilibiliNativePlayer,
+        quality: Binding<Int>,
+        onDismiss: @escaping () -> Void,
+        onQualityChanged: @escaping () -> Void
+    ) {
+        self.model = model
+        _quality = quality
+        self.onDismiss = onDismiss
+        self.onQualityChanged = onQualityChanged
+        _lastQuality = State(initialValue: quality.wrappedValue)
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            BilibiliDetailVideoSurface(
+                model: model,
+                quality: $quality,
+                onBack: onDismiss,
+                onExpand: {}
+            )
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .background(Color.black)
+            .ignoresSafeArea()
+        }
+        .background(Color.black)
+        .statusBarHidden(true)
+        .onChange(of: quality) { value in
+            guard value != lastQuality else { return }
+            lastQuality = value
+            onQualityChanged()
+        }
+    }
+}
+
 struct BilibiliFavoritePicker: View {
     let aid: String
     let onSaved: () -> Void
@@ -304,3 +390,4 @@ struct BilibiliFavoritePicker: View {
         } catch { self.error = error.localizedDescription }
     }
 }
+
