@@ -17,6 +17,7 @@ struct BilibiliHomePage: View {
     @State private var searchRefresh = UUID()
     @State private var searchTask: Task<Void, Never>?
     @State private var presentedVideo: Song?
+    @State private var showingPresentedVideo = false
     @ObservedObject private var feed = BilibiliHomeFeedStore.shared
 
     var body: some View {
@@ -37,7 +38,7 @@ struct BilibiliHomePage: View {
                             LazyVStack(alignment: .leading, spacing: 16) {
                                 if !submittedQuery.isEmpty && resultType != .song {
                                     BilibiliSearchResults(keyword: submittedQuery, type: resultType) { song in
-                                        presentedVideo = song
+                                        presentVideo(song)
                                     }
                                         .id(searchRefresh)
                                 } else {
@@ -111,11 +112,22 @@ struct BilibiliHomePage: View {
         }
 
         .onDisappear { searchTask?.cancel() }
-        .fullScreenCover(item: $presentedVideo) { song in
-            BilibiliNativeStandaloneStack(initialRoute: .video(song))
-                .environmentObject(player)
-                .environmentObject(theme)
+        .fullScreenCover(isPresented: $showingPresentedVideo, onDismiss: {
+            presentedVideo = nil
+        }) {
+            if let presentedVideo {
+                BilibiliNativeStandaloneStack(initialRoute: .video(presentedVideo))
+                    .environmentObject(player)
+                    .environmentObject(theme)
+            } else {
+                Color.black.ignoresSafeArea()
+            }
         }
+    }
+
+    private func presentVideo(_ song: Song) {
+        presentedVideo = song
+        showingPresentedVideo = true
     }
 
     private var channels: some View {
