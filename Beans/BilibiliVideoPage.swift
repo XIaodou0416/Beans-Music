@@ -322,7 +322,12 @@ struct BilibiliVideoPage: View {
         Task { @MainActor in
             defer { followingBusy = false }
             do {
-                let current = following ?? (try await BilibiliAPI.shared.upProfile(owner.id).following)
+                let current: Bool
+                if let following {
+                    current = following
+                } else {
+                    current = try await BilibiliAPI.shared.upProfile(owner.id).following
+                }
                 try await BilibiliAPI.shared.nativeFollow(id: owner.id, follow: !current)
                 following = !current
             } catch { message = error.localizedDescription }
