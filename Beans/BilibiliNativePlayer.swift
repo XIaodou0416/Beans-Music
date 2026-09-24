@@ -161,6 +161,7 @@ struct BilibiliDetailVideoSurface: View {
     let onExpand: () -> Void
     let onRetry: () -> Void
     var onSettings: (() -> Void)? = nil
+    var rendersVideo = true
     @State private var controlsVisible = true
     @State private var currentTime = 0.0
     @State private var duration = 0.0
@@ -172,7 +173,9 @@ struct BilibiliDetailVideoSurface: View {
     var body: some View {
         ZStack {
             Color.black
-            if let player = model.player {
+            // Only one AVPlayerLayer owns the shared player during fullscreen.
+            // Reattaching the portrait layer does not replace the AVPlayerItem.
+            if rendersVideo, let player = model.player {
                 BilibiliPlayerLayerView(player: player)
                     .aspectRatio(16.0 / 9.0, contentMode: .fit)
             }

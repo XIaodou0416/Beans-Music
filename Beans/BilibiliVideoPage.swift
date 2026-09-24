@@ -167,7 +167,7 @@ struct BilibiliVideoPage: View {
     }
 
     private var playback: some View {
-        BilibiliDetailVideoSurface(model: videoPlayer, quality: $quality, onBack: closePage, onExpand: enterFullscreen, onRetry: { play(force: true) }, onSettings: { showPlaybackSettings = true })
+        BilibiliDetailVideoSurface(model: videoPlayer, quality: $quality, onBack: closePage, onExpand: enterFullscreen, onRetry: { play(force: true) }, onSettings: { showPlaybackSettings = true }, rendersVideo: !showFullscreenPlayer)
         .background(Color.black)
     }
 
