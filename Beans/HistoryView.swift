@@ -3,6 +3,8 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var theme: ThemeStore
+    @AppStorage(BilibiliExperience.key) private var bilibiliMode = BilibiliExperience.listen.rawValue
+    @State private var selectedBilibiliVideo: Song?
 
     var body: some View {
         BeansNavigationStack {
@@ -13,9 +15,7 @@ struct HistoryView: View {
                 } else {
                     List {
                         ForEach(Array(player.history.enumerated()), id: \.element.identityKey) { index, song in
-                            SongCell(song: song) {
-                                player.play(songs: player.history, startAt: index)
-                            }
+                            SongCell(song: song) { open(song, index: index) }
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                         }
@@ -38,6 +38,11 @@ struct HistoryView: View {
                     }
                 }
             }
+            .sheet(item: $selectedBilibiliVideo) { song in
+                BilibiliNativeStandaloneStack(initialRoute: .video(song))
+                    .environmentObject(player)
+                    .environmentObject(theme)
+            }
         }
         .background {
             HighRefreshConfigurator()
@@ -45,4 +50,13 @@ struct HistoryView: View {
                 .allowsHitTesting(false)
         }
     }
+
+    private func open(_ song: Song, index: Int) {
+        if song.source == .bilibili, bilibiliMode == BilibiliExperience.video.rawValue {
+            selectedBilibiliVideo = song
+        } else {
+            player.play(songs: player.history, startAt: index)
+        }
+    }
 }
+
