@@ -86,7 +86,9 @@ final class BeansDiagnostics: ObservableObject {
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         let file = directory.appendingPathComponent("BeansDiagnostics-\(formatter.string(from: Date())).txt")
         let crashText = Self.crashFiles(in: directory).prefix(6).compactMap { try? String(contentsOf: $0, encoding: .utf8) }.joined(separator: "\n\n")
-        let content = "Beans Music 全局诊断日志\n\(diagnosticContext(reason: \"导出\"))\n\n最近结构化日志：\n\(BeansLogger.shared.fullText)\n\n最近崩溃与系统诊断：\n\(crashText.isEmpty ? \"暂无\" : crashText)\n"
+        let exportReason = "导出"
+        let emptyCrashText = "暂无"
+        let content = "Beans Music 全局诊断日志\n\(diagnosticContext(reason: exportReason))\n\n最近结构化日志：\n\(BeansLogger.shared.fullText)\n\n最近崩溃与系统诊断：\n\(crashText.isEmpty ? emptyCrashText : crashText)\n"
         try? content.write(to: file, atomically: true, encoding: .utf8)
         return file
     }
@@ -138,7 +140,8 @@ final class BeansDiagnostics: ObservableObject {
             let deviceDigest = SHA256.hash(data: Data(DeviceIdentity.userID.utf8)).map { String(format: "%02x", $0) }.joined().prefix(12)
             let battery = UIDevice.current.batteryLevel >= 0 ? String(format: "%.0f%%", UIDevice.current.batteryLevel * 100) : "unknown"
             let storage = (try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory())[.systemFreeSize] as? NSNumber)?.int64Value ?? 0
-            text += " device=\(UIDevice.current.model) hardware=\(DeviceIdentity.hardwareModel) os=\(UIDevice.current.systemName)-\(UIDevice.current.systemVersion) app=\(BeansLogger.appVersion) build=\(Bundle.main.object(forInfoDictionaryKey: \"CFBundleVersion\") as? String ?? \"?\") deviceID=\(deviceDigest) network=\(BeansNetworkStatus.shared.connectionKind) reachable=\(BeansNetworkStatus.shared.isReachable) freeStorage=\(storage) battery=\(battery) freeMemory=\(ProcessInfo.processInfo.physicalMemory)"
+            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+            text += " device=\(UIDevice.current.model) hardware=\(DeviceIdentity.hardwareModel) os=\(UIDevice.current.systemName)-\(UIDevice.current.systemVersion) app=\(BeansLogger.appVersion) build=\(build) deviceID=\(deviceDigest) network=\(BeansNetworkStatus.shared.connectionKind) reachable=\(BeansNetworkStatus.shared.isReachable) freeStorage=\(storage) battery=\(battery) freeMemory=\(ProcessInfo.processInfo.physicalMemory)"
         }
         return text
     }
