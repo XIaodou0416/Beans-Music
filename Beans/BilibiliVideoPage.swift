@@ -7,6 +7,7 @@ struct BilibiliVideoPage: View {
     @EnvironmentObject private var music: PlayerManager
     @EnvironmentObject private var navigation: BilibiliNavigationState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.bilibiliDismissVideo) private var dismissVideo
     @StateObject private var videoPlayer = BilibiliNativePlayer()
     @ObservedObject private var account = BilibiliAuth.shared
     @State private var detail: BilibiliVideoInfo?
@@ -265,7 +266,13 @@ struct BilibiliVideoPage: View {
     }
 
     private func closePage() {
-        if routeDepth > 0 { navigation.pop(to: routeDepth - 1) } else { dismiss() }
+        if routeDepth > 0 {
+            navigation.pop(to: routeDepth - 1)
+        } else if let dismissVideo {
+            dismissVideo()
+        } else {
+            dismiss()
+        }
     }
 
     private func rememberPosition() {
