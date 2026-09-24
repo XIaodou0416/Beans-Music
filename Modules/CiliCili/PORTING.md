@@ -46,5 +46,7 @@ xcodebuild -project Beans.xcodeproj -scheme Beans -configuration Release \
 - `App/RootTabView.swift`：将上游五个底部标签装入 Beans 顶部频道条，保留页面。
 - `Features/Player/ActivePlaybackCoordinator.swift`：播放前通知 Beans 暂停音乐。
 - `Storage/KeychainStore.swift`：Beans 命名空间，去除明文 UserDefaults 降级存储。
+- `Features/Player/PlayerStateViewModel.swift`：释放本模块注册的锁屏回调，避免与音乐双重响应。
+- `Features/Mine/MineOverlayNavigation.swift`：补齐上游遗漏的 watchLater 枚举分支。
 
 `Integration` 是唯一新增宿主接口层；详情和评论组件不重绘。

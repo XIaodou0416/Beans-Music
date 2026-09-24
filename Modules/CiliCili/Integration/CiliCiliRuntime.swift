@@ -40,6 +40,8 @@ public final class CiliCiliRuntime: ObservableObject {
         ActivePlaybackCoordinator.shared.stopActivePlayback()
     }
 
+    public var ownsPlayback: Bool { ActivePlaybackCoordinator.shared.currentActivePlayer() != nil }
+
     public func pauseForBackground() {
         ActivePlaybackCoordinator.shared.pauseActivePlaybackForAppBackground()
     }

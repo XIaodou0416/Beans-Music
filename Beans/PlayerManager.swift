@@ -2,6 +2,7 @@ import AVFoundation
 import MediaPlayer
 import SwiftUI
 import UIKit
+import CiliCiliKit
 
 enum PlayMode: String, CaseIterable, Identifiable {
     case sequential
@@ -2610,6 +2611,7 @@ final class PlayerManager: NSObject, ObservableObject {
     // MARK: - 系统正在播放
 
     private func updateNowPlaying() {
+        guard !CiliCiliRuntime.shared.ownsPlayback else { return }
         guard nowPlayingEnabled else {
             clearNowPlayingInfo()
             return
@@ -2684,7 +2686,16 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func publishNowPlayingInfo() {
+        guard !CiliCiliRuntime.shared.ownsPlayback else { return }
         guard nowPlayingEnabled, !nowPlayingInfo.isEmpty else { return }
+        if isPlaying {
+            let center = MPRemoteCommandCenter.shared()
+            center.nextTrackCommand.isEnabled = true
+            center.previousTrackCommand.isEnabled = true
+            center.skipForwardCommand.isEnabled = false
+            center.skipBackwardCommand.isEnabled = false
+            UIApplication.shared.beginReceivingRemoteControlEvents()
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
         MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
     }
@@ -2711,6 +2722,7 @@ final class PlayerManager: NSObject, ObservableObject {
             guard let self else { return .commandFailed }
             self.performOnMain { [weak self] in
                 guard let self else { return }
+                guard !CiliCiliRuntime.shared.ownsPlayback else { return }
                 guard self.ensurePlaybackAllowed() else { return }
                 self.clearAudioRecoveryIntent()
                 self.player?.playImmediately(atRate: Float(self.rate))
@@ -2724,6 +2736,7 @@ final class PlayerManager: NSObject, ObservableObject {
             guard let self else { return .commandFailed }
             self.performOnMain { [weak self] in
                 guard let self else { return }
+                guard !CiliCiliRuntime.shared.ownsPlayback else { return }
                 self.clearAudioRecoveryIntent()
                 self.isPlaying = false
                 self.stopListeningSegment()
@@ -2734,20 +2747,32 @@ final class PlayerManager: NSObject, ObservableObject {
             return .success
         }
         center.nextTrackCommand.addTarget { [weak self] _ in
-            self?.performOnMain { [weak self] in self?.next() }
+            self?.performOnMain { [weak self] in
+                guard !CiliCiliRuntime.shared.ownsPlayback else { return }
+                self?.next()
+            }
             return .success
         }
         center.previousTrackCommand.addTarget { [weak self] _ in
-            self?.performOnMain { [weak self] in self?.previous() }
+            self?.performOnMain { [weak self] in
+                guard !CiliCiliRuntime.shared.ownsPlayback else { return }
+                self?.previous()
+            }
             return .success
         }
         center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            self?.performOnMain { [weak self] in self?.togglePlayPause() }
+            self?.performOnMain { [weak self] in
+                guard !CiliCiliRuntime.shared.ownsPlayback else { return }
+                self?.togglePlayPause()
+            }
             return .success
         }
         center.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
-            self?.performOnMain { [weak self] in self?.seek(to: event.positionTime) }
+            self?.performOnMain { [weak self] in
+                guard !CiliCiliRuntime.shared.ownsPlayback else { return }
+                self?.seek(to: event.positionTime)
+            }
             return .success
         }
     }

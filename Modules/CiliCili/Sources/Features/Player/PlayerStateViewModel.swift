@@ -93,7 +93,7 @@ private final class PlayerRemoteControlSession {
     static let shared = PlayerRemoteControlSession()
 
     private var currentPlayerID: ObjectIdentifier?
-    private var remoteCommandTargets: [Any] = []
+    private var remoteCommandTargets: [(MPRemoteCommand, Any)] = []
     private var currentArtworkURL: URL?
     private var currentArtwork: MPMediaItemArtwork?
     private var artworkTask: Task<Void, Never>?
@@ -130,8 +130,11 @@ private final class PlayerRemoteControlSession {
     }
 
     func clear() {
+        guard currentPlayerID != nil else { return }
         currentPlayerID = nil
         resetDetailedMetadataCache()
+        for (command, target) in remoteCommandTargets { command.removeTarget(target) }
+        remoteCommandTargets.removeAll()
         let center = MPRemoteCommandCenter.shared()
         center.nextTrackCommand.isEnabled = false
         center.previousTrackCommand.isEnabled = false
@@ -247,25 +250,25 @@ private final class PlayerRemoteControlSession {
         center.skipForwardCommand.preferredIntervals = [15]
         center.skipBackwardCommand.preferredIntervals = [15]
 
-        remoteCommandTargets.append(center.playCommand.addTarget { _ in
+        register(center.playCommand) { _ in
             Task { @MainActor in
                 ActivePlaybackCoordinator.shared.currentActivePlayer()?.play()
             }
             return .success
-        })
-        remoteCommandTargets.append(center.pauseCommand.addTarget { _ in
+        }
+        register(center.pauseCommand) { _ in
             Task { @MainActor in
                 ActivePlaybackCoordinator.shared.currentActivePlayer()?.pause()
             }
             return .success
-        })
-        remoteCommandTargets.append(center.togglePlayPauseCommand.addTarget { _ in
+        }
+        register(center.togglePlayPauseCommand) { _ in
             Task { @MainActor in
                 ActivePlaybackCoordinator.shared.currentActivePlayer()?.togglePlayback()
             }
             return .success
-        })
-        remoteCommandTargets.append(center.changePlaybackPositionCommand.addTarget { event in
+        }
+        register(center.changePlaybackPositionCommand) { event in
             guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
             Task { @MainActor in
                 guard let player = ActivePlaybackCoordinator.shared.currentActivePlayer(),
@@ -275,31 +278,35 @@ private final class PlayerRemoteControlSession {
                 player.seek(to: min(max(event.positionTime / duration, 0), 1))
             }
             return .success
-        })
-        remoteCommandTargets.append(center.skipForwardCommand.addTarget { _ in
+        }
+        register(center.skipForwardCommand) { _ in
             Task { @MainActor in
                 ActivePlaybackCoordinator.shared.currentActivePlayer()?.seek(by: 15)
             }
             return .success
-        })
-        remoteCommandTargets.append(center.skipBackwardCommand.addTarget { _ in
+        }
+        register(center.skipBackwardCommand) { _ in
             Task { @MainActor in
                 ActivePlaybackCoordinator.shared.currentActivePlayer()?.seek(by: -15)
             }
             return .success
-        })
-        remoteCommandTargets.append(center.nextTrackCommand.addTarget { _ in
+        }
+        register(center.nextTrackCommand) { _ in
             Task { @MainActor in
                 ActivePlaybackCoordinator.shared.currentActivePlayer()?.requestNextTrack()
             }
             return .success
-        })
-        remoteCommandTargets.append(center.previousTrackCommand.addTarget { _ in
+        }
+        register(center.previousTrackCommand) { _ in
             Task { @MainActor in
                 ActivePlaybackCoordinator.shared.currentActivePlayer()?.requestPreviousTrack()
             }
             return .success
-        })
+        }
+    }
+
+    private func register(_ command: MPRemoteCommand, handler: @escaping (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus) {
+        remoteCommandTargets.append((command, command.addTarget(handler: handler)))
     }
 }
 

@@ -12,6 +12,7 @@ targets:
   Beans:
     type: application
     platform: iOS
+    deploymentTarget: "26.1"
     sources:
       - Beans
     resources:
@@ -69,6 +70,7 @@ targets:
   CiliCiliKit:
     type: framework
     platform: iOS
+    deploymentTarget: "26.1"
     sources:
       - path: Modules/CiliCili/Sources
         excludes:
@@ -86,6 +88,7 @@ targets:
   CiliCiliTests:
     type: bundle.unit-test
     platform: iOS
+    deploymentTarget: "26.1"
     sources:
       - Modules/CiliCili/Tests
     dependencies:
@@ -98,6 +101,7 @@ targets:
   BeansTests:
     type: bundle.unit-test
     platform: iOS
+    deploymentTarget: "26.1"
     sources:
       - BeansTests
     dependencies:
@@ -106,6 +110,17 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.tests
+  BeansUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.1"
+    sources:
+      - BeansUITests
+    dependencies:
+      - target: Beans
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.uitests
 
 schemes:
   Beans:
@@ -120,4 +135,5 @@ schemes:
       targets:
         - BeansTests
         - CiliCiliTests
+        - BeansUITests
 

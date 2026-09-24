@@ -17,7 +17,7 @@ enum MineOverlayRoute: Hashable {
         case .interfaceSettings, .homeAndSearchSettings, .playbackSettings, .contentFilterSettings,
              .privacySettings, .multiAccountSettings:
             true
-        case .accountMessages, .history, .favorites:
+        case .accountMessages, .history, .favorites, .watchLater:
             false
         }
     }

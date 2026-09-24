@@ -91,8 +91,16 @@ jobs:
             -resultBundlePath BilibiliTests.xcresult \
             -only-testing:BeansTests/BilibiliDetailTests \
             -only-testing:CiliCiliTests \
+            -only-testing:BeansUITests/CiliCiliPortUITests \
             CODE_SIGNING_ALLOWED=NO \
             test 2>&1 | tee bilibili-tests.log
+
+      - name: Export simulator screenshots
+        if: always()
+        run: |
+          if [ -d BilibiliTests.xcresult ]; then
+            xcrun xcresulttool export attachments --path BilibiliTests.xcresult --output-path ui-screenshots
+          fi
 
       - name: Upload build and test diagnostics
         if: always()
@@ -103,6 +111,7 @@ jobs:
             xcodebuild.log
             bilibili-tests.log
             BilibiliTests.xcresult
+            ui-screenshots
 
       - name: Verify version in built app
         run: |
