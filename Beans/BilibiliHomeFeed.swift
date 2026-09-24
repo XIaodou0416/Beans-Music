@@ -103,6 +103,7 @@ final class BilibiliHomeFeedStore: ObservableObject {
 }
 
 struct BilibiliHomeFeed: View {
+    var onVideo: ((Song) -> Void)? = nil
     @EnvironmentObject private var player: PlayerManager
     @EnvironmentObject private var navigation: BilibiliNavigationState
     @ObservedObject private var store = BilibiliHomeFeedStore.shared
@@ -144,13 +145,17 @@ struct BilibiliHomeFeed: View {
                         BilibiliFeedCard(video: video) {
                             BeansHaptics.tap()
                             let tracks = store.videos.map(\.song)
-                            if mode == BilibiliExperience.video.rawValue { navigation.push(.video(video.song)) }
+                            if mode == BilibiliExperience.video.rawValue {
+                                if let onVideo { onVideo(video.song) } else { navigation.push(.video(video.song)) }
+                            }
                             else { player.play(songs: tracks, startAt: tracks.firstIndex(where: { $0.identityKey == video.id }) ?? 0) }
                         }
                         .onAppear { Task { await store.loadMoreIfNeeded(id: video.id) } }
                         .contextMenu {
                             Button { player.playNext(video.song) } label: { Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward") }
-                            Button { navigation.push(.video(video.song)) } label: { Label("视频详情与评论", systemImage: "play.rectangle") }
+                            Button {
+                                if let onVideo { onVideo(video.song) } else { navigation.push(.video(video.song)) }
+                            } label: { Label("视频详情与评论", systemImage: "play.rectangle") }
                         }
                     }
                 }
