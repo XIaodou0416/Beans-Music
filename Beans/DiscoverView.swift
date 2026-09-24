@@ -2097,10 +2097,10 @@ struct DiscoverView: View {
         case .qishui:
             break
         case .bilibili:
-            async let songs: [Song] = (try? await BilibiliAPI.shared.recommendedSongs(limit: 30)) ?? []
-            async let playlists: [Playlist] = (try? await BilibiliAPI.shared.recommendedPlaylists(limit: 18)) ?? []
-            snapshot.dailySongs = await songs
-            snapshot.personalized = await playlists
+            // Bilibili has its own native browse surface. Keep its videos out
+            // of the generic music精选 page.
+            snapshot.dailySongs = []
+            snapshot.personalized = []
         }
         return snapshot
     }
@@ -3333,3 +3333,4 @@ private struct HomeUnifiedSearchSheet: View {
         return output
     }
 }
+
