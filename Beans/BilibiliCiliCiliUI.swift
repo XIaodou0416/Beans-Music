@@ -52,7 +52,7 @@ struct BilibiliPlaybackSettings: View {
     @AppStorage("beans.bilibili.playbackRate") private var playbackRate = 1.0
 
     var body: some View {
-        NavigationStack {
+        BeansNavigationStack {
             List {
                 Section {
                     Picker(selection: $quality) {
@@ -88,7 +88,6 @@ struct BilibiliPlaybackSettings: View {
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
             .background { BeansLiquidSheetBackground() }
             .navigationTitle("播放设置")
             .navigationBarTitleDisplayMode(.inline)
@@ -118,7 +117,7 @@ struct BilibiliSMSLoginSheet: View {
     private var normalizedCode: String { code.filter(\.isNumber) }
 
     var body: some View {
-        NavigationStack {
+        BeansNavigationStack {
             Form {
                 Section {
                     TextField("手机号", text: $phone)
@@ -201,13 +200,13 @@ struct BilibiliWebLoginSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
+        BeansNavigationStack {
             BilibiliWebLoginWebView { cookie in
                 Task { @MainActor in
                     do {
                         try await auth.login(cookie: cookie)
                         dismiss()
-                    } catch { error = error.localizedDescription }
+                    } catch let loginError { error = loginError.localizedDescription }
                 }
             }
             .navigationTitle("网页登录")
@@ -312,7 +311,7 @@ struct BilibiliAccountHistoryPage: View {
         loading = true
         error = nil
         do { songs = try await BilibiliAPI.shared.accountHistoryVideos() }
-        catch { error = error.localizedDescription }
+        catch let loadError { error = loadError.localizedDescription }
         loading = false
     }
 }
