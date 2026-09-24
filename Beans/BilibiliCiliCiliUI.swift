@@ -1,47 +1,6 @@
 import SwiftUI
 import WebKit
 
-/// CiliCili uses a system glass surface for every floating control. BeansGlass
-/// keeps the same interaction model while remaining compatible with iOS 15.
-struct BilibiliVideoTabBarHider: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-        view.isUserInteractionEnabled = false
-        DispatchQueue.main.async { hideTabBar(from: view) }
-        return view
-    }
-
-    func updateUIView(_ view: UIView, context: Context) {
-        DispatchQueue.main.async { hideTabBar(from: view) }
-    }
-
-    static func dismantleUIView(_ view: UIView, coordinator: ()) {
-        DispatchQueue.main.async { restoreTabBar(from: view) }
-    }
-
-    private func hideTabBar(from view: UIView) {
-        var responder: UIResponder? = view
-        while let current = responder {
-            if let controller = current as? UITabBarController {
-                controller.tabBar.isHidden = true
-                return
-            }
-            responder = current.next
-        }
-    }
-
-    private static func restoreTabBar(from view: UIView) {
-        var responder: UIResponder? = view
-        while let current = responder {
-            if let controller = current as? UITabBarController {
-                controller.tabBar.isHidden = false
-                return
-            }
-            responder = current.next
-        }
-    }
-}
-
 struct BilibiliPlaybackSettings: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var quality: Int

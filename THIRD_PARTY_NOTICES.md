@@ -132,3 +132,24 @@ The adapted Swift source files are marked with comments. The upstream GPL-3.0
 terms and copyright notices apply to the adapted code. The full license text
 is available in each upstream repository's `LICENSE` file.
 
+Reference revision used for the CiliCili-derived detail-page structure:
+`c61b0d33966c5d8e87ea20527b8ba48c702c10c1` (2026-09-15).
+
+The 2026-09-25 Beans adaptation uses the upstream `VideoDetailView`,
+`VideoDetailViewContentResolver`, `VideoDetailNativeContentTabView`,
+`UIKitShell/VideoDetailShellContentView`, `CommentsSectionView`,
+`CommentsSectionHeader`, `CommentsSectionContentStateView`, `CommentRow`,
+`CommentRowHeader`, `CommentRowLayout` and `DynamicCommentFullRowReplyTarget`.
+The upstream player surface, action strip, page menu and related list were also
+read to guide the integration with Beans' existing AVPlayer and API models.
+
+Adapted files: `Beans/BilibiliVideoPage.swift`,
+`Beans/BilibiliNativeComments.swift`, and `Beans/BilibiliCommentRow.swift`.
+Changes include stable mounted tabs, a fixed player viewport, scoped comment
+refresh/presentation, and independent author/like/media/reply targets.
+Copyright notices and GPL-3.0 terms of CiliCili and its contributors remain
+applicable. These adapted portions are not relicensed under the root MIT notice.
+The full upstream GPL-3.0 text is retained verbatim in
+`Beans/Resources/CiliCili-LICENSE.txt`, with attribution and source retrieval
+information in `Beans/Resources/CiliCili-NOTICE.md`; both are included in the IPA.
+

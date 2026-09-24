@@ -6,32 +6,16 @@ final class BilibiliPresentationState: ObservableObject {
     @Published private(set) var activeVideoIDs = Set<String>()
 
     func enterVideo(_ id: String) {
+        guard !activeVideoIDs.contains(id) else { return }
         activeVideoIDs.insert(id)
     }
 
     func leaveVideo(_ id: String) {
+        guard activeVideoIDs.contains(id) else { return }
         activeVideoIDs.remove(id)
     }
 
     var isVideoDetailActive: Bool { !activeVideoIDs.isEmpty }
-}
-
-@MainActor
-final class BilibiliDetailPresentation: ObservableObject {
-    static let shared = BilibiliDetailPresentation()
-    @Published var presentedVideo: Song?
-
-    func present(_ song: Song) {
-        guard presentedVideo?.identityKey != song.identityKey else { return }
-        BilibiliDetailDiagnostics.record("present request: \(song.identityKey)")
-        presentedVideo = song
-    }
-
-    func dismiss() {
-        guard presentedVideo != nil else { return }
-        BilibiliDetailDiagnostics.record("presenter dismiss")
-        presentedVideo = nil
-    }
 }
 
 @MainActor
@@ -52,19 +36,10 @@ private struct BilibiliNavigationActionKey: EnvironmentKey {
     static let defaultValue: ((BilibiliNativeRoute) -> Void)? = nil
 }
 
-private struct BilibiliDismissVideoKey: EnvironmentKey {
-    static let defaultValue: (() -> Void)? = nil
-}
-
 extension EnvironmentValues {
     var bilibiliNavigate: ((BilibiliNativeRoute) -> Void)? {
         get { self[BilibiliNavigationActionKey.self] }
         set { self[BilibiliNavigationActionKey.self] = newValue }
-    }
-
-    var bilibiliDismissVideo: (() -> Void)? {
-        get { self[BilibiliDismissVideoKey.self] }
-        set { self[BilibiliDismissVideoKey.self] = newValue }
     }
 
 }
@@ -103,6 +78,7 @@ struct BilibiliNativeStandaloneStack: View {
                         .environmentObject(navigation)
                 }
         }
+        .toolbar(.hidden, for: .tabBar)
     }
 }
 

@@ -6,8 +6,11 @@ import UIKit
 @MainActor
 final class BilibiliNativePlayer: ObservableObject {
     @Published private(set) var player: AVPlayer?
-    @Published private(set) var loading = true
+    @Published private(set) var loading = false
     @Published private(set) var error: String?
+    @Published private(set) var wantsPlayback = false
+    @Published private(set) var isPlaying = false
+    private var playbackKey: String?
     private var alternatives: [URL] = []
     private var itemObserver: NSKeyValueObservation?
     private var timeObserver: NSKeyValueObservation?
@@ -15,8 +18,13 @@ final class BilibiliNativePlayer: ObservableObject {
     private var generation = UUID()
     private var request: Task<Void, Never>?
 
-    func open(resumeAt: Double = 0, _ loader: @escaping () async throws -> [URL]) {
+    func open(key: String? = nil, force: Bool = false, resumeAt: Double = 0, _ loader: @escaping () async throws -> [URL]) {
+        // A view reappearing is not a new playback request. Only an explicit
+        // retry or a different video/quality may replace an in-flight item.
+        if let key, key == playbackKey, !force { return }
         stop()
+        playbackKey = key
+        wantsPlayback = true
         let token = UUID()
         generation = token
         loading = true
@@ -35,6 +43,7 @@ final class BilibiliNativePlayer: ObservableObject {
             catch {
                 guard generation == token else { return }
                 loading = false
+                wantsPlayback = false
                 self.error = error.localizedDescription
             }
         }
@@ -46,6 +55,9 @@ final class BilibiliNativePlayer: ObservableObject {
         player?.pause()
         guard !alternatives.isEmpty else {
             loading = false
+            wantsPlayback = false
+            isPlaying = false
+            player = nil
             error = "视频加载失败，所有备用地址均不可用，请重试"
             return
         }
@@ -56,32 +68,62 @@ final class BilibiliNativePlayer: ObservableObject {
         player = nextPlayer
         loading = true
         let token = generation
-        itemObserver = item.observe(\.status, options: [.new]) { [weak self, weak item] _, _ in
+        itemObserver = item.observe(\.status, options: [.initial, .new]) { [weak self, weak item] _, _ in
             Task { @MainActor in
                 guard let self, let item, token == self.generation, self.player?.currentItem === item else { return }
                 if item.status == .failed { self.nextURL(resume: resume) }
             }
         }
-        timeObserver = nextPlayer.observe(\.timeControlStatus, options: [.new]) { [weak self, weak nextPlayer] _, _ in
+        timeObserver = nextPlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self, weak nextPlayer] _, _ in
             Task { @MainActor in
                 guard let self, let nextPlayer, token == self.generation, self.player === nextPlayer else { return }
-                if nextPlayer.timeControlStatus == .playing {
+                self.isPlaying = nextPlayer.timeControlStatus == .playing
+                if self.isPlaying {
                     self.loading = false
                     self.timeout?.cancel()
                 }
             }
         }
         if resume > 0 { nextPlayer.seek(to: CMTime(seconds: resume, preferredTimescale: 600)) }
-        nextPlayer.play()
+        if wantsPlayback {
+            scheduleTimeout(for: nextPlayer, resume: resume)
+            nextPlayer.play()
+        }
+    }
+    private func scheduleTimeout(for nextPlayer: AVPlayer, resume: Double) {
+        timeout?.cancel()
+        let token = generation
         timeout = Task { [weak self, weak nextPlayer] in
             do { try await Task.sleep(nanoseconds: 15_000_000_000) } catch { return }
-            guard let self, let nextPlayer, token == self.generation, self.player === nextPlayer, self.loading else { return }
+            guard let self, let nextPlayer, token == self.generation, self.player === nextPlayer,
+                  self.loading, self.wantsPlayback else { return }
             self.nextURL(resume: resume)
         }
     }
-    func pause() { player?.pause(); timeout?.cancel() }
+    func pause() {
+        wantsPlayback = false
+        isPlaying = false
+        player?.pause()
+        timeout?.cancel()
+    }
+    func resume() {
+        guard error == nil else { return }
+        wantsPlayback = true
+        if let player {
+            if loading {
+                let seconds = player.currentTime().seconds
+                scheduleTimeout(for: player, resume: seconds.isFinite ? max(0, seconds) : 0)
+            }
+            player.play()
+        }
+    }
     func stop() {
         generation = UUID()
+        playbackKey = nil
+        wantsPlayback = false
+        isPlaying = false
+        loading = false
+        error = nil
         request?.cancel()
         timeout?.cancel()
         itemObserver = nil
@@ -117,6 +159,7 @@ struct BilibiliDetailVideoSurface: View {
     @Binding var quality: Int
     let onBack: () -> Void
     let onExpand: () -> Void
+    let onRetry: () -> Void
     var onSettings: (() -> Void)? = nil
     @State private var controlsVisible = true
     @State private var currentTime = 0.0
@@ -138,17 +181,18 @@ struct BilibiliDetailVideoSurface: View {
                 .onTapGesture {
                     withAnimation(.easeOut(duration: 0.18)) { controlsVisible.toggle() }
                 }
-            if model.loading {
+            if model.loading && model.wantsPlayback {
                 ProgressView().tint(.white).allowsHitTesting(false)
             }
             if let error = model.error {
                 VStack(spacing: 10) {
                     Text(error).font(.footnote).multilineTextAlignment(.center)
-                    Button("重新播放") { model.player?.play() }
+                    Button("重新播放", action: onRetry)
                         .buttonStyle(.bordered)
                 }
                 .foregroundStyle(.white)
                 .padding()
+                .zIndex(2)
             }
             if controlsVisible { controls.transition(.opacity) }
         }
@@ -156,7 +200,12 @@ struct BilibiliDetailVideoSurface: View {
         .background(Color.black)
         .clipped()
         .onReceive(timer) { _ in updatePlaybackTime() }
-        .onChange(of: model.player?.currentItem?.duration.seconds) { _ in updatePlaybackTime() }
+        .onChange(of: model.player) { _ in
+            currentTime = 0
+            duration = 0
+            seekTime = 0
+            updatePlaybackTime()
+        }
     }
 
     private var controls: some View {
@@ -166,6 +215,7 @@ struct BilibiliDetailVideoSurface: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+            .allowsHitTesting(false)
             VStack {
                 HStack {
                     playerButton("chevron.left", label: "返回", action: onBack)
@@ -177,16 +227,17 @@ struct BilibiliDetailVideoSurface: View {
                         .tint(Color(red: 0.98, green: 0.31, blue: 0.53))
                     HStack(spacing: 10) {
                         Button {
-                            if model.player?.timeControlStatus == .playing { model.pause() }
-                            else { model.player?.play() }
+                            if model.wantsPlayback { model.pause() }
+                            else if model.player == nil && !model.loading { onRetry() }
+                            else { model.resume() }
                         } label: {
-                            Image(systemName: model.player?.timeControlStatus == .playing ? "pause.fill" : "play.fill")
+                            Image(systemName: model.wantsPlayback ? "pause.fill" : "play.fill")
                                 .font(.system(size: 17, weight: .semibold))
                                 .frame(width: 34, height: 34)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(model.player?.timeControlStatus == .playing ? "暂停" : "播放")
+                        .accessibilityLabel(model.wantsPlayback ? "暂停" : "播放")
 
                         Text("\(timeLabel(isSeeking ? seekTime : currentTime)) / \(timeLabel(duration))")
                             .font(.system(size: 12, weight: .medium, design: .monospaced))

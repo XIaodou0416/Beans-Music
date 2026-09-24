@@ -58,6 +58,7 @@ jobs:
 
       - name: Build (unsigned)
         run: |
+          set -o pipefail
           VER=$(cat version.txt)
           BUILD=$(cat build.txt)
           echo "Building with MARKETING_VERSION=$VER CURRENT_PROJECT_VERSION=$BUILD"
@@ -75,7 +76,32 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee xcodebuild.log
+
+      - name: Test Bilibili detail regressions
+        run: |
+          set -o pipefail
+          SIMULATOR=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if x.get("isAvailable") and "iPhone" in x["name"]))')
+          xcodebuild \
+            -project Beans.xcodeproj \
+            -scheme Beans \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR" \
+            -derivedDataPath build-tests \
+            -resultBundlePath BilibiliTests.xcresult \
+            -only-testing:BeansTests/BilibiliDetailTests \
+            CODE_SIGNING_ALLOWED=NO \
+            test 2>&1 | tee bilibili-tests.log
+
+      - name: Upload build and test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Beans-build-diagnostics
+          path: |
+            xcodebuild.log
+            bilibili-tests.log
+            BilibiliTests.xcresult
 
       - name: Verify version in built app
         run: |
@@ -88,6 +114,8 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Beans.app Payload/
+          cp Beans/Resources/CiliCili-LICENSE.txt Payload/Beans.app/
+          cp Beans/Resources/CiliCili-NOTICE.md Payload/Beans.app/
           # 使用普通 ZIP，避免将 macOS 资源元数据带入 IPA，提升第三方签名器兼容性。
           zip -qry Beans-unsigned.ipa Payload
           unzip -t Beans-unsigned.ipa

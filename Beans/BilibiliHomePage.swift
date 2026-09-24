@@ -16,7 +16,9 @@ struct BilibiliHomePage: View {
     @StateObject private var navigation = BilibiliNavigationState()
     @State private var searchRefresh = UUID()
     @State private var searchTask: Task<Void, Never>?
-    @ObservedObject private var detailPresentation = BilibiliDetailPresentation.shared
+    // The presenting page owns its cover; feed and playback updates never
+    // write this state. RootView also preserves the presenting TabView identity.
+    @State private var presentedVideo: Song?
     @ObservedObject private var feed = BilibiliHomeFeedStore.shared
 
     var body: some View {
@@ -37,12 +39,12 @@ struct BilibiliHomePage: View {
                             LazyVStack(alignment: .leading, spacing: 16) {
                                 if !submittedQuery.isEmpty && resultType != .song {
                                     BilibiliSearchResults(keyword: submittedQuery, type: resultType) { song in
-                                        detailPresentation.present(song)
+                                        presentVideo(song)
                                     }
                                         .id(searchRefresh)
                                 } else {
                                     BilibiliHomeFeed { song in
-                                        detailPresentation.present(song)
+                                        presentVideo(song)
                                     }
                                 }
                             }
@@ -113,17 +115,12 @@ struct BilibiliHomePage: View {
         }
 
         .onDisappear { searchTask?.cancel() }
-        .fullScreenCover(item: $detailPresentation.presentedVideo) { presentedVideo in
+        .fullScreenCover(item: $presentedVideo) { presentedVideo in
             BilibiliNativeStandaloneStack(initialRoute: .video(presentedVideo))
                 .environmentObject(player)
                 .environmentObject(theme)
-                .environment(\.bilibiliDismissVideo) { detailPresentation.dismiss() }
                 .background(Color.black)
-                .ignoresSafeArea()
                 .onAppear { BeansDiagnostics.shared.route("哔哩哔哩视频详情") }
-        }
-        .onChange(of: detailPresentation.presentedVideo?.identityKey) { value in
-            BilibiliDetailDiagnostics.record(value.map { "overlay state: \($0)" } ?? "overlay state: nil")
         }
     }
 
@@ -155,6 +152,12 @@ struct BilibiliHomePage: View {
         submittedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         searchRefresh = UUID()
         Task { await feed.select(channel: channel == .live ? .recommended : channel, query: submittedQuery, force: true) }
+    }
+
+    private func presentVideo(_ song: Song) {
+        guard presentedVideo == nil else { return }
+        BilibiliDetailDiagnostics.record("present request: \(song.identityKey)")
+        presentedVideo = song
     }
 }
 

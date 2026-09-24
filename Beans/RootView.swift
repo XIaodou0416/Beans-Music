@@ -1556,18 +1556,27 @@ private struct MiniPlayerAccessoryModifier: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if isActive {
-            content.tabViewBottomAccessory {
-                RootMiniPlayerAccessory(
-                    showPlayer: $showPlayer,
-                    clock: clock,
-                    transitionNamespace: transitionNamespace
-                )
-                    .environment(\.colorScheme, colorScheme)
+        // Keep the TabView at one structural identity while a detail cover is
+        // presented. Branching around `content` tears down the cover's owner;
+        // its onDisappear then re-enables the accessory and repeats the cycle.
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: isActive) {
+                accessory
             }
         } else {
-            content
+            content.tabViewBottomAccessory {
+                if isActive { accessory }
+            }
         }
+    }
+
+    private var accessory: some View {
+        RootMiniPlayerAccessory(
+            showPlayer: $showPlayer,
+            clock: clock,
+            transitionNamespace: transitionNamespace
+        )
+        .environment(\.colorScheme, colorScheme)
     }
 
 }

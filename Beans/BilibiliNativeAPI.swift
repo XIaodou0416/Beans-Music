@@ -91,11 +91,11 @@ extension BilibiliAPI {
     func nativeFollow(id: String, follow: Bool) async throws {
         try await form("/x/relation/modify", fields: ["fid": id, "act": follow ? "1" : "2", "re_src": "11"])
     }
-    func nativeComment(aid: String, message: String, root: String? = nil) async throws {
+    func nativeComment(aid: String, message: String, root: String? = nil, parent: String? = nil) async throws {
         let value = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty, value.count <= 1000 else { throw BilibiliError(message: "请输入1到1000字的评论") }
         var fields = ["oid": aid, "type": "1", "message": value, "plat": "1"]
-        if let root { fields["root"] = root; fields["parent"] = root }
+        if let root { fields["root"] = root; fields["parent"] = parent ?? root }
         try await form("/x/v2/reply/add", fields: fields)
     }
     func nativeCommentLike(aid: String, reply: String, like: Bool) async throws {
@@ -107,15 +107,25 @@ extension BilibiliAPI {
         let data = try await get(root == nil ? "/x/v2/reply" : "/x/v2/reply/reply", params)
         let rawRows = data["replies"] as? [[String: Any]] ?? []
         let total = Self.number((data["page"] as? [String: Any])?["count"])
-        let rows = rawRows.compactMap { row -> BilibiliReply? in
-            let id = Self.text(row["rpid_str"] ?? row["rpid"])
-            guard !id.isEmpty else { return nil }
-            let member = row["member"] as? [String: Any] ?? [:]
-            let content = row["content"] as? [String: Any] ?? [:]
-            return BilibiliReply(id: id, author: Artist(id: Self.text(member["mid"]), name: Self.text(member["uname"]), coverURL: Self.image(member["avatar"]), source: .bilibili),
-                                 message: Self.text(content["message"]), date: Date(timeIntervalSince1970: Double(Self.number(row["ctime"]))),
-                                 likeCount: Self.number(row["like"]), liked: Self.number(row["action"]) == 1, replyCount: Self.number(row["rcount"]))
-        }
+        let rows = rawRows.compactMap { Self.commentReply($0) }
         return BilibiliReplies(items: rows, total: total, hasMore: !rawRows.isEmpty && page * 20 < total)
+    }
+
+    static func commentReply(_ row: [String: Any], includesPreviews: Bool = true) -> BilibiliReply? {
+        let id = text(row["rpid_str"] ?? row["rpid"])
+        guard !id.isEmpty else { return nil }
+        let member = row["member"] as? [String: Any] ?? [:]
+        let content = row["content"] as? [String: Any] ?? [:]
+        let pictures = (content["pictures"] as? [[String: Any]] ?? []).compactMap { image($0["img_src"]) }
+        let previews = includesPreviews
+            ? (row["replies"] as? [[String: Any]] ?? []).compactMap { commentReply($0, includesPreviews: false) }
+            : []
+        return BilibiliReply(
+            id: id,
+            author: Artist(id: text(member["mid"]), name: text(member["uname"]), coverURL: image(member["avatar"]), source: .bilibili),
+            message: text(content["message"]), date: Date(timeIntervalSince1970: Double(number(row["ctime"]))),
+            likeCount: number(row["like"]), liked: number(row["action"]) == 1, replyCount: number(row["rcount"]),
+            pictures: pictures, previews: previews
+        )
     }
 }

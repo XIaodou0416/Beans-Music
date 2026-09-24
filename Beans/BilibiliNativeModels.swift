@@ -39,6 +39,8 @@ struct BilibiliReply: Identifiable {
     let likeCount: Int
     let liked: Bool
     let replyCount: Int
+    var pictures: [URL] = []
+    var previews: [BilibiliReply] = []
 }
 struct BilibiliReplies {
     let items: [BilibiliReply]
