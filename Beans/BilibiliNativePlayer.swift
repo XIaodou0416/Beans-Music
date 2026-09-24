@@ -117,6 +117,7 @@ struct BilibiliDetailVideoSurface: View {
     @Binding var quality: Int
     let onBack: () -> Void
     let onExpand: () -> Void
+    var onSettings: (() -> Void)? = nil
     @State private var controlsVisible = true
     @State private var currentTime = 0.0
     @State private var duration = 0.0
@@ -192,14 +193,17 @@ struct BilibiliDetailVideoSurface: View {
                             .lineLimit(1)
                             .fixedSize()
                         Spacer(minLength: 4)
-                        Menu {
-                            Button("流畅") { quality = 16 }
-                            Button("高清") { quality = 64 }
-                            Button("超清") { quality = 80 }
+                        Button {
+                            if let onSettings {
+                                onSettings()
+                            } else {
+                                quality = quality == 64 ? 80 : 64
+                            }
                         } label: {
                             Image(systemName: "gearshape.fill")
                                 .font(.system(size: 16, weight: .medium))
                                 .frame(width: 34, height: 34)
+                                .background { BeansGlass(shape: Circle(), forceLiquid: true) }
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("清晰度，当前\(qualityTitle)")
@@ -234,7 +238,7 @@ struct BilibiliDetailVideoSurface: View {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .semibold))
                 .frame(width: 36, height: 36)
-                .background(.ultraThinMaterial, in: Circle())
+                .background { BeansGlass(shape: Circle(), forceLiquid: true) }
                 .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 0.8))
                 .contentShape(Circle())
         }
