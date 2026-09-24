@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 
 enum BilibiliDetailDiagnostics {
+    // Keep detail failures available on-device so older iOS releases can be diagnosed without Xcode.
     private static let queue = DispatchQueue(label: "beans.bilibili.detail-diagnostics")
     private static let fileURL: URL = {
         let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -12,8 +13,7 @@ enum BilibiliDetailDiagnostics {
     static func record(_ event: String) {
         queue.async {
             let formatter = ISO8601DateFormatter()
-            let line = "[(formatter.string(from: Date()))] (event)
-"
+            let line = "[\(formatter.string(from: Date()))] \(event)\n"
             guard let data = line.data(using: .utf8) else { return }
             if !FileManager.default.fileExists(atPath: fileURL.path) {
                 FileManager.default.createFile(atPath: fileURL.path, contents: nil)
@@ -37,7 +37,7 @@ enum BilibiliDetailDiagnostics {
 }
 
 struct BilibiliDetailLogSheet: View {
-    @Environment(.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismiss
     @State private var log = ""
 
     var body: some View {
@@ -64,3 +64,4 @@ struct BilibiliDetailLogSheet: View {
         .task { log = BilibiliDetailDiagnostics.read() }
     }
 }
+
