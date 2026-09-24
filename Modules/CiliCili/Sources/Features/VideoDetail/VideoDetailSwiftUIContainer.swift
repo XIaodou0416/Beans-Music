@@ -797,9 +797,15 @@ final class VideoDetailSwiftUIContainerViewController: UIViewController {
     private let playerFrameDiagnosticsAccessibilityView = UIView()
 #endif
 
-    private lazy var hostingController: UIHostingController<VideoDetailSwiftUIContainer> = {
+    private var hostEnvironment = EnvironmentValues()
+    private lazy var hostingController: UIHostingController<AnyView> = {
         UIHostingController(rootView: makeRootView())
     }()
+
+    func installHostEnvironment(_ environment: EnvironmentValues) {
+        hostEnvironment = environment
+        if isViewLoaded { hostingController.rootView = makeRootView() }
+    }
 
     init(
         initialVideo: VideoItem,
@@ -992,8 +998,8 @@ final class VideoDetailSwiftUIContainerViewController: UIViewController {
         publishLatestRotationDiagnostic()
     }
 
-    private func makeRootView() -> VideoDetailSwiftUIContainer {
-        VideoDetailSwiftUIContainer(
+    private func makeRootView() -> AnyView {
+        AnyView(VideoDetailSwiftUIContainer(
             viewModel: viewModel,
             model: contentModel,
             runtimeSettings: runtimeSettings,
@@ -1022,7 +1028,7 @@ final class VideoDetailSwiftUIContainerViewController: UIViewController {
             onNavigateBack: { [weak self] in
                 self?.rotationDelegate?.navigateBackFromVideoDetail()
             }
-        )
+        ).environment(\.self, hostEnvironment))
     }
 
     private func publishLatestRotationDiagnostic() {

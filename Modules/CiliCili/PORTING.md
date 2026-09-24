@@ -49,6 +49,7 @@ xcodebuild -project Beans.xcodeproj -scheme Beans -configuration Release \
 - `Features/Player/PlayerStateViewModel.swift`：释放本模块注册的锁屏回调，避免与音乐双重响应。
 - `Features/Mine/MineOverlayNavigation.swift`：补齐上游遗漏的 watchLater 枚举分支。
 - `Features/VideoDetail/VideoDetailSwiftUIContainer.swift`：给独立 UIHostingController 注入同一套依赖。
+- `Features/VideoDetail/UIKitShell/VideoDetailShellRepresentable.swift`、`VideoDetailRotationBridgeViewController.swift`、`VideoDetailNativeContentTabView.swift`：将宿主环境传入独立渲染容器，保留评论作者/相关推荐路由。
 - `Features/Mine/MineDisplaySettingsSection.swift`：移除独立 App 专用的图标/全局外观/底栏配置。
 
 `Integration` 是唯一新增宿主接口层；详情和评论组件不重绘。

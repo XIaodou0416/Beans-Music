@@ -15,6 +15,7 @@ public final class CiliCiliRuntime: ObservableObject {
     private var navigationOwners: Set<UUID> = []
     private var subscriptions = Set<AnyCancellable>()
     private var lastExportedIdentity = ""
+    private var pendingLegacySession: (cookie: String, name: String, id: String, avatar: String?)?
 
     private init() {
         let session = dependencies.sessionStore
@@ -54,6 +55,7 @@ public final class CiliCiliRuntime: ObservableObject {
         let session = dependencies.sessionStore
         let values = Self.cookieValues(cookie)
         guard Self.credentialIdentity(values) != Self.credentialIdentity(Self.cookieValues(session.cookieHeader())) else {
+            pendingLegacySession = nil
             return
         }
         do {
@@ -67,13 +69,21 @@ public final class CiliCiliRuntime: ObservableObject {
                 ))
             }
             lastExportedIdentity = exportIdentity
+            pendingLegacySession = nil
             integrationError = nil
         } catch {
+            pendingLegacySession = (cookie, name, userID, avatar)
             integrationError = "哔哩哔哩账号同步失败：\(error.localizedDescription)"
         }
     }
 
-    public func retrySessionExport() { exportSessionIfChanged() }
+    public func retrySessionExport() {
+        if let pending = pendingLegacySession {
+            synchronizeLegacySession(cookie: pending.cookie, name: pending.name, userID: pending.id, avatar: pending.avatar)
+        } else {
+            exportSessionIfChanged()
+        }
+    }
 
     private var exportIdentity: String {
         let session = dependencies.sessionStore
@@ -82,7 +92,7 @@ public final class CiliCiliRuntime: ObservableObject {
     }
 
     private func exportSessionIfChanged() {
-        guard let onSessionChange, exportIdentity != lastExportedIdentity else { return }
+        guard pendingLegacySession == nil, let onSessionChange, exportIdentity != lastExportedIdentity else { return }
         let session = dependencies.sessionStore
         do {
             try onSessionChange(

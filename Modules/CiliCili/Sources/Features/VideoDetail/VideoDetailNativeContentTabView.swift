@@ -220,7 +220,7 @@ private struct VideoDetailInteractiveScrollHost<Content: View>: UIViewRepresenta
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.delegate = context.coordinator
 
-        let hostingController = UIHostingController(rootView: scrollContent)
+        let hostingController = UIHostingController(rootView: hostedContent(environment: context.environment))
         hostingController.sizingOptions = .intrinsicContentSize
         hostingController.safeAreaRegions = []
         hostingController.view.backgroundColor = .clear
@@ -249,7 +249,7 @@ private struct VideoDetailInteractiveScrollHost<Content: View>: UIViewRepresenta
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
         let contentChanged = context.coordinator.contentConfiguration != contentConfiguration
         if contentChanged {
-            context.coordinator.hostingController?.rootView = scrollContent
+            context.coordinator.hostingController?.rootView = hostedContent(environment: context.environment)
             context.coordinator.contentConfiguration = contentConfiguration
         }
         context.coordinator.update(
@@ -294,6 +294,10 @@ private struct VideoDetailInteractiveScrollHost<Content: View>: UIViewRepresenta
                 max(viewportHeight - bottomInset, 0)
             )
         )
+    }
+
+    private func hostedContent(environment: EnvironmentValues) -> AnyView {
+        AnyView(scrollContent.environment(\.self, environment))
     }
 
     private var contentConfiguration: ContentConfiguration {

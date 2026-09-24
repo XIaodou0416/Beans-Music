@@ -32,4 +32,19 @@ final class BeansIntegrationTests: XCTestCase {
         runtime.setNavigationActive(false, owner: history)
         XCTAssertFalse(runtime.isDetailActive)
     }
+
+    func testPlaybackOwnershipFollowsPlayerReplacementAndStop() {
+        let coordinator = ActivePlaybackCoordinator.shared
+        coordinator.stopActivePlayback()
+        let first = PlayerStateViewModel(videoURL: nil, audioURL: nil, title: "first", referer: "https://www.bilibili.com")
+        let second = PlayerStateViewModel(videoURL: nil, audioURL: nil, title: "second", referer: "https://www.bilibili.com")
+        defer { coordinator.stopActivePlayback() }
+        coordinator.activate(first)
+        XCTAssertTrue(CiliCiliRuntime.hasActivePlayback)
+        coordinator.activate(second)
+        coordinator.unregister(first)
+        XCTAssertTrue(CiliCiliRuntime.hasActivePlayback)
+        coordinator.deactivate(second)
+        XCTAssertFalse(CiliCiliRuntime.hasActivePlayback)
+    }
 }

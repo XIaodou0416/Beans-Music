@@ -69,6 +69,10 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
         AppOrientationLock.supportedOrientations
     }
 
+    func installHostEnvironment(_ environment: EnvironmentValues) {
+        contentController.installHostEnvironment(environment)
+    }
+
     override var prefersStatusBarHidden: Bool {
         rotationCoordinator.isLandscape || rotationCoordinator.isPortraitFullscreen
     }

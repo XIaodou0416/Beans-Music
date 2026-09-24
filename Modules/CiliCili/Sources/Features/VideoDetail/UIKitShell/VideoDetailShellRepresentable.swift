@@ -23,7 +23,7 @@ struct VideoDetailShellRepresentable: UIViewControllerRepresentable {
         // 新路径绕过 PlaybackScene，需自己 bind runtimeSettings，
         // 否则内容区设置（诊断按钮/进度条等）取默认值。
         runtimeSettings.bind(dependencies.libraryStore)
-        return VideoDetailRotationBridgeViewController(
+        let controller = VideoDetailRotationBridgeViewController(
             initialVideo: seedVideo,
             viewModel: viewModel,
             runtimeSettings: runtimeSettings,
@@ -63,6 +63,8 @@ struct VideoDetailShellRepresentable: UIViewControllerRepresentable {
             },
             onNavigateBack: onNavigateBack
         )
+        controller.installHostEnvironment(context.environment)
+        return controller
     }
 
     func updateUIViewController(
