@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CiliCiliKit
 
 private enum DiscoverRoute: Hashable {
     case topList(TopList)
@@ -138,9 +139,16 @@ struct DiscoverView: View {
     }
 
     var body: some View {
-        Group {
-            if source == .bilibili { BilibiliHomePage() }
-            else { musicHomeContent }
+        if source == .bilibili {
+            CiliCiliHomeView(
+                platforms: homeProviders.map(\.rawValue),
+                selectPlatform: { rawValue in
+                    guard SearchProvider(rawValue: rawValue) != nil else { return }
+                    homeSourceRaw = rawValue
+                }
+            )
+        } else {
+            musicHomeContent
         }
     }
 
