@@ -174,7 +174,11 @@ struct RootTabView: View {
         Group {
             rootTabContent(for: tab, detailPath: detailPath)
         }
-        .safeAreaInset(edge: .top, spacing: 0) { EmptyView() }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if detailPath.wrappedValue.isEmpty {
+                channelStrip
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if tab == .search, showsSearchBottomAccessory {
                 SearchTabBottomAccessory(store: searchBottomAccessoryStore)
