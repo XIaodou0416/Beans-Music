@@ -107,6 +107,7 @@ struct ThirdPartySource: Identifiable, Codable, Hashable, Sendable {
 /// 第三方音源管理：只保存用户导入的音源配置。
 final class UnblockSourceStore: ObservableObject {
     static let shared = UnblockSourceStore()
+    private static let bundledIkunSourceID = "beans.bundled.ikun-music-source.v26"
     private static let removedBuiltInSourceIDs: Set<String> = [
         "beans.preset.shiqianjiang.lx.v7",
         "beans.preset.shiqianjiang.cr.v7",
@@ -142,9 +143,23 @@ final class UnblockSourceStore: ObservableObject {
             savedSources = []
         }
 
+        // 保留用户导入源，并把项目随附的 LX 音源导入一次。脚本仍由现有
+        // JavaScriptCore 运行时执行，播放链路不需要另起一套网络实现。
+        var mergedSources = savedSources
+        if !mergedSources.contains(where: { $0.id == Self.bundledIkunSourceID }),
+           let bundledURL = Bundle.main.url(forResource: "ikun-music-source", withExtension: "js"),
+           let imported = try? ThirdPartySourceImportParser.parse(fileURL: bundledURL),
+           let first = imported.first {
+            var source = first
+            source.id = Self.bundledIkunSourceID
+            source.enabled = true
+            source.sourceURL = "bundle://ikun-music-source.js"
+            mergedSources.append(source)
+        }
+
         // 旧版本的内置预设全部丢弃，只保留用户导入的配置。
         var seen = Set<String>()
-        sources = savedSources.compactMap { source in
+        sources = mergedSources.compactMap { source in
             guard !Self.removedBuiltInSourceIDs.contains(source.id),
                   seen.insert(source.id).inserted else { return nil }
             return source

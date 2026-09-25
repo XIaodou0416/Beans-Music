@@ -38,14 +38,6 @@ struct MineAccountLibrarySection: View {
                 )
             }
 
-            MineOverlayNavigationButton {
-                onOpenRoute(.watchLater)
-            } label: {
-                AccountLibraryButtonRow(
-                    title: "稍后再看",
-                    systemImage: "clock.badge.checkmark"
-                )
-            }
         } header: {
             Text("账号内容")
         }

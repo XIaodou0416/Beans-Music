@@ -201,7 +201,8 @@ extension VideoDetailViewModel {
             title: detail.title,
             coverURL: detail.pic,
             duration: TimeInterval(detail.duration ?? 0),
-            artist: detail.owner?.name ?? ""
+            artist: detail.owner?.name ?? "",
+            ownerID: detail.owner?.mid
         )
         if !isEnabled {
             externalHandler?(externalRequest, false, resumeTime, shouldResumePlayback)

@@ -174,7 +174,7 @@ struct RootTabView: View {
         Group {
             rootTabContent(for: tab, detailPath: detailPath)
         }
-        .safeAreaInset(edge: .top, spacing: 0) { channelStrip }
+        .safeAreaInset(edge: .top, spacing: 0) { EmptyView() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if tab == .search, showsSearchBottomAccessory {
                 SearchTabBottomAccessory(store: searchBottomAccessoryStore)
@@ -194,22 +194,17 @@ struct RootTabView: View {
                 .accessibilityLabel("切换主页平台")
             }
             ToolbarItem(placement: .principal) {
-                if tab == .home, let viewModel = homeViewModelHolder.viewModel {
-                    HomeFeedModeMenu(currentMode: viewModel.mode) { mode in
-                        homeActionStore.mode.switchMode(
-                            mode, viewModel: viewModel, scrollActions: homeActionStore.scroll,
-                            nativeRefreshActionStore: homeActionStore.nativeRefresh
-                        )
-                    }
+                if tab == .home {
+                    Text("哔哩哔哩").font(.headline)
                 } else {
                     Text(tab.title).font(.headline)
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button { openMineOverlayRoute(.accountMessages) } label: {
-                    Image(systemName: "bell")
+                Button { selectAvailableRootTab(.mine) } label: {
+                    Image(systemName: "person.crop.circle")
                 }
-                .accessibilityLabel("哔哩哔哩消息")
+                .accessibilityLabel("哔哩哔哩我的")
             }
         }
         .nativeNavigationSearch(

@@ -22,9 +22,15 @@ targets:
       - Beans/Resources/CeruBilibili-LICENSE.txt
       - Beans/Resources/SimpleIcons-LICENSE.txt
       - Beans/Resources/CeruBilibili-NOTICE.md
+      - Beans/Resources/ikun-music-source.js
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app
+        DEAD_CODE_STRIPPING: YES
+        DEPLOYMENT_POSTPROCESSING: YES
+        STRIP_INSTALLED_PRODUCT: YES
+        SWIFT_COMPILATION_MODE: wholemodule
+        SWIFT_OPTIMIZATION_LEVEL: "-O"
         MARKETING_VERSION: "1.8.1"
         CURRENT_PROJECT_VERSION: "19"
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -79,6 +85,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.cilicili
+        DEAD_CODE_STRIPPING: YES
+        DEPLOYMENT_POSTPROCESSING: YES
+        STRIP_INSTALLED_PRODUCT: YES
+        SWIFT_COMPILATION_MODE: wholemodule
+        SWIFT_OPTIMIZATION_LEVEL: "-O"
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor

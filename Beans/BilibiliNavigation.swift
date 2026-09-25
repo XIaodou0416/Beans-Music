@@ -5,6 +5,7 @@ import CiliCiliKit
 final class BilibiliPresentationState: ObservableObject {
     static let shared = BilibiliPresentationState()
     @Published private(set) var activeVideoIDs = Set<String>()
+    @Published private(set) var activeLiveIDs = Set<String>()
 
     func enterVideo(_ id: String) {
         guard !activeVideoIDs.contains(id) else { return }
@@ -17,6 +18,10 @@ final class BilibiliPresentationState: ObservableObject {
     }
 
     var isVideoDetailActive: Bool { !activeVideoIDs.isEmpty }
+
+    func enterLive(_ id: String) { activeLiveIDs.insert(id) }
+    func leaveLive(_ id: String) { activeLiveIDs.remove(id) }
+    var shouldHideBeansChrome: Bool { isVideoDetailActive || !activeLiveIDs.isEmpty }
 }
 
 /// Compatibility at Beans' music boundaries, never an alternative video UI.

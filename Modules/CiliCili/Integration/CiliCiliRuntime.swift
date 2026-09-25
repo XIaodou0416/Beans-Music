@@ -10,12 +10,14 @@ public final class CiliCiliRuntime: ObservableObject {
     let dependencies = AppDependencies()
     @Published public private(set) var isDetailActive = false
     @Published public private(set) var isVideoDetailActive = false
+    @Published public private(set) var isLiveRoomActive = false
     @Published public private(set) var integrationError: String?
     public var onPlaybackActivation: (() -> Void)?
     public var onVideoListenModeChange: ((CiliCiliVideoListenRequest, Bool, TimeInterval, Bool) -> Void)?
     public var onSessionChange: ((String, String, String, String?) throws -> Void)?
     private var navigationOwners: Set<UUID> = []
     private var videoDetailOwners: Set<UUID> = []
+    private var liveRoomOwners: Set<UUID> = []
     private var subscriptions = Set<AnyCancellable>()
     private var lastExportedIdentity = ""
     private var pendingLegacySession: (cookie: String, name: String, id: String, avatar: String?)?
@@ -48,6 +50,12 @@ public final class CiliCiliRuntime: ObservableObject {
         if active { videoDetailOwners.insert(owner) } else { videoDetailOwners.remove(owner) }
         let value = !videoDetailOwners.isEmpty
         if isVideoDetailActive != value { isVideoDetailActive = value }
+    }
+
+    public func setLiveRoomActive(_ active: Bool, owner: UUID) {
+        if active { liveRoomOwners.insert(owner) } else { liveRoomOwners.remove(owner) }
+        let value = !liveRoomOwners.isEmpty
+        if isLiveRoomActive != value { isLiveRoomActive = value }
     }
 
     public func stopPlaybackForMusic() {
@@ -142,6 +150,7 @@ public struct CiliCiliVideoListenRequest: Sendable {
     public let coverURL: String?
     public let duration: TimeInterval
     public let artist: String
+    public let ownerID: Int?
 
     public init(
         bvid: String,
@@ -150,7 +159,8 @@ public struct CiliCiliVideoListenRequest: Sendable {
         title: String,
         coverURL: String?,
         duration: TimeInterval,
-        artist: String
+        artist: String,
+        ownerID: Int? = nil
     ) {
         self.bvid = bvid
         self.aid = aid
@@ -159,6 +169,7 @@ public struct CiliCiliVideoListenRequest: Sendable {
         self.coverURL = coverURL
         self.duration = duration
         self.artist = artist
+        self.ownerID = ownerID
     }
 }
 

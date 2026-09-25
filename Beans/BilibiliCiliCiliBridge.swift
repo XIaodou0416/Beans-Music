@@ -29,6 +29,10 @@ final class BilibiliCiliCiliBridge {
             if active { BilibiliPresentationState.shared.enterVideo("cilicili-module") }
             else { BilibiliPresentationState.shared.leaveVideo("cilicili-module") }
         }.store(in: &subscriptions)
+        runtime.$isLiveRoomActive.removeDuplicates().sink { active in
+            if active { BilibiliPresentationState.shared.enterLive("cilicili-live") }
+            else { BilibiliPresentationState.shared.leaveLive("cilicili-live") }
+        }.store(in: &subscriptions)
         NotificationCenter.default.publisher(for: .beansBilibiliLoginDidUpdate).sink { [weak self] _ in
             self?.synchronizeAccount()
         }.store(in: &subscriptions)
@@ -61,6 +65,31 @@ final class BilibiliCiliCiliBridge {
             bilibiliID: bilibiliID
         )
         player.playBilibiliAudio(song, resumeAt: resumeAt, shouldResume: shouldResume)
+        guard shouldResume else { return }
+
+        // Beans 的播放器按钮不经过 CiliCili 的详情页控件。把当前上下文的
+        // 下一批视频补进同一个 Beans 队列，才能让“下一首”继续按 UP 主/相关推荐
+        // 前进，而不是因为外部播放器队列只有一首而停住。
+        let api = BilibiliAPI.shared
+        Task { @MainActor [weak player] in
+            do {
+                let candidates: [BilibiliFeedVideo]
+                if let ownerID = request.ownerID, ownerID > 0 {
+                    let owner = Artist(id: String(ownerID), name: request.artist, coverURL: nil, source: .bilibili)
+                    candidates = try await api.upVideos(owner, page: 1).items
+                } else {
+                    candidates = try await api.relatedVideos(aid: String(request.aid ?? 0))
+                }
+                let additions = candidates.compactMap { item -> Song? in
+                    let bvid = item.song.bilibiliID?.split(separator: ":").first.map(String.init)
+                    guard bvid != request.bvid else { return nil }
+                    return item.song
+                }
+                player?.append(songs: additions)
+            } catch {
+                BeansLogger.shared.log("听视频队列预加载失败：\(error.localizedDescription)", level: .debug)
+            }
+        }
     }
 
     private func synchronizeAccount() {

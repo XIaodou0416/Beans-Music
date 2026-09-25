@@ -29,11 +29,6 @@ struct MineContentView: View {
                 onOpenRoute: onOpenRoute
             )
 
-            MineSettingsSection(
-                libraryStore: libraryStore,
-                onOpenRoute: onOpenRoute
-            )
-            MineAboutSection()
         }
         .tint(libraryStore.appTintColor)
         .formStyle(.grouped)

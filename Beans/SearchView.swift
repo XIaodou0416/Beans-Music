@@ -1,5 +1,4 @@
 import SwiftUI
-import CiliCiliKit
 
 // MARK: - 流式标签布局（热搜标签云）
 
@@ -320,9 +319,7 @@ struct SearchView: View {
 
     var body: some View {
         if provider == .bilibili {
-            CiliCiliHomeView(platforms: searchProviders.map(\.rawValue), startsWithSearch: true) { name in
-                if let selected = SearchCatalogProvider(rawValue: name) { provider = selected }
-            }
+            BilibiliHomePage()
         } else {
             musicSearchBody
         }

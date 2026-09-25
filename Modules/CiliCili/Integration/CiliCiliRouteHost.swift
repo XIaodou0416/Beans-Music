@@ -55,9 +55,13 @@ private struct CiliCiliRouteStack: View {
             return .handled
         })
         .sheet(item: $browser) { InAppBrowserView(url: $0.url).ignoresSafeArea() }
-        .onAppear { CiliCiliRuntime.shared.setNavigationActive(true, owner: owner) }
+        .onAppear {
+            CiliCiliRuntime.shared.setNavigationActive(true, owner: owner)
+            if case .live = initialRoute { CiliCiliRuntime.shared.setLiveRoomActive(true, owner: owner) }
+        }
         .onDisappear {
             CiliCiliRuntime.shared.setNavigationActive(false, owner: owner)
+            CiliCiliRuntime.shared.setLiveRoomActive(false, owner: owner)
             ActivePlaybackCoordinator.shared.stopActivePlayback()
             AppOrientationLock.restorePortrait()
         }

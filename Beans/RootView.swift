@@ -301,7 +301,7 @@ struct RootView: View {
                     nativeTabs(isPadLandscape: false)
                         .modifier(
                             MiniPlayerAccessoryModifier(
-                                isActive: player.currentSong != nil && !queueOverlayPresented && !bilibiliPresentation.isVideoDetailActive,
+                                isActive: player.currentSong != nil && !queueOverlayPresented && !bilibiliPresentation.shouldHideBeansChrome,
                                 showPlayer: $showPlayer,
                                 clock: player.clock,
                                 colorScheme: colorScheme,
@@ -309,7 +309,7 @@ struct RootView: View {
                             )
                         )
                         .toolbar(
-                            bilibiliPresentation.isVideoDetailActive ? .hidden : .visible,
+                            bilibiliPresentation.shouldHideBeansChrome ? .hidden : .visible,
                             for: .tabBar
                         )
                 } else {
@@ -1248,7 +1248,7 @@ struct RootView: View {
         ZStack(alignment: .bottom) {
             activeTabPage()
 
-            if !bilibiliPresentation.isVideoDetailActive {
+            if !bilibiliPresentation.shouldHideBeansChrome {
                 legacyFloatingTabBar
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
