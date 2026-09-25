@@ -12,7 +12,6 @@ final class CiliCiliPortUITests: XCTestCase {
         dismissStartupOverlays(in: app)
         XCTAssertTrue(app.buttons["beans.bilibili.channel.home"].waitForExistence(timeout: 20))
         for tab in ["dynamic", "live", "search", "mine", "home"] {
-            dismissStartupOverlays(in: app)
             let channel = hittableChannel(app, tab: tab)
             XCTAssertTrue(channel.isHittable)
             channel.tap()
