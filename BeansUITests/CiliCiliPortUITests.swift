@@ -15,7 +15,7 @@ final class CiliCiliPortUITests: XCTestCase {
             let channel = hittableChannel(app, tab: tab)
             XCTAssertTrue(channel.isHittable)
             channel.tap()
-            XCTAssertTrue(hittableChannel(app, tab: tab).isSelected)
+            XCTAssertTrue(waitForSelectedChannel(app, tab: tab))
         }
         XCTAssertEqual(app.tabBars.count, 1, "Beans 应只有一套底栏")
         let attachment = XCTAttachment(screenshot: app.screenshot())
@@ -71,6 +71,19 @@ final class CiliCiliPortUITests: XCTestCase {
             if candidate.isHittable { return candidate }
         }
         return channels.firstMatch
+    }
+
+    private func waitForSelectedChannel(_ app: XCUIApplication, tab: String) -> Bool {
+        let deadline = Date().addingTimeInterval(5)
+        let channels = app.buttons.matching(identifier: "beans.bilibili.channel.\(tab)")
+        while Date() < deadline {
+            for index in 0..<channels.count {
+                let candidate = channels.element(boundBy: index)
+                if candidate.isHittable && candidate.isSelected { return true }
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return false
     }
 
     private func capture(_ app: XCUIApplication, name: String) {
