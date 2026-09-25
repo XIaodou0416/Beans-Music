@@ -88,7 +88,7 @@ final class BilibiliHomeFeedStore: ObservableObject {
                 if let data = try? JSONEncoder().encode(snapshot) { UserDefaults.standard.set(data, forKey: cacheKey) }
             }
         } catch is CancellationError {
-        } catch { if token == generation { failedPage = next; error = error.localizedDescription } }
+        } catch let loadError { if token == generation { failedPage = next; self.error = loadError.localizedDescription } }
     }
 
     func loadMoreIfNeeded(id: String) async { guard error == nil, videos.suffix(6).contains(where: { $0.id == id }) else { return }; await loadMore() }

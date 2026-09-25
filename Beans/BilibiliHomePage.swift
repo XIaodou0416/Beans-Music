@@ -7,6 +7,7 @@ struct BilibiliHomePage: View {
     @State private var submittedQuery = ""
     @State private var resultType: SearchResultType = .all
     @State private var channel = BilibiliChannel.recommended
+    @AppStorage(BilibiliExperience.key) private var mode = BilibiliExperience.listen.rawValue
     @StateObject private var navigation = BilibiliNavigationState()
     @State private var searchTask: Task<Void, Never>?
     @ObservedObject private var feed = BilibiliHomeFeedStore.shared
