@@ -399,6 +399,16 @@ final class PlayerManager: NSObject, ObservableObject {
         jumpToOrderPosition(min(max(index, 0), songs.count - 1))
     }
 
+    /// 由哔哩哔哩“听视频”模式复用 Beans 音频播放器，保留当前详情页的续播时间和播放意图。
+    func playBilibiliAudio(_ song: Song, resumeAt: TimeInterval = 0, shouldResume: Bool = true) {
+        guard song.source == .bilibili, ensurePlaybackAllowed() else { return }
+        queue = [song]
+        currentIndex = 0
+        buildPlayOrder()
+        orderPosition = 0
+        loadCurrent(resumeAt: resumeAt, autoplay: shouldResume)
+    }
+
     /// 追加后台继续加载的私人漫游歌曲，不打断当前歌曲或重置播放位置。
     func append(songs newSongs: [Song]) {
         guard !newSongs.isEmpty else { return }
@@ -796,7 +806,11 @@ final class PlayerManager: NSObject, ObservableObject {
         updateNowPlaying()
     }
 
-    private func loadCurrent(resumeAt: Double? = nil, forceKugouStandard: Bool = false) {
+    private func loadCurrent(
+        resumeAt: Double? = nil,
+        forceKugouStandard: Bool = false,
+        autoplay: Bool = true
+    ) {
         guard ensurePlaybackAllowed() else { return }
         guard let song = currentSong else { return }
         audioRecoveryWorkItem?.cancel()
@@ -936,6 +950,7 @@ final class PlayerManager: NSObject, ObservableObject {
                         url: resolved.url,
                         thirdPartyVIPNotice: notice,
                         resumeAt: initialProgress,
+                        autoplay: autoplay,
                         isThirdParty: true,
                         thirdPartyQuality: resolved.quality
                     )
@@ -967,6 +982,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 self.setupPlayer(
                     url: url,
                     resumeAt: initialProgress,
+                    autoplay: autoplay,
                     qqOfficialBR: qqOfficialBR,
                     attemptedQQOfficialBRs: attemptedQQOfficialBRs
                 )
@@ -1324,6 +1340,7 @@ final class PlayerManager: NSObject, ObservableObject {
         url: URL,
         thirdPartyVIPNotice: ThirdPartyVIPNotice? = nil,
         resumeAt: Double = 0,
+        autoplay: Bool = true,
         isThirdParty: Bool = false,
         thirdPartyQuality: ThirdPartyAudioQuality? = nil,
         qqOfficialBR: String? = nil,
@@ -1501,6 +1518,12 @@ final class PlayerManager: NSObject, ObservableObject {
             let seekTime = CMTime(seconds: resumeAt, preferredTimescale: 600)
             player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
             progress = resumeAt
+        }
+        guard autoplay else {
+            isBuffering = false
+            loadFailed = false
+            refreshNowPlayingOwnership()
+            return
         }
         player.playImmediately(atRate: Float(rate))
         isPlaying = true

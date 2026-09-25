@@ -9,13 +9,20 @@ public final class CiliCiliRuntime: ObservableObject {
     public static let shared = CiliCiliRuntime()
     let dependencies = AppDependencies()
     @Published public private(set) var isDetailActive = false
+    @Published public private(set) var isVideoDetailActive = false
     @Published public private(set) var integrationError: String?
     public var onPlaybackActivation: (() -> Void)?
+    public var onVideoListenModeChange: ((CiliCiliVideoListenRequest, Bool, TimeInterval, Bool) -> Void)?
     public var onSessionChange: ((String, String, String, String?) throws -> Void)?
     private var navigationOwners: Set<UUID> = []
+    private var videoDetailOwners: Set<UUID> = []
     private var subscriptions = Set<AnyCancellable>()
     private var lastExportedIdentity = ""
     private var pendingLegacySession: (cookie: String, name: String, id: String, avatar: String?)?
+
+    public var usesExternalVideoListenPlayer: Bool {
+        onVideoListenModeChange != nil
+    }
 
     private init() {
         let session = dependencies.sessionStore
@@ -35,6 +42,12 @@ public final class CiliCiliRuntime: ObservableObject {
         if active { navigationOwners.insert(owner) } else { navigationOwners.remove(owner) }
         let value = !navigationOwners.isEmpty
         if isDetailActive != value { isDetailActive = value }
+    }
+
+    public func setVideoDetailActive(_ active: Bool, owner: UUID) {
+        if active { videoDetailOwners.insert(owner) } else { videoDetailOwners.remove(owner) }
+        let value = !videoDetailOwners.isEmpty
+        if isVideoDetailActive != value { isVideoDetailActive = value }
     }
 
     public func stopPlaybackForMusic() {
@@ -118,6 +131,34 @@ public final class CiliCiliRuntime: ObservableObject {
 
     nonisolated static func credentialIdentity(_ values: [String: String]) -> String {
         ["SESSDATA", "DedeUserID", "bili_jct"].map { values[$0] ?? "" }.joined(separator: "|")
+    }
+}
+
+public struct CiliCiliVideoListenRequest: Sendable {
+    public let bvid: String
+    public let aid: Int?
+    public let cid: Int?
+    public let title: String
+    public let coverURL: String?
+    public let duration: TimeInterval
+    public let artist: String
+
+    public init(
+        bvid: String,
+        aid: Int?,
+        cid: Int?,
+        title: String,
+        coverURL: String?,
+        duration: TimeInterval,
+        artist: String
+    ) {
+        self.bvid = bvid
+        self.aid = aid
+        self.cid = cid
+        self.title = title
+        self.coverURL = coverURL
+        self.duration = duration
+        self.artist = artist
     }
 }
 

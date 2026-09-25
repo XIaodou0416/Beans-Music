@@ -9,6 +9,10 @@ extension VideoDetailViewModel {
         usesSeamlessPlaybackHandoff: Bool = false
     ) {
         guard !isPlaybackInvalidatedForNavigation else { return }
+        if playbackContentMode == .audioOnly,
+           CiliCiliRuntime.shared.usesExternalVideoListenPlayer {
+            return
+        }
         guard let variant = selectedPlayVariant, variant.isPlayable else {
             resetStablePlayerForMissingVariant()
             return

@@ -12,6 +12,7 @@ struct VideoDetailView: View {
     @StateObject private var runtimeSettings = VideoDetailRuntimeSettingsStore()
     @State private var presentationState = VideoDetailViewPresentationState()
     @State private var pendingCommentAnchor: VideoCommentAnchor?
+    @State private var videoDetailRuntimeOwner = UUID()
 
     init(
         seedVideo: VideoItem,
@@ -54,6 +55,12 @@ struct VideoDetailView: View {
             .environment(\.markRelatedVideoNavigation) {
                 holder.viewModel?.markRelatedVideoNavigation()
             }
+        }
+        .onAppear {
+            CiliCiliRuntime.shared.setVideoDetailActive(true, owner: videoDetailRuntimeOwner)
+        }
+        .onDisappear {
+            CiliCiliRuntime.shared.setVideoDetailActive(false, owner: videoDetailRuntimeOwner)
         }
     }
 

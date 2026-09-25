@@ -13,11 +13,19 @@ final class BilibiliCiliCiliBridge {
         guard subscriptions.isEmpty else { return }
         let runtime = CiliCiliRuntime.shared
         runtime.onPlaybackActivation = { [weak self] in self?.player?.pauseForBilibiliVideo() }
+        runtime.onVideoListenModeChange = { [weak self] request, enabled, resumeAt, shouldResume in
+            self?.handleVideoListenModeChange(
+                request: request,
+                enabled: enabled,
+                resumeAt: resumeAt,
+                shouldResume: shouldResume
+            )
+        }
         runtime.onSessionChange = { cookie, name, id, avatar in
             try BilibiliAuth.shared.acceptCiliCiliSession(cookie: cookie, name: name, id: id, avatar: avatar)
         }
         synchronizeAccount()
-        runtime.$isDetailActive.removeDuplicates().sink { active in
+        runtime.$isVideoDetailActive.removeDuplicates().sink { active in
             if active { BilibiliPresentationState.shared.enterVideo("cilicili-module") }
             else { BilibiliPresentationState.shared.leaveVideo("cilicili-module") }
         }.store(in: &subscriptions)
@@ -27,6 +35,32 @@ final class BilibiliCiliCiliBridge {
         player.$isPlaying.removeDuplicates().filter { $0 }.sink { _ in
             runtime.stopPlaybackForMusic()
         }.store(in: &subscriptions)
+    }
+
+    private func handleVideoListenModeChange(
+        request: CiliCiliVideoListenRequest,
+        enabled: Bool,
+        resumeAt: TimeInterval,
+        shouldResume: Bool
+    ) {
+        guard let player else { return }
+        guard enabled else {
+            player.pauseForBilibiliVideo()
+            return
+        }
+
+        let bilibiliID = request.cid.map { request.bvid + ":" + String($0) } ?? request.bvid
+        let song = Song(
+            id: request.aid ?? 0,
+            name: request.title,
+            artists: request.artist.isEmpty ? "哔哩哔哩" : request.artist,
+            album: "哔哩哔哩视频",
+            coverURL: request.coverURL.flatMap(URL.init(string:)),
+            duration: request.duration,
+            source: .bilibili,
+            bilibiliID: bilibiliID
+        )
+        player.playBilibiliAudio(song, resumeAt: resumeAt, shouldResume: shouldResume)
     }
 
     private func synchronizeAccount() {

@@ -121,6 +121,7 @@ extension VideoDetailViewModel {
               !isPlaybackInvalidatedForNavigation,
               !isSwitchingVideoListenMode
         else { return }
+        guard !CiliCiliRuntime.shared.usesExternalVideoListenPlayer else { return }
 
         let previousVariant = resolvedVideoListenAudioVariant
         let preferenceKey = variant?.preferenceKey
@@ -191,6 +192,26 @@ extension VideoDetailViewModel {
             videoListenPlaybackSessionStore.removeState(for: detail)
             pendingVideoListenPlaybackSessionState = nil
             cancelVideoListenSleepTimer()
+        }
+        let externalHandler = CiliCiliRuntime.shared.onVideoListenModeChange
+        let externalRequest = CiliCiliVideoListenRequest(
+            bvid: detail.bvid,
+            aid: detail.aid,
+            cid: selectedCID ?? detail.cid,
+            title: detail.title,
+            coverURL: detail.pic,
+            duration: TimeInterval(detail.duration ?? 0),
+            artist: detail.owner?.name ?? ""
+        )
+        if !isEnabled {
+            externalHandler?(externalRequest, false, resumeTime, shouldResumePlayback)
+        }
+        if isEnabled, let externalHandler = CiliCiliRuntime.shared.onVideoListenModeChange {
+            stablePlayerViewModel?.stop()
+            stablePlayerViewModel = nil
+            isSwitchingVideoListenMode = false
+            externalHandler(externalRequest, true, resumeTime, shouldResumePlayback)
+            return
         }
         updateStablePlayerViewModelIfNeeded(
             resumeTimeOverride: resumeTime,
