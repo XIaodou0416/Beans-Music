@@ -7,7 +7,6 @@ struct BilibiliHomePage: View {
     @State private var submittedQuery = ""
     @State private var resultType: SearchResultType = .all
     @State private var channel = BilibiliChannel.recommended
-    @AppStorage(BilibiliExperience.key) private var mode = BilibiliExperience.listen.rawValue
     @StateObject private var navigation = BilibiliNavigationState()
     @State private var searchTask: Task<Void, Never>?
     @ObservedObject private var feed = BilibiliHomeFeedStore.shared
@@ -17,14 +16,6 @@ struct BilibiliHomePage: View {
             ZStack {
                 Color(uiColor: .systemBackground).ignoresSafeArea()
                 VStack(spacing: 0) {
-                    Picker("播放模式", selection: $mode) {
-                        ForEach(BilibiliExperience.allCases) { item in
-                            Text(item.title).tag(item.rawValue)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
                     channels
                     if channel != .live || !submittedQuery.isEmpty {
                         if !submittedQuery.isEmpty { Picker("搜索类型", selection: $resultType) { ForEach([SearchResultType.all, .song, .artist, .playlist]) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.bottom, 8) }

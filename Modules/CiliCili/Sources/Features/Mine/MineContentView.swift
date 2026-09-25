@@ -5,6 +5,8 @@ struct MineContentView: View {
     @ObservedObject var accountMessageViewModel: AccountMessageCenterViewModel
     @ObservedObject var sessionStore: SessionStore
     @ObservedObject var libraryStore: LibraryStore
+    @AppStorage(CiliCiliPlaybackExperience.storageKey)
+    private var playbackExperienceRaw = CiliCiliPlaybackExperience.defaultRawValue
     let onQRCodeLogin: () -> Void
     let onSMSLogin: () -> Void
     let onWebLogin: () -> Void
@@ -28,6 +30,16 @@ struct MineContentView: View {
                 isLoggedIn: sessionStore.isLoggedIn,
                 onOpenRoute: onOpenRoute
             )
+
+            Section("视频播放") {
+                Picker("播放模式", selection: $playbackExperienceRaw) {
+                    ForEach(CiliCiliPlaybackExperience.allCases) { experience in
+                        Text(experience.title).tag(experience.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("mine.video-playback-mode")
+            }
 
         }
         .tint(libraryStore.appTintColor)

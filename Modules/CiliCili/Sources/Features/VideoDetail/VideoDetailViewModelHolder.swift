@@ -39,7 +39,7 @@ final class VideoDetailViewModelHolder: ObservableObject {
         sponsorBlockService: SponsorBlockService,
         playbackOptions: VideoDetailPlaybackOptions
     ) -> VideoDetailViewModel {
-        VideoDetailViewModel(
+        let viewModel = VideoDetailViewModel(
             seedVideo: seedVideo,
             api: api,
             libraryStore: libraryStore,
@@ -47,6 +47,10 @@ final class VideoDetailViewModelHolder: ObservableObject {
             sponsorBlockService: sponsorBlockService,
             playbackOptions: playbackOptions
         )
+        if playbackOptions != .performanceTest {
+            viewModel.playbackContentMode = CiliCiliPlaybackExperience.current.playerContentMode
+        }
+        return viewModel
     }
 
     private func installViewModel(_ viewModel: VideoDetailViewModel) {

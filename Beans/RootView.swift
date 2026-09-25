@@ -175,7 +175,7 @@ struct RootView: View {
     @AppStorage("beans.tabIconStyle") private var tabIconStyleRaw = BeansTabIconStyle.sfSymbols.rawValue
     @State private var tabVisibility = BeansTabVisibility.load()
     @AppStorage("beans.queueOverlayPresented") private var queueOverlayPresented = false
-    @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
+    @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.bilibili.rawValue
     @AppStorage("beans.developer.homeFrameMeter") private var homeFrameMeterEnabled = true
     @AppStorage("beans.legacyTabCornerRadius") private var legacyTabCornerRadius = 32.0
     @AppStorage("beans.legacyTabWidth") private var legacyTabWidth = 356.0

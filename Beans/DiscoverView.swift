@@ -38,8 +38,8 @@ struct DiscoverView: View {
 
     /// 主页只保留每日推荐和排行榜；歌单广场位于独立底栏页面。
     private var availableSections: [String] { SectionOrderStore.homeDefaults }
-    /// 首页数据源：记住上次选择，下次打开仍保持该平台（默认网易云）
-    @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.netease.rawValue
+    /// 首页数据源：记住上次选择，下次打开仍保持该平台（默认哔哩哔哩）
+    @AppStorage("beans.homeSource") private var homeSourceRaw = SearchProvider.bilibili.rawValue
     /// 每日推荐的旧版横向歌曲卡样式，默认使用新版推荐卡片。
     @AppStorage("beans.home.dailySongsListStyle") private var dailySongsListStyle = false
     @AppStorage("beans.homeGreetingText") private var homeGreetingText = ""
@@ -125,8 +125,8 @@ struct DiscoverView: View {
 
     init() {
         let savedRaw = UserDefaults.standard.string(forKey: "beans.homeSource")
-            ?? SearchProvider.netease.rawValue
-        let savedSource = SearchProvider(rawValue: savedRaw) ?? .netease
+            ?? SearchProvider.bilibili.rawValue
+        let savedSource = SearchProvider(rawValue: savedRaw) ?? .bilibili
         let snapshot = DiscoverCache.shared.cached(for: savedSource)
         _topLists = State(initialValue: snapshot?.topLists ?? [])
         _dailySongs = State(initialValue: snapshot?.dailySongs ?? [])
@@ -178,20 +178,14 @@ struct DiscoverView: View {
                 if !homeRenderingPaused {
                     ScrollViewReader { proxy in
                     VStack(alignment: .leading, spacing: isNativeClean ? 34 : 26) {
-                        if source == .bilibili {
-                            bilibiliHeader
-                        } else {
-                            header
-                        }
+                        header
                         if shouldShowRemoteAnnouncementBanner {
                             remoteAnnouncementBanner
                         }
                         if !hidePlatformPicker && !isNativeClean && source != .bilibili {
                             providerPicker
                         }
-                        if source == .bilibili {
-                            BilibiliHomePage()
-                        } else if let errorMessage {
+                        if let errorMessage {
                             ErrorStateView(message: errorMessage) {
                                 Task { await load(force: true) }
                             }
